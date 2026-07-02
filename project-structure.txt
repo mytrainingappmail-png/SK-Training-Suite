@@ -1,0 +1,121 @@
+Folder PATH listing
+Volume serial number is 000001DE 52C0:6645
+C:\USERS\LENOVO\SK-TRAINING-SUITE\SRC
+¦   App.css
+¦   App.tsx
+¦   index.css
+¦   main.tsx
+¦   
++---assets
+¦       hero.png
+¦       logo.png
+¦       
++---components
+¦   +---auth
+¦   ¦       LoginForm.tsx
+¦   ¦       
+¦   +---common
+¦   ¦       Button.tsx
+¦   ¦       Input.tsx
+¦   ¦       Loader.tsx
+¦   ¦       Modal.tsx
+¦   ¦       
+¦   +---dashboard
+¦   ¦       DashboardCards.tsx
+¦   ¦       Header.tsx
+¦   ¦       QuickActions.tsx
+¦   ¦       RecentActivity.tsx
+¦   ¦       Sidebar.tsx
+¦   ¦       StatsCard.tsx
+¦   ¦       
+¦   +---superadmin
+¦           BranchForm.tsx
+¦           BranchManagement.tsx
+¦           BranchTable.tsx
+¦           CompanyManagement.tsx
+¦           DeleteBranchDialog.tsx
+¦           LocationManagement.tsx
+¦           MenuManagement.tsx
+¦           PermissionManagement.tsx
+¦           RoleManagement.tsx
+¦           ThemeManagement.tsx
+¦           
++---config
+¦       branding.ts
+¦       menu.ts
+¦       
++---constants
+¦       permissions.ts
+¦       roles.ts
+¦       routes.ts
+¦       
++---database
+¦       schema.sql
+¦       
++---hooks
+¦       usePermissions.ts
+¦       
++---layouts
+¦       DashboardLayout.tsx
+¦       
++---lib
+¦       supabase.ts
+¦       
++---modules
+¦   +---authentication
+¦   +---employees
+¦   +---notifications
+¦   +---projects
+¦   +---reports
+¦   +---settings
+¦   +---skills
+¦   +---super-admin
+¦   +---territories
+¦   +---tests
+¦   +---training
++---pages
+¦       Admin.tsx
+¦       Courses.tsx
+¦       Dashboard.tsx
+¦       Employees.tsx
+¦       LoginPage.tsx
+¦       Roles.tsx
+¦       Training.tsx
+¦       
++---repositories
+¦   +---branch
+¦   ¦       branchRepository.ts
+¦   ¦       
+¦   +---company
+¦   ¦       companyRepository.ts
+¦   ¦       
+¦   +---permission
+¦   ¦       permissionRepository.ts
+¦   ¦       
+¦   +---role
+¦           roleRepository.ts
+¦           
++---routes
++---services
+¦   +---auth
+¦   ¦       authService.ts
+¦   ¦       session.ts
+¦   ¦       
+¦   +---branch
+¦   ¦       branchService.ts
+¦   ¦       
+¦   +---company
+¦           companyService.ts
+¦           
++---store
+¦       companyStore.ts
+¦       
++---types
+¦   ¦   app.ts
+¦   ¦   branch.ts
+¦   ¦   company.ts
+¦   ¦   
+¦   +---common
+¦           index.ts
+¦           
++---utils
