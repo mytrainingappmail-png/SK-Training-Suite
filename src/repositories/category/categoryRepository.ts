@@ -3,7 +3,7 @@ import type { Category } from "../../types/category";
 
 export async function getCategories(): Promise<Category[]> {
   const { data, error } = await supabase
-    .from("categories")
+    .from("course_categories")
     .select("*")
     .order("category_name", { ascending: true });
 

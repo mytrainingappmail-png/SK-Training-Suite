@@ -38,6 +38,13 @@ export const MENU: MenuItem[] = [
     visible: true,
   },
   {
+  id: "modules",
+  title: "Modules",
+  route: ROUTES.MODULES,
+  icon: "layers",
+  visible: true,
+},
+  {
     id: "assessment",
     title: "Assessment",
     route: ROUTES.ASSESSMENT,
