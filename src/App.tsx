@@ -7,6 +7,7 @@ import Employees from "./pages/Employees";
 import Training from "./pages/Training";
 import Courses from "./pages/Courses";
 import Admin from "./pages/Admin";
+import Modules from "./pages/Modules";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <Route path={ROUTES.TRAINING} element={<Training />} />
       <Route path={ROUTES.COURSES} element={<Courses />} />
       <Route path={ROUTES.ADMIN} element={<Admin />} />
+      <Route path={ROUTES.MODULES} element={<Modules />} />
     </Routes>
   );
 }

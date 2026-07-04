@@ -17,5 +17,6 @@ export const ROUTES = {
   SETTINGS: "/settings",
 
   ADMIN: "/admin",
+  MODULES: "/modules",
 
 } as const;

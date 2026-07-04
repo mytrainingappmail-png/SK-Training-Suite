@@ -1,21 +1,25 @@
 import Header from "../components/dashboard/Header";
 import Sidebar from "../components/dashboard/Sidebar";
-import CourseManagement from "../components/superadmin/CourseManagement";
+import ModuleManagement from "../components/superadmin/ModuleManagement";
 
-function Courses() {
+function Modules() {
   return (
     <div className="flex min-h-screen bg-slate-100">
+
       <Sidebar />
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex-1 flex flex-col">
+
         <Header />
 
         <main className="p-8">
-          <CourseManagement />
+          <ModuleManagement />
         </main>
+
       </div>
+
     </div>
   );
 }
 
-export default Courses;
+export default Modules;
