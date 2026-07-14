@@ -1,69 +1,22 @@
-import { PERMISSIONS } from "./permissions";
+// src/constants/roles.ts
 
-export interface Role {
-  id: string;
-  name: string;
-  level: number;
-  permissions: string[];
-}
+export const SYSTEM_ROLE_CODES = [
+  "SUPER_ADMIN",
+  "ADMIN",
+] as const;
 
-export const DEFAULT_ROLES: Role[] = [
-  {
-    id: "super_admin",
-    name: "Super Admin",
-    level: 1,
-    permissions: Object.values(PERMISSIONS),
-  },
+export const DEFAULT_HIERARCHY_LEVEL = 1;
 
-  {
-    id: "admin",
-    name: "Admin",
-    level: 2,
-    permissions: [
-      PERMISSIONS.VIEW_DASHBOARD,
-      PERMISSIONS.VIEW_EMPLOYEE,
-      PERMISSIONS.CREATE_EMPLOYEE,
-      PERMISSIONS.EDIT_EMPLOYEE,
-      PERMISSIONS.VIEW_COURSE,
-      PERMISSIONS.CREATE_COURSE,
-      PERMISSIONS.EDIT_COURSE,
-      PERMISSIONS.VIEW_ASSESSMENT,
-      PERMISSIONS.CREATE_ASSESSMENT,
-      PERMISSIONS.VIEW_REPORTS,
-      PERMISSIONS.VIEW_SETTINGS,
-    ],
-  },
+export const ROLE_PAGE_SIZE = 10;
 
-  {
-    id: "trainer",
-    name: "Trainer",
-    level: 3,
-    permissions: [
-      PERMISSIONS.VIEW_DASHBOARD,
-      PERMISSIONS.VIEW_COURSE,
-      PERMISSIONS.EDIT_COURSE,
-      PERMISSIONS.VIEW_MODULE,
-      PERMISSIONS.CREATE_MODULE,
-      PERMISSIONS.EDIT_MODULE,
-      PERMISSIONS.VIEW_LESSON,
-      PERMISSIONS.CREATE_LESSON,
-      PERMISSIONS.EDIT_LESSON,
-      PERMISSIONS.VIEW_ASSESSMENT,
-      PERMISSIONS.CREATE_ASSESSMENT,
-    ],
-  },
+export const ROLE_SORT_FIELD = "hierarchy_level";
 
-  {
-    id: "learner",
-    name: "Learner",
-    level: 4,
-    permissions: [
-      PERMISSIONS.VIEW_DASHBOARD,
-      PERMISSIONS.VIEW_COURSE,
-      PERMISSIONS.VIEW_MODULE,
-      PERMISSIONS.VIEW_LESSON,
-      PERMISSIONS.VIEW_ASSESSMENT,
-      PERMISSIONS.VIEW_CERTIFICATE,
-    ],
-  },
-];
+export const ROLE_SORT_ORDER = "asc";
+
+export const ROLE_VALIDATION = {
+  ROLE_CODE_REQUIRED: "Role Code is required.",
+  ROLE_NAME_REQUIRED: "Role Name is required.",
+  COMPANY_REQUIRED: "Company is required.",
+  HIERARCHY_REQUIRED: "Hierarchy Level must be greater than or equal to 1.",
+  SYSTEM_ROLE_DELETE: "System Roles cannot be deleted.",
+} as const;

@@ -1,6 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from 'react-router-dom';
 import React, { useState } from 'react';
 import { BRAND } from '../../config/branding';
+import { login } from '../../services/auth/authService';
+import { useAuthorization } from '../../hooks/useAuthorization';
 
 interface InputFieldProps {
   id: string;
@@ -10,6 +12,7 @@ interface InputFieldProps {
   value: string;
   onChange: (value: string) => void;
   rightElement?: React.ReactNode;
+  disabled?: boolean;
 }
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -20,6 +23,7 @@ const InputField: React.FC<InputFieldProps> = ({
   value,
   onChange,
   rightElement,
+  disabled,
 }) => (
   <div>
     <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1.5 tracking-wide">
@@ -33,8 +37,9 @@ const InputField: React.FC<InputFieldProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        disabled={disabled}
         autoComplete={type === 'password' ? 'current-password' : 'off'}
-        className="w-full px-4 py-3 pr-11 rounded-xl bg-white/[0.06] border border-white/[0.12] text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 transition-all duration-200"
+        className="w-full px-4 py-3 pr-11 rounded-xl bg-white/[0.06] border border-white/[0.12] text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ '--tw-ring-color': `${BRAND.secondaryColor}66` } as React.CSSProperties}
       />
       {rightElement && (
@@ -77,24 +82,60 @@ interface LoginFormProps {
 
 const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
   const navigate = useNavigate();
-    const [companyCode, setCompanyCode] = useState('');
+  const { refresh } = useAuthorization();
+  const [companyCode, setCompanyCode] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("LOGIN BUTTON CLICKED");
+    if (loading) return;
 
-  onSubmit?.({
-    companyCode,
-    employeeId,
-    password,
-    rememberMe,
-  });
+    if (!companyCode.trim()) {
+      setErrorMessage('Company Code is required.');
+      return;
+    }
+    if (!employeeId.trim()) {
+      setErrorMessage('Employee ID is required.');
+      return;
+    }
+    if (!password) {
+      setErrorMessage('Password is required.');
+      return;
+    }
 
-  navigate("/dashboard");
-};
+    setErrorMessage(null);
+    setLoading(true);
+
+    try {
+      onSubmit?.({ companyCode, employeeId, password, rememberMe });
+
+      const result = await login({
+  companyCode,
+  employeeId,
+  password,
+});
+
+if (!result.success) {
+  setErrorMessage(result.error);
+  return;
+}
+
+// Reload authorization context after creating session
+await refresh();
+
+navigate('/dashboard', { replace: true });
+    } catch {
+      setErrorMessage('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="backdrop-blur-2xl bg-white/[0.05] border border-white/[0.1] rounded-[24px] shadow-2xl shadow-black/50 p-8 lg:p-10">
@@ -109,7 +150,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
           label="Company Code"
           placeholder="Enter company code"
           value={companyCode}
-          onChange={setCompanyCode}
+          onChange={(v) => { setCompanyCode(v); setErrorMessage(null); }}
+          disabled={loading}
         />
 
         <InputField
@@ -117,7 +159,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
           label="Employee ID"
           placeholder="Enter employee ID"
           value={employeeId}
-          onChange={setEmployeeId}
+          onChange={(v) => { setEmployeeId(v); setErrorMessage(null); }}
+          disabled={loading}
         />
 
         <InputField
@@ -126,12 +169,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
           type={showPassword ? 'text' : 'password'}
           placeholder="Enter your password"
           value={password}
-          onChange={setPassword}
+          onChange={(v) => { setPassword(v); setErrorMessage(null); }}
+          disabled={loading}
           rightElement={
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className="text-slate-400 hover:opacity-80 transition-colors duration-200"
+              disabled={loading}
+              className="text-slate-400 hover:opacity-80 transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ color: showPassword ? BRAND.secondaryColor : undefined }}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
@@ -140,6 +185,28 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
           }
         />
 
+        {errorMessage !== null && (
+          <div
+            role="alert"
+            className="flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+          >
+            <svg
+              className="mt-0.5 h-4 w-4 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+              />
+            </svg>
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between pt-1">
           <label htmlFor="rememberMe" className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -147,7 +214,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded border-white/20 bg-white/10 cursor-pointer focus:ring-2"
+              disabled={loading}
+              className="w-4 h-4 rounded border-white/20 bg-white/10 cursor-pointer focus:ring-2 disabled:cursor-not-allowed"
               style={{ accentColor: BRAND.secondaryColor }}
             />
             <span className="text-sm text-slate-300">Remember me</span>
@@ -164,13 +232,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
 
         <button
           type="submit"
-          className="w-full mt-2 py-3.5 rounded-xl font-semibold text-sm tracking-wide hover:shadow-lg active:scale-[0.98] transition-all duration-300"
+          disabled={loading}
+          className="w-full mt-2 py-3.5 rounded-xl font-semibold text-sm tracking-wide hover:shadow-lg active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
           style={{
             background: `linear-gradient(to right, ${BRAND.secondaryColor}, ${BRAND.secondaryColor}CC)`,
             color: BRAND.primaryColor,
           }}
         >
-          Login
+          {loading ? 'Signing In...' : 'Login'}
         </button>
       </form>
 

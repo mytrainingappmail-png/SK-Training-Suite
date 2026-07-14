@@ -1,21 +1,7 @@
-import Header from "../components/dashboard/Header";
-import Sidebar from "../components/dashboard/Sidebar";
 import CourseManagement from "../components/superadmin/CourseManagement";
 
 function Courses() {
-  return (
-    <div className="flex min-h-screen bg-slate-100">
-      <Sidebar />
-
-      <div className="flex flex-1 flex-col">
-        <Header />
-
-        <main className="p-8">
-          <CourseManagement />
-        </main>
-      </div>
-    </div>
-  );
+  return <CourseManagement />;
 }
 
 export default Courses;

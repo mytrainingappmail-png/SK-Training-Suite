@@ -4,11 +4,13 @@ export interface Category {
 
   company_id: string;
 
-  category_code: string;
-
   category_name: string;
 
   description: string;
+
+  icon: string;
+
+  display_order: number;
 
   active: boolean;
 

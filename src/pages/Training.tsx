@@ -1,6 +1,3 @@
-import Header from "../components/dashboard/Header";
-import Sidebar from "../components/dashboard/Sidebar";
-
 const courses = [
   {
     title: "Real Estate Foundation",
@@ -27,89 +24,75 @@ const courses = [
 
 function Training() {
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="bg-white rounded-2xl shadow-sm p-8">
 
-      <Sidebar />
+      <div className="flex justify-between items-center mb-8">
 
-      <div className="flex-1 flex flex-col">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800">
+            Training Management
+          </h1>
 
-        <Header />
+          <p className="text-slate-500 mt-2">
+            Create, organize and manage learning programs.
+          </p>
+        </div>
 
-        <main className="p-8">
+        <button className="px-5 py-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 font-semibold">
+          + Create Course
+        </button>
 
-          <div className="bg-white rounded-2xl shadow-sm p-8">
+      </div>
 
-            <div className="flex justify-between items-center mb-8">
+      <div className="grid grid-cols-3 gap-6">
 
-              <div>
-                <h1 className="text-3xl font-bold text-slate-800">
-                  Training Management
-                </h1>
+        {courses.map((course) => (
 
-                <p className="text-slate-500 mt-2">
-                  Create, organize and manage learning programs.
-                </p>
+          <div
+            key={course.title}
+            className="border rounded-2xl p-6 hover:shadow-lg transition"
+          >
+
+            <h2 className="text-xl font-bold">
+              {course.title}
+            </h2>
+
+            <p className="text-slate-500 mt-2">
+              {course.level}
+            </p>
+
+            <div className="mt-6 space-y-2 text-sm">
+
+              <div className="flex justify-between">
+                <span>Learners</span>
+                <strong>{course.learners}</strong>
               </div>
 
-              <button className="px-5 py-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 font-semibold">
-                + Create Course
-              </button>
+              <div className="flex justify-between">
+                <span>Duration</span>
+                <strong>{course.duration}</strong>
+              </div>
 
-            </div>
+              <div className="flex justify-between">
+                <span>Status</span>
 
-            <div className="grid grid-cols-3 gap-6">
-
-              {courses.map((course) => (
-
-                <div
-                  key={course.title}
-                  className="border rounded-2xl p-6 hover:shadow-lg transition"
+                <strong
+                  className={
+                    course.status === "Active"
+                      ? "text-green-600"
+                      : "text-orange-500"
+                  }
                 >
+                  {course.status}
+                </strong>
 
-                  <h2 className="text-xl font-bold">
-                    {course.title}
-                  </h2>
-
-                  <p className="text-slate-500 mt-2">
-                    {course.level}
-                  </p>
-
-                  <div className="mt-6 space-y-2 text-sm">
-
-                    <div className="flex justify-between">
-                      <span>Learners</span>
-                      <strong>{course.learners}</strong>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span>Duration</span>
-                      <strong>{course.duration}</strong>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span>Status</span>
-                      <strong
-                        className={
-                          course.status === "Active"
-                            ? "text-green-600"
-                            : "text-orange-500"
-                        }
-                      >
-                        {course.status}
-                      </strong>
-                    </div>
-
-                  </div>
-
-                </div>
-
-              ))}
+              </div>
 
             </div>
 
           </div>
 
-        </main>
+        ))}
 
       </div>
 

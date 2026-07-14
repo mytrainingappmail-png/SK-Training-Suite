@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 function Sidebar() {
   return (
-    <aside className="w-72 h-screen bg-slate-900 border-r border-slate-800 flex flex-col">
+    <aside className="w-50 min-h-screen bg-slate-900 border-r border-slate-800 flex flex-col sticky top-0">
 
       <div className="p-6 border-b border-slate-800 flex items-center gap-3">
 
@@ -27,7 +27,7 @@ function Sidebar() {
 
       </div>
 
-      <nav className="flex-1 p-4">
+      <nav className="sidebar-scroll flex-1 overflow-y-auto p-4 pb-24">
 
         {MENU
   .filter((item) => item.visible)
@@ -35,7 +35,7 @@ function Sidebar() {
     <Link
       key={item.id}
       to={item.route}
-      className="block w-full mb-2 px-4 py-3 rounded-xl text-slate-300 hover:bg-yellow-500 hover:text-black transition"
+      className="block w-full mb-2 px-4 py-2.5 rounded-xl text-slate-300 hover:bg-yellow-500 hover:text-black transition"
     >
       {item.title}
     </Link>
