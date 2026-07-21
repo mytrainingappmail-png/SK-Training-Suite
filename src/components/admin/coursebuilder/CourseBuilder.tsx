@@ -2035,7 +2035,7 @@ function PropertiesPanel({
 
 type SaveStatus = 'idle' | 'saved';
 
-function CourseBuilder() {
+function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -2227,7 +2227,7 @@ function CourseBuilder() {
         setCourses(courseRows);
         setModules(moduleRows);
         setLessons(lessonRows);
-        setSelectedCourseId((prev) => prev || courseRows[0]?.id || '');
+        setSelectedCourseId((prev) => prev || initialCourseId || courseRows[0]?.id || '');
         setLastSavedAt(new Date());
       })
       .catch((err: unknown) => {
