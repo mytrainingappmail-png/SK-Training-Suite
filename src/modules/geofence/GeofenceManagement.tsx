@@ -1,14 +1,18 @@
 // src/modules/geofence/GeofenceManagement.tsx
 //
 // Admin defines any number of named attendance locations (office, a
-// project site visit, etc.) by searching a place name — no manual
-// lat/lng entry — and assigns each employee a check-in scope: any of
-// the company's active locations, or a specific hand-picked subset.
-// A company with zero locations configured is never restricted.
+// project site visit, etc.) — pick a point three ways: search a place
+// name (best-effort; OpenStreetMap has patchy coverage of private
+// project names), tap "Use My Location" while standing there, or type
+// latitude/longitude directly (e.g. copied from Google Maps). Then
+// assign employees a check-in scope in bulk, filtered by department/
+// designation, like a standard HRMS attendance policy screen.
 
 import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser } from '../../services/auth/session';
 import { employeeService } from '../../services/employee/employeeService';
+import { departmentService } from '../../services/department/departmentService';
+import { designationService } from '../../services/designation/designationService';
 import {
   loadLocations,
   createLocation,
@@ -20,6 +24,8 @@ import {
   setEmployeeScope,
 } from '../../services/geofence/geofenceService';
 import type { Employee } from '../../types/employee';
+import type { Department } from '../../types/department';
+import type { Designation } from '../../types/designation';
 import type {
   AttendanceLocation,
   AttendanceLocationScope,
@@ -46,6 +52,9 @@ function IconPencil({ className = 'h-3.5 w-3.5' }: { className?: string }) {
 function IconX({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>);
 }
+function IconCrosshair({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3M6 12H3m15 0a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" /></svg>);
+}
 
 function PrimaryButton({ onClick, disabled, children }: { onClick?: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (<button type="button" onClick={onClick} disabled={disabled} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]">{children}</button>);
@@ -64,41 +73,53 @@ const TYPE_BADGE_CLS: Record<LocationType, string> = {
   other: 'bg-slate-100 text-slate-600',
 };
 
+const SCOPE_BADGE_CLS: Record<AttendanceLocationScope, string> = {
+  all: 'bg-emerald-50 text-emerald-700',
+  specific: 'bg-indigo-50 text-indigo-700',
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Add / Edit Location dialog — search-by-place-name, no manual lat/lng
+// Add / Edit Location dialog — search a place (best effort), use your
+// current GPS position, or type latitude/longitude directly. All
+// three fill the same two fields below, which stay editable either way.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LocationDialog({
-  companyId, editing, saving, onSave, onCancel,
+  editing, saving, onSave, onCancel,
 }: {
-  companyId: string;
   editing: AttendanceLocation | null;
   saving: boolean;
   onSave: (data: { name: string; type: LocationType; address: string; lat: number; lng: number; radius: number }) => void;
   onCancel: () => void;
 }) {
-  const [query, setQuery] = useState(editing?.address ?? '');
+  const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [picked, setPicked] = useState<PlaceSearchResult | null>(
-    editing ? { displayName: editing.address, latitude: editing.latitude, longitude: editing.longitude } : null
-  );
+  const [searchError, setSearchError] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState('');
+
   const [name, setName] = useState(editing?.location_name ?? '');
   const [type, setType] = useState<LocationType>(editing?.location_type ?? 'office');
+  const [address, setAddress] = useState(editing?.address ?? '');
+  const [lat, setLat] = useState(editing ? String(editing.latitude) : '');
+  const [lng, setLng] = useState(editing ? String(editing.longitude) : '');
   const [radius, setRadius] = useState(String(editing?.radius_meters ?? 200));
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 3 || (picked && picked.displayName === query)) {
-      setResults([]);
-      return;
-    }
+    setSearchError('');
+    if (query.trim().length < 3) { setResults([]); return; }
     debounceRef.current = setTimeout(() => {
       setSearching(true);
       searchPlaces(query)
-        .then(setResults)
-        .catch(() => setResults([]))
+        .then((rows) => {
+          setResults(rows);
+          if (rows.length === 0) setSearchError("No matches — try 'Use My Location' or enter coordinates manually below.");
+        })
+        .catch(() => { setResults([]); setSearchError('Search failed. Try again or enter coordinates manually below.'); })
         .finally(() => setSearching(false));
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -106,20 +127,51 @@ function LocationDialog({
   }, [query]);
 
   function pickResult(r: PlaceSearchResult) {
-    setPicked(r);
-    setQuery(r.displayName);
-    setResults([]);
+    setLat(String(r.latitude));
+    setLng(String(r.longitude));
+    setAddress(r.displayName);
     if (!name.trim()) setName(r.displayName.split(',')[0]);
+    setResults([]);
+    setQuery('');
   }
 
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      setLocateError('Geolocation is not supported by this browser.');
+      return;
+    }
+    setLocating(true);
+    setLocateError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(String(pos.coords.latitude));
+        setLng(String(pos.coords.longitude));
+        setLocating(false);
+      },
+      (err) => {
+        setLocateError(`Could not get location: ${err.message}`);
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  const canSave =
+    name.trim().length > 0 &&
+    lat.trim().length > 0 && lng.trim().length > 0 &&
+    !Number.isNaN(latNum) && !Number.isNaN(lngNum) &&
+    latNum >= -90 && latNum <= 90 && lngNum >= -180 && lngNum <= 180;
+
   function handleSubmit() {
-    if (!picked) return;
+    if (!canSave) return;
     onSave({
       name: name.trim(),
       type,
-      address: picked.displayName,
-      lat: picked.latitude,
-      lng: picked.longitude,
+      address: address.trim(),
+      lat: latNum,
+      lng: lngNum,
       radius: Math.max(1, Number(radius) || 200),
     });
   }
@@ -127,7 +179,7 @@ function LocationDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/40" onClick={!saving ? onCancel : undefined} />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900">{editing ? 'Edit Location' : 'Add Location'}</h3>
           <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><IconX /></button>
@@ -135,41 +187,54 @@ function LocationDialog({
 
         <div className="space-y-4">
           <div className="relative">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Search Place</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Search Place (optional)</label>
             <input
               value={query}
-              onChange={(e) => { setQuery(e.target.value); setPicked(null); }}
-              placeholder="e.g. Hero Homes Palatial, Sector 104, Gurgaon"
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. Cyber Hub, Gurgaon"
               className={INPUT_CLS}
-              autoFocus
             />
-            {searching && (
-              <div className="absolute right-3 top-9 text-slate-400"><IconSpinner className="h-4 w-4" /></div>
-            )}
+            {searching && <div className="absolute right-3 top-9 text-slate-400"><IconSpinner className="h-4 w-4" /></div>}
             {results.length > 0 && (
               <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
                 {results.map((r, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => pickResult(r)}
-                    className="block w-full border-b border-slate-50 px-3 py-2 text-left text-sm text-slate-700 last:border-0 hover:bg-indigo-50"
-                  >
+                  <button key={i} type="button" onClick={() => pickResult(r)} className="block w-full border-b border-slate-50 px-3 py-2 text-left text-sm text-slate-700 last:border-0 hover:bg-indigo-50">
                     {r.displayName}
                   </button>
                 ))}
               </div>
             )}
-            {picked && (
-              <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600">
-                <IconMapPin className="h-3.5 w-3.5" /> Location selected
-              </p>
-            )}
+            {searchError && <p className="mt-1.5 text-xs text-amber-600">{searchError}</p>}
+            <p className="mt-1.5 text-xs text-slate-400">
+              Small/private project names are often missing from this free search — use the options below instead.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-500">Latitude / Longitude</label>
+              <SecondaryButton onClick={useMyLocation} disabled={locating} className="!px-2.5 !py-1.5 text-xs">
+                {locating ? <IconSpinner className="h-3.5 w-3.5" /> : <IconCrosshair className="h-3.5 w-3.5" />} Use My Location
+              </SecondaryButton>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude, e.g. 28.4595" className={INPUT_CLS} />
+              <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude, e.g. 77.0266" className={INPUT_CLS} />
+            </div>
+            {locateError && <p className="mt-1.5 text-xs text-red-600">{locateError}</p>}
+            <p className="mt-1.5 text-xs text-slate-400">
+              Tip: open the spot in Google Maps, long-press the pin, and paste the coordinates shown there.
+            </p>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-500">Location Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Gurgaon HQ" className={INPUT_CLS} />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Hero Homes Palatial Site" className={INPUT_CLS} />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Address (optional)</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. Sector 104, Gurgaon" className={INPUT_CLS} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -189,7 +254,7 @@ function LocationDialog({
 
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={onCancel} disabled={saving}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={handleSubmit} disabled={saving || !picked || !name.trim()}>
+            <PrimaryButton onClick={handleSubmit} disabled={saving || !canSave}>
               {saving ? <IconSpinner className="h-3.5 w-3.5" /> : null} Save Location
             </PrimaryButton>
           </div>
@@ -230,6 +295,8 @@ function GeofenceManagement() {
   const [section, setSection] = useState<Section>('locations');
   const [locations, setLocations] = useState<AttendanceLocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [employeeLocationMap, setEmployeeLocationMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -242,7 +309,12 @@ function GeofenceManagement() {
   const [deletingLocation, setDeletingLocation] = useState(false);
 
   const [employeeSearch, setEmployeeSearch] = useState('');
-  const [busyEmployeeId, setBusyEmployeeId] = useState<string | null>(null);
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [designationFilter, setDesignationFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkScope, setBulkScope] = useState<AttendanceLocationScope>('all');
+  const [bulkLocationIds, setBulkLocationIds] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
 
   function showToast(message: string) {
     setToast(message);
@@ -257,11 +329,19 @@ function GeofenceManagement() {
     }
     setLoading(true);
     setError('');
-    Promise.all([loadLocations(companyId), employeeService.getAll(), loadAllEmployeeLocationMap()])
-      .then(([locationRows, employeeRows, map]) => {
+    Promise.all([
+      loadLocations(companyId),
+      employeeService.getAll(),
+      loadAllEmployeeLocationMap(),
+      departmentService.getAll(),
+      designationService.getAll(),
+    ])
+      .then(([locationRows, employeeRows, map, departmentRows, designationRows]) => {
         setLocations(locationRows);
         setEmployees(employeeRows.filter((e) => e.company_id === companyId && e.active));
         setEmployeeLocationMap(map);
+        setDepartments(departmentRows.filter((d) => d.company_id === companyId));
+        setDesignations(designationRows.filter((d) => d.company_id === companyId));
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load geofencing data.'))
       .finally(() => setLoading(false));
@@ -323,39 +403,77 @@ function GeofenceManagement() {
     }
   }
 
-  async function handleScopeChange(employeeId: string, scope: AttendanceLocationScope) {
-    setBusyEmployeeId(employeeId);
-    try {
-      await setEmployeeScope(employeeId, scope);
-      setEmployees((prev) => prev.map((e) => (e.id === employeeId ? { ...e, attendance_location_scope: scope } : e)));
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update scope.');
-    } finally {
-      setBusyEmployeeId(null);
-    }
-  }
+  // ── Employee filtering + bulk selection ───────────────────────────────────
 
-  async function handleToggleEmployeeLocation(employeeId: string, locationId: string) {
-    const current = employeeLocationMap[employeeId] ?? [];
-    const next = current.includes(locationId)
-      ? current.filter((id) => id !== locationId)
-      : [...current, locationId];
-    setBusyEmployeeId(employeeId);
-    try {
-      await setEmployeeLocations(employeeId, next);
-      setEmployeeLocationMap((prev) => ({ ...prev, [employeeId]: next }));
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update employee locations.');
-    } finally {
-      setBusyEmployeeId(null);
-    }
-  }
+  const filteredDesignations = departmentFilter === 'all'
+    ? designations
+    : designations.filter((d) => d.department_id === departmentFilter);
 
   const filteredEmployees = employees.filter((e) => {
+    if (departmentFilter !== 'all' && e.department_id !== departmentFilter) return false;
+    if (designationFilter !== 'all' && e.designation_id !== designationFilter) return false;
     const kw = employeeSearch.trim().toLowerCase();
     if (!kw) return true;
     return `${e.first_name} ${e.last_name}`.toLowerCase().includes(kw) || e.employee_code.toLowerCase().includes(kw);
   });
+
+  const allFilteredSelected = filteredEmployees.length > 0 && filteredEmployees.every((e) => selectedIds.has(e.id));
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredEmployees.forEach((e) => next.delete(e.id));
+      } else {
+        filteredEmployees.forEach((e) => next.add(e.id));
+      }
+      return next;
+    });
+  }
+
+  function toggleSelect(employeeId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(employeeId)) next.delete(employeeId); else next.add(employeeId);
+      return next;
+    });
+  }
+
+  function toggleBulkLocation(locationId: string) {
+    setBulkLocationIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(locationId)) next.delete(locationId); else next.add(locationId);
+      return next;
+    });
+  }
+
+  async function handleApplyToSelected() {
+    if (selectedIds.size === 0) return;
+    setApplying(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await Promise.all(
+        ids.map(async (employeeId) => {
+          await setEmployeeScope(employeeId, bulkScope);
+          await setEmployeeLocations(employeeId, bulkScope === 'specific' ? Array.from(bulkLocationIds) : []);
+        })
+      );
+      showToast(`Updated ${ids.length} employee${ids.length === 1 ? '' : 's'}`);
+      setSelectedIds(new Set());
+      setBulkLocationIds(new Set());
+      fetchAll();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update selected employees.');
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  function scopeSummary(emp: Employee): string {
+    if (emp.attendance_location_scope === 'all') return 'All Locations';
+    const count = (employeeLocationMap[emp.id] ?? []).length;
+    return count > 0 ? `${count} specific location${count === 1 ? '' : 's'}` : 'Specific (none set)';
+  }
 
   if (loading) {
     return <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}</div>;
@@ -370,8 +488,8 @@ function GeofenceManagement() {
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">Attendance Geofencing</h2>
         <p className="text-sm text-slate-500">
-          Add named locations by searching a place — office, a project site, anywhere training happens — then decide
-          which employees must check in from which location(s). No locations configured means no restriction.
+          Add named locations — office, a project site, anywhere training happens — then decide which employees must
+          check in from which location(s). No locations configured means no restriction.
         </p>
         <div className="mt-4 flex gap-2">
           <button
@@ -414,7 +532,7 @@ function GeofenceManagement() {
                         {LOCATION_TYPE_LABELS[loc.location_type]}
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate text-xs text-slate-400">{loc.address}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-400">{loc.address || `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`}</p>
                     <p className="mt-0.5 text-xs text-slate-400">Radius: {loc.radius_meters}m</p>
                   </div>
                   <div className="flex flex-shrink-0 gap-2">
@@ -434,12 +552,30 @@ function GeofenceManagement() {
 
       {section === 'employees' && (
         <div className="space-y-4">
-          <input
-            value={employeeSearch}
-            onChange={(e) => setEmployeeSearch(e.target.value)}
-            placeholder="Search employee by name or code…"
-            className={`max-w-sm ${INPUT_CLS}`}
-          />
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
+            <input
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              placeholder="Search by name or code…"
+              className={`min-w-[200px] flex-1 ${INPUT_CLS}`}
+            />
+            <select
+              value={departmentFilter}
+              onChange={(e) => { setDepartmentFilter(e.target.value); setDesignationFilter('all'); }}
+              className={`w-auto min-w-[160px] ${INPUT_CLS}`}
+            >
+              <option value="all">All Departments</option>
+              {departments.map((d) => (<option key={d.id} value={d.id}>{d.department_name}</option>))}
+            </select>
+            <select
+              value={designationFilter}
+              onChange={(e) => setDesignationFilter(e.target.value)}
+              className={`w-auto min-w-[160px] ${INPUT_CLS}`}
+            >
+              <option value="all">All Designations</option>
+              {filteredDesignations.map((d) => (<option key={d.id} value={d.id}>{d.designation_name}</option>))}
+            </select>
+          </div>
 
           {locations.length === 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
@@ -447,65 +583,97 @@ function GeofenceManagement() {
             </div>
           )}
 
-          <div className="space-y-3">
-            {filteredEmployees.map((emp) => {
-              const busy = busyEmployeeId === emp.id;
-              const linkedIds = employeeLocationMap[emp.id] ?? [];
-              return (
-                <div key={emp.id} className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-800">{emp.first_name} {emp.last_name}</p>
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAll}
+                disabled={filteredEmployees.length === 0}
+                className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-400"
+              />
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all (${filteredEmployees.length})`}
+              </span>
+            </div>
+
+            {filteredEmployees.length === 0 ? (
+              <p className="py-10 text-center text-sm text-slate-400">No employees found.</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {filteredEmployees.map((emp) => (
+                  <label key={emp.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(emp.id)}
+                      onChange={() => toggleSelect(emp.id)}
+                      className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-400"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800">{emp.first_name} {emp.last_name}</p>
                       <p className="text-xs text-slate-400">{emp.employee_code}</p>
                     </div>
-                    <select
-                      value={emp.attendance_location_scope}
-                      onChange={(e) => handleScopeChange(emp.id, e.target.value as AttendanceLocationScope)}
-                      disabled={busy}
-                      className="rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 disabled:opacity-50"
-                    >
-                      {(Object.keys(ATTENDANCE_SCOPE_LABELS) as AttendanceLocationScope[]).map((s) => (
-                        <option key={s} value={s}>{ATTENDANCE_SCOPE_LABELS[s]}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {emp.attendance_location_scope === 'specific' && locations.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                      {locations.map((loc) => {
-                        const checked = linkedIds.includes(loc.id);
-                        return (
-                          <label
-                            key={loc.id}
-                            className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                              checked ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            } ${busy ? 'pointer-events-none opacity-50' : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => handleToggleEmployeeLocation(emp.id, loc.id)}
-                              className="hidden"
-                            />
-                            {loc.location_name}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {filteredEmployees.length === 0 && (
-              <p className="py-8 text-center text-sm text-slate-400">No employees found.</p>
+                    <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${SCOPE_BADGE_CLS[emp.attendance_location_scope]}`}>
+                      {scopeSummary(emp)}
+                    </span>
+                  </label>
+                ))}
+              </div>
             )}
           </div>
+
+          {selectedIds.size > 0 && (
+            <div className="sticky bottom-4 rounded-2xl border border-indigo-100 bg-white p-4 shadow-lg">
+              <p className="mb-3 text-sm font-semibold text-slate-800">
+                Set check-in policy for {selectedIds.size} selected employee{selectedIds.size === 1 ? '' : 's'}
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={bulkScope}
+                  onChange={(e) => setBulkScope(e.target.value as AttendanceLocationScope)}
+                  className={`w-auto ${INPUT_CLS}`}
+                >
+                  {(Object.keys(ATTENDANCE_SCOPE_LABELS) as AttendanceLocationScope[]).map((s) => (
+                    <option key={s} value={s}>{ATTENDANCE_SCOPE_LABELS[s]}</option>
+                  ))}
+                </select>
+
+                {bulkScope === 'specific' && (
+                  <div className="flex flex-wrap gap-2">
+                    {locations.map((loc) => {
+                      const checked = bulkLocationIds.has(loc.id);
+                      return (
+                        <label
+                          key={loc.id}
+                          className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${checked ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        >
+                          <input type="checkbox" checked={checked} onChange={() => toggleBulkLocation(loc.id)} className="hidden" />
+                          {loc.location_name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="ml-auto flex gap-2">
+                  <SecondaryButton onClick={() => { setSelectedIds(new Set()); setBulkLocationIds(new Set()); }} disabled={applying}>
+                    Clear
+                  </SecondaryButton>
+                  <PrimaryButton
+                    onClick={handleApplyToSelected}
+                    disabled={applying || (bulkScope === 'specific' && bulkLocationIds.size === 0)}
+                  >
+                    {applying ? <IconSpinner className="h-3.5 w-3.5" /> : null} Apply
+                  </PrimaryButton>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {locationDialogOpen && (
         <LocationDialog
-          companyId={companyId}
           editing={editingLocation}
           saving={savingLocation}
           onSave={handleSaveLocation}

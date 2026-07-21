@@ -88,7 +88,13 @@ export async function setEmployeeScope(employeeId: string, scope: AttendanceLoca
   await setEmployeeAttendanceScope(employeeId, scope);
 }
 
-// ── Place search (free, no API key — OpenStreetMap Nominatim) ────────────────
+// ── Place search ──────────────────────────────────────────────────────────────
+//
+// Uses Google Places (much better coverage of private project/building
+// names) when VITE_GOOGLE_PLACES_API_KEY is set in .env — no code
+// changes needed to switch it on later, just add the key and restart.
+// Falls back to the free OpenStreetMap Nominatim search otherwise (and
+// if a configured Google key ever errors out).
 
 export interface PlaceSearchResult {
   displayName: string;
@@ -96,11 +102,55 @@ export interface PlaceSearchResult {
   longitude: number;
 }
 
+const GOOGLE_PLACES_API_KEY = (import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined)?.trim();
+
 export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> {
   const q = query.trim();
   if (q.length < 3) return [];
 
-  const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=6&q=${encodeURIComponent(q)}`;
+  if (GOOGLE_PLACES_API_KEY) {
+    try {
+      return await searchPlacesGoogle(q, GOOGLE_PLACES_API_KEY);
+    } catch {
+      // Fall through to the free search below rather than failing outright.
+    }
+  }
+
+  return searchPlacesNominatim(q);
+}
+
+interface GooglePlacesResponse {
+  places?: {
+    displayName?: { text: string };
+    formattedAddress?: string;
+    location?: { latitude: number; longitude: number };
+  }[];
+}
+
+async function searchPlacesGoogle(query: string, apiKey: string): Promise<PlaceSearchResult[]> {
+  const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location',
+    },
+    body: JSON.stringify({ textQuery: query }),
+  });
+  if (!response.ok) throw new Error('Google Places search failed.');
+
+  const data = (await response.json()) as GooglePlacesResponse;
+  return (data.places ?? [])
+    .filter((p) => p.location)
+    .map((p) => ({
+      displayName: p.formattedAddress || p.displayName?.text || query,
+      latitude: p.location!.latitude,
+      longitude: p.location!.longitude,
+    }));
+}
+
+async function searchPlacesNominatim(query: string): Promise<PlaceSearchResult[]> {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=6&q=${encodeURIComponent(query)}`;
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('Location search failed. Please try again.');
 
