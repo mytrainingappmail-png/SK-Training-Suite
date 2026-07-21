@@ -31,7 +31,18 @@ const BLANK: EmployeeForm = {
   joining_date: "",
   reporting_manager: null,
   active: true,
+  attendance_location_scope: "all",
+  password: "",
 };
+
+function generateTemporaryPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let result = "";
+  for (let i = 0; i < 10; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers  (no React, no side-effects)
@@ -320,6 +331,7 @@ interface FormErrs {
   joining_date?: string;
   email?: string;
   mobile?: string;
+  password?: string;
 }
 
 function EmployeeModal({
@@ -362,11 +374,13 @@ function EmployeeModal({
           joining_date: editing.joining_date,
           reporting_manager: editing.reporting_manager,
           active: editing.active,
+          password: "",
         }
       : { ...BLANK }
   );
 
   const [errs, setErrs] = useState<FormErrs>({});
+  const [showPassword, setShowPassword] = useState(false);
   const firstRef = useRef<HTMLSelectElement>(null);
 
   // ── Cascading dropdown lists — derived from props + form state during render
@@ -474,6 +488,13 @@ function EmployeeModal({
 
     if (form.mobile && !/^[+]?[\d\s\-().]{7,20}$/.test(form.mobile))
       e.mobile = "Enter a valid mobile number.";
+
+    const passwordValue = (form.password ?? "").trim();
+    if (!isEdit && !passwordValue) {
+      e.password = "Password is required for a new employee.";
+    } else if (passwordValue && passwordValue.length < 6) {
+      e.password = "Password must be at least 6 characters.";
+    }
 
     setErrs(e);
     return Object.keys(e).length === 0;
@@ -671,6 +692,49 @@ function EmployeeModal({
               </FL>
             </div>
 
+            <FL
+              label={isEdit ? "Reset Password (leave blank to keep unchanged)" : "Temporary Password"}
+              required={!isEdit}
+              error={errs.password}
+            >
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password ?? ""}
+                    onChange={(e) => set("password", e.target.value)}
+                    placeholder={isEdit ? "Leave blank to keep current password" : "Set a temporary password"}
+                    maxLength={100}
+                    disabled={saving}
+                    className={CLS_INPUT}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    set("password", generateTemporaryPassword());
+                    setShowPassword(true);
+                  }}
+                  className="flex-shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Generate
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {isEdit
+                  ? "The employee can change this themselves afterward from their own profile."
+                  : "Share this with the employee — they can change it from their own profile after logging in."}
+              </p>
+            </FL>
+
             {/* Joining Date */}
             <FL label="Joining Date" required error={errs.joining_date}>
               <input
@@ -850,7 +914,9 @@ export default function EmployeeManagement() {
     setSaving(true);
     try {
       if (modal?.type === "edit") {
-        await employeeService.update(modal.emp.id, data);
+        const { password, ...rest } = data;
+        const payload: EmployeeForm = password && password.trim() ? data : rest;
+        await employeeService.update(modal.emp.id, payload);
       } else {
         await employeeService.create(data);
       }
