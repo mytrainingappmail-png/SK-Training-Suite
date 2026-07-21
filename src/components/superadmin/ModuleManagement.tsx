@@ -343,7 +343,7 @@ function ModuleModal({
     isEdit
       ? {
           course_id:         editing.course_id,
-          module_code:       editing.module_code,
+          module_code:       editing.module_code ?? '',
           module_name:       editing.module_name,
           description:       editing.description,
           module_order:      editing.module_order,
@@ -617,7 +617,7 @@ export default function ModuleManagement() {
 
   // ── Derived
   const usedCodes = useMemo(
-    () => modules.map((m) => m.module_code.trim().toLowerCase()),
+    () => modules.map((m) => (m.module_code ?? '').trim().toLowerCase()),
     [modules]
   );
 
@@ -626,7 +626,7 @@ export default function ModuleManagement() {
     if (!kw) return modules;
     return modules.filter(
       (m) =>
-        m.module_code.toLowerCase().includes(kw) ||
+        (m.module_code ?? '').toLowerCase().includes(kw) ||
         m.module_name.toLowerCase().includes(kw) ||
         (m.description ?? "").toLowerCase().includes(kw)
     );
