@@ -36,11 +36,28 @@ import {
   saveResource,
   removeResource,
 } from '../../../services/resource/resourceService';
+import {
+  loadAssessments,
+  createAssessment,
+  saveAssessment,
+  removeAssessment,
+} from '../../../services/assessment/assessmentService';
+import {
+  loadQuestions,
+  createQuestion,
+  saveQuestion,
+  removeQuestion,
+  loadOptionsByQuestion,
+} from '../../../services/question/questionService';
 
 import type { Lesson, LessonType } from '../../../types/lessonBuilder';
 import type { Module, ModuleForm } from '../../../types/module';
 import type { Course } from '../../../types/course';
 import type { Resource } from '../../../types/resource';
+import type { Assessment, AssessmentForm, AssessmentType } from '../../../types/assessment';
+import { defaultAssessmentForm } from '../../../types/assessment';
+import type { Question, QuestionType, DifficultyLevel, QuestionWithOptionsForm, QuestionOptionForm } from '../../../types/question';
+import { defaultQuestionForm, TRUE_FALSE_OPTIONS } from '../../../types/question';
 
 const LESSONS_CHANGED_EVENT = 'sk:lessons-changed';
 
@@ -99,15 +116,6 @@ interface AssignmentSettings {
 }
 
 const DEFAULT_ASSIGNMENT: AssignmentSettings = { instructions: '', marks: 0, submissionRequired: false };
-
-interface QuizSettings {
-  quizName:       string;
-  passingPercent: number;
-  attempts:       number;
-  timerMinutes:   number;
-}
-
-const DEFAULT_QUIZ: QuizSettings = { quizName: '', passingPercent: 60, attempts: 1, timerMinutes: 0 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Icons (inline SVG only — no external icon package, no emoji)
@@ -264,6 +272,14 @@ function IconImage({ className = 'h-4 w-4' }: { className?: string }) {
     </svg>
   );
 }
+function IconHighlight({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m9 11.25 6.75-6.75 3 3-6.75 6.75L9 15l-3-3 3-.75Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 19.5h18" />
+    </svg>
+  );
+}
 
 function PageTypeIcon({ type, className = 'h-4 w-4' }: { type: LessonType; className?: string }) {
   if (type === 'video') return <IconVideo className={className} />;
@@ -374,7 +390,7 @@ function PreviewDialog({ html, onClose }: { html: string; onClose: () => void })
             <IconX className="h-4 w-4" />
           </button>
         </div>
-        <div className="prose prose-invert max-w-none text-[15px] leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="prose max-w-none rounded-xl bg-white p-5 text-[15px] leading-relaxed text-slate-900" dangerouslySetInnerHTML={{ __html: html }} />
       </div>
     </div>
   );
@@ -392,14 +408,26 @@ function PreviewDialog({ html, onClose }: { html: string; onClose: () => void })
 // workspace exactly like every other lesson type.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageEditorPanel({ lessonId }: { lessonId: string }) {
+function PageEditorPanel({ lessonId, onDirtyChange }: { lessonId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [editorBg, setEditorBg] = useState<'dark' | 'white' | 'gray' | 'cream'>('dark');
+  const [localNotice, setLocalNotice] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const loadedLessonId = useRef<string>('');
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRange = useRef<Range | null>(null);
+
+  const EDITOR_BG: Record<typeof editorBg, { bg: string; text: string; label: string }> = {
+    dark: { bg: '#1e293b', text: '#f1f5f9', label: 'Dark Blue' },
+    white: { bg: '#ffffff', text: '#0f172a', label: 'White' },
+    gray: { bg: '#f1f5f9', text: '#0f172a', label: 'Light Gray' },
+    cream: { bg: '#fdf6e3', text: '#1f2937', label: 'Cream' },
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -425,27 +453,97 @@ function PageEditorPanel({ lessonId }: { lessonId: string }) {
     }
   }, [loading, html, lessonId]);
 
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
+  // ── Selection preservation ── native file pickers, color inputs and
+  // window.prompt() all steal focus/selection from the contentEditable
+  // element; every toolbar action saves the Range beforehand and restores
+  // it right before executing, so insertion always lands where the user
+  // was actually working (this is the fix for images "not appearing" —
+  // execCommand was silently inserting into a lost/empty selection).
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current && editorRef.current.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  }
+  function restoreSelection() {
+    if (!savedRange.current) return;
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(savedRange.current);
+  }
+
   function handleInput() {
     if (editorRef.current) setHtml(editorRef.current.innerHTML);
+    onDirtyChange?.(true);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      handleAutoSave();
+    }, 2000);
   }
 
   function exec(command: string, value?: string) {
     editorRef.current?.focus();
+    restoreSelection();
     document.execCommand(command, false, value);
+    saveSelection();
     handleInput();
   }
 
+  function setFontSize(px: string) {
+    editorRef.current?.focus();
+    restoreSelection();
+    document.execCommand('fontSize', false, '7');
+    if (editorRef.current) {
+      editorRef.current.querySelectorAll('font[size="7"]').forEach((el) => {
+        const span = document.createElement('span');
+        span.style.fontSize = px;
+        span.innerHTML = el.innerHTML;
+        el.replaceWith(span);
+      });
+    }
+    saveSelection();
+    handleInput();
+  }
+
+  function handleInsertLink() {
+    saveSelection();
+    const url = window.prompt('Link URL:', 'https://');
+    if (url) exec('createLink', url);
+  }
+
+  function handleEditorKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const ctrlOrCmd = e.ctrlKey || e.metaKey;
+    if (!ctrlOrCmd) return;
+    if (e.key === 'b' || e.key === 'B') { e.preventDefault(); exec('bold'); }
+    else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); exec('italic'); }
+    else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); exec('underline'); }
+  }
+
   async function handleAutoSave() {
+    if (debounceTimer.current) { clearTimeout(debounceTimer.current); debounceTimer.current = null; }
     if (!editorRef.current) return;
     const current = editorRef.current.innerHTML;
     setSaveState('saving');
     try {
       await updateLesson(lessonId, { content: current });
       setSaveState('saved');
+      onDirtyChange?.(false);
+      notifyLessonsChanged();
       setTimeout(() => setSaveState('idle'), 1500);
     } catch {
       setSaveState('idle');
     }
+  }
+
+  function handleImageButtonClick() {
+    saveSelection();
+    imageInputRef.current?.click();
   }
 
   async function handleInsertImage(file: File) {
@@ -453,12 +551,151 @@ function PageEditorPanel({ lessonId }: { lessonId: string }) {
     try {
       const result = await uploadImage(file);
       editorRef.current?.focus();
-      document.execCommand('insertHTML', false, `<img src="${result.url}" alt="" style="max-width:100%;border-radius:0.5rem;" />`);
+      restoreSelection();
+      document.execCommand(
+        'insertHTML',
+        false,
+        `<img src="${result.url}" alt="" style="max-width:100%;border-radius:0.5rem;" onerror="this.style.display='none'" />`
+      );
+      saveSelection();
       handleInput();
+    } catch {
+      // upload failure is surfaced by the service call itself; nothing to insert
     } finally {
       setUploadingImage(false);
     }
   }
+
+  // ── Image selection (resize / align / delete) ───────────────────────────────
+  function handleEditorClick(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    setSelectedImage(target.tagName === 'IMG' ? (target as HTMLImageElement) : null);
+  }
+  function setImageAlign(align: 'left' | 'center' | 'right' | 'full') {
+    if (!selectedImage) return;
+    if (align === 'left') {
+      selectedImage.style.cssFloat = 'left';
+      selectedImage.style.display = '';
+      selectedImage.style.margin = '0 1rem 1rem 0';
+      selectedImage.style.width = selectedImage.style.width || '50%';
+    } else if (align === 'right') {
+      selectedImage.style.cssFloat = 'right';
+      selectedImage.style.display = '';
+      selectedImage.style.margin = '0 0 1rem 1rem';
+      selectedImage.style.width = selectedImage.style.width || '50%';
+    } else if (align === 'center') {
+      selectedImage.style.cssFloat = 'none';
+      selectedImage.style.display = 'block';
+      selectedImage.style.margin = '0 auto 1rem auto';
+    } else {
+      selectedImage.style.cssFloat = 'none';
+      selectedImage.style.display = 'block';
+      selectedImage.style.margin = '0 0 1rem 0';
+      selectedImage.style.width = '100%';
+    }
+    handleInput();
+  }
+  function setImageWidth(pct: string) {
+    if (!selectedImage) return;
+    selectedImage.style.width = pct;
+    handleInput();
+  }
+  function deleteSelectedImage() {
+    if (!selectedImage) return;
+    selectedImage.remove();
+    setSelectedImage(null);
+    handleInput();
+  }
+
+  function showLocalNotice(message: string) {
+    setLocalNotice(message);
+    setTimeout(() => setLocalNotice(''), 2000);
+  }
+
+  // ── Tables ───────────────────────────────────────────────────────────────────
+  function getSelectedCell(): HTMLTableCellElement | null {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    while (node && node !== editorRef.current) {
+      if (node instanceof HTMLTableCellElement) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+  function insertTable() {
+    const rowsInput = window.prompt('Number of rows:', '3');
+    const colsInput = window.prompt('Number of columns:', '3');
+    const rows = Math.max(1, Number(rowsInput) || 3);
+    const cols = Math.max(1, Number(colsInput) || 3);
+    let tableHtml = '<table style="border-collapse:collapse;width:100%;margin:0.5rem 0;">';
+    for (let r = 0; r < rows; r++) {
+      tableHtml += '<tr>';
+      for (let c = 0; c < cols; c++) {
+        tableHtml += '<td style="border:1px solid #64748b;padding:6px;min-width:40px;">&nbsp;</td>';
+      }
+      tableHtml += '</tr>';
+    }
+    tableHtml += '</table><p><br></p>';
+    editorRef.current?.focus();
+    restoreSelection();
+    document.execCommand('insertHTML', false, tableHtml);
+    saveSelection();
+    handleInput();
+  }
+  function addTableRow() {
+    const cell = getSelectedCell();
+    const row = cell?.closest('tr');
+    if (!row) { showLocalNotice('Click inside a table cell first.'); return; }
+    const newRow = row.cloneNode(true) as HTMLTableRowElement;
+    Array.from(newRow.cells).forEach((c) => { c.innerHTML = '&nbsp;'; });
+    row.after(newRow);
+    handleInput();
+  }
+  function deleteTableRow() {
+    const cell = getSelectedCell();
+    const row = cell?.closest('tr');
+    if (!row) { showLocalNotice('Click inside a table cell first.'); return; }
+    row.remove();
+    handleInput();
+  }
+  function addTableColumn() {
+    const cell = getSelectedCell();
+    const table = cell?.closest('table');
+    if (!cell || !table) { showLocalNotice('Click inside a table cell first.'); return; }
+    const cellIndex = cell.cellIndex;
+    Array.from(table.rows).forEach((r) => {
+      const newCell = r.insertCell(cellIndex + 1);
+      newCell.style.border = '1px solid #64748b';
+      newCell.style.padding = '6px';
+      newCell.innerHTML = '&nbsp;';
+    });
+    handleInput();
+  }
+  function deleteTableColumn() {
+    const cell = getSelectedCell();
+    const table = cell?.closest('table');
+    if (!cell || !table) { showLocalNotice('Click inside a table cell first.'); return; }
+    const cellIndex = cell.cellIndex;
+    Array.from(table.rows).forEach((r) => {
+      if (r.cells[cellIndex]) r.deleteCell(cellIndex);
+    });
+    handleInput();
+  }
+  function mergeTableCells() {
+    const cell = getSelectedCell();
+    if (!cell) { showLocalNotice('Click inside a table cell first.'); return; }
+    const nextCell = cell.nextElementSibling;
+    if (!(nextCell instanceof HTMLTableCellElement)) { showLocalNotice('No adjacent cell to merge with.'); return; }
+    const currentColspan = Number(cell.getAttribute('colspan') || '1');
+    const nextColspan = Number(nextCell.getAttribute('colspan') || '1');
+    cell.setAttribute('colspan', String(currentColspan + nextColspan));
+    cell.innerHTML = `${cell.innerHTML} ${nextCell.innerHTML}`.trim();
+    nextCell.remove();
+    handleInput();
+  }
+
+  const activeBg = EDITOR_BG[editorBg];
 
   return (
     <Card title="Page Content">
@@ -469,31 +706,83 @@ function PageEditorPanel({ lessonId }: { lessonId: string }) {
       ) : (
         <>
           <div className="mb-2 flex flex-wrap items-center gap-1 rounded-xl bg-slate-800 p-1.5">
-            <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-300 hover:bg-slate-700">B</button>
-            <button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="rounded-lg px-2.5 py-1.5 text-sm italic text-slate-300 hover:bg-slate-700">I</button>
-            <button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="rounded-lg px-2.5 py-1.5 text-sm underline text-slate-300 hover:bg-slate-700">U</button>
+            <select
+              onMouseDown={saveSelection}
+              onChange={(e) => exec('fontName', e.target.value)}
+              defaultValue=""
+              title="Font Family"
+              className="h-8 rounded-lg bg-slate-700 px-2 text-xs text-slate-200 focus:outline-none"
+            >
+              <option value="" disabled>Font</option>
+              <option value="Arial">Arial</option>
+              <option value="Calibri">Calibri</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Tahoma">Tahoma</option>
+              <option value="'Times New Roman', serif">Times New Roman</option>
+            </select>
+            <select
+              onMouseDown={saveSelection}
+              onChange={(e) => setFontSize(`${e.target.value}px`)}
+              defaultValue=""
+              title="Font Size"
+              className="h-8 rounded-lg bg-slate-700 px-2 text-xs text-slate-200 focus:outline-none"
+            >
+              <option value="" disabled>Size</option>
+              {[10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48].map((s) => (<option key={s} value={s}>{s}</option>))}
+            </select>
+            <span className="mx-1 h-6 w-px bg-slate-700" />
+            <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} title="Bold" className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-300 hover:bg-slate-700">B</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} title="Italic" className="rounded-lg px-2.5 py-1.5 text-sm italic text-slate-300 hover:bg-slate-700">I</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} title="Underline" className="rounded-lg px-2.5 py-1.5 text-sm underline text-slate-300 hover:bg-slate-700">U</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('strikeThrough'); }} title="Strikethrough" className="rounded-lg px-2.5 py-1.5 text-sm line-through text-slate-300 hover:bg-slate-700">S</button>
+            <label title="Text Color" className="flex cursor-pointer items-center rounded-lg px-1.5 hover:bg-slate-700">
+              <span className="text-sm font-bold text-slate-300">A</span>
+              <input type="color" onMouseDown={saveSelection} onChange={(e) => exec('foreColor', e.target.value)} className="h-5 w-5 cursor-pointer border-0 bg-transparent p-0" />
+            </label>
+            <label title="Highlight Color" className="flex cursor-pointer items-center rounded-lg px-1.5 hover:bg-slate-700">
+              <IconHighlight className="h-4 w-4 text-slate-300" />
+              <input type="color" onMouseDown={saveSelection} onChange={(e) => exec('hiliteColor', e.target.value)} className="h-5 w-5 cursor-pointer border-0 bg-transparent p-0" />
+            </label>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('removeFormat'); }} title="Clear Formatting" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Clear</button>
+            <span className="mx-1 h-6 w-px bg-slate-700" />
+            <button onMouseDown={(e) => { e.preventDefault(); exec('superscript'); }} title="Superscript" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">x²</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('subscript'); }} title="Subscript" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">x₂</button>
             <span className="mx-1 h-6 w-px bg-slate-700" />
             <select
               onMouseDown={(e) => e.stopPropagation()}
               onChange={(e) => exec('formatBlock', e.target.value)}
               defaultValue="<p>"
+              title="Paragraph Style"
               className="h-8 rounded-lg bg-slate-700 px-2 text-xs text-slate-200 focus:outline-none"
             >
               <option value="<p>">Text</option>
               <option value="<h1>">Heading 1</option>
               <option value="<h2>">Heading 2</option>
               <option value="<h3>">Heading 3</option>
+              <option value="<blockquote>">Quote</option>
             </select>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('insertHorizontalRule'); }} title="Horizontal Rule" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">HR</button>
             <span className="mx-1 h-6 w-px bg-slate-700" />
-            <button onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }} className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">• List</button>
-            <button onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }} className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">1. List</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }} title="Bulleted List" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">• List</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }} title="Numbered List" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">1. List</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('outdent'); }} title="Decrease Indent" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">⇤</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('indent'); }} title="Increase Indent" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">⇥</button>
             <span className="mx-1 h-6 w-px bg-slate-700" />
-            <button onMouseDown={(e) => { e.preventDefault(); exec('justifyLeft'); }} className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Left</button>
-            <button onMouseDown={(e) => { e.preventDefault(); exec('justifyCenter'); }} className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Center</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('justifyLeft'); }} title="Align Left" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Left</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('justifyCenter'); }} title="Align Center" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Center</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('justifyRight'); }} title="Align Right" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Right</button>
+            <span className="mx-1 h-6 w-px bg-slate-700" />
+            <button onMouseDown={(e) => { e.preventDefault(); handleInsertLink(); }} title="Insert Link" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Link</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('unlink'); }} title="Remove Link" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Unlink</button>
+            <span className="mx-1 h-6 w-px bg-slate-700" />
+            <button onMouseDown={(e) => { e.preventDefault(); exec('undo'); }} title="Undo" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">↶</button>
+            <button onMouseDown={(e) => { e.preventDefault(); exec('redo'); }} title="Redo" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">↷</button>
             <span className="mx-1 h-6 w-px bg-slate-700" />
             <button
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => imageInputRef.current?.click()}
+              onClick={handleImageButtonClick}
+              title="Insert Image"
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
             >
               {uploadingImage ? <Spinner className="h-3.5 w-3.5" /> : <IconImage className="h-3.5 w-3.5" />} Image
@@ -505,18 +794,63 @@ function PageEditorPanel({ lessonId }: { lessonId: string }) {
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleInsertImage(f); }}
             />
+            <button onMouseDown={(e) => { e.preventDefault(); insertTable(); }} title="Insert Table" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-700">Table</button>
             <span className="ml-auto pr-1 text-[11px] text-slate-500">
-              {saveState === 'saving' && 'Saving\u2026'}
-              {saveState === 'saved' && 'Saved'}
+              {localNotice && <span className="text-amber-400">{localNotice}</span>}
+              {!localNotice && saveState === 'saving' && 'Saving…'}
+              {!localNotice && saveState === 'saved' && 'Saved'}
             </span>
           </div>
+
+          {selectedImage && (
+            <div className="mb-2 flex flex-wrap items-center gap-1 rounded-xl bg-slate-800 p-1.5">
+              <span className="px-2 text-[11px] font-semibold text-slate-500">Image</span>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageAlign('left')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">Left</button>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageAlign('center')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">Center</button>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageAlign('right')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">Right</button>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageAlign('full')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">Full Width</button>
+              <span className="mx-1 h-6 w-px bg-slate-700" />
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageWidth('25%')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">25%</button>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageWidth('50%')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">50%</button>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setImageWidth('100%')} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">100%</button>
+              <span className="mx-1 h-6 w-px bg-slate-700" />
+              <button onMouseDown={(e) => e.preventDefault()} onClick={deleteSelectedImage} className="rounded-lg px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10">Delete</button>
+            </div>
+          )}
+
+          <div className="mb-2 flex flex-wrap items-center gap-1 rounded-xl bg-slate-800 p-1.5">
+            <span className="px-2 text-[11px] font-semibold text-slate-500">Table</span>
+            <button onMouseDown={(e) => e.preventDefault()} onClick={addTableRow} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">+ Row</button>
+            <button onMouseDown={(e) => e.preventDefault()} onClick={deleteTableRow} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">− Row</button>
+            <button onMouseDown={(e) => e.preventDefault()} onClick={addTableColumn} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">+ Column</button>
+            <button onMouseDown={(e) => e.preventDefault()} onClick={deleteTableColumn} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">− Column</button>
+            <button onMouseDown={(e) => e.preventDefault()} onClick={mergeTableCells} className="rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700">Merge Cells</button>
+            <span className="ml-auto flex items-center gap-1.5 pr-1">
+              <span className="text-[11px] font-semibold text-slate-500">Editor Background</span>
+              <select
+                value={editorBg}
+                onChange={(e) => setEditorBg(e.target.value as typeof editorBg)}
+                className="h-7 rounded-lg bg-slate-700 px-2 text-[11px] text-slate-200 focus:outline-none"
+              >
+                {(Object.keys(EDITOR_BG) as (typeof editorBg)[]).map((key) => (
+                  <option key={key} value={key}>{EDITOR_BG[key].label}</option>
+                ))}
+              </select>
+            </span>
+          </div>
+
           <div
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
             onInput={handleInput}
             onBlur={handleAutoSave}
-            className="w-full max-h-[calc(100vh-320px)] min-h-[560px] overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 p-5 text-sm leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            onKeyDown={handleEditorKeyDown}
+            onKeyUp={saveSelection}
+            onMouseUp={saveSelection}
+            onClick={handleEditorClick}
+            style={{ backgroundColor: activeBg.bg, color: activeBg.text }}
+            className="w-full max-h-[calc(100vh-320px)] min-h-[560px] overflow-y-auto rounded-xl border border-slate-700 p-5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
           />
         </>
       )}
@@ -722,43 +1056,482 @@ function AssignmentPanel({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Quiz panel — no backend column exists; temporary local UI state only
+// Test panel — real `assessments` + `question_bank` + `question_options`
+// tables (assessmentService / questionService, unmodified). One Assessment
+// row per Quiz lesson (assessments.lesson_id), with a real question bank
+// underneath. Nothing here is session-local or fake.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function QuizPanel({
-  settings, onChange,
-}: { settings: QuizSettings; onChange: (patch: Partial<QuizSettings>) => void }) {
+const ASSESSMENT_TYPE_LABELS: Record<AssessmentType, string> = {
+  quiz: 'Quiz', test: 'Test', exam: 'Exam', survey: 'Survey', practice: 'Practice',
+};
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  mcq: 'Multiple Choice', multiple_select: 'Multiple Select', true_false: 'True / False',
+  fill_blank: 'Fill in the Blank', short_answer: 'Short Answer', long_answer: 'Long Answer',
+};
+
+const TEST_INPUT_CLS = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40';
+
+function questionFormFromRow(row: Question, options: QuestionOptionForm[]): QuestionWithOptionsForm {
+  return {
+    assessment_id: row.assessment_id,
+    question_code: row.question_code,
+    question_text: row.question_text,
+    question_type: row.question_type,
+    difficulty_level: row.difficulty_level,
+    marks: row.marks,
+    negative_marks: row.negative_marks,
+    time_limit_seconds: row.time_limit_seconds,
+    explanation: row.explanation,
+    hint: row.hint,
+    display_order: row.display_order,
+    mandatory: row.mandatory,
+    randomize_options: row.randomize_options,
+    attachment_url: row.attachment_url,
+    image_url: row.image_url,
+    active: row.active,
+    options: options.length ? options : defaultQuestionForm.options,
+  };
+}
+
+function QuestionEditorDialog({
+  assessmentId, question, nextOrder, busy, onSave, onCancel,
+}: {
+  assessmentId: string;
+  question: Question | null;
+  nextOrder: number;
+  busy: boolean;
+  onSave: (form: QuestionWithOptionsForm) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState<QuestionWithOptionsForm>({
+    ...defaultQuestionForm,
+    assessment_id: assessmentId,
+    question_code: `Q-${Date.now().toString(36).toUpperCase()}`,
+    display_order: nextOrder,
+  });
+  const [loadingOptions, setLoadingOptions] = useState(!!question);
+
+  useEffect(() => {
+    if (!question) return;
+    let cancelled = false;
+    setLoadingOptions(true);
+    loadOptionsByQuestion(question.id)
+      .then((opts) => {
+        if (cancelled) return;
+        setForm(questionFormFromRow(
+          question,
+          opts.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct, display_order: o.display_order })),
+        ));
+      })
+      .finally(() => { if (!cancelled) setLoadingOptions(false); });
+    return () => { cancelled = true; };
+  }, [question]);
+
+  const needsOptions = form.question_type === 'mcq' || form.question_type === 'multiple_select' || form.question_type === 'true_false';
+
+  function toggleCorrect(index: number) {
+    setForm((prev) => ({
+      ...prev,
+      options: prev.options.map((o, i) => (
+        prev.question_type === 'multiple_select'
+          ? (i === index ? { ...o, is_correct: !o.is_correct } : o)
+          : { ...o, is_correct: i === index }
+      )),
+    }));
+  }
+  function updateOptionText(index: number, text: string) {
+    setForm((prev) => ({ ...prev, options: prev.options.map((o, i) => (i === index ? { ...o, option_text: text } : o)) }));
+  }
+  function addOption() {
+    setForm((prev) => ({ ...prev, options: [...prev.options, { option_text: '', is_correct: false, display_order: prev.options.length + 1 }] }));
+  }
+  function removeOptionAt(index: number) {
+    setForm((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== index) }));
+  }
+  function handleTypeChange(type: QuestionType) {
+    setForm((prev) => ({
+      ...prev,
+      question_type: type,
+      options: type === 'true_false'
+        ? TRUE_FALSE_OPTIONS
+        : (type === 'mcq' || type === 'multiple_select' ? prev.options : []),
+    }));
+  }
+
   return (
-    <Card title="Quiz">
-      <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-400">Linked Quiz</label>
-          <input
-            value={settings.quizName}
-            onChange={(e) => onChange({ quizName: e.target.value })}
-            placeholder="Quiz name…"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-          />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={!busy ? onCancel : undefined} />
+      <div className="relative z-10 max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-100">{question ? 'Edit Question' : 'Add Question'}</h3>
+          <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800"><IconX className="h-4 w-4" /></button>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-400">Pass %</label>
-            <input type="number" min={0} max={100} value={settings.passingPercent} onChange={(e) => onChange({ passingPercent: Number(e.target.value) })} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
+        {loadingOptions ? (
+          <div className="flex items-center justify-center py-16 text-slate-500"><Spinner className="h-5 w-5" /></div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Question Text</label>
+              <textarea
+                value={form.question_text}
+                onChange={(e) => setForm((p) => ({ ...p, question_text: e.target.value }))}
+                rows={3}
+                placeholder="Type the question…"
+                className={`${TEST_INPUT_CLS} resize-none`}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-400">Type</label>
+                <select value={form.question_type} onChange={(e) => handleTypeChange(e.target.value as QuestionType)} className={TEST_INPUT_CLS}>
+                  {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (<option key={t} value={t}>{QUESTION_TYPE_LABELS[t]}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-400">Difficulty</label>
+                <select value={form.difficulty_level} onChange={(e) => setForm((p) => ({ ...p, difficulty_level: e.target.value as DifficultyLevel }))} className={TEST_INPUT_CLS}>
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-400">Marks</label>
+                <input type="number" min={1} value={form.marks} onChange={(e) => setForm((p) => ({ ...p, marks: Number(e.target.value) }))} className={TEST_INPUT_CLS} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-400">Negative Marks</label>
+                <input type="number" min={0} value={form.negative_marks} onChange={(e) => setForm((p) => ({ ...p, negative_marks: Number(e.target.value) }))} className={TEST_INPUT_CLS} />
+              </div>
+            </div>
+
+            {needsOptions && (
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-400">
+                  Options {form.question_type === 'multiple_select' ? '(check all correct answers)' : '(select the correct answer)'}
+                </label>
+                <div className="space-y-2">
+                  {form.options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type={form.question_type === 'multiple_select' ? 'checkbox' : 'radio'}
+                        checked={opt.is_correct}
+                        onChange={() => toggleCorrect(i)}
+                        disabled={form.question_type === 'true_false'}
+                        className="h-4 w-4 flex-shrink-0 text-indigo-500"
+                      />
+                      <input
+                        value={opt.option_text}
+                        onChange={(e) => updateOptionText(i, e.target.value)}
+                        disabled={form.question_type === 'true_false'}
+                        placeholder={`Option ${i + 1}`}
+                        className={`min-w-0 flex-1 ${TEST_INPUT_CLS} disabled:opacity-60`}
+                      />
+                      {form.question_type !== 'true_false' && form.options.length > 2 && (
+                        <button onClick={() => removeOptionAt(i)} className="flex-shrink-0 rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-400">
+                          <IconTrash className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {form.question_type !== 'true_false' && form.options.length < 6 && (
+                  <button onClick={addOption} className="mt-2 flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300">
+                    <IconPlus className="h-3.5 w-3.5" /> Add Option
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Explanation (shown after answering)</label>
+              <textarea
+                value={form.explanation}
+                onChange={(e) => setForm((p) => ({ ...p, explanation: e.target.value }))}
+                rows={2}
+                placeholder="Optional…"
+                className={`${TEST_INPUT_CLS} resize-none`}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <SecondaryButton onClick={onCancel} disabled={busy}>Cancel</SecondaryButton>
+              <PrimaryButton onClick={() => onSave(form)} disabled={busy || !form.question_text.trim()}>
+                {busy ? <Spinner className="h-3.5 w-3.5" /> : <IconSave className="h-3.5 w-3.5" />} Save Question
+              </PrimaryButton>
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-400">Attempts</label>
-            <input type="number" min={1} value={settings.attempts} onChange={(e) => onChange({ attempts: Number(e.target.value) })} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-400">Timer (min)</label>
-            <input type="number" min={0} value={settings.timerMinutes} onChange={(e) => onChange({ timerMinutes: Number(e.target.value) })} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-          </div>
-        </div>
-        <p className="text-xs text-slate-500">
-          Quiz settings are not backed by a dedicated table yet — kept for this session only.
-        </p>
+        )}
       </div>
-    </Card>
+    </div>
+  );
+}
+
+function TestEditorPanel({ lessonId }: { lessonId: string }) {
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | 'new' | null>(null);
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  const [deleteQuestionTarget, setDeleteQuestionTarget] = useState<Question | null>(null);
+  const [deletingQuestion, setDeletingQuestion] = useState(false);
+  const [confirmDeleteTest, setConfirmDeleteTest] = useState(false);
+  const [deletingTest, setDeletingTest] = useState(false);
+  const [testToast, setTestToast] = useState('');
+
+  function showTestToast(message: string) {
+    setTestToast(message);
+    setTimeout(() => setTestToast(''), 2200);
+  }
+
+  function fetchTest() {
+    setLoading(true);
+    Promise.all([loadAssessments(), loadQuestions()])
+      .then(([assessments, allQuestions]) => {
+        const match = assessments.find((a) => a.lesson_id === lessonId) ?? null;
+        setAssessment(match);
+        setQuestions(
+          match
+            ? allQuestions.filter((q) => q.assessment_id === match.id).sort((a, b) => a.display_order - b.display_order)
+            : []
+        );
+      })
+      .catch(() => showTestToast('Failed to load test.'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    fetchTest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonId]);
+
+  async function handleCreateTest() {
+    setCreating(true);
+    try {
+      const created = await createAssessment({
+        ...defaultAssessmentForm,
+        lesson_id: lessonId,
+        assessment_code: `TEST-${Date.now().toString(36).toUpperCase()}`,
+        assessment_title: 'Untitled Test',
+      });
+      setAssessment(created);
+    } catch (err) {
+      showTestToast(err instanceof Error ? err.message : 'Failed to create test.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleSettingsChange(patch: Partial<AssessmentForm>) {
+    if (!assessment) return;
+    setSavingSettings(true);
+    try {
+      const updated = await saveAssessment(assessment.id, patch);
+      setAssessment(updated);
+    } catch (err) {
+      showTestToast(err instanceof Error ? err.message : 'Failed to update test settings.');
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  async function handleSaveQuestion(form: QuestionWithOptionsForm) {
+    setSavingQuestion(true);
+    try {
+      if (editingQuestion && editingQuestion !== 'new') {
+        await saveQuestion(editingQuestion.id, form);
+      } else {
+        await createQuestion(form);
+      }
+      setEditingQuestion(null);
+      fetchTest();
+    } catch (err) {
+      showTestToast(err instanceof Error ? err.message : 'Failed to save question.');
+    } finally {
+      setSavingQuestion(false);
+    }
+  }
+
+  async function handleDeleteQuestionConfirm() {
+    if (!deleteQuestionTarget) return;
+    setDeletingQuestion(true);
+    try {
+      await removeQuestion(deleteQuestionTarget.id);
+      setDeleteQuestionTarget(null);
+      fetchTest();
+    } catch (err) {
+      showTestToast(err instanceof Error ? err.message : 'Failed to delete question.');
+    } finally {
+      setDeletingQuestion(false);
+    }
+  }
+
+  async function handleDeleteTestConfirm() {
+    if (!assessment) return;
+    setDeletingTest(true);
+    try {
+      await removeAssessment(assessment.id);
+      setAssessment(null);
+      setQuestions([]);
+      setConfirmDeleteTest(false);
+    } catch (err) {
+      showTestToast(err instanceof Error ? err.message : 'Failed to delete test.');
+    } finally {
+      setDeletingTest(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card title="Test">
+        <div className="flex items-center justify-center py-16 text-slate-500"><Spinner className="h-5 w-5" /></div>
+      </Card>
+    );
+  }
+
+  if (!assessment) {
+    return (
+      <>
+        <Card title="Test">
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-700 py-16 text-center">
+            <IconQuiz className="h-6 w-6 text-slate-600" />
+            <p className="text-sm text-slate-500">No test linked to this item yet.</p>
+            <PrimaryButton onClick={handleCreateTest} disabled={creating}>
+              {creating ? <Spinner className="h-3.5 w-3.5" /> : <IconPlus className="h-3.5 w-3.5" />} Create Test
+            </PrimaryButton>
+          </div>
+        </Card>
+        {testToast && (
+          <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">{testToast}</div>
+        )}
+      </>
+    );
+  }
+
+  const totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+
+  return (
+    <div className="space-y-5">
+      <Card title="Test Settings">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-400">Title</label>
+            <input key={assessment.id} defaultValue={assessment.assessment_title} onBlur={(e) => handleSettingsChange({ assessment_title: e.target.value })} className={TEST_INPUT_CLS} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Type</label>
+              <select value={assessment.assessment_type} onChange={(e) => handleSettingsChange({ assessment_type: e.target.value as AssessmentType })} className={TEST_INPUT_CLS}>
+                {(Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[]).map((t) => (<option key={t} value={t}>{ASSESSMENT_TYPE_LABELS[t]}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Duration (min)</label>
+              <input key={`${assessment.id}-dur`} type="number" min={1} defaultValue={assessment.duration_minutes} onBlur={(e) => handleSettingsChange({ duration_minutes: Number(e.target.value) })} className={TEST_INPUT_CLS} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Passing %</label>
+              <input key={`${assessment.id}-pass`} type="number" min={0} max={100} defaultValue={assessment.passing_percentage} onBlur={(e) => handleSettingsChange({ passing_percentage: Number(e.target.value) })} className={TEST_INPUT_CLS} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Max Attempts</label>
+              <input key={`${assessment.id}-att`} type="number" min={1} defaultValue={assessment.maximum_attempts} onBlur={(e) => handleSettingsChange({ maximum_attempts: Number(e.target.value) })} className={TEST_INPUT_CLS} />
+            </div>
+          </div>
+          {assessment.negative_marking && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-400">Negative Marks (per wrong answer)</label>
+              <input key={`${assessment.id}-neg`} type="number" min={0} step={0.5} defaultValue={assessment.negative_marks} onBlur={(e) => handleSettingsChange({ negative_marks: Number(e.target.value) })} className={TEST_INPUT_CLS} />
+            </div>
+          )}
+          <div className="space-y-2">
+            <ToggleRow label="Shuffle Questions" on={assessment.shuffle_questions} onChange={() => handleSettingsChange({ shuffle_questions: !assessment.shuffle_questions })} />
+            <ToggleRow label="Shuffle Options" on={assessment.shuffle_options} onChange={() => handleSettingsChange({ shuffle_options: !assessment.shuffle_options })} />
+            <ToggleRow label="Negative Marking" on={assessment.negative_marking} onChange={() => handleSettingsChange({ negative_marking: !assessment.negative_marking })} />
+            <ToggleRow label="Show Result Immediately" on={assessment.show_result_immediately} onChange={() => handleSettingsChange({ show_result_immediately: !assessment.show_result_immediately })} />
+            <ToggleRow label="Show Correct Answers" on={assessment.show_correct_answers} onChange={() => handleSettingsChange({ show_correct_answers: !assessment.show_correct_answers })} />
+            <ToggleRow label="Auto Submit on Timer End" on={assessment.auto_submit} onChange={() => handleSettingsChange({ auto_submit: !assessment.auto_submit })} />
+            <ToggleRow label="Certificate on Pass" on={assessment.certificate_enabled} onChange={() => handleSettingsChange({ certificate_enabled: !assessment.certificate_enabled })} />
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+            <span className="text-xs text-slate-500">
+              {savingSettings ? 'Saving…' : `${questions.length} question${questions.length === 1 ? '' : 's'} · ${totalMarks} marks total`}
+            </span>
+            <DangerButton onClick={() => setConfirmDeleteTest(true)}><IconTrash className="h-3.5 w-3.5" /> Delete Test</DangerButton>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Questions">
+        <div className="space-y-2">
+          {questions.length === 0 && (
+            <p className="py-6 text-center text-sm text-slate-500">No questions yet. Add the first one below.</p>
+          )}
+          {questions.map((q, i) => (
+            <div key={q.id} className="flex items-start gap-3 rounded-xl bg-slate-800/70 p-3">
+              <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-300">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-100">{q.question_text || 'Untitled question'}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{QUESTION_TYPE_LABELS[q.question_type]} · {q.marks} mark{q.marks === 1 ? '' : 's'}</p>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <button onClick={() => setEditingQuestion(q)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-indigo-400"><IconPencil className="h-3.5 w-3.5" /></button>
+                <button onClick={() => setDeleteQuestionTarget(q)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400"><IconTrash className="h-3.5 w-3.5" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setEditingQuestion('new')}
+          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-700 py-3 text-sm font-semibold text-slate-400 transition hover:border-indigo-500/50 hover:text-indigo-400"
+        >
+          <IconPlus className="h-4 w-4" /> Add Question
+        </button>
+      </Card>
+
+      {editingQuestion && (
+        <QuestionEditorDialog
+          assessmentId={assessment.id}
+          question={editingQuestion === 'new' ? null : editingQuestion}
+          nextOrder={questions.length + 1}
+          busy={savingQuestion}
+          onSave={handleSaveQuestion}
+          onCancel={() => setEditingQuestion(null)}
+        />
+      )}
+
+      {deleteQuestionTarget && (
+        <DeleteDialog
+          title="Delete Question"
+          name={deleteQuestionTarget.question_text || 'this question'}
+          busy={deletingQuestion}
+          onConfirm={handleDeleteQuestionConfirm}
+          onCancel={() => setDeleteQuestionTarget(null)}
+        />
+      )}
+
+      {confirmDeleteTest && (
+        <DeleteDialog
+          title="Delete Test"
+          name={assessment.assessment_title || 'this test'}
+          busy={deletingTest}
+          onConfirm={handleDeleteTestConfirm}
+          onCancel={() => setConfirmDeleteTest(false)}
+        />
+      )}
+
+      {testToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">{testToast}</div>
+      )}
+    </div>
   );
 }
 
@@ -786,34 +1559,46 @@ function CommonSection({ title, children }: { title: string; children: React.Rea
   );
 }
 
+function extractImageUrls(html: string): string[] {
+  if (!html) return [];
+  const matches = html.match(/<img[^>]+src=["']([^"']+)["']/gi) ?? [];
+  return matches
+    .map((tag) => {
+      const srcMatch = tag.match(/src=["']([^"']+)["']/i);
+      return srcMatch ? srcMatch[1] : '';
+    })
+    .filter((url) => url.length > 0);
+}
+
 function LessonCommonSettings({
-  lesson, lessonModule, resources, readingResource,
+  lesson, lessonModule, readingResource,
   uploadingThumbnail, uploadingReading,
-  assignmentSettings, quizSettings, mandatory,
+  assignmentSettings, mandatory,
   onThumbnailUpload, onReadingUpload, onReadingLabelChange, onReadingRemove,
-  onAssignmentChange, onQuizChange, onMandatoryChange, onLessonChange,
+  onAssignmentChange, onMandatoryChange, onLessonChange,
 }: {
   lesson: Lesson;
   lessonModule: Module | null;
-  resources: Resource[];
   readingResource: Resource | null;
   uploadingThumbnail: boolean;
   uploadingReading: boolean;
   assignmentSettings: AssignmentSettings;
-  quizSettings: QuizSettings;
   mandatory: boolean;
   onThumbnailUpload: (file: File) => void;
   onReadingUpload: (file: File) => void;
   onReadingLabelChange: (label: string) => void;
   onReadingRemove: () => void;
   onAssignmentChange: (patch: Partial<AssignmentSettings>) => void;
-  onQuizChange: (patch: Partial<QuizSettings>) => void;
   onMandatoryChange: (value: boolean) => void;
   onLessonChange: (patch: Partial<Lesson>) => void;
 }) {
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const readingInputRef = useRef<HTMLInputElement>(null);
-  const imageResources = resources.filter((r) => r.resource_type === 'image');
+  // Single source of truth: images embedded in the lesson's own content —
+  // the exact same field the Page Editor writes to and Preview renders
+  // from. No separate resource-row model, so this can never drift out of
+  // sync with what the editor or Preview actually show.
+  const imageUrls = lesson.lesson_type === 'text' ? extractImageUrls(lesson.content) : [];
 
   return (
     <Card title="Common Lesson Settings">
@@ -823,7 +1608,19 @@ function LessonCommonSettings({
           {lessonModule ? (
             <div className="flex items-center gap-3">
               {lessonModule.thumbnail ? (
-                <img src={lessonModule.thumbnail} alt="" className="h-16 w-24 flex-shrink-0 rounded-lg object-cover" />
+                <div className="relative h-16 w-24 flex-shrink-0">
+                  <img
+                    src={lessonModule.thumbnail}
+                    alt=""
+                    className="h-16 w-24 rounded-lg object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const fallback = e.currentTarget.nextElementSibling;
+                      if (fallback instanceof HTMLElement) fallback.classList.remove('hidden');
+                    }}
+                  />
+                  <div className="hidden absolute inset-0 flex h-16 w-24 items-center justify-center rounded-lg bg-slate-800 text-slate-600"><IconImage className="h-5 w-5" /></div>
+                </div>
               ) : (
                 <div className="flex h-16 w-24 flex-shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-600"><IconImage className="h-5 w-5" /></div>
               )}
@@ -868,12 +1665,14 @@ function LessonCommonSettings({
         </CommonSection>
 
         <CommonSection title="Images">
-          {imageResources.length > 0 ? (
+          {imageUrls.length > 0 ? (
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-              {imageResources.map((r) => (<img key={r.id} src={r.file_url} alt="" className="h-14 w-full rounded-md object-cover" />))}
+              {imageUrls.map((url, i) => (<img key={`${url}-${i}`} src={url} alt="" className="h-14 w-full rounded-md object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />))}
             </div>
-          ) : (
+          ) : lesson.lesson_type === 'text' ? (
             <p className="text-xs text-slate-600">Images added in the Page Content editor appear here.</p>
+          ) : (
+            <p className="text-xs text-slate-600">Images are only supported on Page items.</p>
           )}
         </CommonSection>
 
@@ -887,23 +1686,6 @@ function LessonCommonSettings({
               <input type="checkbox" checked={assignmentSettings.submissionRequired} onChange={(e) => onAssignmentChange({ submissionRequired: e.target.checked })} className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500" />
               Submission Required
             </label>
-          </div>
-        </CommonSection>
-
-        <CommonSection title="Quiz">
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-400">Pass %</label>
-              <input type="number" min={0} max={100} value={quizSettings.passingPercent} onChange={(e) => onQuizChange({ passingPercent: Number(e.target.value) })} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-400">Attempts</label>
-              <input type="number" min={1} value={quizSettings.attempts} onChange={(e) => onQuizChange({ attempts: Number(e.target.value) })} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-400">Timer (min)</label>
-              <input type="number" min={0} value={quizSettings.timerMinutes} onChange={(e) => onQuizChange({ timerMinutes: Number(e.target.value) })} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-            </div>
           </div>
         </CommonSection>
 
@@ -1060,7 +1842,21 @@ function ModuleProperties({
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onThumbnailUpload(f); }}
             />
-            {mod.thumbnail && <img src={mod.thumbnail} alt="" className="mt-3 h-28 w-full rounded-lg object-cover" />}
+            {mod.thumbnail && (
+              <div className="relative mt-3 h-28 w-full">
+                <img
+                  src={mod.thumbnail}
+                  alt=""
+                  className="h-28 w-full rounded-lg object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling;
+                    if (fallback instanceof HTMLElement) fallback.classList.remove('hidden');
+                  }}
+                />
+                <div className="hidden absolute inset-0 flex h-28 w-full items-center justify-center rounded-lg bg-slate-800 text-slate-600"><IconImage className="h-6 w-6" /></div>
+              </div>
+            )}
           </PropertyField>
         </div>
       )}
@@ -1275,7 +2071,6 @@ function CourseBuilder() {
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
   const [assignmentSettingsById, setAssignmentSettingsById] = useState<Record<string, AssignmentSettings>>({});
-  const [quizSettingsById, setQuizSettingsById] = useState<Record<string, QuizSettings>>({});
   const [mandatoryById, setMandatoryById] = useState<Record<string, boolean>>({});
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -1285,6 +2080,20 @@ function CourseBuilder() {
   const [toast, setToast] = useState('');
   const [treeSearch, setTreeSearch] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Drag & drop reorder (modules + lessons, same-module and cross-module)
+  const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
+  const [dragOverModuleId, setDragOverModuleId] = useState<string | null>(null);
+  const [draggedItem, setDraggedItem] = useState<{ id: string; moduleId: string } | null>(null);
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+
+  // Undo-delete (10 second window before the real delete call fires)
+  const pendingModuleDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingLessonDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Unsaved-changes protection
+  const [isDirty, setIsDirty] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Workspace shell layout (pure UI state — persisted to localStorage
   // only; no business data, no service/database involvement) ───────────────
@@ -1312,16 +2121,62 @@ function CourseBuilder() {
     }
   }, [leftCollapsed, inspectorOpen, leftWidth, rightWidth]);
 
+  const selectedCourse = courses.find((c) => c.id === selectedCourseId) ?? null;
+  const activeLesson = lessons.find((l) => l.id === activeLessonId) ?? null;
+  const selectedModule = modules.find((m) => m.id === selectedModuleId) ?? null;
+  const activeLessonModule = activeLesson ? modules.find((m) => m.id === activeLesson.module_id) ?? null : null;
   useEffect(() => {
+    function isTypingTarget(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false;
+      return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable;
+    }
+
     function handleKeydown(e: KeyboardEvent) {
       if (e.altKey && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
         setInspectorOpen((prev) => !prev);
+        return;
+      }
+      const ctrlOrCmd = e.ctrlKey || e.metaKey;
+      if (ctrlOrCmd && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        handleSave();
+        return;
+      }
+      if (ctrlOrCmd && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        setAddMenuOpenFor(null);
+        setPreviewOpen(false);
+        setDeleteModuleTarget(null);
+        setDeletePageTarget(null);
+        return;
+      }
+      if (e.key === 'Delete' && !isTypingTarget(e.target)) {
+        if (activeLesson) {
+          setDeletePageTarget(activeLesson);
+        } else if (selectedModule) {
+          setDeleteModuleTarget(selectedModule);
+        }
       }
     }
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLesson, selectedModule]);
+
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     function handleResize() {
@@ -1352,9 +2207,16 @@ function CourseBuilder() {
     };
   }, [isDragging]);
 
+  const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null);
+
   function showToast(message: string) {
     setToast(message);
     setTimeout(() => setToast(''), 2200);
+  }
+
+  function showUndoToast(message: string, onUndo: () => void) {
+    setUndoToast({ message, onUndo });
+    setTimeout(() => setUndoToast((current) => (current?.message === message ? null : current)), 10000);
   }
 
   function fetchOutline() {
@@ -1392,11 +2254,7 @@ function CourseBuilder() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const selectedCourse = courses.find((c) => c.id === selectedCourseId) ?? null;
-  const activeLesson = lessons.find((l) => l.id === activeLessonId) ?? null;
-  const selectedModule = modules.find((m) => m.id === selectedModuleId) ?? null;
-  const activeLessonModule = activeLesson ? modules.find((m) => m.id === activeLesson.module_id) ?? null : null;
+  
 
   const courseModules = modules
     .filter((m) => m.course_id === selectedCourseId)
@@ -1441,12 +2299,21 @@ function CourseBuilder() {
     });
   }
 
+  function confirmDiscardIfDirty(): boolean {
+    if (!isDirty) return true;
+    const proceed = window.confirm('You have unsaved changes. Leave without saving?');
+    if (proceed) setIsDirty(false);
+    return proceed;
+  }
+
   function selectModule(mod: Module) {
+    if (!confirmDiscardIfDirty()) return;
     setSelectedModuleId(mod.id);
     setActiveLessonId('');
   }
 
   function selectItem(item: Lesson) {
+    if (!confirmDiscardIfDirty()) return;
     setActiveLessonId(item.id);
     setSelectedModuleId('');
   }
@@ -1518,21 +2385,26 @@ function CourseBuilder() {
 
   async function handleDeleteModuleConfirm() {
     if (!deleteModuleTarget) return;
+    const target = deleteModuleTarget;
     setDeletingModule(true);
-    try {
-      await removeModule(deleteModuleTarget.id);
-      if (lessonsForModule(deleteModuleTarget.id).some((p) => p.id === activeLessonId)) {
-        setActiveLessonId('');
+    setDeleteModuleTarget(null);
+    if (lessonsForModule(target.id).some((p) => p.id === activeLessonId)) setActiveLessonId('');
+    if (selectedModuleId === target.id) setSelectedModuleId('');
+    setDeletingModule(false);
+    showUndoToast(`"${target.module_name}" will be deleted`, () => {
+      if (pendingModuleDeleteTimer.current) clearTimeout(pendingModuleDeleteTimer.current);
+      pendingModuleDeleteTimer.current = null;
+      showToast('Delete cancelled');
+    });
+    pendingModuleDeleteTimer.current = setTimeout(async () => {
+      try {
+        await removeModule(target.id);
+        fetchOutline();
+        notifyLessonsChanged();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Failed to delete module.');
       }
-      if (selectedModuleId === deleteModuleTarget.id) setSelectedModuleId('');
-      setDeleteModuleTarget(null);
-      fetchOutline();
-      notifyLessonsChanged();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete module.');
-    } finally {
-      setDeletingModule(false);
-    }
+    }, 10000);
   }
 
   async function handleDuplicateModule(mod: Module) {
@@ -1589,6 +2461,62 @@ function CourseBuilder() {
       fetchOutline();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to reorder modules.');
+    }
+  }
+
+  function handleModuleDragStart(moduleId: string) {
+    setDraggedModuleId(moduleId);
+  }
+  function handleModuleDragOver(e: React.DragEvent, moduleId: string) {
+    e.preventDefault();
+    if (draggedModuleId && draggedModuleId !== moduleId) setDragOverModuleId(moduleId);
+  }
+  async function handleModuleDrop(targetModuleId: string) {
+    const sourceId = draggedModuleId;
+    setDraggedModuleId(null);
+    setDragOverModuleId(null);
+    if (!sourceId || sourceId === targetModuleId) return;
+    const ordered = [...courseModules];
+    const fromIndex = ordered.findIndex((m) => m.id === sourceId);
+    const toIndex = ordered.findIndex((m) => m.id === targetModuleId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const [moved] = ordered.splice(fromIndex, 1);
+    ordered.splice(toIndex, 0, moved);
+    try {
+      await Promise.all(ordered.map((m, i) => saveModule(m.id, { ...toModuleForm(m), module_order: i + 1 })));
+      fetchOutline();
+      showToast('Modules reordered');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to reorder modules.');
+    }
+  }
+
+  function handleItemDragStart(itemId: string, moduleId: string) {
+    setDraggedItem({ id: itemId, moduleId });
+  }
+  function handleItemDragOver(e: React.DragEvent, itemId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedItem && draggedItem.id !== itemId) setDragOverItemId(itemId);
+  }
+  async function handleItemDrop(targetModuleId: string, targetItemId: string | null) {
+    const source = draggedItem;
+    setDraggedItem(null);
+    setDragOverItemId(null);
+    if (!source) return;
+    const draggedLesson = lessons.find((l) => l.id === source.id);
+    if (!draggedLesson) return;
+    const targetItems = lessonsForModule(targetModuleId).filter((i) => i.id !== source.id);
+    const insertAt = targetItemId ? targetItems.findIndex((i) => i.id === targetItemId) : targetItems.length;
+    const reordered = [...targetItems];
+    reordered.splice(insertAt < 0 ? reordered.length : insertAt, 0, draggedLesson);
+    try {
+      await Promise.all(reordered.map((item, i) => updateLesson(item.id, { module_id: targetModuleId, display_order: i + 1 })));
+      fetchOutline();
+      notifyLessonsChanged();
+      showToast(source.moduleId === targetModuleId ? 'Item reordered' : 'Item moved');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to reorder item.');
     }
   }
 
@@ -1651,18 +2579,25 @@ function CourseBuilder() {
 
   async function handleDeletePageConfirm() {
     if (!deletePageTarget) return;
+    const target = deletePageTarget;
     setDeletingPage(true);
-    try {
-      await deleteLesson(deletePageTarget.id);
-      if (activeLessonId === deletePageTarget.id) setActiveLessonId('');
-      setDeletePageTarget(null);
-      fetchOutline();
-      notifyLessonsChanged();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete item.');
-    } finally {
-      setDeletingPage(false);
-    }
+    setDeletePageTarget(null);
+    if (activeLessonId === target.id) setActiveLessonId('');
+    setDeletingPage(false);
+    showUndoToast(`"${target.lesson_title || 'Untitled'}" will be deleted`, () => {
+      if (pendingLessonDeleteTimer.current) clearTimeout(pendingLessonDeleteTimer.current);
+      pendingLessonDeleteTimer.current = null;
+      showToast('Delete cancelled');
+    });
+    pendingLessonDeleteTimer.current = setTimeout(async () => {
+      try {
+        await deleteLesson(target.id);
+        fetchOutline();
+        notifyLessonsChanged();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Failed to delete item.');
+      }
+    }, 10000);
   }
 
   async function handleDuplicatePage(moduleId: string, page: Lesson) {
@@ -1846,7 +2781,7 @@ function CourseBuilder() {
     }
   }
 
-  // ── Assignment / Quiz — temporary local UI state only (no backend table) ──
+  // ── Assignment — temporary local UI state only (no backend table) ──────────
 
   function getAssignmentSettings(lessonId: string): AssignmentSettings {
     return assignmentSettingsById[lessonId] ?? DEFAULT_ASSIGNMENT;
@@ -1856,17 +2791,6 @@ function CourseBuilder() {
     setAssignmentSettingsById((prev) => ({
       ...prev,
       [lessonId]: { ...getAssignmentSettings(lessonId), ...patch },
-    }));
-  }
-
-  function getQuizSettings(lessonId: string): QuizSettings {
-    return quizSettingsById[lessonId] ?? DEFAULT_QUIZ;
-  }
-
-  function updateQuizSettings(lessonId: string, patch: Partial<QuizSettings>) {
-    setQuizSettingsById((prev) => ({
-      ...prev,
-      [lessonId]: { ...getQuizSettings(lessonId), ...patch },
     }));
   }
 
@@ -1904,6 +2828,7 @@ function CourseBuilder() {
 
   function handleSave() {
     setSaveStatus('saved');
+    setIsDirty(false);
     showToast('Saved');
     setTimeout(() => setSaveStatus('idle'), 1500);
   }
@@ -2020,6 +2945,7 @@ function CourseBuilder() {
               </svg>
             </span>
             <input
+              ref={searchInputRef}
               value={treeSearch}
               onChange={(e) => setTreeSearch(e.target.value)}
               placeholder="Search modules & items\u2026"
@@ -2040,7 +2966,14 @@ function CourseBuilder() {
                 const isModuleSelected = selectedModuleId === mod.id;
                 return (
                   <div key={mod.id} className={`rounded-xl transition ${isModuleSelected ? 'bg-indigo-500/10 ring-1 ring-indigo-500/30' : ''}`}>
-                    <div className="group flex items-center gap-1 rounded-xl px-1 py-1.5 hover:bg-slate-800/60">
+                    <div
+                      draggable
+                      onDragStart={() => handleModuleDragStart(mod.id)}
+                      onDragOver={(e) => handleModuleDragOver(e, mod.id)}
+                      onDragLeave={() => setDragOverModuleId((current) => (current === mod.id ? null : current))}
+                      onDrop={() => handleModuleDrop(mod.id)}
+                      className={`group flex items-center gap-1 rounded-xl px-1 py-1.5 hover:bg-slate-800/60 ${dragOverModuleId === mod.id ? 'ring-2 ring-indigo-500/60' : ''}`}
+                    >
                       <div className="flex flex-col">
                         <button
                           onClick={() => moveModule(mod, 'up')}
@@ -2122,7 +3055,12 @@ function CourseBuilder() {
                           return (
                             <div
                               key={item.id}
-                              className={`group flex items-center gap-1 rounded-lg ${isItemSelected ? 'bg-indigo-500/10' : ''}`}
+                              draggable
+                              onDragStart={(e) => { e.stopPropagation(); handleItemDragStart(item.id, mod.id); }}
+                              onDragOver={(e) => handleItemDragOver(e, item.id)}
+                              onDragLeave={() => setDragOverItemId((current) => (current === item.id ? null : current))}
+                              onDrop={(e) => { e.stopPropagation(); handleItemDrop(mod.id, item.id); }}
+                              className={`group flex items-center gap-1 rounded-lg ${isItemSelected ? 'bg-indigo-500/10' : ''} ${dragOverItemId === item.id ? 'ring-2 ring-indigo-500/60' : ''}`}
                             >
                               <div className="flex flex-col">
                                 <button
@@ -2185,6 +3123,11 @@ function CourseBuilder() {
                           );
                         })}
 
+                        <div
+                          onDragOver={(e) => { if (draggedItem) e.preventDefault(); }}
+                          onDrop={() => handleItemDrop(mod.id, null)}
+                          className="h-2"
+                        />
                         <div className="relative pt-1">
                           <button
                             onClick={() => setAddMenuOpenFor(addMenuOpenFor === mod.id ? null : mod.id)}
@@ -2261,6 +3204,24 @@ function CourseBuilder() {
 
         {/* CENTER — type-specific panel */}
         <main className="min-w-0 flex-1 mt-7">
+          {(selectedModule || activeLesson) && (
+            <nav className="mb-4 flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="truncate text-slate-400">{selectedCourse?.course_name ?? 'Course'}</span>
+              {(activeLessonModule || selectedModule) && (
+                <>
+                  <IconChevronRight className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate text-slate-400">{(activeLessonModule ?? selectedModule)?.module_name}</span>
+                </>
+              )}
+              {activeLesson && (
+                <>
+                  <IconChevronRight className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate font-semibold text-slate-200">{activeLesson.lesson_title || 'Untitled'}</span>
+                </>
+              )}
+            </nav>
+          )}
+
           {!activeLessonId && !selectedModuleId && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 px-6 py-14 text-center shadow-[0_2px_16px_-4px_rgba(0,0,0,0.4)]">
               <p className="text-sm text-slate-500">Select an item from Course Structure to start editing.</p>
@@ -2274,7 +3235,7 @@ function CourseBuilder() {
           )}
 
           {activeLessonId && activeLesson?.lesson_type === 'text' && (
-            <PageEditorPanel key={activeLessonId} lessonId={activeLessonId} />
+            <PageEditorPanel key={activeLessonId} lessonId={activeLessonId} onDirtyChange={setIsDirty} />
           )}
 
           {activeLessonId && activeLesson?.lesson_type === 'video' && (
@@ -2305,15 +3266,12 @@ function CourseBuilder() {
           )}
 
           {activeLessonId && activeLesson?.lesson_type === 'quiz' && (
-            <QuizPanel
-              settings={getQuizSettings(activeLessonId)}
-              onChange={(patch) => updateQuizSettings(activeLessonId, patch)}
-            />
+            <TestEditorPanel key={activeLessonId} lessonId={activeLessonId} />
           )}
 
           {activeLessonId && activeLesson &&
             !['text', 'video', 'document', 'assignment', 'quiz'].includes(activeLesson.lesson_type) && (
-              <PageEditorPanel key={activeLessonId} lessonId={activeLessonId} />
+              <PageEditorPanel key={activeLessonId} lessonId={activeLessonId} onDirtyChange={setIsDirty} />
           )}
 
           {activeLessonId && activeLesson && (
@@ -2321,19 +3279,16 @@ function CourseBuilder() {
               <LessonCommonSettings
                 lesson={activeLesson}
                 lessonModule={activeLessonModule}
-                resources={resources}
                 readingResource={readingResource}
                 uploadingThumbnail={uploadingThumbnail}
                 uploadingReading={uploadingReading}
                 assignmentSettings={getAssignmentSettings(activeLessonId)}
-                quizSettings={getQuizSettings(activeLessonId)}
                 mandatory={getMandatory(activeLessonId)}
                 onThumbnailUpload={handleLessonModuleThumbnailUpload}
                 onReadingUpload={handleReadingUpload}
                 onReadingLabelChange={handleReadingLabelChange}
                 onReadingRemove={handleReadingRemove}
                 onAssignmentChange={(patch) => updateAssignmentSettings(activeLessonId, patch)}
-                onQuizChange={(patch) => updateQuizSettings(activeLessonId, patch)}
                 onMandatoryChange={(value) => setMandatory(activeLessonId, value)}
                 onLessonChange={handleItemPropertiesChange}
               />
@@ -2416,6 +3371,18 @@ function CourseBuilder() {
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {undoToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">
+          <span>{undoToast.message}</span>
+          <button
+            onClick={() => { undoToast.onUndo(); setUndoToast(null); }}
+            className="rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-400"
+          >
+            Undo
+          </button>
         </div>
       )}
     </div>

@@ -34,7 +34,7 @@ export async function createQuestion(
   // Reject duplicate code
   const existing = await getQuestions();
   const code = data.question_code.trim().toLowerCase();
-  if (existing.some((q) => q.question_code.trim().toLowerCase() === code)) {
+  if (existing.some((q) => (q.question_code ?? '').trim().toLowerCase() === code)) {
     throw new Error(
       `Question Code "${data.question_code.trim()}" already exists.`
     );
@@ -60,7 +60,7 @@ export async function saveQuestion(
   const code = data.question_code.trim().toLowerCase();
   if (
     existing.some(
-      (q) => q.question_code.trim().toLowerCase() === code && q.id !== id
+      (q) => (q.question_code ?? '').trim().toLowerCase() === code && q.id !== id
     )
   ) {
     throw new Error(

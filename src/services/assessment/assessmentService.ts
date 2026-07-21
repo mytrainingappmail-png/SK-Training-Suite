@@ -22,7 +22,7 @@ export async function createAssessment(
   const existing = await getAssessments();
   const code = data.assessment_code.trim().toLowerCase();
   const duplicate = existing.some(
-    (a) => a.assessment_code.trim().toLowerCase() === code
+    (a) => (a.assessment_code ?? '').trim().toLowerCase() === code
   );
   if (duplicate) {
     throw new Error(`Assessment Code "${data.assessment_code.trim()}" already exists.`);
@@ -43,7 +43,7 @@ export async function saveAssessment(
     const existing = await getAssessments();
     const code = data.assessment_code.trim().toLowerCase();
     const duplicate = existing.some(
-      (a) => a.assessment_code.trim().toLowerCase() === code && a.id !== id
+      (a) => (a.assessment_code ?? '').trim().toLowerCase() === code && a.id !== id
     );
     if (duplicate) {
       throw new Error(`Assessment Code "${data.assessment_code.trim()}" already exists.`);
