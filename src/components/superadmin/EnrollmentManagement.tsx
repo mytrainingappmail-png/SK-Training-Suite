@@ -444,7 +444,24 @@ function EnrollmentModal({
     ev.preventDefault();
     if (saving) return;
     if (!validate()) return;
-    onSave(form);
+    // Optional id/date fields must be null, not "", or Postgres rejects them
+    // ("invalid input syntax for type uuid" / "...timestamp with time zone").
+    // assigned_by is a free-text field but the column is a real foreign key
+    // to `users` (not `employees`, and that table isn't otherwise used by
+    // this app) — there's no way for typed text to satisfy that constraint,
+    // so it's always sent as null until a proper user-lookup exists.
+    const cleaned = {
+      ...form,
+      branch_id:        form.branch_id || null,
+      learning_path_id: form.enrollment_type === "LEARNING_PATH" ? (form.learning_path_id || null) : null,
+      course_id:        form.enrollment_type === "COURSE" ? (form.course_id || null) : null,
+      assigned_by:      null,
+      start_date:       form.start_date || null,
+      due_date:         form.due_date || null,
+      expiry_date:      form.expiry_date || null,
+      certificate_id:   form.certificate_id || null,
+    } as unknown as typeof form;
+    onSave(cleaned);
   }
 
   return (
