@@ -6,6 +6,7 @@ export async function getAllCourses(): Promise<Course[]> {
   const { data, error } = await supabase
     .from("courses")
     .select("*")
+    .order("display_order", { ascending: true })
     .order("course_name", { ascending: true });
 
   if (error) {
@@ -14,6 +15,25 @@ export async function getAllCourses(): Promise<Course[]> {
   }
 
   return data ?? [];
+}
+
+export async function convertCourseToModule(
+  sourceCourseId: string,
+  targetCourseId: string,
+  moduleName?: string
+): Promise<string> {
+  const { data, error } = await supabase.rpc("convert_course_to_module", {
+    p_source_course_id: sourceCourseId,
+    p_target_course_id: targetCourseId,
+    p_module_name: moduleName?.trim() || null,
+  });
+
+  if (error) {
+    console.error("[courseRepository] convertCourseToModule:", error);
+    throw new Error(error.message);
+  }
+
+  return data as string;
 }
 
 export async function getCourseById(id: string): Promise<Course> {
@@ -32,9 +52,12 @@ export async function getCourseById(id: string): Promise<Course> {
 }
 
 export async function createCourse(course: CourseForm): Promise<Course> {
+  // created_by is a real FK to `users` (uuid) but the UI never collects a
+  // value for it, so it's always "" here — Postgres rejects "" for a uuid
+  // column ("invalid input syntax for type uuid"), it must be null instead.
   const { data, error } = await supabase
     .from("courses")
-    .insert(course)
+    .insert({ ...course, created_by: course.created_by || null })
     .select()
     .single();
 
@@ -50,9 +73,12 @@ export async function updateCourse(
   id: string,
   course: Partial<CourseForm>
 ): Promise<Course> {
+  const patch = "created_by" in course
+    ? { ...course, created_by: course.created_by || null }
+    : course;
   const { data, error } = await supabase
     .from("courses")
-    .update(course)
+    .update(patch)
     .eq("id", id)
     .select()
     .single();

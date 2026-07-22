@@ -20,6 +20,24 @@
 // state only, clearly labelled as such. Nothing fake is persisted.
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { loadCourses } from '../../../services/course/courseService';
 import { loadModules, createModule, saveModule, removeModule } from '../../../services/module/moduleService';
@@ -189,6 +207,15 @@ function IconArrowDown({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
+}
+function IconGrip({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
     </svg>
   );
 }
@@ -2030,6 +2057,48 @@ function PropertiesPanel({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Drag-and-drop sortable wrappers (dnd-kit)
+// A dedicated grip handle starts the drag — the row itself stays clickable for
+// select/rename/etc. so a drag never gets triggered by an ordinary click, and
+// dnd-kit's live re-ordering animation shows exactly where an item will land
+// (unlike the old native-HTML5 drag, which only highlighted a ring and always
+// inserted "before" the hovered row regardless of which half you dropped on).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SortableRow({
+  id,
+  disabled,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  children: (opts: { dragHandleProps: { attributes: ReturnType<typeof useSortable>['attributes']; listeners: ReturnType<typeof useSortable>['listeners'] }; isDragging: boolean }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ dragHandleProps: { attributes, listeners }, isDragging })}
+    </div>
+  );
+}
+
+function ModuleDropZone({ moduleId, children }: { moduleId: string; children?: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `module-dropzone:${moduleId}` });
+  return (
+    <div ref={setNodeRef} className={`h-3 rounded ${isOver ? 'bg-indigo-500/30' : ''}`}>
+      {children}
+    </div>
+  );
+}
+
+const dndSensorOptions = { activationConstraint: { distance: 4 } };
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main CourseBuilder
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2081,11 +2150,15 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
   const [treeSearch, setTreeSearch] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
-  // Drag & drop reorder (modules + lessons, same-module and cross-module)
-  const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
-  const [dragOverModuleId, setDragOverModuleId] = useState<string | null>(null);
-  const [draggedItem, setDraggedItem] = useState<{ id: string; moduleId: string } | null>(null);
-  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+  // Drag & drop reorder (modules + lessons, same-module and cross-module) — dnd-kit.
+  // A single shared DndContext is used for both modules and items (ids are
+  // prefixed "mod:"/"item:" to tell them apart in the drop handler) because
+  // item rows are nested inside module rows — two separate DndContexts would
+  // make the inner one intercept every item drag meant for the outer one.
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, dndSensorOptions),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   // Undo-delete (10 second window before the real delete call fires)
   const pendingModuleDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2464,26 +2537,14 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
     }
   }
 
-  function handleModuleDragStart(moduleId: string) {
-    setDraggedModuleId(moduleId);
-  }
-  function handleModuleDragOver(e: React.DragEvent, moduleId: string) {
-    e.preventDefault();
-    if (draggedModuleId && draggedModuleId !== moduleId) setDragOverModuleId(moduleId);
-  }
-  async function handleModuleDrop(targetModuleId: string) {
-    const sourceId = draggedModuleId;
-    setDraggedModuleId(null);
-    setDragOverModuleId(null);
-    if (!sourceId || sourceId === targetModuleId) return;
+  async function reorderModules(sourceModuleId: string, targetModuleId: string) {
     const ordered = [...courseModules];
-    const fromIndex = ordered.findIndex((m) => m.id === sourceId);
+    const fromIndex = ordered.findIndex((m) => m.id === sourceModuleId);
     const toIndex = ordered.findIndex((m) => m.id === targetModuleId);
     if (fromIndex < 0 || toIndex < 0) return;
-    const [moved] = ordered.splice(fromIndex, 1);
-    ordered.splice(toIndex, 0, moved);
+    const reordered = arrayMove(ordered, fromIndex, toIndex);
     try {
-      await Promise.all(ordered.map((m, i) => saveModule(m.id, { ...toModuleForm(m), module_order: i + 1 })));
+      await Promise.all(reordered.map((m, i) => saveModule(m.id, { ...toModuleForm(m), module_order: i + 1 })));
       fetchOutline();
       showToast('Modules reordered');
     } catch (err) {
@@ -2491,22 +2552,11 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
     }
   }
 
-  function handleItemDragStart(itemId: string, moduleId: string) {
-    setDraggedItem({ id: itemId, moduleId });
-  }
-  function handleItemDragOver(e: React.DragEvent, itemId: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (draggedItem && draggedItem.id !== itemId) setDragOverItemId(itemId);
-  }
-  async function handleItemDrop(targetModuleId: string, targetItemId: string | null) {
-    const source = draggedItem;
-    setDraggedItem(null);
-    setDragOverItemId(null);
-    if (!source) return;
-    const draggedLesson = lessons.find((l) => l.id === source.id);
+  async function handleItemDrop(sourceItemId: string, targetModuleId: string, targetItemId: string | null) {
+    const draggedLesson = lessons.find((l) => l.id === sourceItemId);
     if (!draggedLesson) return;
-    const targetItems = lessonsForModule(targetModuleId).filter((i) => i.id !== source.id);
+    const sourceModuleId = draggedLesson.module_id;
+    const targetItems = lessonsForModule(targetModuleId).filter((i) => i.id !== sourceItemId);
     const insertAt = targetItemId ? targetItems.findIndex((i) => i.id === targetItemId) : targetItems.length;
     const reordered = [...targetItems];
     reordered.splice(insertAt < 0 ? reordered.length : insertAt, 0, draggedLesson);
@@ -2514,9 +2564,37 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
       await Promise.all(reordered.map((item, i) => updateLesson(item.id, { module_id: targetModuleId, display_order: i + 1 })));
       fetchOutline();
       notifyLessonsChanged();
-      showToast(source.moduleId === targetModuleId ? 'Item reordered' : 'Item moved');
+      showToast(sourceModuleId === targetModuleId ? 'Item reordered' : 'Item moved');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to reorder item.');
+    }
+  }
+
+  // Single dispatcher for the shared DndContext — ids are prefixed "mod:"/"item:"
+  // so a module drag never gets mistaken for an item drag or vice versa.
+  function handleTreeDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    if (activeId.startsWith('mod:')) {
+      if (!overId.startsWith('mod:')) return;
+      reorderModules(activeId.slice(4), overId.slice(4));
+      return;
+    }
+
+    if (activeId.startsWith('item:')) {
+      const sourceItemId = activeId.slice(5);
+      if (overId.startsWith('item:')) {
+        const targetItemId = overId.slice(5);
+        const overLesson = lessons.find((l) => l.id === targetItemId);
+        if (overLesson) handleItemDrop(sourceItemId, overLesson.module_id, overLesson.id);
+        return;
+      }
+      if (overId.startsWith('module-dropzone:')) {
+        handleItemDrop(sourceItemId, overId.replace('module-dropzone:', ''), null);
+      }
     }
   }
 
@@ -2958,6 +3036,8 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
 
           {!loading && !error && (
             <div className="space-y-1">
+              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleTreeDragEnd}>
+              <SortableContext items={visibleModules.map((m) => `mod:${m.id}`)} strategy={verticalListSortingStrategy}>
               {visibleModules.map((mod, modIndex) => {
                 const isExpanded = searchTerm ? true : expandedModuleIds.has(mod.id);
                 const items = itemsMatchingSearch(mod.id);
@@ -2965,15 +3045,23 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
                 const progress = moduleProgress(mod.id);
                 const isModuleSelected = selectedModuleId === mod.id;
                 return (
-                  <div key={mod.id} className={`rounded-xl transition ${isModuleSelected ? 'bg-indigo-500/10 ring-1 ring-indigo-500/30' : ''}`}>
+                  <SortableRow key={mod.id} id={`mod:${mod.id}`} disabled={!!searchTerm}>
+                    {({ dragHandleProps, isDragging }) => (
+                  <div className={`rounded-xl transition ${isModuleSelected ? 'bg-indigo-500/10 ring-1 ring-indigo-500/30' : ''} ${isDragging ? 'z-10 shadow-lg ring-1 ring-indigo-500/40' : ''}`}>
                     <div
-                      draggable
-                      onDragStart={() => handleModuleDragStart(mod.id)}
-                      onDragOver={(e) => handleModuleDragOver(e, mod.id)}
-                      onDragLeave={() => setDragOverModuleId((current) => (current === mod.id ? null : current))}
-                      onDrop={() => handleModuleDrop(mod.id)}
-                      className={`group flex items-center gap-1 rounded-xl px-1 py-1.5 hover:bg-slate-800/60 ${dragOverModuleId === mod.id ? 'ring-2 ring-indigo-500/60' : ''}`}
+                      className="group flex items-center gap-1 rounded-xl px-1 py-1.5 hover:bg-slate-800/60"
                     >
+                      {!searchTerm && (
+                        <button
+                          {...dragHandleProps.attributes}
+                          {...dragHandleProps.listeners}
+                          aria-label="Drag to reorder module"
+                          title="Drag to reorder"
+                          className="cursor-grab touch-none text-slate-600 transition hover:text-indigo-400 active:cursor-grabbing"
+                        >
+                          <IconGrip />
+                        </button>
+                      )}
                       <div className="flex flex-col">
                         <button
                           onClick={() => moveModule(mod, 'up')}
@@ -3049,19 +3137,27 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
 
                     {isExpanded && (
                       <div className="ml-4 space-y-0.5 border-l border-slate-800 pl-3 pb-2">
+                        <SortableContext items={items.map((i) => `item:${i.id}`)} strategy={verticalListSortingStrategy}>
                         {items.map((item, itemIndex) => {
                           const isEditingItem = editingPageId === item.id;
                           const isItemSelected = activeLessonId === item.id;
                           return (
+                            <SortableRow key={item.id} id={`item:${item.id}`} disabled={!!searchTerm}>
+                              {({ dragHandleProps: itemDragHandleProps, isDragging: itemIsDragging }) => (
                             <div
-                              key={item.id}
-                              draggable
-                              onDragStart={(e) => { e.stopPropagation(); handleItemDragStart(item.id, mod.id); }}
-                              onDragOver={(e) => handleItemDragOver(e, item.id)}
-                              onDragLeave={() => setDragOverItemId((current) => (current === item.id ? null : current))}
-                              onDrop={(e) => { e.stopPropagation(); handleItemDrop(mod.id, item.id); }}
-                              className={`group flex items-center gap-1 rounded-lg ${isItemSelected ? 'bg-indigo-500/10' : ''} ${dragOverItemId === item.id ? 'ring-2 ring-indigo-500/60' : ''}`}
+                              className={`group flex items-center gap-1 rounded-lg ${isItemSelected ? 'bg-indigo-500/10' : ''} ${itemIsDragging ? 'z-10 shadow-lg ring-1 ring-indigo-500/40' : ''}`}
                             >
+                              {!searchTerm && (
+                                <button
+                                  {...itemDragHandleProps.attributes}
+                                  {...itemDragHandleProps.listeners}
+                                  aria-label="Drag to reorder item"
+                                  title="Drag to reorder"
+                                  className="cursor-grab touch-none text-slate-600 transition hover:text-indigo-400 active:cursor-grabbing"
+                                >
+                                  <IconGrip className="h-3 w-3" />
+                                </button>
+                              )}
                               <div className="flex flex-col">
                                 <button
                                   onClick={() => movePage(mod.id, item, 'up')}
@@ -3120,14 +3216,13 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
                                 </div>
                               )}
                             </div>
+                              )}
+                            </SortableRow>
                           );
                         })}
+                        </SortableContext>
 
-                        <div
-                          onDragOver={(e) => { if (draggedItem) e.preventDefault(); }}
-                          onDrop={() => handleItemDrop(mod.id, null)}
-                          className="h-2"
-                        />
+                        <ModuleDropZone moduleId={mod.id} />
                         <div className="relative pt-1">
                           <button
                             onClick={() => setAddMenuOpenFor(addMenuOpenFor === mod.id ? null : mod.id)}
@@ -3161,8 +3256,12 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
                       </div>
                     )}
                   </div>
+                    )}
+                  </SortableRow>
                 );
               })}
+              </SortableContext>
+              </DndContext>
 
               {!addingModule ? (
                 <button

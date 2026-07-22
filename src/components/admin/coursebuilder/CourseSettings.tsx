@@ -187,6 +187,7 @@ function toCourseForm(c: Course): CourseForm {
     duration_hours: c.duration_hours,
     passing_percentage: c.passing_percentage,
     certificate_enabled: c.certificate_enabled,
+    display_order: c.display_order,
     active: c.active,created_by: "",
   };
 }

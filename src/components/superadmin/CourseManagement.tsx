@@ -1,4 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import {
   loadCourses,
@@ -6,6 +23,8 @@ import {
   saveCourse,
   removeCourse,
   toggleCourseStatus,
+  reorderCourses,
+  convertCourseToModule,
 } from "../../services/course/courseService";
 import { loadCompanies } from "../../services/company/companyService";
 import { loadCategories } from "../../services/category/categoryService";
@@ -135,6 +154,61 @@ function Toggle({
         }`}
       />
     </button>
+  );
+}
+
+function IconGrip({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+function IconSwap({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-9L21 3m0 0-4.5 4.5M21 3H7.5" />
+    </svg>
+  );
+}
+
+function IconArrowUp({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+    </svg>
+  );
+}
+function IconArrowDown({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
+}
+
+// Drag handle starts the drag (not the whole row), so an ordinary click on
+// the row never accidentally triggers a drag — same pattern as Course Builder.
+function SortableCourseRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: (opts: { dragHandleProps: { attributes: ReturnType<typeof useSortable>["attributes"]; listeners: ReturnType<typeof useSortable>["listeners"] }; isDragging: boolean }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ dragHandleProps: { attributes, listeners }, isDragging })}
+    </div>
   );
 }
 
@@ -386,6 +460,7 @@ function CourseModal({
           duration_hours:      editing.duration_hours,
           passing_percentage:  editing.passing_percentage,
           certificate_enabled: editing.certificate_enabled,
+          display_order:       editing.display_order,
           active:              editing.active,
           created_by:          editing.created_by,
         }
@@ -704,6 +779,282 @@ function CourseModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Reorder Courses modal — drag-and-drop + arrows, grouped by category
+// (matches how courses are grouped for employees), autosaves on every move.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReorderCoursesModal({
+  courses,
+  categories,
+  saving,
+  onReorder,
+  onClose,
+}: {
+  courses: Course[];
+  categories: Category[];
+  saving: boolean;
+  onReorder: (ordered: Course[]) => void;
+  onClose: () => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const UNCATEGORIZED = "__uncategorized__";
+
+  // A course whose category_id doesn't match any known category (deleted
+  // category, cross-company mismatch, etc.) must still show up somewhere —
+  // otherwise it would silently disappear from the reorder list entirely.
+  const groupKey = useCallback(
+    (categoryId: string) => (categories.some((cat) => cat.id === categoryId) ? categoryId : UNCATEGORIZED),
+    [categories]
+  );
+
+  const grouped = useMemo(() => {
+    const byCategory = new Map<string, Course[]>();
+    for (const c of courses) {
+      const key = groupKey(c.category_id);
+      const list = byCategory.get(key) ?? [];
+      list.push(c);
+      byCategory.set(key, list);
+    }
+    for (const list of byCategory.values()) {
+      list.sort((a, b) => a.display_order - b.display_order || a.course_name.localeCompare(b.course_name));
+    }
+    return byCategory;
+  }, [courses, groupKey]);
+
+  const categoryGroups = useMemo(() => {
+    const list: { id: string; name: string }[] = categories.map((c) => ({ id: c.id, name: c.category_name }));
+    if (grouped.has(UNCATEGORIZED)) list.push({ id: UNCATEGORIZED, name: "Uncategorized" });
+    return list;
+  }, [categories, grouped]);
+
+  function moveWithinCategory(categoryId: string, courseId: string, direction: "up" | "down") {
+    const list = grouped.get(categoryId) ?? [];
+    const index = list.findIndex((c) => c.id === courseId);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    onReorder(arrayMove(list, index, targetIndex));
+  }
+
+  function handleDragEnd(categoryId: string, event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const list = grouped.get(categoryId) ?? [];
+    const fromIndex = list.findIndex((c) => c.id === active.id);
+    const toIndex = list.findIndex((c) => c.id === over.id);
+    if (fromIndex < 0 || toIndex < 0) return;
+    onReorder(arrayMove(list, fromIndex, toIndex));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-10"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reorder-title"
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 id="reorder-title" className="text-lg font-semibold text-slate-800">Reorder Courses</h2>
+            <p className="text-sm text-slate-500">Drag a course, or use the arrows, to change the order shown to employees.</p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="max-h-[65vh] space-y-6 overflow-y-auto p-6">
+          {categoryGroups.map((group) => {
+            const list = grouped.get(group.id) ?? [];
+            if (list.length === 0) return null;
+            return (
+              <div key={group.id}>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  {group.name}
+                </h3>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(group.id, e)}>
+                  <SortableContext items={list.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-1.5">
+                      {list.map((course, i) => (
+                        <SortableCourseRow key={course.id} id={course.id}>
+                          {({ dragHandleProps, isDragging }) => (
+                            <div
+                              className={`flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 ${
+                                isDragging ? "z-10 shadow-lg ring-1 ring-yellow-400/50" : ""
+                              }`}
+                            >
+                              <button
+                                {...dragHandleProps.attributes}
+                                {...dragHandleProps.listeners}
+                                aria-label="Drag to reorder"
+                                title="Drag to reorder"
+                                disabled={saving}
+                                className="cursor-grab touch-none text-slate-400 transition hover:text-slate-600 active:cursor-grabbing disabled:opacity-40"
+                              >
+                                <IconGrip />
+                              </button>
+                              <div className="flex flex-col">
+                                <button
+                                  onClick={() => moveWithinCategory(group.id, course.id, "up")}
+                                  disabled={saving || i === 0}
+                                  aria-label="Move up"
+                                  className="text-slate-400 transition hover:text-yellow-600 disabled:opacity-30"
+                                >
+                                  <IconArrowUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  onClick={() => moveWithinCategory(group.id, course.id, "down")}
+                                  disabled={saving || i === list.length - 1}
+                                  aria-label="Move down"
+                                  className="text-slate-400 transition hover:text-yellow-600 disabled:opacity-30"
+                                >
+                                  <IconArrowDown className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <Thumbnail src={course.thumbnail} alt={course.course_name} />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-slate-800">{course.course_name}</p>
+                                <p className="truncate font-mono text-xs text-slate-400">{course.course_code}</p>
+                              </div>
+                            </div>
+                          )}
+                        </SortableCourseRow>
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Convert-to-Module modal — merges an entire course into another course as
+// one new module (all its lessons move over, in order); the source course
+// is then deleted. Backed by the convert_course_to_module DB function so the
+// whole operation is one atomic transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ConvertToModuleModal({
+  course,
+  courses,
+  saving,
+  onConfirm,
+  onClose,
+}: {
+  course: Course;
+  courses: Course[];
+  saving: boolean;
+  onConfirm: (targetCourseId: string, moduleName: string) => void;
+  onClose: () => void;
+}) {
+  const [targetId, setTargetId] = useState("");
+  const [moduleName, setModuleName] = useState(course.course_name);
+  const [err, setErr] = useState("");
+
+  const targets = courses.filter((c) => c.id !== course.id && c.company_id === course.company_id);
+
+  function handleConfirm() {
+    if (!targetId) {
+      setErr("Please choose a target course.");
+      return;
+    }
+    onConfirm(targetId, moduleName);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="convert-title"
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={!saving ? onClose : undefined} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+          <IconSwap className="h-6 w-6 text-amber-600" />
+        </div>
+        <h3 id="convert-title" className="mb-1 text-lg font-semibold text-slate-800">
+          Convert to Module
+        </h3>
+        <p className="mb-5 text-sm text-slate-500">
+          Turn <span className="font-semibold text-slate-700">{course.course_name}</span> into a single module
+          inside another course. All of its lessons move over, in the same order, and this course is then deleted.
+          This cannot be undone.
+        </p>
+
+        <FL label="Target Course" required error={err}>
+          <select
+            value={targetId}
+            onChange={(e) => { setTargetId(e.target.value); setErr(""); }}
+            disabled={saving}
+            className={CLS_SELECT}
+          >
+            <option value="">— Select Course —</option>
+            {targets.map((c) => (
+              <option key={c.id} value={c.id}>{c.course_name} ({c.course_code})</option>
+            ))}
+          </select>
+        </FL>
+
+        <div className="mt-4">
+          <FL label="New Module Name">
+            <input
+              type="text"
+              value={moduleName}
+              onChange={(e) => setModuleName(e.target.value)}
+              disabled={saving}
+              className={CLS_INPUT}
+            />
+          </FL>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={saving}
+            className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50 active:scale-95"
+          >
+            {saving ? "Converting…" : "Convert & Merge"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -711,6 +1062,8 @@ type ModalKind =
   | { type: "add" }
   | { type: "edit"; course: Course }
   | { type: "delete"; course: Course }
+  | { type: "reorder" }
+  | { type: "convert"; course: Course }
   | null;
 
 export default function CourseManagement() {
@@ -720,10 +1073,12 @@ export default function CourseManagement() {
   const [companies,  setCompanies]  = useState<Company[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const [loading,    setLoading]    = useState(true);
-  const [saving,     setSaving]     = useState(false);
-  const [deleting,   setDeleting]   = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [saving,      setSaving]      = useState(false);
+  const [deleting,    setDeleting]    = useState(false);
+  const [togglingId,  setTogglingId]  = useState<string | null>(null);
+  const [reordering,  setReordering]  = useState(false);
+  const [converting,  setConverting]  = useState(false);
 
   const [search, setSearch] = useState("");
   const [page,   setPage]   = useState(1);
@@ -853,6 +1208,37 @@ console.log("Categories:", categoryData);
     }
   }
 
+  // ── Reorder — each move re-saves the whole affected category's order,
+  // then reloads from the DB (same "save then refetch" pattern used
+  // everywhere else in this app, e.g. Course Builder's module/lesson reorder).
+  async function handleReorderCourses(ordered: Course[]) {
+    setReordering(true);
+    try {
+      await reorderCourses(ordered);
+      await load();
+    } catch (err) {
+      setBanner(err instanceof Error ? err.message : "Unable to reorder courses.");
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  // ── Convert an entire course into a module of another course
+  async function handleConvertToModule(targetCourseId: string, moduleName: string) {
+    if (modal?.type !== "convert") return;
+    setConverting(true);
+    try {
+      await convertCourseToModule(modal.course.id, targetCourseId, moduleName);
+      await load();
+      setBanner("");
+      closeModal();
+    } catch (err) {
+      setBanner(err instanceof Error ? err.message : "Unable to convert course to module.");
+    } finally {
+      setConverting(false);
+    }
+  }
+
   // ── Render
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -871,6 +1257,14 @@ console.log("Categories:", categoryData);
             className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
           >
             <Spinner spin={loading} />
+          </button>
+          <button
+            onClick={() => openModal({ type: "reorder" })}
+            disabled={loading || courses.length < 2}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <IconGrip className="h-4 w-4" />
+            Reorder Courses
           </button>
           <button
             ref={addBtnRef}
@@ -1032,6 +1426,15 @@ console.log("Categories:", categoryData);
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            onClick={() => openModal({ type: "convert", course })}
+                            disabled={busy}
+                            aria-label="Convert to module"
+                            title="Convert to Module"
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <IconSwap className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => openModal({ type: "edit", course })}
                             disabled={busy}
                             aria-label="Edit course"
@@ -1105,6 +1508,28 @@ console.log("Categories:", categoryData);
           busy={deleting}
           onConfirm={handleDelete}
           onCancel={closeModal}
+        />
+      )}
+
+      {/* Reorder courses */}
+      {modal?.type === "reorder" && (
+        <ReorderCoursesModal
+          courses={courses}
+          categories={categories}
+          saving={reordering}
+          onReorder={handleReorderCourses}
+          onClose={closeModal}
+        />
+      )}
+
+      {/* Convert to module */}
+      {modal?.type === "convert" && (
+        <ConvertToModuleModal
+          course={modal.course}
+          courses={courses}
+          saving={converting}
+          onConfirm={handleConvertToModule}
+          onClose={closeModal}
         />
       )}
 

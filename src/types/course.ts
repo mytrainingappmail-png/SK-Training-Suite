@@ -40,6 +40,10 @@ export interface Course {
 
   certificate_enabled: boolean;
 
+  // Position among sibling courses in the same category — used for admin
+  // drag-and-drop reordering, lower numbers appear first.
+  display_order: number;
+
   active: boolean;
 
   // ID of the user who created the course.
@@ -72,6 +76,7 @@ export const defaultCourseForm: CourseForm = {
   duration_hours: 0,
   passing_percentage: 50,
   certificate_enabled: false,
+  display_order: 0,
   active: true,
   created_by: "",
 };
