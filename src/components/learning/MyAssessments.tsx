@@ -104,10 +104,28 @@ function EmptyState({ search }: { search: string }) {
 // Assessment card (dashboard)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Rotating gradient palette so cards read as colorful, quiz-themed.
+const ASSESSMENT_GRADIENTS = [
+  'from-indigo-500 to-violet-500',
+  'from-rose-500 to-orange-400',
+  'from-emerald-500 to-teal-400',
+  'from-sky-500 to-cyan-400',
+];
+
+function IconQuiz({ className = 'h-6 w-6' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 17.25h.007v.008H12v-.008Z" />
+    </svg>
+  );
+}
+
 function AssessmentCard({
-  assessment, onStart, onViewResult,
+  assessment, index, onStart, onViewResult,
 }: {
   assessment:   MyAssessment;
+  index:        number;
   onStart:      (assessment: MyAssessment) => void;
   onViewResult: (assessment: MyAssessment) => void;
 }) {
@@ -116,9 +134,18 @@ function AssessmentCard({
   const passingPercent =
     assessment.totalMarks > 0 ? Math.round((assessment.passingMarks / assessment.totalMarks) * 100) : null;
   const attemptsExhausted = assessment.attemptCount >= assessment.maximumAttempts;
+  const gradient = ASSESSMENT_GRADIENTS[index % ASSESSMENT_GRADIENTS.length];
 
   return (
-    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+
+      <div className={`relative h-16 bg-gradient-to-r ${gradient}`}>
+        <div className="absolute -bottom-5 left-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-md ring-4 ring-white">
+          <IconQuiz className="h-6 w-6" />
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col p-5 pt-8">
 
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -179,7 +206,7 @@ function AssessmentCard({
         {(!isCompleted || (isCompleted && !attemptsExhausted)) && (
           <button
             onClick={() => onStart(assessment)}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 active:scale-95"
+            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${gradient} px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95`}
           >
             {isInProgress ? 'Continue Assessment' : isCompleted ? 'Retake Assessment' : 'Start Assessment'}
           </button>
@@ -193,6 +220,7 @@ function AssessmentCard({
             View Result
           </button>
         )}
+      </div>
       </div>
     </div>
   );
@@ -527,10 +555,11 @@ function MyAssessments({ onStartAssessment, onViewResult }: MyAssessmentsProps) 
 
       {!loading && !error && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((assessment) => (
+          {filtered.map((assessment, index) => (
             <AssessmentCard
               key={assessment.assignmentId}
               assessment={assessment}
+              index={index}
               onStart={handleStart}
               onViewResult={handleViewResult}
             />

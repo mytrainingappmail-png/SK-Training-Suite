@@ -111,47 +111,58 @@ function EmptyState({ search }: { search: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CertificateCard({ certificate, onOpen }: { certificate: MyCertificate; onOpen: () => void }) {
+  const isIssued = certificate.status === 'valid';
   return (
     <button
       onClick={onOpen}
-      className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:shadow-md"
+      className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl"
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      {/* Gold ribbon header — celebratory treatment for an earned/eligible achievement */}
+      <div className={`relative h-20 bg-gradient-to-br ${isIssued ? 'from-amber-400 via-yellow-500 to-amber-600' : 'from-slate-300 to-slate-400'} px-5 pt-4`}>
+        <svg className="absolute -right-3 -top-3 h-24 w-24 text-white/10" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2l2.4 4.86 5.37.78-3.89 3.79.92 5.35L12 14.27l-4.8 2.51.92-5.35-3.89-3.79 5.37-.78L12 2z" />
+        </svg>
+        <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/25 text-white backdrop-blur-sm">
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.623 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
           </svg>
         </span>
-        <StatusBadge status={certificate.status} />
       </div>
 
-      <div className="mb-4 min-w-0 flex-1">
-        <p className="truncate text-base font-semibold text-slate-800">{certificate.certificateTitle}</p>
-        {certificate.courseName && (
-          <p className="mt-0.5 truncate text-sm text-slate-500">{certificate.courseName}</p>
-        )}
-        {certificate.certificateNumber && (
-          <span className="mt-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">
-            {certificate.certificateNumber}
-          </span>
-        )}
-
-        <div className="mt-3 grid grid-cols-2 gap-y-1 text-xs text-slate-500">
-          {certificate.status !== 'pending' && (
-            <div>
-              <p className="text-slate-400">Issue Date</p>
-              <p className="font-medium text-slate-700">{formatDate(certificate.issueDate)}</p>
-            </div>
-          )}
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1" />
+          <StatusBadge status={certificate.status} />
         </div>
-      </div>
 
-      <span className="mt-auto inline-flex items-center gap-1 text-sm font-semibold text-yellow-600">
-        View Details
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-        </svg>
-      </span>
+        <div className="mb-4 min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-slate-800">{certificate.certificateTitle}</p>
+          {certificate.courseName && (
+            <p className="mt-0.5 truncate text-sm text-slate-500">{certificate.courseName}</p>
+          )}
+          {certificate.certificateNumber && (
+            <span className="mt-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">
+              {certificate.certificateNumber}
+            </span>
+          )}
+
+          <div className="mt-3 grid grid-cols-2 gap-y-1 text-xs text-slate-500">
+            {certificate.status !== 'pending' && (
+              <div>
+                <p className="text-slate-400">Issue Date</p>
+                <p className="font-medium text-slate-700">{formatDate(certificate.issueDate)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <span className="mt-auto inline-flex items-center gap-1 text-sm font-semibold text-amber-600">
+          View Details
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </span>
+      </div>
     </button>
   );
 }
