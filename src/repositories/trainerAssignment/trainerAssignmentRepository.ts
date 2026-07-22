@@ -2,6 +2,24 @@ import { supabase } from "../../lib/supabase";
 import type { TrainerAssignment } from "../../types/trainerAssignment";
 import type { TrainerAssignmentForm } from "../../types/trainerAssignment";
 
+// Optional fields whose empty-string "no value" placeholder must become
+// null before reaching Postgres — branch_id is a uuid column ("" is
+// invalid input for uuid), and assigned_from/assigned_to are date
+// columns (which reject "" the same way).
+function sanitize<T extends Partial<TrainerAssignmentForm>>(assignment: T): T {
+  const cleaned = { ...assignment };
+  if ("branch_id" in cleaned && cleaned.branch_id === "") {
+    (cleaned as Record<string, unknown>).branch_id = null;
+  }
+  if ("assigned_from" in cleaned && cleaned.assigned_from === "") {
+    (cleaned as Record<string, unknown>).assigned_from = null;
+  }
+  if ("assigned_to" in cleaned && cleaned.assigned_to === "") {
+    (cleaned as Record<string, unknown>).assigned_to = null;
+  }
+  return cleaned;
+}
+
 export async function getTrainerAssignments(): Promise<TrainerAssignment[]> {
   const { data, error } = await supabase
     .from("trainer_assignments")
@@ -38,7 +56,7 @@ export async function createTrainerAssignment(
 ): Promise<TrainerAssignment> {
   const { data, error } = await supabase
     .from("trainer_assignments")
-    .insert(assignment)
+    .insert(sanitize(assignment))
     .select()
     .single();
 
@@ -56,7 +74,7 @@ export async function updateTrainerAssignment(
 ): Promise<TrainerAssignment> {
   const { data, error } = await supabase
     .from("trainer_assignments")
-    .update(assignment)
+    .update(sanitize(assignment))
     .eq("id", id)
     .select()
     .single();

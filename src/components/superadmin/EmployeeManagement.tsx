@@ -374,6 +374,7 @@ function EmployeeModal({
           joining_date: editing.joining_date,
           reporting_manager: editing.reporting_manager,
           active: editing.active,
+          attendance_location_scope: editing.attendance_location_scope,
           password: "",
         }
       : { ...BLANK }

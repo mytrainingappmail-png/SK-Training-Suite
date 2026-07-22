@@ -1,5 +1,7 @@
 // src/components/learning/ContinueLearning.tsx
 
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../constants/routes';
 import { useEffect, useMemo, useState } from 'react';
 import { loadContinueLearning } from '../../services/continueLearning/continueLearningService';
 import { getCurrentUser }       from '../../services/auth/session';
@@ -184,6 +186,7 @@ function ContinueLearning({ onContinue }: ContinueLearningProps) {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user?.id) {
@@ -215,7 +218,11 @@ function ContinueLearning({ onContinue }: ContinueLearningProps) {
   }, [search, items]);
 
   function handleContinue(item: ContinueLearningItem) {
-    onContinue?.(item);
+    if (onContinue) {
+      onContinue(item);
+    } else {
+      navigate(ROUTES.COURSE_PLAYER.replace(':courseId', item.enrollmentId));
+    }
   }
 
   return (

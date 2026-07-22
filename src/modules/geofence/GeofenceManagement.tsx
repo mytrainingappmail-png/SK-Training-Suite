@@ -23,6 +23,7 @@ import {
   setEmployeeLocations,
   setEmployeeScope,
 } from '../../services/geofence/geofenceService';
+import type { PlaceSearchResult } from '../../services/geofence/geofenceService';
 import type { Employee } from '../../types/employee';
 import type { Department } from '../../types/department';
 import type { Designation } from '../../types/designation';
@@ -30,7 +31,6 @@ import type {
   AttendanceLocation,
   AttendanceLocationScope,
   LocationType,
-  PlaceSearchResult,
 } from '../../types/geofence';
 import { LOCATION_TYPE_LABELS, ATTENDANCE_SCOPE_LABELS } from '../../types/geofence';
 

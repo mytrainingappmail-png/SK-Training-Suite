@@ -19,6 +19,8 @@ import {
   submitAssessment as repositorySubmitAssessment,
 } from "../../repositories/assessmentPlayer/assessmentPlayerRepository";
 
+import { finalizeAssessmentResult } from "./autoGradingService";
+
 // ─── startAssessment ──────────────────────────────────────────────────────────
 // Resumes an existing in-progress attempt or creates a new one after validating
 // maximum_attempts. Returns everything the player component needs to render.
@@ -123,6 +125,10 @@ export async function saveQuestionAnswer(
 // persisted in assessment_answers before writing the terminal attempt record.
 // The component supplies only timing and submission intent — counts are never
 // trusted from the caller.
+//
+// Immediately after the terminal attempt record is written, this now also
+// auto-grades every answer and creates the matching AssessmentResult —
+// previously this was a separate manual step an admin had to do by hand.
 
 export async function submitAssessment(
   request: SubmitRequest
@@ -162,7 +168,18 @@ export async function submitAssessment(
     unansweredQuestions,
   };
 
-  return await repositorySubmitAssessment(submitPayload);
+  const attempt = await repositorySubmitAssessment(submitPayload);
+
+  // Auto-grade + auto-create the AssessmentResult. Never let a grading
+  // failure hide the fact that the assessment itself was submitted
+  // successfully — log it, but still return the submitted attempt.
+  try {
+    await finalizeAssessmentResult(request.attemptId);
+  } catch (err) {
+    console.error("[assessmentPlayerService] Auto-grading failed:", err);
+  }
+
+  return attempt;
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────

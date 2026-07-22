@@ -1,5 +1,7 @@
 // src/components/learning/MyLearningPaths.tsx
 
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../constants/routes';
 import { useEffect, useMemo, useState } from 'react';
 import { loadMyLearningPaths } from '../../services/myLearningPath/myLearningPathService';
 import { getCurrentUser }      from '../../services/auth/session';
@@ -199,7 +201,7 @@ function PathCard({ path, onOpen }: PathCardProps) {
 
 function MyLearningPaths({ onOpenPath }: MyLearningPathsProps) {
   const user = getCurrentUser();
-
+const navigate = useNavigate();
   const [paths,   setPaths]   = useState<MyLearningPath[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -235,7 +237,11 @@ function MyLearningPaths({ onOpenPath }: MyLearningPathsProps) {
   }, [search, paths]);
 
   function handleOpen(learningPathId: string) {
-    onOpenPath?.(learningPathId);
+    if (onOpenPath) {
+      onOpenPath(learningPathId);
+    } else {
+      navigate(ROUTES.MY_COURSES);
+    }
   }
 
   return (

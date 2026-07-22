@@ -2,6 +2,24 @@ import { supabase } from "../../lib/supabase";
 import type { TrainingBatch } from "../../types/trainingBatch";
 import type { TrainingBatchForm } from "../../types/trainingBatch";
 
+// Every optional foreign key in this form (company_id, branch_id,
+// course_id, learning_path_id, trainer_id) is a uuid column — "" is
+// invalid input for uuid, it must be null instead. start_date/end_date
+// are date columns with the same problem when left blank.
+function sanitize<T extends Partial<TrainingBatchForm>>(batch: T): T {
+  const cleaned = { ...batch } as Record<string, unknown>;
+  const uuidFields = ["company_id", "branch_id", "course_id", "learning_path_id", "trainer_id"];
+  const dateFields = ["start_date", "end_date"];
+
+  for (const field of [...uuidFields, ...dateFields]) {
+    if (field in cleaned && cleaned[field] === "") {
+      cleaned[field] = null;
+    }
+  }
+
+  return cleaned as T;
+}
+
 export async function getTrainingBatches(): Promise<TrainingBatch[]> {
   const { data, error } = await supabase
     .from("training_batches")
@@ -36,7 +54,7 @@ export async function createTrainingBatch(
 ): Promise<TrainingBatch> {
   const { data, error } = await supabase
     .from("training_batches")
-    .insert(batch)
+    .insert(sanitize(batch))
     .select()
     .single();
 
@@ -54,7 +72,7 @@ export async function updateTrainingBatch(
 ): Promise<TrainingBatch> {
   const { data, error } = await supabase
     .from("training_batches")
-    .update(batch)
+    .update(sanitize(batch))
     .eq("id", id)
     .select()
     .single();

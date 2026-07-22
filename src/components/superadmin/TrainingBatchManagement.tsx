@@ -257,6 +257,7 @@ function DeleteDialog({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface FormErrs {
+  company_id?: string;
   batch_code?: string;
   batch_name?: string;
   status?: string;
@@ -327,6 +328,10 @@ function TrainingBatchModal({
 
   function validate(): boolean {
     const e: FormErrs = {};
+
+    // company_id is NOT NULL in the database — required here too, so
+    // the person sees a clear message instead of a raw database error.
+    if (!form.company_id) e.company_id = "Company is required.";
 
     if (!form.batch_code.trim())  e.batch_code  = "Batch Code is required.";
     if (!form.batch_name.trim())  e.batch_name  = "Batch Name is required.";
@@ -403,11 +408,11 @@ function TrainingBatchModal({
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Organisation</p>
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <FL label="Company">
+              <FL label="Company" required error={errs.company_id}>
                 <select value={form.company_id}
                   onChange={(e) => field("company_id", e.target.value)}
                   disabled={saving} className={CLS_SELECT}>
-                  <option value="">— None —</option>
+                  <option value="">— Select Company —</option>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
                 </select>
               </FL>

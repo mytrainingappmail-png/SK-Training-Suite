@@ -15,17 +15,22 @@
 //                                               existing services, not new)
 //   session.getCurrentUser()                  — Employee Name
 //
-// No repository, service, or database changes. Trainer Name, Assessment/
-// Assignment/Attendance eligibility reasons and a real QR code have no
-// backing anywhere reachable, so those sections are gracefully hidden
-// rather than faked.
+// UPDATED: certificate.certificateUrl is always empty (no static file is
+// ever generated for a certificate) — Preview/Download/Print now use the
+// real, live-rendered certificate (certificateViewService +
+// CertificateRenderer), the same pieces already wired into LearningHome's
+// "View Certificate" link. Share now shares by text only, since there is
+// no real URL to share.
 
 import { useEffect, useMemo, useState } from 'react';
 import { loadMyCertificates } from '../../services/myCertificate/myCertificateService';
 import { loadMyCourses }      from '../../services/myCourses/myCourseService';
 import { getCurrentUser }     from '../../services/auth/session';
+import { loadCertificateForView } from '../../services/certificate/certificateViewService';
+import CertificateRenderer from '../certificate/CertificateRenderer';
 import type { MyCertificate, MyCertificateStatus } from '../../types/myCertificate';
 import type { MyCourse } from '../../types/myCourse';
+import type { CertificateViewData } from '../../services/certificate/certificateViewService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status badge
@@ -165,6 +170,24 @@ function CertificateDetails({
 }) {
   const [copied, setCopied] = useState(false);
   const [toast,  setToast]  = useState('');
+  const [viewData, setViewData] = useState<CertificateViewData | null>(null);
+  const [loadingView, setLoadingView] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  const isIssued = certificate.status !== 'pending';
+
+  useEffect(() => {
+    if (!isIssued) {
+      setLoadingView(false);
+      return;
+    }
+    setLoadingView(true);
+    loadCertificateForView(certificate.id)
+      .then(setViewData)
+      .catch(() => setViewData(null))
+      .finally(() => setLoadingView(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [certificate.id, isIssued]);
 
   function showToast(message: string) {
     setToast(message);
@@ -182,26 +205,18 @@ function CertificateDetails({
   }
 
   async function handleShare() {
-    if (!certificate.certificateUrl) {
-      showToast('Certificate is not issued yet.');
-      return;
-    }
-    const shareData = {
-      title: certificate.certificateTitle,
-      text: `${certificate.certificateTitle} — ${certificate.courseName}`,
-      url: certificate.certificateUrl,
-    };
-    const nav = navigator as Navigator & { share?: (data: typeof shareData) => Promise<void> };
+    const shareText = `${certificate.certificateTitle} — ${certificate.courseName} (Certificate No: ${certificate.certificateNumber})`;
+    const nav = navigator as Navigator & { share?: (data: { title: string; text: string }) => Promise<void> };
     if (nav.share) {
       try {
-        await nav.share(shareData);
+        await nav.share({ title: certificate.certificateTitle, text: shareText });
       } catch {
         // user cancelled — no action needed
       }
     } else {
       try {
-        await navigator.clipboard.writeText(certificate.certificateUrl);
-        showToast('Link copied to clipboard');
+        await navigator.clipboard.writeText(shareText);
+        showToast('Certificate details copied to clipboard');
       } catch {
         showToast('Sharing is not supported on this browser.');
       }
@@ -209,14 +224,65 @@ function CertificateDetails({
   }
 
   function handlePrint() {
-    if (!certificate.certificateUrl) {
-      showToast('Certificate is not issued yet.');
-      return;
-    }
-    window.open(certificate.certificateUrl, '_blank', 'noopener,noreferrer');
+    window.print();
   }
 
-  const isIssued = certificate.status !== 'pending';
+  function handleDownload() {
+    const svgEl = document.getElementById('certificate-preview-svg')?.querySelector('svg');
+    if (!svgEl) {
+      showToast('Certificate is still loading — try again in a moment.');
+      return;
+    }
+    setDownloading(true);
+    try {
+      const viewBox = svgEl.getAttribute('viewBox')?.split(' ').map(Number) ?? [0, 0, 1122, 793];
+      const [, , svgWidth, svgHeight] = viewBox;
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgEl);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const scale = 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = svgWidth * scale;
+        canvas.height = svgHeight * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setDownloading(false);
+          return;
+        }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, svgWidth, svgHeight);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            setDownloading(false);
+            return;
+          }
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = `Certificate-${certificate.certificateNumber || certificate.id}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(downloadUrl);
+          setDownloading(false);
+        }, 'image/png');
+      };
+      img.onerror = () => setDownloading(false);
+      img.src = url;
+    } catch {
+      setDownloading(false);
+    }
+  }
+
   const eligibilityReasons: string[] = [];
   if (!isIssued && matchedCourse && matchedCourse.status !== 'COMPLETED') {
     eligibilityReasons.push('Course not completed');
@@ -242,19 +308,33 @@ function CertificateDetails({
         <StatusBadge status={certificate.status} />
       </div>
 
-      {/* Certificate Preview */}
+      {/* Certificate Preview — now the real, live-rendered certificate */}
       <div className="mb-8">
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Certificate Preview</h3>
-        {isIssued && certificate.certificateUrl ? (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-            <img src={certificate.certificateUrl} alt={certificate.certificateTitle} className="w-full object-contain" />
-          </div>
-        ) : (
+        {!isIssued ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-400">
             <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.623 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
             </svg>
             <p className="font-medium">Your certificate hasn't been issued yet.</p>
+          </div>
+        ) : loadingView ? (
+          <div className="h-96 animate-pulse rounded-2xl bg-slate-100" />
+        ) : viewData ? (
+          <div id="certificate-preview-svg" className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <CertificateRenderer
+              template={viewData.template}
+              data={{
+                employeeName: viewData.employeeName,
+                courseName: viewData.courseName || certificate.courseName,
+                issueDate: formatDate(certificate.issueDate),
+                certificateNo: certificate.certificateNumber,
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-400">
+            <p className="font-medium">Certificate design could not be loaded.</p>
           </div>
         )}
       </div>
@@ -298,18 +378,16 @@ function CertificateDetails({
       {/* Buttons */}
       {isIssued && (
         <div className="mb-8 flex flex-wrap gap-2">
-          <a
-            href={certificate.certificateUrl || undefined}
-            download
-            className={`inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95 ${
-              !certificate.certificateUrl ? 'pointer-events-none opacity-40' : ''
-            }`}
+          <button
+            onClick={handleDownload}
+            disabled={downloading || loadingView || !viewData}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
-            Download Certificate
-          </a>
+            {downloading ? 'Downloading…' : 'Download Certificate'}
+          </button>
           <button
             onClick={handlePrint}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"

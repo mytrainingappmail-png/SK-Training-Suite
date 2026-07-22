@@ -15,8 +15,11 @@ import type {
   QrPosition,
   Orientation,
   PaperSize,
+  DesignPreset,
+  LogoPosition,
 } from "../../types/certificateTemplate";
-import { defaultCertificateTemplateForm } from "../../types/certificateTemplate";
+import { defaultCertificateTemplateForm, DESIGN_PRESETS, LOGO_POSITIONS } from "../../types/certificateTemplate";
+import CertificateRenderer from "../certificate/CertificateRenderer";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -256,6 +259,13 @@ interface FormErrs {
   default_template?: string;
 }
 
+const PREVIEW_DATA = {
+  employeeName: "John Doe",
+  courseName: "Sample Course Name",
+  issueDate: new Date().toLocaleDateString(),
+  certificateNo: "SAMPLE-0001",
+};
+
 function TemplateModal({
   editing,
   usedCodes,
@@ -281,7 +291,19 @@ function TemplateModal({
           description:          editing.description,
           background_image_url: editing.background_image_url,
           logo_url:             editing.logo_url,
+          logo_position:        editing.logo_position,
           signature_url:        editing.signature_url,
+          signatory_1_name:     editing.signatory_1_name,
+          signatory_1_title:    editing.signatory_1_title,
+          signature_2_url:      editing.signature_2_url,
+          signatory_2_name:     editing.signatory_2_name,
+          signatory_2_title:    editing.signatory_2_title,
+          certificate_title:    editing.certificate_title,
+          subtitle_text:        editing.subtitle_text,
+          description_text:     editing.description_text,
+          description_bold:     editing.description_bold,
+          description_color:    editing.description_color,
+          design_preset:        editing.design_preset,
           qr_position:          editing.qr_position,
           orientation:          editing.orientation,
           paper_size:           editing.paper_size,
@@ -353,6 +375,13 @@ function TemplateModal({
     onSave(form);
   }
 
+  const previewTemplate: CertificateTemplate = {
+    id: editing?.id ?? '',
+    created_at: editing?.created_at ?? '',
+    updated_at: editing?.updated_at ?? '',
+    ...form,
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-10"
@@ -361,171 +390,305 @@ function TemplateModal({
       aria-labelledby="ct-form-title"
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={!saving ? onClose : undefined} />
-      <div className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 grid w-full max-w-6xl grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
 
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <h2 id="ct-form-title" className="text-lg font-semibold text-slate-800">
-              {isEdit ? "Edit Template" : "Add Template"}
-            </h2>
-            <p className="text-sm text-slate-500">
-              {isEdit ? "Update certificate template settings." : "Define a new certificate template."}
-            </p>
-          </div>
-          <button type="button" onClick={onClose} disabled={saving} aria-label="Close"
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <div className="rounded-2xl bg-white shadow-2xl">
 
-        <form onSubmit={onSubmit} noValidate>
-          <div className="space-y-5 p-6">
-
-            {/* ── Identity ── */}
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Identity</p>
-
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <FL label="Template Name" required error={errs.template_name}>
-                <input ref={firstRef} type="text" value={form.template_name}
-                  onChange={(e) => field("template_name", e.target.value)}
-                  placeholder="e.g. Gold Border Classic"
-                  maxLength={100} disabled={saving} className={CLS_INPUT} />
-              </FL>
-              <FL label="Template Code" required error={errs.template_code}>
-                <input type="text" value={form.template_code}
-                  onChange={(e) => field("template_code", e.target.value)}
-                  placeholder="e.g. TMPL-GOLD-001"
-                  maxLength={50} disabled={saving} className={CLS_INPUT} />
-              </FL>
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div>
+              <h2 id="ct-form-title" className="text-lg font-semibold text-slate-800">
+                {isEdit ? "Edit Template" : "Add Template"}
+              </h2>
+              <p className="text-sm text-slate-500">
+                {isEdit ? "Update certificate template settings." : "Define a new certificate template."}
+              </p>
             </div>
+            <button type="button" onClick={onClose} disabled={saving} aria-label="Close"
+              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-            <FL label="Description">
-              <textarea value={form.description}
-                onChange={(e) => field("description", e.target.value)}
-                placeholder="Optional description of this template"
-                rows={2} disabled={saving} className={CLS_TEXTAREA} />
-            </FL>
+          <form onSubmit={onSubmit} noValidate className="max-h-[75vh] overflow-y-auto">
+            <div className="space-y-5 p-6">
 
-            {/* ── Layout ── */}
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Layout</p>
+              {/* ── Identity ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Identity</p>
 
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-              <FL label="Orientation">
-                <select value={form.orientation}
-                  onChange={(e) => field("orientation", e.target.value as Orientation)}
-                  disabled={saving} className={CLS_SELECT}>
-                  {ORIENTATIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <FL label="Template Name" required error={errs.template_name}>
+                  <input ref={firstRef} type="text" value={form.template_name}
+                    onChange={(e) => field("template_name", e.target.value)}
+                    placeholder="e.g. Gold Border Classic"
+                    maxLength={100} disabled={saving} className={CLS_INPUT} />
+                </FL>
+                <FL label="Template Code" required error={errs.template_code}>
+                  <input type="text" value={form.template_code}
+                    onChange={(e) => field("template_code", e.target.value)}
+                    placeholder="e.g. TMPL-GOLD-001"
+                    maxLength={50} disabled={saving} className={CLS_INPUT} />
+                </FL>
+              </div>
+
+              <FL label="Description">
+                <textarea value={form.description}
+                  onChange={(e) => field("description", e.target.value)}
+                  placeholder="Optional description of this template"
+                  rows={2} disabled={saving} className={CLS_TEXTAREA} />
               </FL>
-              <FL label="Paper Size">
-                <select value={form.paper_size}
-                  onChange={(e) => field("paper_size", e.target.value as PaperSize)}
+
+              {/* ── Design ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Design</p>
+
+              <FL label="Design Preset">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {DESIGN_PRESETS.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => field("design_preset", p.value as DesignPreset)}
+                      disabled={saving}
+                      className={`rounded-xl border-2 px-2 py-2 text-[11px] font-medium transition ${
+                        form.design_preset === p.value
+                          ? "border-yellow-400 bg-yellow-50 text-yellow-800"
+                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </FL>
+
+              <FL label="Logo Position">
+                <select value={form.logo_position}
+                  onChange={(e) => field("logo_position", e.target.value as LogoPosition)}
                   disabled={saving} className={CLS_SELECT}>
-                  {PAPER_SIZES.map((p) => (
+                  {LOGO_POSITIONS.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
                 </select>
               </FL>
-              <FL label="QR Code Position">
-                <select value={form.qr_position}
-                  onChange={(e) => field("qr_position", e.target.value as QrPosition)}
-                  disabled={saving} className={CLS_SELECT}>
-                  {QR_POSITIONS.map((q) => (
-                    <option key={q.value} value={q.value}>{q.label}</option>
-                  ))}
-                </select>
-              </FL>
-            </div>
 
-            {/* ── Typography ── */}
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Typography</p>
+              {/* ── Certificate Text ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Certificate Text</p>
 
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <FL label="Font Family">
-                <select value={form.font_family}
-                  onChange={(e) => field("font_family", e.target.value)}
-                  disabled={saving} className={CLS_SELECT}>
-                  {FONT_FAMILIES.map((f) => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
+              <FL label="Certificate Title">
+                <input type="text" value={form.certificate_title}
+                  onChange={(e) => field("certificate_title", e.target.value)}
+                  placeholder="e.g. CERTIFICATE OF ACHIEVEMENT"
+                  disabled={saving} className={CLS_INPUT} />
+                <p className="mt-1 text-xs text-slate-400">The big heading at the top of the certificate.</p>
               </FL>
-              <FL label="Font Size (pt)" required error={errs.font_size}>
-                <input type="number" min={1} value={form.font_size}
-                  onChange={(e) =>
-                    field("font_size", Math.max(1, parseInt(e.target.value, 10) || 1))
-                  }
+
+              <FL label="Subtitle">
+                <input type="text" value={form.subtitle_text}
+                  onChange={(e) => field("subtitle_text", e.target.value)}
+                  placeholder="e.g. This certificate is proudly presented to"
+                  disabled={saving} className={CLS_INPUT} />
+                <p className="mt-1 text-xs text-slate-400">Small line shown just above the employee's name.</p>
+              </FL>
+
+              <FL label="Description">
+                <textarea value={form.description_text}
+                  onChange={(e) => field("description_text", e.target.value)}
+                  rows={3} disabled={saving} className={CLS_TEXTAREA} />
+                <p className="mt-1 text-xs text-slate-400">
+                  Shown below the employee's name. Placeholders: <code className="rounded bg-slate-100 px-1">{'{{employee_name}}'}</code>{' '}
+                  <code className="rounded bg-slate-100 px-1">{'{{course_name}}'}</code>{' '}
+                  <code className="rounded bg-slate-100 px-1">{'{{issue_date}}'}</code>{' '}
+                  <code className="rounded bg-slate-100 px-1">{'{{certificate_no}}'}</code>
+                </p>
+              </FL>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <FL label="Description Text Color">
+                  <input type="color" value={form.description_color}
+                    onChange={(e) => field("description_color", e.target.value)}
+                    disabled={saving} className="h-10 w-full rounded-xl border border-slate-200" />
+                </FL>
+                <FL label="Description Style">
+                  <ToggleRow
+                    label="Bold"
+                    sub="Make the description text bold"
+                    on={form.description_bold}
+                    onChange={() => field("description_bold", !form.description_bold)}
+                    disabled={saving}
+                  />
+                </FL>
+              </div>
+
+              {/* ── Layout ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Layout</p>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <FL label="Orientation">
+                  <select value={form.orientation}
+                    onChange={(e) => field("orientation", e.target.value as Orientation)}
+                    disabled={saving} className={CLS_SELECT}>
+                    {ORIENTATIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </FL>
+                <FL label="Paper Size">
+                  <select value={form.paper_size}
+                    onChange={(e) => field("paper_size", e.target.value as PaperSize)}
+                    disabled={saving} className={CLS_SELECT}>
+                    {PAPER_SIZES.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                </FL>
+                <FL label="QR Code Position">
+                  <select value={form.qr_position}
+                    onChange={(e) => field("qr_position", e.target.value as QrPosition)}
+                    disabled={saving} className={CLS_SELECT}>
+                    {QR_POSITIONS.map((q) => (
+                      <option key={q.value} value={q.value}>{q.label}</option>
+                    ))}
+                  </select>
+                </FL>
+              </div>
+
+              {/* ── Typography ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Typography</p>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <FL label="Font Family">
+                  <select value={form.font_family}
+                    onChange={(e) => field("font_family", e.target.value)}
+                    disabled={saving} className={CLS_SELECT}>
+                    {FONT_FAMILIES.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </FL>
+                <FL label="Font Size (pt)" required error={errs.font_size}>
+                  <input type="number" min={1} value={form.font_size}
+                    onChange={(e) =>
+                      field("font_size", Math.max(1, parseInt(e.target.value, 10) || 1))
+                    }
+                    disabled={saving} className={CLS_INPUT} />
+                </FL>
+              </div>
+
+              {/* ── Assets ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Logo & Background</p>
+
+              <FL label="Background Image URL">
+                <input type="url" value={form.background_image_url}
+                  onChange={(e) => field("background_image_url", e.target.value)}
+                  placeholder="https://example.com/bg.png"
                   disabled={saving} className={CLS_INPUT} />
               </FL>
-            </div>
 
-            {/* ── Assets ── */}
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Asset URLs</p>
-
-            <FL label="Background Image URL">
-              <input type="url" value={form.background_image_url}
-                onChange={(e) => field("background_image_url", e.target.value)}
-                placeholder="https://example.com/bg.png"
-                disabled={saving} className={CLS_INPUT} />
-            </FL>
-
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <FL label="Logo URL">
                 <input type="url" value={form.logo_url}
                   onChange={(e) => field("logo_url", e.target.value)}
                   placeholder="https://example.com/logo.png"
                   disabled={saving} className={CLS_INPUT} />
               </FL>
-              <FL label="Signature URL">
-                <input type="url" value={form.signature_url}
-                  onChange={(e) => field("signature_url", e.target.value)}
-                  placeholder="https://example.com/signature.png"
-                  disabled={saving} className={CLS_INPUT} />
-              </FL>
+
+              {/* ── Signatures ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Signatures</p>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-xs font-semibold text-slate-500">Signature 1</p>
+                  <FL label="Signature Image URL">
+                    <input type="url" value={form.signature_url}
+                      onChange={(e) => field("signature_url", e.target.value)}
+                      placeholder="https://example.com/signature1.png"
+                      disabled={saving} className={CLS_INPUT} />
+                  </FL>
+                  <FL label="Signatory Name">
+                    <input type="text" value={form.signatory_1_name}
+                      onChange={(e) => field("signatory_1_name", e.target.value)}
+                      placeholder="e.g. Rajesh Kumar"
+                      disabled={saving} className={CLS_INPUT} />
+                  </FL>
+                  <FL label="Signatory Title">
+                    <input type="text" value={form.signatory_1_title}
+                      onChange={(e) => field("signatory_1_title", e.target.value)}
+                      placeholder="e.g. Head of Training"
+                      disabled={saving} className={CLS_INPUT} />
+                  </FL>
+                </div>
+
+                <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-xs font-semibold text-slate-500">Signature 2</p>
+                  <FL label="Signature Image URL">
+                    <input type="url" value={form.signature_2_url}
+                      onChange={(e) => field("signature_2_url", e.target.value)}
+                      placeholder="https://example.com/signature2.png"
+                      disabled={saving} className={CLS_INPUT} />
+                  </FL>
+                  <FL label="Signatory Name">
+                    <input type="text" value={form.signatory_2_name}
+                      onChange={(e) => field("signatory_2_name", e.target.value)}
+                      placeholder="e.g. Priya Sharma"
+                      disabled={saving} className={CLS_INPUT} />
+                  </FL>
+                  <FL label="Signatory Title">
+                    <input type="text" value={form.signatory_2_title}
+                      onChange={(e) => field("signatory_2_title", e.target.value)}
+                      placeholder="e.g. Managing Director"
+                      disabled={saving} className={CLS_INPUT} />
+                  </FL>
+                </div>
+              </div>
+
+              {/* ── Status ── */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
+
+              <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <ToggleRow
+                  label="Active"
+                  sub="Template is available for use"
+                  on={form.active}
+                  onChange={() => field("active", !form.active)}
+                  disabled={saving}
+                />
+                <ToggleRow
+                  label="Default Template"
+                  sub="Used when no specific template is assigned"
+                  on={form.default_template}
+                  onChange={() => field("default_template", !form.default_template)}
+                  disabled={saving}
+                />
+                {errs.default_template && (
+                  <p className="text-xs text-red-500">{errs.default_template}</p>
+                )}
+              </div>
+
             </div>
 
-            {/* ── Status ── */}
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
-
-            <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <ToggleRow
-                label="Active"
-                sub="Template is available for use"
-                on={form.active}
-                onChange={() => field("active", !form.active)}
-                disabled={saving}
-              />
-              <ToggleRow
-                label="Default Template"
-                sub="Used when no specific template is assigned"
-                on={form.default_template}
-                onChange={() => field("default_template", !form.default_template)}
-                disabled={saving}
-              />
-              {errs.default_template && (
-                <p className="text-xs text-red-500">{errs.default_template}</p>
-              )}
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+              <button type="button" onClick={onClose} disabled={saving}
+                className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving}
+                className="rounded-xl bg-yellow-500 px-6 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 disabled:opacity-50 active:scale-95">
+                {saving ? "Saving…" : isEdit ? "Update Template" : "Add Template"}
+              </button>
             </div>
+          </form>
 
-          </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-            <button type="button" onClick={onClose} disabled={saving}
-              className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving}
-              className="rounded-xl bg-yellow-500 px-6 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 disabled:opacity-50 active:scale-95">
-              {saving ? "Saving…" : isEdit ? "Update Template" : "Add Template"}
-            </button>
+        {/* Live preview */}
+        <div className="hidden rounded-2xl bg-white p-4 shadow-2xl lg:block">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Live Preview</p>
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <CertificateRenderer template={previewTemplate} data={PREVIEW_DATA} />
           </div>
-        </form>
+        </div>
 
       </div>
     </div>

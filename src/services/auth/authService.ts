@@ -1,21 +1,26 @@
 // File: src/services/auth/authService.ts
 //
+// SECURITY MIGRATION — Phase 2.
+//
+// Employees who have been migrated (employees.auth_user_id is set) now
+// log in through REAL Supabase Auth (supabase.auth.signInWithPassword).
+// This gives every subsequent database request a real, verifiable
+// identity, which is what allows RLS policies to actually restrict
+// data by company — something the old plaintext-password check could
+// never support.
+//
+// Employees who have NOT been migrated yet (auth_user_id is still
+// null) continue to log in exactly the old way, with zero change in
+// behaviour — nobody is locked out during the gradual migration.
+//
+// The User object returned to the rest of the app, and the
+// setCurrentUser() call, are UNCHANGED — every existing file that
+// calls getCurrentUser() keeps working exactly as before.
+//
 // Verified import paths from src/services/auth/:
 //   ../../lib/supabase      → src/lib/supabase.ts             (exports: supabase)
 //   ./session               → src/services/auth/session.ts    (exports: setCurrentUser)
 //   ../../types/app         → src/types/app.ts                (exports: User, UserStatus)
-//
-// employees table columns used (auth-specific columns must be present in DB):
-//   id, company_id, branch_id, department_id, designation_id,
-//   employee_code, first_name, last_name, email, mobile, active,
-//   password, failed_login_attempts, account_locked,
-//   last_login, password_changed_at
-//
-// companies table columns used:
-//   id, company_code, active
-//
-// employee_roles table columns used:
-//   employee_id, role_id, active, assigned_date
 
 import { supabase }       from "../../lib/supabase";
 import { setCurrentUser } from "./session";
@@ -90,8 +95,10 @@ export async function login(
     );
   }
 
-  // ── 6. Validate password ──────────────────────────────────────────────────
-  const passwordValid = emp.password === password;
+  // ── 6. Validate password — real Supabase Auth if migrated, legacy check otherwise ──
+  const passwordValid = emp.auth_user_id
+    ? await validateViaSupabaseAuth(companyCode.trim(), employeeId.trim(), password)
+    : emp.password === password;
 
   if (!passwordValid) {
     await handleFailedAttempt(emp.id, emp.failed_login_attempts ?? 0);
@@ -129,6 +136,11 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
+  // Also end the real Supabase Auth session (harmless no-op for
+  // employees who were never migrated — signOut() just does nothing
+  // if there was no real session to begin with).
+  await supabase.auth.signOut();
+
   const { logout: clearSession } = await import("./session");
   clearSession();
 }
@@ -141,24 +153,54 @@ function fail(error: string): LoginResult {
   return { success: false, user: null, error };
 }
 
+function internalEmailFor(companyCode: string, employeeCode: string): string {
+  return `${companyCode.toLowerCase()}.${employeeCode.toLowerCase()}@internal.sktraining`;
+}
+
+/**
+ * Signs in through real Supabase Auth. On success, Supabase stores a
+ * real, verifiable session on the shared client — every future
+ * .from() call the app makes will carry this identity, which is what
+ * lets RLS policies scope data to the employee's own company.
+ */
+async function validateViaSupabaseAuth(
+  companyCode: string,
+  employeeCode: string,
+  password: string
+): Promise<boolean> {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: internalEmailFor(companyCode, employeeCode),
+    password,
+  });
+
+  if (error) {
+    console.error("[authService] validateViaSupabaseAuth:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
 interface CompanyRow {
   id:     string;
   active: boolean;
 }
 
 async function fetchCompany(companyCode: string): Promise<CompanyRow | null> {
-  const { data, error } = await supabase
-    .from("companies")
-    .select("id, active")
-    .eq("company_code", companyCode)
-    .maybeSingle();
+  // Runs before any Supabase Auth session exists (that's the point of a
+  // login call), so this goes through a SECURITY DEFINER RPC rather than
+  // a direct table query — the anon key has no standing access to
+  // `companies` at all now that RLS is enforced.
+  const { data, error } = await supabase.rpc("get_company_for_login", {
+    p_company_code: companyCode,
+  });
 
   if (error) {
     console.error("[authService] fetchCompany:", error.message);
     return null;
   }
 
-  return data ?? null;
+  return (data as CompanyRow[] | null)?.[0] ?? null;
 }
 
 interface EmployeeRow {
@@ -176,29 +218,27 @@ interface EmployeeRow {
   password:              string | null;
   failed_login_attempts: number | null;
   account_locked:        boolean | null;
+  auth_user_id:          string | null;
 }
 
 async function fetchEmployee(
   employeeCode: string,
   companyId:    string
 ): Promise<EmployeeRow | null> {
-  const { data, error } = await supabase
-    .from("employees")
-    .select(
-      "id, company_id, branch_id, department_id, designation_id, " +
-      "employee_code, first_name, last_name, email, mobile, active, " +
-      "password, failed_login_attempts, account_locked"
-    )
-    .eq("employee_code", employeeCode)
-    .eq("company_id",    companyId)
-    .maybeSingle();
+  // Also pre-session (see fetchCompany above) — routed through a SECURITY
+  // DEFINER RPC so `employees` (names, mobiles, password field) never needs
+  // an anon-accessible policy.
+  const { data, error } = await supabase.rpc("login_lookup_employee", {
+    p_employee_code: employeeCode,
+    p_company_id:    companyId,
+  });
 
   if (error) {
     console.error("[authService] fetchEmployee:", error.message);
     return null;
   }
 
-  return (data as EmployeeRow | null) ?? null;
+  return (data as EmployeeRow[] | null)?.[0] ?? null;
 }
 
 async function handleFailedAttempt(
@@ -208,18 +248,13 @@ async function handleFailedAttempt(
   const newAttempts = currentAttempts + 1;
   const shouldLock  = newAttempts >= MAX_FAILED_ATTEMPTS;
 
-  const updates: Record<string, unknown> = {
-    failed_login_attempts: newAttempts,
-  };
-
-  if (shouldLock) {
-    updates.account_locked = true;
-  }
-
-  const { error } = await supabase
-    .from("employees")
-    .update(updates)
-    .eq("id", employeeId);
+  // Still pre-session — a wrong password never establishes a Supabase
+  // Auth session, so this also has to go through the RPC.
+  const { error } = await supabase.rpc("login_record_failed_attempt", {
+    p_employee_id:  employeeId,
+    p_new_attempts: newAttempts,
+    p_lock:         shouldLock,
+  });
 
   if (error) {
     console.error("[authService] handleFailedAttempt:", error.message);
@@ -227,14 +262,9 @@ async function handleFailedAttempt(
 }
 
 async function handleSuccessfulLogin(employeeId: string): Promise<void> {
-  const { error } = await supabase
-    .from("employees")
-    .update({
-      failed_login_attempts: 0,
-      account_locked:        false,
-      last_login:            new Date().toISOString(),
-    })
-    .eq("id", employeeId);
+  const { error } = await supabase.rpc("login_record_successful_login", {
+    p_employee_id: employeeId,
+  });
 
   if (error) {
     console.error("[authService] handleSuccessfulLogin:", error.message);

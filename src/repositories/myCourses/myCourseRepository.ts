@@ -1,5 +1,29 @@
+// src/repositories/myCourses/myCourseRepository.ts
+//
+// FIX: enrollments -> courses, and courses -> course_categories, are
+// both to-ONE relationships — PostgREST returns each as a single
+// object, not an array. The old code did `row.courses?.[0]` and
+// `course?.course_categories?.[0]`, both array-indexing a non-array,
+// which silently returned undefined every time. This is the original
+// source of the "Untitled Course" fallback text showing up in My
+// Courses. Now handled via unwrap(), which works whether Supabase
+// returns an object or a single-item array.
+
 import { supabase } from '../../lib/supabase';
 import type { MyCourse, MyCourseStatus } from '../../types/myCourse';
+
+interface SBCourseCategory {
+  category_name: string;
+}
+
+interface SBCourse {
+  course_code:    string;
+  course_name:    string;
+  thumbnail:      string;
+  duration_days:  number;
+  duration_hours: number;
+  course_categories: SBCourseCategory[] | SBCourseCategory | null;
+}
 
 interface SupabaseEnrollmentRow {
   id:                    string;
@@ -9,21 +33,17 @@ interface SupabaseEnrollmentRow {
   due_date:              string;
   completed_at:          string | null;
   created_at:            string;
-  courses: Array<{
-    course_code:    string;
-    course_name:    string;
-    thumbnail:      string;
-    duration_days:  number;
-    duration_hours: number;
-    course_categories: Array<{
-      category_name: string;
-    }> | null;
-  }> | null;
+  courses: SBCourse[] | SBCourse | null;
+}
+
+function unwrap<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
 
 function normalise(row: SupabaseEnrollmentRow): MyCourse {
-  const course   = row.courses?.[0]               ?? null;
-  const category = course?.course_categories?.[0] ?? null;
+  const course   = unwrap(row.courses);
+  const category = unwrap(course?.course_categories);
 
   return {
     enrollmentId:         row.id,

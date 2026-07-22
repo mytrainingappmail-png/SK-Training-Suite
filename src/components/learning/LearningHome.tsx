@@ -4,11 +4,16 @@
 //   react                                     — useEffect, useState
 //   ../../services/learning/learningService   — loadLearningHome
 //   ../../services/auth/session               — getCurrentUser
+//   ../../services/courseVisibility/courseVisibilityService — loadVisibleCoursesForEmployee
 //   ../../types/learning                      — LearningHome
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { loadLearningHome }    from '../../services/learning/learningService';
 import { getCurrentUser }      from '../../services/auth/session';
+import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
+import { ROUTES } from '../../constants/routes';
+import { MiniBarChart, MiniDonutChart } from '../shared/MiniCharts';
 import type { LearningHome }   from '../../types/learning';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,8 +198,36 @@ export default function LearningHome() {
     }
     setLoading(true);
     setError(null);
-    loadLearningHome(user.id)
-      .then(setData)
+
+    // Real designation-based visibility, applied on top of whatever
+    // loadLearningHome already returns — a course no longer allowed
+    // for this employee's designation is removed here, and the
+    // summary counts are recomputed so the numbers on screen always
+    // match the list actually shown.
+    Promise.all([loadLearningHome(user.id), loadVisibleCoursesForEmployee(user.id)])
+      .then(([homeData, visibleCourses]) => {
+        const visibleCourseIds = new Set(visibleCourses.map((c) => c.id));
+        const restrictedCourses = homeData.courses.filter((c) => visibleCourseIds.has(c.courseId));
+
+        const completedCourses = restrictedCourses.filter((c) => c.status === 'COMPLETED').length;
+        const inProgressCourses = restrictedCourses.filter((c) => c.status === 'IN_PROGRESS').length;
+        const totalCourses = restrictedCourses.length;
+        const overallProgressPct = totalCourses > 0
+          ? Math.round(restrictedCourses.reduce((sum, c) => sum + c.completionPercentage, 0) / totalCourses)
+          : 0;
+
+        setData({
+          ...homeData,
+          courses: restrictedCourses,
+          summary: {
+            ...homeData.summary,
+            totalCourses,
+            completedCourses,
+            inProgressCourses,
+            overallProgressPct,
+          },
+        });
+      })
       .catch((err: unknown) => {
         console.error('[LearningHome]', err);
         setError(err instanceof Error ? err.message : 'Failed to load learning data.');
@@ -222,6 +255,8 @@ export default function LearningHome() {
 
   const { summary, courses, paths, assessments, certificates } = data;
   const fullName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Employee';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   // Continue learning: in-progress first, then pending, cap at 3
   const continueCourses = [...courses]
@@ -238,8 +273,8 @@ export default function LearningHome() {
         style={{ background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)' }}
       >
         <div className="space-y-1">
-          <p className="text-sm text-slate-400">My Learning</p>
-          <h1 className="text-2xl font-bold">{fullName}</h1>
+          <p className="text-sm text-slate-400">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <h1 className="text-2xl font-bold">{greeting}, {fullName} 👋</h1>
           <p className="text-sm text-slate-300">
             {summary.inProgressCourses > 0
               ? `${summary.inProgressCourses} course${summary.inProgressCourses > 1 ? 's' : ''} in progress`
@@ -267,6 +302,28 @@ export default function LearningHome() {
         <SummaryCard label="Paths Done"       value={summary.completedPaths}     border="border-cyan-100"   icon={Ic.progress} />
         <SummaryCard label="Overall" value={summary.overallProgressPct} suffix="%" border="border-slate-200" icon={Ic.progress} />
       </div>
+
+      {/* ── Charts ────────────────────────────────────────────────────────────── */}
+      {courses.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-slate-800">Course Completion</h3>
+            <MiniBarChart
+              data={courses.slice(0, 8).map((c) => ({ label: c.courseName, value: c.completionPercentage }))}
+              color="#6366F1"
+              maxValue={100}
+            />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-slate-800">Course Status</h3>
+            <MiniDonutChart data={[
+              { label: 'Completed', value: courses.filter((c) => c.status === 'COMPLETED').length, color: '#10B981' },
+              { label: 'In Progress', value: courses.filter((c) => c.status === 'IN_PROGRESS').length, color: '#3B82F6' },
+              { label: 'Pending', value: courses.filter((c) => c.status !== 'COMPLETED' && c.status !== 'IN_PROGRESS').length, color: '#CBD5E1' },
+            ]} />
+          </div>
+        </div>
+      )}
 
       {/* ── Continue Learning ────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -430,12 +487,12 @@ export default function LearningHome() {
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => console.info('[LearningHome] Start assessment:', a.assessmentId)}
+                <Link
+                  to={ROUTES.MY_ASSESSMENTS}
                   className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-95"
                 >
                   Take Test {Ic.arrow}
-                </button>
+                </Link>
               </div>
             ))}
           </div>
@@ -467,16 +524,12 @@ export default function LearningHome() {
                     </p>
                   )}
                 </div>
-                {cert.certificateUrl && (
-                  <a
-                    href={cert.certificateUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-yellow-700 hover:underline"
-                  >
-                    View Certificate {Ic.arrow}
-                  </a>
-                )}
+                <Link
+                  to={ROUTES.CERTIFICATE_VIEW.replace(':certificateId', cert.id)}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-yellow-700 hover:underline"
+                >
+                  View Certificate {Ic.arrow}
+                </Link>
               </div>
             ))}
           </div>

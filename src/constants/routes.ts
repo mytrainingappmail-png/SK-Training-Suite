@@ -44,4 +44,22 @@ export const ROUTES = {
 
   CONTINUE_LEARNING: "/learning/continue",
 
+  VIDEOS: "/learning/videos",
+
+  PROJECTS: "/learning/projects",
+
+  CERTIFICATE_VIEW: "/learning/certificate/:certificateId",
+
+  MY_ATTENDANCE: "/learning/attendance",
+
+  TRAINER_STUDENTS: "/teaching/students",
+
+  TRAINER_GRADING_QUEUE: "/teaching/grading",
+
+  TRAINER_COURSES: "/teaching/courses",
+
+  TRAINER_BATCHES: "/teaching/batches",
+
+  TRAINER_RESULTS: "/teaching/results",
+
 } as const;

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { loadMyCourses }       from '../../services/myCourses/myCourseService';
 import { getCurrentUser }      from '../../services/auth/session';
+import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
+import { ROUTES } from '../../constants/routes';
 import type { MyCourse, MyCourseStatus } from '../../types/myCourse';
 
 const STATUS_STYLES: Record<MyCourseStatus, string> = {
@@ -47,6 +50,7 @@ function Skeleton() {
 
 function MyCourses() {
   const user = getCurrentUser();
+  const navigate = useNavigate();
 
   const [courses,  setCourses]  = useState<MyCourse[]>([]);
   const [filtered, setFiltered] = useState<MyCourse[]>([]);
@@ -64,10 +68,16 @@ function MyCourses() {
     setLoading(true);
     setError('');
 
-    loadMyCourses(user.id)
-      .then((data) => {
-        setCourses(data);
-        setFiltered(data);
+    // Real designation-based visibility, on top of the existing
+    // enrollment-based list — a course that was assigned before its
+    // visibility rules changed will no longer show here if it's no
+    // longer allowed for this employee's designation.
+    Promise.all([loadMyCourses(user.id), loadVisibleCoursesForEmployee(user.id)])
+      .then(([data, visibleCourses]) => {
+        const visibleCourseIds = new Set(visibleCourses.map((c) => c.id));
+        const restricted = data.filter((c) => visibleCourseIds.has(c.courseId));
+        setCourses(restricted);
+        setFiltered(restricted);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load courses.');
@@ -91,6 +101,10 @@ function MyCourses() {
       )
     );
   }, [search, courses]);
+
+  function openCourse(course: MyCourse) {
+    navigate(ROUTES.COURSE_PLAYER.replace(':courseId', course.enrollmentId));
+  }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -199,7 +213,7 @@ function MyCourses() {
               <button
                 className="flex-shrink-0 rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={course.status === 'CANCELLED' || course.status === 'EXPIRED'}
-                onClick={() => console.info('[MyCourses] Open course:', course.courseId)}
+                onClick={() => openCourse(course)}
               >
                 {course.status === 'COMPLETED'
                   ? 'Review'

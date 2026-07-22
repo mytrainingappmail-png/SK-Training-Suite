@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 
 import Sidebar from "../components/dashboard/Sidebar";
 import Header from "../components/dashboard/Header";
+import LicenseGuard from "../components/license/LicenseGuard";
 
 function AppLayout() {
   return (
@@ -14,7 +15,9 @@ function AppLayout() {
         <Header />
 
         <main className="flex-1 overflow-y-auto p-8">
-          <Outlet />
+          <LicenseGuard>
+            <Outlet />
+          </LicenseGuard>
         </main>
 
       </div>

@@ -759,6 +759,19 @@ function ContentEditor({ lessonId }: ContentEditorProps) {
     setUploadingKind('thumbnail');
     try {
       const result = await uploadImage(file);
+      restoreSelection();
+
+insertHtml(`
+  <p>
+    <img
+      src="${result.url}"
+      alt="${file.name}"
+      style="max-width:100%;height:auto;border-radius:8px;"
+    />
+  </p>
+`);
+
+handleInput();
       if (thumbnailResource) {
         await saveResource(thumbnailResource.id, {
           lesson_id: thumbnailResource.lesson_id,

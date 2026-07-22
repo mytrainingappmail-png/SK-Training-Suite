@@ -1,8 +1,15 @@
 // src/repositories/coursePlayer/coursePlayerRepository.ts
 //
 // Supabase queries only — zero business logic.
-// All nested relations typed as Array (Supabase JS returns arrays even for
-// FK-to-PK joins). Normalised to single objects before returning.
+//
+// FIX: enrollments -> courses is a to-ONE relationship (many
+// enrollments belong to one course), so PostgREST returns `courses`
+// as a single object, NOT an array — unlike courses -> modules,
+// modules -> lessons, and lessons -> learning_resources, which are all
+// to-MANY and correctly come back as arrays. The old code did
+// `row.courses?.[0]`, which silently returned undefined for an object
+// (array-indexing a non-array), causing every course to fail with
+// "Course not found." This now handles both shapes safely via unwrap().
 
 import { supabase } from '../../lib/supabase';
 import type {
@@ -68,10 +75,18 @@ interface SBEnrollmentRow {
   completion_percentage: number;
   due_date:              string;
   completed_at:          string | null;
-  courses:               SBCourse[] | null;
+  courses:               SBCourse | SBCourse[] | null;
 }
 
 // ── Normalise helpers ─────────────────────────────────────────────────────────
+
+// Supabase JS can return a to-one embed as either a single object or a
+// single-item array depending on how PostgREST resolves the
+// relationship — this handles both shapes safely everywhere it's used.
+function unwrap<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
 
 function normaliseResource(r: SBResource): CoursePlayerResource {
   return {
@@ -196,7 +211,7 @@ export async function getCoursePlayerData(
   if (!enrollRow) throw new Error('Enrollment not found.');
 
   const row = enrollRow as unknown as SBEnrollmentRow;
-  const sbCourse = row.courses?.[0] ?? null;
+  const sbCourse = unwrap(row.courses);
   if (!sbCourse) throw new Error('Course not found.');
 
   // 2. Fetch completed lesson IDs for this employee + course

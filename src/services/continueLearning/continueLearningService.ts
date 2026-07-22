@@ -3,11 +3,21 @@
 // Business logic only — no Supabase imports.
 // Derives the resume point (lesson + resource, remaining lessons, estimated
 // time remaining) for each in-progress course enrollment.
+//
+// FIX: enrollments -> courses is a to-ONE relationship, so PostgREST
+// returns `courses` as a single object, not an array. The old code did
+// `row.courses?.[0]` (array-indexing a non-array), which silently
+// returned undefined for every real course — this is the exact root
+// cause of both "Course not found" (CoursePlayer) and the
+// "Untitled Course" fallback text showing up everywhere. Now handled
+// via unwrapCourse(), which works whether Supabase returns an object
+// or a single-item array.
 
 import { getInProgressCourseEnrollments } from '../../repositories/continueLearning/continueLearningRepository';
 import type {
   RawContinueLearningEnrollmentRow,
   RawLessonRow,
+  RawCourseRow,
 } from '../../repositories/continueLearning/continueLearningRepository';
 
 import type {
@@ -20,6 +30,11 @@ import type {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+function unwrapCourse(courses: RawCourseRow[] | RawCourseRow | null | undefined): RawCourseRow | null {
+  if (Array.isArray(courses)) return courses[0] ?? null;
+  return courses ?? null;
+}
+
 interface FlatLesson {
   order:  number;
   lesson: RawLessonRow;
@@ -27,7 +42,7 @@ interface FlatLesson {
 
 /** Flattens active modules/lessons into a single ordered sequence. */
 function flattenLessons(row: RawContinueLearningEnrollmentRow): FlatLesson[] {
-  const course  = row.courses?.[0];
+  const course  = unwrapCourse(row.courses);
   const modules = (course?.modules ?? [])
     .filter((m) => m.active)
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -95,7 +110,7 @@ export async function loadContinueLearning(
 
   return enrollmentRows
     .map((row): ContinueLearningItem | null => {
-      const course = row.courses?.[0];
+      const course = unwrapCourse(row.courses);
       if (!course) return null;
 
       const flatLessons  = flattenLessons(row);
