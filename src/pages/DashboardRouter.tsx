@@ -11,7 +11,7 @@
 //     never touched.
 
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../services/auth/session';
 import { loadRoles } from '../services/role/roleService';
 import { useAuthorization } from '../hooks/useAuthorization';
@@ -23,7 +23,12 @@ import TrainerDashboard from '../components/dashboard/TrainerDashboard';
 function DashboardRouter() {
   const user = getCurrentUser();
   const { can, ready } = useAuthorization();
+  const navigate = useNavigate();
   const [roleCode, setRoleCode] = useState<string | null | undefined>(undefined);
+
+  function goToAdminTab(tab: string, courseId?: string) {
+    navigate(ROUTES.ADMIN, { state: { tab, courseId } });
+  }
 
   useEffect(() => {
     if (!user?.roleId) {
@@ -58,7 +63,21 @@ function DashboardRouter() {
   // Every other role (Admin, Super Admin, HR, Team Leader, or any
   // custom role) follows the real permission system as usual.
   if (can(PERMISSIONS.VIEW_DASHBOARD)) {
-    return <Dashboard />;
+    return (
+      <Dashboard
+        onCreateCourse={() => goToAdminTab('course-builder')}
+        onCreateAssessment={() => goToAdminTab('assessment')}
+        onAssignCourse={() => goToAdminTab('enrollment')}
+        onIssueCertificate={() => goToAdminTab('certificate-generation')}
+        onInviteEmployee={() => goToAdminTab('employee')}
+        onOpenNotifications={() => goToAdminTab('assignment')}
+        onSearchResultSelect={(type, id) => {
+          if (type === 'course') goToAdminTab('course-builder', id);
+          else if (type === 'employee') navigate(ROUTES.EMPLOYEES);
+          else goToAdminTab('learning-path');
+        }}
+      />
+    );
   }
 
   return <Navigate to={ROUTES.LEARNING_HOME} replace />;

@@ -19,6 +19,8 @@
 // dependency. No repository, service, or database changes.
 
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../constants/routes';
 
 import { loadCompanies } from '../services/company/companyService';
 import { branchService } from '../services/branch/branchService';
@@ -348,11 +350,57 @@ interface DashboardProps {
 
 type DateRangePreset = 'this_month' | 'last_month' | 'last_quarter' | 'custom';
 
+// Extra shortcuts a user can pin to their own Quick Actions panel, on top
+// of the five built-in ones above. Each points at an Admin console tab.
+const QUICK_ACTION_CATALOG: { key: string; label: string; tab: string }[] = [
+  { key: 'employees',     label: 'Employees',           tab: 'employee' },
+  { key: 'courses',       label: 'Courses',              tab: 'course' },
+  { key: 'question-bank', label: 'Question Bank',        tab: 'question' },
+  { key: 'certificates',  label: 'Certificates',         tab: 'certificate' },
+  { key: 'cert-template', label: 'Certificate Templates',tab: 'certificate-template' },
+  { key: 'learning-path', label: 'Learning Paths',       tab: 'learning-path' },
+  { key: 'training-batch',label: 'Training Batches',     tab: 'training-batch' },
+  { key: 'enrollments',   label: 'Enrollments',          tab: 'enrollment' },
+  { key: 'reports',       label: 'Reports',              tab: 'reports' },
+  { key: 'attendance',    label: 'Attendance',           tab: 'attendance' },
+  { key: 'geofence',      label: 'Attendance Geofencing',tab: 'geofence' },
+];
+
+const CUSTOM_QUICK_ACTIONS_KEY = 'dashboardCustomQuickActions';
+
+function loadCustomQuickActionKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_QUICK_ACTIONS_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 function Dashboard({
   onSearchResultSelect, onCreateCourse, onCreateAssessment, onAssignCourse, onIssueCertificate,
   onInviteEmployee, onOpenNotifications, onOpenProfile,
 }: DashboardProps) {
   const user = getCurrentUser();
+  const navigate = useNavigate();
+
+  const [customActionKeys, setCustomActionKeys] = useState<string[]>(loadCustomQuickActionKeys);
+  const [showAddPicker, setShowAddPicker] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_QUICK_ACTIONS_KEY, JSON.stringify(customActionKeys));
+  }, [customActionKeys]);
+
+  const availableToAdd = QUICK_ACTION_CATALOG.filter((a) => !customActionKeys.includes(a.key));
+
+  function addCustomAction(key: string) {
+    setCustomActionKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    setShowAddPicker(false);
+  }
+
+  function removeCustomAction(key: string) {
+    setCustomActionKeys((prev) => prev.filter((k) => k !== key));
+  }
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -975,7 +1023,7 @@ function Dashboard({
             <ol className="space-y-4 border-l border-slate-100 pl-4">
               {activityFeed.map((item) => (
                 <li key={item.id} className="relative">
-                  <span className="absolute -left-[21px] flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 ring-4 ring-white">{item.icon}</span>
+                  <span className="absolute -left-[33px] flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 ring-4 ring-white">{item.icon}</span>
                   <p className="text-sm font-semibold text-slate-800">{item.label}</p>
                   <p className="text-xs text-slate-500">{item.detail}</p>
                   <p className="mt-0.5 text-[11px] text-slate-400">{new Date(item.date).toLocaleString()}</p>
@@ -1004,6 +1052,56 @@ function Dashboard({
             <button onClick={onInviteEmployee} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
               <span className="flex items-center gap-2"><IconMail className="h-4 w-4" /> Invite Employee</span> <IconArrowRight />
             </button>
+
+            {customActionKeys.map((key) => {
+              const action = QUICK_ACTION_CATALOG.find((a) => a.key === key);
+              if (!action) return null;
+              return (
+                <div key={key} className="group flex items-center gap-1.5">
+                  <button
+                    onClick={() => navigate(ROUTES.ADMIN, { state: { tab: action.tab } })}
+                    className="flex flex-1 items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <span className="flex items-center gap-2"><IconPlus className="h-4 w-4" /> {action.label}</span> <IconArrowRight />
+                  </button>
+                  <button
+                    onClick={() => removeCustomAction(key)}
+                    title="Remove from Quick Actions"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+
+            {showAddPicker ? (
+              availableToAdd.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                  All available shortcuts are already added.
+                </p>
+              ) : (
+                <select
+                  autoFocus
+                  defaultValue=""
+                  onChange={(e) => { if (e.target.value) addCustomAction(e.target.value); }}
+                  onBlur={() => setShowAddPicker(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700"
+                >
+                  <option value="" disabled>Choose a shortcut to add…</option>
+                  {availableToAdd.map((a) => (
+                    <option key={a.key} value={a.key}>{a.label}</option>
+                  ))}
+                </select>
+              )
+            ) : (
+              <button
+                onClick={() => setShowAddPicker(true)}
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-semibold text-slate-500 transition hover:border-slate-400 hover:text-slate-700"
+              >
+                <IconPlus className="h-4 w-4" /> Add Quick Action
+              </button>
+            )}
           </div>
         </GlassCard>
       </div>
