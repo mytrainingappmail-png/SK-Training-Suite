@@ -1,4 +1,5 @@
 import { BRAND } from "../../config/branding";
+import logo from "../../assets/logo.png";
 import { MENU } from "../../config/menu";
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -99,7 +100,7 @@ function Sidebar() {
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
 
           <img
-            src={BRAND.logo}
+            src={logo}
             alt="logo"
             className="w-12 h-12 rounded-xl object-contain bg-white"
           />
