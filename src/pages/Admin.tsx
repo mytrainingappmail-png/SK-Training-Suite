@@ -49,6 +49,7 @@ import BulkCertificateIssue from "../modules/certificate/BulkCertificateIssue";
 import AttendanceManagement from "../modules/attendance/AttendanceManagement";
 import SecurityMigration from "../modules/security/SecurityMigration";
 import GeofenceManagement from "../modules/geofence/GeofenceManagement";
+import NotificationCenter from "../components/admin/notifications/NotificationCenter";
 
 import { useAuthorization } from "../hooks/useAuthorization";
 
@@ -394,6 +395,15 @@ function Admin() {
               </button>
             )}
 
+            {matches("Notifications") && (
+              <button
+                onClick={() => setActiveTab("notifications")}
+                className={getTabClass("notifications")}
+              >
+                Notifications
+              </button>
+            )}
+
             {matches("Plans") && (
               <button
                 onClick={() => setActiveTab("plans")}
@@ -563,6 +573,8 @@ function Admin() {
             {activeTab === "employee-role" && can(PERMISSIONS.VIEW_EMPLOYEE_ROLE) && <EmployeeRoleManagement />}
 
             {activeTab === "reports" && can(PERMISSIONS.VIEW_REPORTS) && <ReportManagement />}
+
+            {activeTab === "notifications" && <NotificationCenter />}
 
             {activeTab === "permissions" && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
             {activeTab === "role-permission" && can(PERMISSIONS.VIEW_PERMISSION) && (

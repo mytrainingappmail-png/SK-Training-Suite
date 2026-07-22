@@ -16,6 +16,7 @@ import { ROUTES }               from '../../constants/routes';
 import { useAuthorization }     from '../../hooks/useAuthorization';
 import { clearCurrentUser }     from '../../services/auth/session';
 import ProfileDrawer from '../profile/ProfileDrawer';
+import NotificationBell from '../notifications/NotificationBell';
 
 function Header() {
   const navigate           = useNavigate();
@@ -78,9 +79,7 @@ function Header() {
       <div className="flex items-center gap-4">
 
         {/* Notification bell */}
-        <button className="relative p-2 rounded-xl hover:bg-slate-100 transition">
-          🔔
-        </button>
+        <NotificationBell />
 
         {/* Profile section with dropdown */}
         <div className="relative" ref={dropdownRef}>

@@ -70,7 +70,7 @@ function DashboardRouter() {
         onAssignCourse={() => goToAdminTab('enrollment')}
         onIssueCertificate={() => goToAdminTab('certificate-generation')}
         onInviteEmployee={() => goToAdminTab('employee')}
-        onOpenNotifications={() => goToAdminTab('assignment')}
+        onOpenNotifications={() => goToAdminTab('notifications')}
         onSearchResultSelect={(type, id) => {
           if (type === 'course') goToAdminTab('course-builder', id);
           else if (type === 'employee') navigate(ROUTES.EMPLOYEES);

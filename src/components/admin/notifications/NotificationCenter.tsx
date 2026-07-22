@@ -1,58 +1,39 @@
 // src/components/admin/notifications/NotificationCenter.tsx
 //
-// Professional Notification Center. There is no notification table,
-// service, or repository anywhere in this app (the only trace is an
-// empty `src/modules/notifications` folder) — confirmed before writing
-// anything here. Per instructions, the notification records themselves
-// are kept as temporary, session-local UI state (nothing fake is
-// persisted; this resets on reload).
-//
-// Everything that IS real is reused as-is, to target real recipients and
-// real course context, exactly like the Enrollment / Learning Path
-// modules:
-//   companyService, branchService, departmentService, roleService,
-//   employeeRoleService, employeeService — full audience targeting
-//   courseService                        — course context for
-//                                          course/assignment/assessment
-//                                          notification types
-//   enrollmentService                    — real enrollment data used to
-//                                          auto-suggest recipients when a
-//                                          course is selected
-//   session.getCurrentUser()             — stamps who created each
-//                                          notification
-//
-// No repository/service/database changes.
+// Notification Center — backed by real notifications/notification_recipients
+// tables (src/services/notification/notificationService.ts). Recipients are
+// resolved from the selected audience (company/branch/department/designation/
+// role/employee, optionally narrowed to a course's enrolled employees) at
+// Send/Schedule time and persisted, so later roster changes don't retroactively
+// alter who a past notification was addressed to.
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { loadCompanies } from '../../../services/company/companyService';
 import { branchService } from '../../../services/branch/branchService';
 import { departmentService } from '../../../services/department/departmentService';
+import { designationService } from '../../../services/designation/designationService';
 import { loadRoles } from '../../../services/role/roleService';
 import { loadEmployeeRoles } from '../../../services/employeeRole/employeeRoleService';
 import { employeeService } from '../../../services/employee/employeeService';
 import { loadCourses } from '../../../services/course/courseService';
 import { loadEnrollments } from '../../../services/enrollment/enrollmentService';
 import { getCurrentUser } from '../../../services/auth/session';
+import * as notificationService from '../../../services/notification/notificationService';
 
-import type { Company } from '../../../types/company';
 import type { Branch } from '../../../types/branch';
 import type { Department } from '../../../types/department';
+import type { Designation } from '../../../types/designation';
 import type { Role } from '../../../types/role';
 import type { EmployeeRole } from '../../../types/employeeRole';
 import type { Employee } from '../../../types/employee';
 import type { Course } from '../../../types/course';
 import type { Enrollment } from '../../../types/enrollment';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Notification domain — session-local only, no backend exists for this yet
-// ─────────────────────────────────────────────────────────────────────────────
-
-type NotificationType =
-  | 'course_assigned' | 'course_completed' | 'assignment_assigned' | 'assignment_due_reminder'
-  | 'assignment_submitted' | 'assessment_scheduled' | 'assessment_reminder' | 'assessment_result'
-  | 'certificate_issued' | 'enrollment' | 'learning_path_assigned' | 'license_expiry'
-  | 'subscription_reminder' | 'system_notification' | 'announcement';
+import type {
+  Notification, NotificationForm, NotificationRecipient,
+  NotificationType, NotificationPriority as Priority,
+  NotificationAudienceType as AudienceType, NotificationStatus,
+} from '../../../types/notification';
+import { defaultNotificationForm } from '../../../types/notification';
 
 const NOTIFICATION_TYPES: { value: NotificationType; label: string }[] = [
   { value: 'course_assigned',        label: 'Course Assigned' },
@@ -76,63 +57,12 @@ const TYPE_LABEL: Record<NotificationType, string> = Object.fromEntries(
   NOTIFICATION_TYPES.map((t) => [t.value, t.label])
 ) as Record<NotificationType, string>;
 
-type Priority = 'low' | 'normal' | 'high' | 'urgent';
-type AudienceType = 'company' | 'branch' | 'department' | 'role' | 'employee';
-type NotificationStatus = 'draft' | 'scheduled' | 'sent' | 'delivered' | 'failed' | 'cancelled';
+// The compose form tracks an optional `id` — empty string means "new,
+// not yet saved". Everything else matches NotificationForm exactly.
+type DraftNotification = NotificationForm & { id: string };
 
-interface DeliveryChannels {
-  inApp: boolean;
-  email: boolean;
-  sms:   boolean;
-  push:  boolean;
-}
-
-interface RecipientRecord {
-  employeeId:     string;
-  deliveryStatus: 'pending' | 'delivered' | 'failed';
-  readStatus:     'unread' | 'read';
-  sentDate:       string | null;
-  readDate:       string | null;
-}
-
-interface NotificationRecord {
-  id:               string;
-  type:             NotificationType;
-  title:            string;
-  message:          string;
-  priority:         Priority;
-  audienceType:     AudienceType;
-  audienceTargetId: string;
-  courseId:         string;
-  channels:         DeliveryChannels;
-  scheduleDate:     string;
-  scheduleTime:     string;
-  expiryDate:       string;
-  status:           NotificationStatus;
-  createdBy:        string;
-  createdDate:      string;
-  recipients:       RecipientRecord[];
-}
-
-function newNotificationDraft(actorName: string): NotificationRecord {
-  return {
-    id: `ntf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-    type: 'announcement',
-    title: '',
-    message: '',
-    priority: 'normal',
-    audienceType: 'employee',
-    audienceTargetId: '',
-    courseId: '',
-    channels: { inApp: true, email: false, sms: false, push: false },
-    scheduleDate: '',
-    scheduleTime: '',
-    expiryDate: '',
-    status: 'draft',
-    createdBy: actorName,
-    createdDate: new Date().toISOString(),
-    recipients: [],
-  };
+function newDraft(actorName: string): DraftNotification {
+  return { id: '', ...defaultNotificationForm, created_by_name: actorName };
 }
 
 const STATUS_LABEL: Record<NotificationStatus, string> = {
@@ -313,9 +243,9 @@ function NotificationCenter() {
   const user = getCurrentUser();
   const actorName = user ? `${user.firstName} ${user.lastName}`.trim() : 'System';
 
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -325,8 +255,10 @@ function NotificationCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [recipientsByNotification, setRecipientsByNotification] = useState<Record<string, NotificationRecipient[]>>({});
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | NotificationStatus>('all');
@@ -335,8 +267,8 @@ function NotificationCenter() {
 
   const [activeId, setActiveId] = useState('');
   const [editing, setEditing] = useState(false);
-  const [formDraft, setFormDraft] = useState<NotificationRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<NotificationRecord | null>(null);
+  const [formDraft, setFormDraft] = useState<DraftNotification | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Notification | null>(null);
 
   function showToast(message: string) {
     setToast(message);
@@ -344,21 +276,34 @@ function NotificationCenter() {
   }
 
   function fetchAll() {
+    if (!user?.companyId) {
+      setError('No active session.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     Promise.all([
-      loadCompanies(), branchService.getAll(), departmentService.getAll(), loadRoles(),
-      loadEmployeeRoles(), employeeService.getAll(), loadCourses(), loadEnrollments(),
+      branchService.getAll(), departmentService.getAll(), designationService.getAll(),
+      loadRoles(), loadEmployeeRoles(), employeeService.getAll(), loadCourses(), loadEnrollments(),
+      notificationService.loadCompanyNotifications(user.companyId),
+      notificationService.loadAllRecipientsForCompany(user.companyId),
     ])
-      .then(([companyRows, branchRows, departmentRows, roleRows, employeeRoleRows, employeeRows, courseRows, enrollmentRows]) => {
-        setCompanies(companyRows);
+      .then(([branchRows, departmentRows, designationRows, roleRows, employeeRoleRows, employeeRows, courseRows, enrollmentRows, notificationRows, recipientRows]) => {
         setBranches(branchRows);
         setDepartments(departmentRows);
+        setDesignations(designationRows);
         setRoles(roleRows);
         setEmployeeRoles(employeeRoleRows);
         setEmployees(employeeRows);
         setCourses(courseRows);
         setEnrollments(enrollmentRows);
+        setNotifications(notificationRows);
+        const grouped: Record<string, NotificationRecipient[]> = {};
+        recipientRows.forEach((r) => {
+          (grouped[r.notification_id] ??= []).push(r);
+        });
+        setRecipientsByNotification(grouped);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load data.');
@@ -371,142 +316,154 @@ function NotificationCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const roleIdsByEmployee = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    employeeRoles.filter((er) => er.active).forEach((er) => {
-      const set = map.get(er.employee_id) ?? new Set<string>();
-      set.add(er.role_id);
-      map.set(er.employee_id, set);
-    });
-    return map;
-  }, [employeeRoles]);
-
-  function resolveRecipients(audienceType: AudienceType, targetId: string): Employee[] {
-    if (!targetId) return [];
-    if (audienceType === 'employee') return employees.filter((e) => e.id === targetId);
-    if (audienceType === 'company') return employees.filter((e) => e.company_id === targetId);
-    if (audienceType === 'branch') return employees.filter((e) => e.branch_id === targetId);
-    if (audienceType === 'department') return employees.filter((e) => e.department_id === targetId);
-    if (audienceType === 'role') return employees.filter((e) => roleIdsByEmployee.get(e.id)?.has(targetId));
-    return [];
-  }
-
-  function courseEnrolledEmployeeIds(courseId: string): Set<string> {
-    return new Set(enrollments.filter((e) => e.course_id === courseId).map((e) => e.employee_id));
+  function resolveRecipientEmployees(audienceType: AudienceType, targetId: string | null, courseId: string | null): Employee[] {
+    const base = notificationService.resolveAudience(audienceType, targetId, employees, employeeRoles);
+    return notificationService.filterByCourseEnrollment(base, courseId, enrollments);
   }
 
   // ── Create / Edit / Duplicate / Delete ──────────────────────────────────────
 
   function openCreate() {
-    setFormDraft(newNotificationDraft(actorName));
+    setFormDraft(newDraft(actorName));
     setEditing(true);
     setActiveId('');
   }
 
-  function openEdit(n: NotificationRecord) {
-    setFormDraft({ ...n });
+  function openEdit(n: Notification) {
+    setFormDraft({ ...n, id: n.id });
     setEditing(true);
     setActiveId(n.id);
   }
 
-  function openDuplicate(n: NotificationRecord) {
-    const copy: NotificationRecord = {
-      ...n,
-      id: `ntf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-      title: `${n.title} (Copy)`,
-      status: 'draft',
-      createdBy: actorName,
-      createdDate: new Date().toISOString(),
-      recipients: [],
-    };
-    setNotifications((prev) => [copy, ...prev]);
-    setActiveId(copy.id);
-    setEditing(false);
-    showToast('Notification duplicated');
+  function openDuplicate(n: Notification) {
+    setFormDraft({ ...n, id: '', title: `${n.title} (Copy)`, status: 'draft', created_by_name: actorName });
+    setEditing(true);
+    setActiveId('');
   }
 
-  function updateFormDraft(patch: Partial<NotificationRecord>) {
+  function updateFormDraft(patch: Partial<DraftNotification>) {
     setFormDraft((prev) => (prev ? { ...prev, ...patch } : prev));
   }
 
-  function buildRecipients(n: NotificationRecord): RecipientRecord[] {
-    let targets = resolveRecipients(n.audienceType, n.audienceTargetId);
-    if (n.courseId) {
-      const enrolledIds = courseEnrolledEmployeeIds(n.courseId);
-      targets = targets.filter((e) => enrolledIds.has(e.id));
+  async function handleSaveForm() {
+    if (!formDraft || !formDraft.title.trim() || !user?.companyId) return;
+    setBusy(true);
+    try {
+      const { id, ...form } = formDraft;
+      const saved = await notificationService.saveNotification(user.companyId, user.id ?? null, form, id || null);
+      setNotifications((prev) => {
+        const exists = prev.some((n) => n.id === saved.id);
+        return exists ? prev.map((n) => (n.id === saved.id ? saved : n)) : [saved, ...prev];
+      });
+      setEditing(false);
+      setActiveId(saved.id);
+      showToast('Notification saved');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save notification.');
+    } finally {
+      setBusy(false);
     }
-    return targets.map((e) => ({
-      employeeId: e.id,
-      deliveryStatus: 'pending',
-      readStatus: 'unread',
-      sentDate: null,
-      readDate: null,
-    }));
   }
 
-  function handleSaveForm() {
-    if (!formDraft || !formDraft.title.trim()) return;
-    const recipients = buildRecipients(formDraft);
-    const saved: NotificationRecord = { ...formDraft, recipients };
-    setNotifications((prev) => {
-      const exists = prev.some((n) => n.id === saved.id);
-      return exists ? prev.map((n) => (n.id === saved.id ? saved : n)) : [saved, ...prev];
-    });
-    setEditing(false);
-    setActiveId(saved.id);
-    showToast('Notification saved');
-  }
-
-  function handleDeleteConfirm() {
+  async function handleDeleteConfirm() {
     if (!deleteTarget) return;
-    setNotifications((prev) => prev.filter((n) => n.id !== deleteTarget.id));
-    if (activeId === deleteTarget.id) setActiveId('');
-    setDeleteTarget(null);
-    showToast('Notification deleted');
+    setBusy(true);
+    try {
+      await notificationService.removeNotification(deleteTarget.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== deleteTarget.id));
+      if (activeId === deleteTarget.id) setActiveId('');
+      setDeleteTarget(null);
+      showToast('Notification deleted');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete notification.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   // ── Lifecycle actions ────────────────────────────────────────────────────────
 
-  function updateNotification(id: string, patch: Partial<NotificationRecord>) {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+  async function handleSchedule(n: Notification) {
+    if (!n.schedule_date) { showToast('Set a schedule date first.'); return; }
+    setBusy(true);
+    try {
+      const recipientEmployees = resolveRecipientEmployees(n.audience_type, n.audience_target_id, n.course_id);
+      await notificationService.scheduleNotification(n, recipientEmployees.map((e) => e.id));
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: 'scheduled' } : x)));
+      showToast('Notification scheduled');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to schedule notification.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleSchedule(n: NotificationRecord) {
-    if (!n.scheduleDate) { showToast('Set a schedule date first.'); return; }
-    updateNotification(n.id, { status: 'scheduled', recipients: n.recipients.length ? n.recipients : buildRecipients(n) });
-    showToast('Notification scheduled');
+  async function handleSendNow(n: Notification) {
+    setBusy(true);
+    try {
+      const recipientEmployees = resolveRecipientEmployees(n.audience_type, n.audience_target_id, n.course_id);
+      await notificationService.sendNotificationNow(n, recipientEmployees.map((e) => e.id));
+      const now = new Date().toISOString();
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: recipientEmployees.length > 0 ? 'delivered' : 'sent' } : x)));
+      setRecipientsByNotification((prev) => ({
+        ...prev,
+        [n.id]: recipientEmployees.map((e) => ({
+          id: `${n.id}-${e.id}`, notification_id: n.id, company_id: n.company_id, employee_id: e.id,
+          delivery_status: 'delivered', read_status: 'unread', sent_at: now, read_at: null, created_at: now,
+        })),
+      }));
+      showToast('Notification sent');
+      fetchAll();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to send notification.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleSendNow(n: NotificationRecord) {
-    const now = new Date().toISOString();
-    const recipients = (n.recipients.length ? n.recipients : buildRecipients(n)).map((r) => ({
-      ...r, deliveryStatus: 'delivered' as const, sentDate: now,
-    }));
-    updateNotification(n.id, { status: recipients.length > 0 ? 'delivered' : 'sent', recipients });
-    showToast('Notification sent');
+  async function handleCancel(n: Notification) {
+    setBusy(true);
+    try {
+      await notificationService.cancelNotification(n.id);
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: 'cancelled' } : x)));
+      showToast('Notification cancelled');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to cancel notification.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleCancel(n: NotificationRecord) {
-    updateNotification(n.id, { status: 'cancelled' });
-    showToast('Notification cancelled');
+  async function handleMarkFailed(n: Notification) {
+    setBusy(true);
+    try {
+      await notificationService.markNotificationFailed(n.id);
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: 'failed' } : x)));
+      setRecipientsByNotification((prev) => ({
+        ...prev,
+        [n.id]: (prev[n.id] ?? []).map((r) => ({ ...r, delivery_status: 'failed' })),
+      }));
+      showToast('Marked as failed');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update notification.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleMarkFailed(n: NotificationRecord) {
-    const recipients = n.recipients.map((r) => ({ ...r, deliveryStatus: 'failed' as const }));
-    updateNotification(n.id, { status: 'failed', recipients });
-    showToast('Marked as failed');
-  }
-
-  function toggleRecipientRead(notificationId: string, employeeId: string) {
-    setNotifications((prev) => prev.map((n) => {
-      if (n.id !== notificationId) return n;
-      return {
-        ...n,
-        recipients: n.recipients.map((r) => r.employeeId === employeeId
-          ? { ...r, readStatus: r.readStatus === 'read' ? 'unread' : 'read', readDate: r.readStatus === 'read' ? null : new Date().toISOString() }
-          : r),
-      };
-    }));
+  async function toggleRecipientRead(notificationId: string, recipient: NotificationRecipient) {
+    const next = recipient.read_status === 'read' ? 'unread' : 'read';
+    try {
+      await notificationService.toggleRecipientReadStatus(recipient.id, next);
+      setRecipientsByNotification((prev) => ({
+        ...prev,
+        [notificationId]: (prev[notificationId] ?? []).map((r) =>
+          r.id === recipient.id ? { ...r, read_status: next, read_at: next === 'read' ? new Date().toISOString() : null } : r
+        ),
+      }));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update read status.');
+    }
   }
 
   // ── Filtering / summary ──────────────────────────────────────────────────────
@@ -525,7 +482,7 @@ function NotificationCenter() {
 
   const topSummary = useMemo(() => {
     let unread = 0, read = 0;
-    notifications.forEach((n) => n.recipients.forEach((r) => (r.readStatus === 'read' ? (read += 1) : (unread += 1))));
+    Object.values(recipientsByNotification).forEach((rows) => rows.forEach((r) => (r.read_status === 'read' ? (read += 1) : (unread += 1))));
     return {
       total: notifications.length,
       unread,
@@ -533,9 +490,10 @@ function NotificationCenter() {
       scheduled: notifications.filter((n) => n.status === 'scheduled').length,
       failed: notifications.filter((n) => n.status === 'failed').length,
     };
-  }, [notifications]);
+  }, [notifications, recipientsByNotification]);
 
   const activeNotification = notifications.find((n) => n.id === activeId) ?? null;
+  const activeRecipients = activeNotification ? recipientsByNotification[activeNotification.id] ?? [] : [];
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -605,7 +563,7 @@ function NotificationCenter() {
         <div className="space-y-6">
           {editing && formDraft ? (
             <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-lg font-bold text-slate-800">{notifications.some((n) => n.id === formDraft.id) ? 'Edit Notification' : 'Create Notification'}</h3>
+              <h3 className="mb-4 text-lg font-bold text-slate-800">{formDraft.id ? 'Edit Notification' : 'Create Notification'}</h3>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Title"><input value={formDraft.title} onChange={(e) => updateFormDraft({ title: e.target.value })} className={INPUT_CLS} /></Field>
@@ -620,7 +578,7 @@ function NotificationCenter() {
                   </select>
                 </Field>
                 <Field label="Related Course (optional)">
-                  <select value={formDraft.courseId} onChange={(e) => updateFormDraft({ courseId: e.target.value })} className={INPUT_CLS}>
+                  <select value={formDraft.course_id ?? ''} onChange={(e) => updateFormDraft({ course_id: e.target.value || null })} className={INPUT_CLS}>
                     <option value="">None</option>
                     {courses.map((c) => (<option key={c.id} value={c.id}>{c.course_name}</option>))}
                   </select>
@@ -635,30 +593,33 @@ function NotificationCenter() {
 
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Audience">
-                  <select value={formDraft.audienceType} onChange={(e) => updateFormDraft({ audienceType: e.target.value as AudienceType, audienceTargetId: '' })} className={INPUT_CLS}>
-                    <option value="company">Company</option>
+                  <select value={formDraft.audience_type} onChange={(e) => updateFormDraft({ audience_type: e.target.value as AudienceType, audience_target_id: null })} className={INPUT_CLS}>
+                    <option value="company">Everyone</option>
                     <option value="branch">Branch</option>
                     <option value="department">Department</option>
+                    <option value="designation">Designation (e.g. New Joinee, Manager, AVP, VP)</option>
                     <option value="role">Role</option>
-                    <option value="employee">Employee</option>
+                    <option value="employee">Specific Employee</option>
                   </select>
                 </Field>
-                <Field label={formDraft.audienceType[0].toUpperCase() + formDraft.audienceType.slice(1)}>
-                  <select value={formDraft.audienceTargetId} onChange={(e) => updateFormDraft({ audienceTargetId: e.target.value })} className={INPUT_CLS}>
-                    <option value="">Select…</option>
-                    {formDraft.audienceType === 'company' && companies.map((c) => (<option key={c.id} value={c.id}>{c.company_name}</option>))}
-                    {formDraft.audienceType === 'branch' && branches.map((b) => (<option key={b.id} value={b.id}>{b.branch_name}</option>))}
-                    {formDraft.audienceType === 'department' && departments.map((d) => (<option key={d.id} value={d.id}>{d.department_name}</option>))}
-                    {formDraft.audienceType === 'role' && roles.map((r) => (<option key={r.id} value={r.id}>{r.role_name}</option>))}
-                    {formDraft.audienceType === 'employee' && employees.map((e) => (<option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>))}
-                  </select>
-                </Field>
+                {formDraft.audience_type !== 'company' && (
+                  <Field label={formDraft.audience_type[0].toUpperCase() + formDraft.audience_type.slice(1)}>
+                    <select value={formDraft.audience_target_id ?? ''} onChange={(e) => updateFormDraft({ audience_target_id: e.target.value || null })} className={INPUT_CLS}>
+                      <option value="">Select…</option>
+                      {formDraft.audience_type === 'branch' && branches.map((b) => (<option key={b.id} value={b.id}>{b.branch_name}</option>))}
+                      {formDraft.audience_type === 'department' && departments.map((d) => (<option key={d.id} value={d.id}>{d.department_name}</option>))}
+                      {formDraft.audience_type === 'designation' && designations.map((d) => (<option key={d.id} value={d.id}>{d.designation_name}</option>))}
+                      {formDraft.audience_type === 'role' && roles.map((r) => (<option key={r.id} value={r.id}>{r.role_name}</option>))}
+                      {formDraft.audience_type === 'employee' && employees.map((e) => (<option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>))}
+                    </select>
+                  </Field>
+                )}
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Field label="Schedule Date"><input type="date" value={formDraft.scheduleDate} onChange={(e) => updateFormDraft({ scheduleDate: e.target.value })} className={INPUT_CLS} /></Field>
-                <Field label="Schedule Time"><input type="time" value={formDraft.scheduleTime} onChange={(e) => updateFormDraft({ scheduleTime: e.target.value })} className={INPUT_CLS} /></Field>
-                <Field label="Expiry Date"><input type="date" value={formDraft.expiryDate} onChange={(e) => updateFormDraft({ expiryDate: e.target.value })} className={INPUT_CLS} /></Field>
+                <Field label="Schedule Date"><input type="date" value={formDraft.schedule_date ?? ''} onChange={(e) => updateFormDraft({ schedule_date: e.target.value || null })} className={INPUT_CLS} /></Field>
+                <Field label="Schedule Time"><input type="time" value={formDraft.schedule_time ?? ''} onChange={(e) => updateFormDraft({ schedule_time: e.target.value || null })} className={INPUT_CLS} /></Field>
+                <Field label="Expiry Date"><input type="date" value={formDraft.expiry_date ?? ''} onChange={(e) => updateFormDraft({ expiry_date: e.target.value || null })} className={INPUT_CLS} /></Field>
               </div>
 
               <div className="mt-4">
@@ -666,25 +627,25 @@ function NotificationCenter() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
                     <span className="text-sm text-slate-700">In App</span>
-                    <Toggle on={formDraft.channels.inApp} onChange={() => updateFormDraft({ channels: { ...formDraft.channels, inApp: !formDraft.channels.inApp } })} />
+                    <Toggle on={formDraft.channel_in_app} onChange={() => updateFormDraft({ channel_in_app: !formDraft.channel_in_app })} />
                   </div>
-                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
-                    <span className="text-sm text-slate-700">Email</span>
-                    <Toggle on={formDraft.channels.email} onChange={() => updateFormDraft({ channels: { ...formDraft.channels, email: !formDraft.channels.email } })} />
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 opacity-60">
+                    <span className="text-sm text-slate-700">Email <span className="text-[10px] text-slate-400">(future)</span></span>
+                    <Toggle on={formDraft.channel_email} onChange={() => updateFormDraft({ channel_email: !formDraft.channel_email })} disabled />
                   </div>
                   <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 opacity-60">
                     <span className="text-sm text-slate-700">SMS <span className="text-[10px] text-slate-400">(future)</span></span>
-                    <Toggle on={formDraft.channels.sms} onChange={() => updateFormDraft({ channels: { ...formDraft.channels, sms: !formDraft.channels.sms } })} disabled />
+                    <Toggle on={formDraft.channel_sms} onChange={() => updateFormDraft({ channel_sms: !formDraft.channel_sms })} disabled />
                   </div>
                   <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 opacity-60">
                     <span className="text-sm text-slate-700">Push <span className="text-[10px] text-slate-400">(future)</span></span>
-                    <Toggle on={formDraft.channels.push} onChange={() => updateFormDraft({ channels: { ...formDraft.channels, push: !formDraft.channels.push } })} disabled />
+                    <Toggle on={formDraft.channel_push} onChange={() => updateFormDraft({ channel_push: !formDraft.channel_push })} disabled />
                   </div>
                 </div>
               </div>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                <PrimaryButton onClick={handleSaveForm} disabled={!formDraft.title.trim()}>Save</PrimaryButton>
+                <PrimaryButton onClick={handleSaveForm} disabled={!formDraft.title.trim() || busy}>Save</PrimaryButton>
                 <SecondaryButton onClick={() => setEditing(false)}>Cancel</SecondaryButton>
               </div>
             </div>
@@ -701,33 +662,33 @@ function NotificationCenter() {
                       <h3 className="text-lg font-bold text-slate-800">{activeNotification.title}</h3>
                       <PriorityBadge priority={activeNotification.priority} />
                     </div>
-                    <p className="text-xs text-slate-400">{TYPE_LABEL[activeNotification.type]} · Created by {activeNotification.createdBy}</p>
+                    <p className="text-xs text-slate-400">{TYPE_LABEL[activeNotification.type]} · Created by {activeNotification.created_by_name || 'Unknown'}</p>
                   </div>
                   <StatusBadge status={activeNotification.status} />
                 </div>
                 <p className="mb-4 text-sm text-slate-600">{activeNotification.message}</p>
 
                 <div className="mb-4 flex flex-wrap gap-2 text-xs text-slate-500">
-                  {activeNotification.channels.inApp && <span className="rounded-full bg-slate-100 px-2.5 py-1">In App</span>}
-                  {activeNotification.channels.email && <span className="rounded-full bg-slate-100 px-2.5 py-1">Email</span>}
-                  {activeNotification.channels.sms && <span className="rounded-full bg-slate-100 px-2.5 py-1">SMS</span>}
-                  {activeNotification.channels.push && <span className="rounded-full bg-slate-100 px-2.5 py-1">Push</span>}
+                  {activeNotification.channel_in_app && <span className="rounded-full bg-slate-100 px-2.5 py-1">In App</span>}
+                  {activeNotification.channel_email && <span className="rounded-full bg-slate-100 px-2.5 py-1">Email</span>}
+                  {activeNotification.channel_sms && <span className="rounded-full bg-slate-100 px-2.5 py-1">SMS</span>}
+                  {activeNotification.channel_push && <span className="rounded-full bg-slate-100 px-2.5 py-1">Push</span>}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <SecondaryButton onClick={() => openEdit(activeNotification)}>Edit</SecondaryButton>
-                  <SecondaryButton onClick={() => openDuplicate(activeNotification)}><IconDuplicate /> Duplicate</SecondaryButton>
-                  <SecondaryButton onClick={() => handleSchedule(activeNotification)}>Schedule</SecondaryButton>
-                  <AccentButton onClick={() => handleSendNow(activeNotification)}>Send Now</AccentButton>
-                  <SecondaryButton onClick={() => handleCancel(activeNotification)}>Cancel</SecondaryButton>
-                  <SecondaryButton onClick={() => handleMarkFailed(activeNotification)}>Mark Failed</SecondaryButton>
-                  <DangerButton onClick={() => setDeleteTarget(activeNotification)}><IconTrash /> Delete</DangerButton>
+                  <SecondaryButton onClick={() => openEdit(activeNotification)} disabled={busy}>Edit</SecondaryButton>
+                  <SecondaryButton onClick={() => openDuplicate(activeNotification)} disabled={busy}><IconDuplicate /> Duplicate</SecondaryButton>
+                  <SecondaryButton onClick={() => handleSchedule(activeNotification)} disabled={busy}>Schedule</SecondaryButton>
+                  <AccentButton onClick={() => handleSendNow(activeNotification)} disabled={busy}>Send Now</AccentButton>
+                  <SecondaryButton onClick={() => handleCancel(activeNotification)} disabled={busy}>Cancel</SecondaryButton>
+                  <SecondaryButton onClick={() => handleMarkFailed(activeNotification)} disabled={busy}>Mark Failed</SecondaryButton>
+                  <DangerButton onClick={() => setDeleteTarget(activeNotification)} disabled={busy}><IconTrash /> Delete</DangerButton>
                 </div>
               </div>
 
               <div className="rounded-2xl bg-white p-6 shadow-sm">
                 <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Notification History</h3>
-                {activeNotification.recipients.length === 0 ? (
+                {activeRecipients.length === 0 ? (
                   <EmptyState message="No recipients yet — schedule or send this notification." />
                 ) : (
                   <div className="max-h-80 overflow-auto">
@@ -742,19 +703,19 @@ function NotificationCenter() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {activeNotification.recipients.map((r) => {
-                          const emp = employees.find((e) => e.id === r.employeeId);
+                        {activeRecipients.map((r) => {
+                          const emp = employees.find((e) => e.id === r.employee_id);
                           return (
-                            <tr key={r.employeeId}>
-                              <td className="py-2 pr-3 font-medium text-slate-700">{emp ? `${emp.first_name} ${emp.last_name}` : r.employeeId}</td>
-                              <td className="py-2 pr-3 text-slate-500 capitalize">{r.deliveryStatus}</td>
+                            <tr key={r.id}>
+                              <td className="py-2 pr-3 font-medium text-slate-700">{emp ? `${emp.first_name} ${emp.last_name}` : r.employee_id}</td>
+                              <td className="py-2 pr-3 text-slate-500 capitalize">{r.delivery_status}</td>
                               <td className="py-2 pr-3">
-                                <button onClick={() => toggleRecipientRead(activeNotification.id, r.employeeId)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${r.readStatus === 'read' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                  {r.readStatus === 'read' ? 'Read' : 'Unread'}
+                                <button onClick={() => toggleRecipientRead(activeNotification.id, r)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${r.read_status === 'read' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                  {r.read_status === 'read' ? 'Read' : 'Unread'}
                                 </button>
                               </td>
-                              <td className="py-2 pr-3 text-slate-500">{r.sentDate ? new Date(r.sentDate).toLocaleString() : '—'}</td>
-                              <td className="py-2 text-slate-500">{r.readDate ? new Date(r.readDate).toLocaleString() : '—'}</td>
+                              <td className="py-2 pr-3 text-slate-500">{r.sent_at ? new Date(r.sent_at).toLocaleString() : '—'}</td>
+                              <td className="py-2 text-slate-500">{r.read_at ? new Date(r.read_at).toLocaleString() : '—'}</td>
                             </tr>
                           );
                         })}
