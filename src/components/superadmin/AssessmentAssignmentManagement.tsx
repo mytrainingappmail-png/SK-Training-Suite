@@ -13,6 +13,7 @@ import { branchService } from "../../services/branch/branchService";
 import { departmentService } from "../../services/department/departmentService";
 import { designationService } from "../../services/designation/designationService";
 import { employeeService } from "../../services/employee/employeeService";
+import { getCurrentUser } from "../../services/auth/session";
 
 import type {
   AssessmentAssignment,
@@ -418,7 +419,25 @@ function AssignmentModal({
     ev.preventDefault();
     if (saving) return;
     if (!validate()) return;
-    onSave(form);
+    // Only the target dimension matching assignment_type should carry a
+    // real id — the other three (branch/department/designation/employee)
+    // must be null, not "", or Postgres rejects them ("invalid input
+    // syntax for type uuid"). company_id is different: it's also the
+    // RLS tenant-scope column on every row regardless of assignment_type,
+    // so it must always resolve to the current admin's own company, not
+    // null, even when targeting a branch/department/designation/employee.
+    const cleaned = {
+      ...form,
+      company_id:     form.assignment_type === 'company' ? form.company_id : (getCurrentUser()?.companyId ?? form.company_id),
+      branch_id:      form.assignment_type === 'branch'      ? form.branch_id      : null,
+      department_id:  form.assignment_type === 'department'  ? form.department_id  : null,
+      designation_id: form.assignment_type === 'designation' ? form.designation_id : null,
+      employee_id:    form.assignment_type === 'employee'    ? form.employee_id    : null,
+      assigned_date:  form.assigned_date || null,
+      start_date:     form.start_date || null,
+      end_date:       form.end_date || null,
+    } as typeof form;
+    onSave(cleaned);
   }
 
   const t = form.assignment_type;
