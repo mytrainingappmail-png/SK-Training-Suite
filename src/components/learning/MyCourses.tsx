@@ -22,6 +22,17 @@ function StatusBadge({ status }: { status: MyCourseStatus }) {
   );
 }
 
+// Rotating gradient palette so the course list reads as colorful, even
+// for courses with no thumbnail image.
+const COURSE_GRADIENTS = [
+  'from-indigo-500 to-violet-500',
+  'from-rose-500 to-orange-400',
+  'from-emerald-500 to-teal-400',
+  'from-sky-500 to-cyan-400',
+  'from-amber-500 to-yellow-400',
+  'from-fuchsia-500 to-pink-500',
+];
+
 function ProgressBar({ value }: { value: number }) {
   const pct    = Math.min(100, Math.max(0, value));
   const colour = pct >= 75 ? 'bg-emerald-500' : pct >= 40 ? 'bg-yellow-400' : 'bg-rose-400';
@@ -143,12 +154,12 @@ function MyCourses() {
 
       {!loading && !error && filtered.length > 0 && (
         <div className="space-y-3">
-          {filtered.map((course) => (
+          {filtered.map((course, index) => (
             <div
               key={course.enrollmentId}
-              className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 p-4 transition hover:bg-slate-50/60"
+              className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
             >
-              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
+              <div className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${COURSE_GRADIENTS[index % COURSE_GRADIENTS.length]}`}>
                 {course.thumbnail ? (
                   <img
                     src={course.thumbnail}
@@ -156,9 +167,9 @@ function MyCourses() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-slate-300">
+                  <div className="flex h-full w-full items-center justify-center text-white/70">
                     <svg
-                      className="h-6 w-6"
+                      className="h-7 w-7"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"

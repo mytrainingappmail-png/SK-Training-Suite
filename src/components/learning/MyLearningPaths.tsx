@@ -28,11 +28,22 @@ const DIFFICULTY_STYLES: Record<string, string> = {
 function DifficultyBadge({ level }: { level: string }) {
   const style = DIFFICULTY_STYLES[level] ?? 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${style}`}>
+    <span className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${style}`}>
       {level || 'Beginner'}
     </span>
   );
 }
+
+// Rotating gradient palette so the grid reads as colorful, even for
+// paths with no thumbnail image.
+const PATH_GRADIENTS = [
+  'from-indigo-500 to-violet-500',
+  'from-rose-500 to-orange-400',
+  'from-emerald-500 to-teal-400',
+  'from-sky-500 to-cyan-400',
+  'from-amber-500 to-yellow-400',
+  'from-fuchsia-500 to-pink-500',
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Progress bar
@@ -98,6 +109,7 @@ function EmptyState({ search }: { search: string }) {
 
 interface PathCardProps {
   path:   MyLearningPath;
+  index:  number;
   onOpen: (learningPathId: string) => void;
 }
 
@@ -107,14 +119,15 @@ const STATUS_ACTION_LABEL: Record<MyLearningPathStatus, string> = {
   completed:   'Review Path',
 };
 
-function PathCard({ path, onOpen }: PathCardProps) {
+function PathCard({ path, index, onOpen }: PathCardProps) {
   const isCompleted = path.status === 'completed';
+  const gradient = PATH_GRADIENTS[index % PATH_GRADIENTS.length];
 
   return (
-    <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
 
       {isCompleted && (
-        <span className="absolute -top-2 -right-2 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+        <span className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
           </svg>
@@ -123,73 +136,75 @@ function PathCard({ path, onOpen }: PathCardProps) {
       )}
 
       {/* Thumbnail */}
-      <div className="mb-4 h-28 w-full overflow-hidden rounded-xl bg-slate-100">
+      <div className={`relative h-28 w-full bg-gradient-to-br ${gradient}`}>
         {path.thumbnailUrl ? (
           <img src={path.thumbnailUrl} alt={path.pathName} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-300">
-            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+          <div className="flex h-full w-full items-center justify-center text-white/70">
+            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443" />
             </svg>
           </div>
         )}
       </div>
 
-      {/* Header */}
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-slate-800">{path.pathName}</p>
-          {path.pathCode && (
-            <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">
-              {path.pathCode}
-            </span>
-          )}
+      <div className="flex flex-1 flex-col p-5">
+        {/* Header */}
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-base font-bold text-slate-800">{path.pathName}</p>
+            {path.pathCode && (
+              <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">
+                {path.pathCode}
+              </span>
+            )}
+          </div>
+          <DifficultyBadge level={path.difficultyLevel} />
         </div>
-        <DifficultyBadge level={path.difficultyLevel} />
-      </div>
 
-      {/* Description */}
-      {path.description && (
-        <p className="mb-3 line-clamp-2 text-sm text-slate-500">{path.description}</p>
-      )}
+        {/* Description */}
+        {path.description && (
+          <p className="mb-3 line-clamp-2 text-sm text-slate-500">{path.description}</p>
+        )}
 
-      {/* Progress */}
-      <div className="mb-3">
-        <ProgressBar value={path.progressPercentage} />
-      </div>
-
-      {/* Meta */}
-      <div className="mb-4 grid grid-cols-2 gap-y-2 text-xs text-slate-500">
-        <div>
-          <p className="text-slate-400">Estimated Duration</p>
-          <p className="font-medium text-slate-700">
-            {path.estimatedDuration > 0 ? `${path.estimatedDuration} hrs` : '—'}
-          </p>
+        {/* Progress */}
+        <div className="mb-3">
+          <ProgressBar value={path.progressPercentage} />
         </div>
-        <div>
-          <p className="text-slate-400">Courses</p>
-          <p className="font-medium text-slate-700">
-            {path.completedCourses} / {path.totalCourses}
-          </p>
-        </div>
-        {path.dueDate && (
+
+        {/* Meta */}
+        <div className="mb-4 grid grid-cols-2 gap-y-2 text-xs text-slate-500">
           <div>
-            <p className="text-slate-400">Due Date</p>
+            <p className="text-slate-400">Estimated Duration</p>
             <p className="font-medium text-slate-700">
-              {new Date(path.dueDate).toLocaleDateString()}
+              {path.estimatedDuration > 0 ? `${path.estimatedDuration} hrs` : '—'}
             </p>
           </div>
-        )}
-      </div>
+          <div>
+            <p className="text-slate-400">Courses</p>
+            <p className="font-medium text-slate-700">
+              {path.completedCourses} / {path.totalCourses}
+            </p>
+          </div>
+          {path.dueDate && (
+            <div>
+              <p className="text-slate-400">Due Date</p>
+              <p className="font-medium text-slate-700">
+                {new Date(path.dueDate).toLocaleDateString()}
+              </p>
+            </div>
+          )}
+        </div>
 
-      {/* Action */}
-      <div className="mt-auto pt-2">
-        <button
-          onClick={() => onOpen(path.learningPathId)}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 active:scale-95"
-        >
-          {STATUS_ACTION_LABEL[path.status]}
-        </button>
+        {/* Action */}
+        <div className="mt-auto pt-2">
+          <button
+            onClick={() => onOpen(path.learningPathId)}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${gradient} px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95`}
+          >
+            {STATUS_ACTION_LABEL[path.status]}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -271,8 +286,8 @@ const navigate = useNavigate();
 
       {!loading && !error && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((path) => (
-            <PathCard key={path.enrollmentId} path={path} onOpen={handleOpen} />
+          {filtered.map((path, index) => (
+            <PathCard key={path.enrollmentId} path={path} index={index} onOpen={handleOpen} />
           ))}
         </div>
       )}
