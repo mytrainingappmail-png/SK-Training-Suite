@@ -4,6 +4,7 @@ import { BRAND } from '../../config/branding';
 import { login } from '../../services/auth/authService';
 import { useAuthorization } from '../../hooks/useAuthorization';
 import { loadBranding } from '../../services/branding/brandingService';
+import { requestPasswordReset } from '../../services/auth/passwordResetService';
 
 interface InputFieldProps {
   id: string;
@@ -72,6 +73,107 @@ const EyeIcon: React.FC<{ open: boolean }> = ({ open }) =>
     </svg>
   );
 
+// There's no real email-sending backend yet, so this can't send a reset
+// link — instead it notifies that company's admins (Super Admin/Admin/HR)
+// directly, who can reset the password from Employee Management. Honest
+// about that limitation in the copy, rather than pretending an email went
+// out.
+const ForgotPasswordModal: React.FC<{ onClose: () => void; accentColor: string }> = ({ onClose, accentColor }) => {
+  const [companyCode, setCompanyCode] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+    if (!companyCode.trim() || !employeeId.trim()) {
+      setError('Please enter your Company Code and Employee ID.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await requestPasswordReset(companyCode, employeeId);
+      setDone(true);
+    } catch {
+      // Same generic message regardless of cause — never reveal whether
+      // the company/employee combination existed.
+      setDone(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-[#0D1320] p-6 shadow-2xl">
+        {done ? (
+          <>
+            <h3 className="mb-2 text-lg font-semibold text-white">Request sent</h3>
+            <p className="mb-5 text-sm text-slate-400">
+              If that Company Code and Employee ID match an account, your administrator has been notified
+              and will reset your password shortly. Please contact them directly if it's urgent.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full rounded-xl py-3 text-sm font-semibold"
+              style={{ backgroundColor: accentColor, color: '#0D1320' }}
+            >
+              Close
+            </button>
+          </>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <h3 className="mb-1 text-lg font-semibold text-white">Forgot password?</h3>
+            <p className="mb-5 text-sm text-slate-400">
+              Enter your Company Code and Employee ID — your administrator will be notified to reset it for you.
+            </p>
+            <div className="space-y-3">
+              <input
+                value={companyCode}
+                onChange={(e) => setCompanyCode(e.target.value)}
+                placeholder="Company Code"
+                disabled={submitting}
+                className="w-full rounded-xl bg-white/[0.06] border border-white/[0.12] px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
+              <input
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                placeholder="Employee ID"
+                disabled={submitting}
+                className="w-full rounded-xl bg-white/[0.06] border border-white/[0.12] px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
+            </div>
+            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="flex-1 rounded-xl border border-white/[0.12] py-3 text-sm font-medium text-slate-300 hover:bg-white/[0.05] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 rounded-xl py-3 text-sm font-semibold disabled:opacity-60"
+                style={{ backgroundColor: accentColor, color: '#0D1320' }}
+              >
+                {submitting ? 'Sending…' : 'Notify Admin'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export interface LoginFormValues {
   companyCode: string;
   employeeId: string;
@@ -93,6 +195,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   // From the active Theme (Admin → Theme) — falls back to the static
   // default until branding resolves (loadBranding() is cached, so this is
   // a cheap call — LoginPage already triggered the same fetch).
@@ -241,6 +344,7 @@ navigate('/dashboard', { replace: true });
 
           <button
             type="button"
+            onClick={() => setShowForgotPassword(true)}
             className="text-sm font-medium hover:opacity-80 transition-opacity duration-200"
             style={{ color: accentColor }}
           >
@@ -273,6 +377,10 @@ navigate('/dashboard', { replace: true });
       <p className="mt-4 text-center text-xs text-slate-500 tracking-wide">
         Version {BRAND.version}
       </p>
+
+      {showForgotPassword && (
+        <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} accentColor={accentColor} />
+      )}
     </div>
   );
 };

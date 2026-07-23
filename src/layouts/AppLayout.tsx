@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 
 import Sidebar from "../components/dashboard/Sidebar";
 import Header from "../components/dashboard/Header";
+import Footer from "../components/dashboard/Footer";
 import LicenseGuard from "../components/license/LicenseGuard";
 
 function AppLayout() {
@@ -19,6 +20,8 @@ function AppLayout() {
             <Outlet />
           </LicenseGuard>
         </main>
+
+        <Footer />
 
       </div>
 

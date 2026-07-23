@@ -245,6 +245,98 @@ function CompanyManagement() {
 
         </div>
 
+        <div>
+
+          <label className="block text-sm font-medium mb-2">
+            Phone
+          </label>
+
+          <input
+            className="w-full border rounded-xl p-3"
+            value={company.phone ?? ""}
+            onChange={(e) =>
+              setCompany({
+                ...company,
+                phone: e.target.value,
+              })
+            }
+          />
+
+        </div>
+
+      </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="mb-1 text-base font-bold text-slate-800">Address</h3>
+        <p className="mb-5 text-sm text-slate-500">
+          Shown in the app footer and on generated documents (invoices, certificates).
+        </p>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-2">Street Address</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.address ?? ""}
+              onChange={(e) => setCompany({ ...company, address: e.target.value })}
+              placeholder="Building, street, area"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">City</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.city ?? ""}
+              onChange={(e) => setCompany({ ...company, city: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">State</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.state ?? ""}
+              onChange={(e) => setCompany({ ...company, state: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Country</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.country ?? ""}
+              onChange={(e) => setCompany({ ...company, country: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Pincode</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.pincode ?? ""}
+              onChange={(e) => setCompany({ ...company, pincode: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">GST Number</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.gst_number ?? ""}
+              onChange={(e) => setCompany({ ...company, gst_number: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">PAN Number</label>
+            <input
+              className="w-full border rounded-xl p-3"
+              value={company.pan_number ?? ""}
+              onChange={(e) => setCompany({ ...company, pan_number: e.target.value })}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="mt-8 border-t pt-6">
