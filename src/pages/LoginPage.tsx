@@ -58,12 +58,12 @@ const FeatureCard: React.FC<{ title: string; description: string; index: number 
 
 export const LoginPage: React.FC = () => {
   const [companyName, setCompanyName] = useState(BRAND.companyName);
-  const [logoUrl, setLogoUrl] = useState('');
+  const [loginLogoUrl, setLoginLogoUrl] = useState('');
 
   useEffect(() => {
     loadBranding().then((b) => {
       setCompanyName(b.companyName);
-      setLogoUrl(b.logoUrl);
+      setLoginLogoUrl(b.loginLogoUrl);
     });
   }, []);
 
@@ -95,10 +95,10 @@ export const LoginPage: React.FC = () => {
         <div className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
           <div className="mb-7">
             <img
-              src={logoUrl || logo}
+              src={loginLogoUrl || logo}
               alt={companyName}
               className="h-36 w-36 object-contain"
-              style={{ boxShadow: `0 0 0 1px ${BRAND.secondaryColor}4D` }}
+              style={loginLogoUrl ? undefined : { boxShadow: `0 0 0 1px ${BRAND.secondaryColor}4D` }}
             />
           </div>
 

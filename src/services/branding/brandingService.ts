@@ -16,8 +16,13 @@ import { BRAND } from "../../config/branding";
 
 export interface ResolvedBranding {
   companyName: string;
-  // Empty string means "use the bundled static logo asset".
+  // Empty string means "use the bundled static logo asset". Used by the
+  // sidebar/header, where the logo sits in a small white box.
   logoUrl: string;
+  // Login-page hero logo — usually the same image as logoUrl, but can be a
+  // transparent-background variant via VITE_BRAND_OVERRIDE_LOGIN_LOGO_URL so
+  // it blends into the dark hero panel instead of sitting in a white box.
+  loginLogoUrl: string;
 }
 
 let cached: ResolvedBranding | null = null;
@@ -27,19 +32,24 @@ export async function loadBranding(): Promise<ResolvedBranding> {
 
   const overrideName = import.meta.env.VITE_BRAND_OVERRIDE_NAME as string | undefined;
   const overrideLogo = import.meta.env.VITE_BRAND_OVERRIDE_LOGO_URL as string | undefined;
+  const overrideLoginLogo = import.meta.env.VITE_BRAND_OVERRIDE_LOGIN_LOGO_URL as string | undefined;
 
-  if (overrideName || overrideLogo) {
+  if (overrideName || overrideLogo || overrideLoginLogo) {
+    const logoUrl = overrideLogo?.trim() || "";
     cached = {
       companyName: overrideName?.trim() || BRAND.companyName,
-      logoUrl: overrideLogo?.trim() || "",
+      logoUrl,
+      loginLogoUrl: overrideLoginLogo?.trim() || logoUrl,
     };
     return cached;
   }
 
   const row = await getPublicBranding();
+  const logoUrl = row?.logo?.trim() || "";
   cached = {
     companyName: row?.company_name?.trim() || BRAND.companyName,
-    logoUrl: row?.logo?.trim() || "",
+    logoUrl,
+    loginLogoUrl: logoUrl,
   };
   return cached;
 }
