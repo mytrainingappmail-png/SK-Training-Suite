@@ -1,11 +1,10 @@
-// A real, visible "Install App" button — the app previously relied entirely
-// on the browser's own automatic install UI (Chrome's address-bar icon),
-// which is easy to miss and doesn't exist at all on iOS Safari. This adds an
-// explicit control: on browsers that support it (Chrome/Edge/Android), it
-// captures the native `beforeinstallprompt` event and triggers it on click;
-// on iOS Safari, which never fires that event, it shows the manual "Add to
-// Home Screen" steps instead. Hides itself once the app is already running
-// installed (standalone display mode) or has no install path at all.
+// A real, always-visible "Install App" button. Chrome/Edge/Android decide
+// entirely on their own — based on per-origin engagement heuristics the app
+// has no access to — whether to fire `beforeinstallprompt` on a given visit,
+// so a button that only appears when that event fires ends up looking like
+// it randomly disappears. Instead: use the native one-click prompt when the
+// browser has offered it, otherwise always show clear manual steps for the
+// current browser/OS instead of hiding the button entirely.
 
 import { useEffect, useState } from 'react';
 
@@ -22,8 +21,22 @@ function isStandalone(): boolean {
   );
 }
 
-function isIos(): boolean {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+function getManualSteps(): string[] {
+  const ua = navigator.userAgent.toLowerCase();
+  const isIos = /iphone|ipad|ipod/.test(ua);
+  const isAndroid = /android/.test(ua);
+  const isChromeOrEdge = /chrome|edg/.test(ua) && !/opr\//.test(ua);
+
+  if (isIos) {
+    return ['Tap the Share icon in Safari\'s toolbar', 'Scroll down and tap "Add to Home Screen"', 'Tap "Add" to confirm'];
+  }
+  if (isAndroid) {
+    return ['Tap the ⋮ menu in your browser', 'Tap "Add to Home screen" or "Install app"', 'Confirm to add it'];
+  }
+  if (isChromeOrEdge) {
+    return ['Look for the install icon (⊕ or a small monitor icon) at the right end of the address bar', 'Or open the ⋮ menu and choose "Install this app…"', 'Confirm to install'];
+  }
+  return ['This browser doesn\'t support one-click install', 'Try opening this page in Chrome or Edge instead, or bookmark this page for quick access'];
 }
 
 function IconDownload({ className = 'h-4 w-4' }: { className?: string }) {
@@ -37,8 +50,7 @@ function IconDownload({ className = 'h-4 w-4' }: { className?: string }) {
 export default function InstallAppButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(() => isStandalone());
-  const [showIosSteps, setShowIosSteps] = useState(false);
-  const ios = isIos();
+  const [showSteps, setShowSteps] = useState(false);
 
   useEffect(() => {
     function onBeforeInstallPrompt(e: Event) {
@@ -58,21 +70,16 @@ export default function InstallAppButton() {
   }, []);
 
   if (installed) return null;
-  // Neither a captured native prompt nor iOS's manual path is available —
-  // most likely an already-dismissed prompt on desktop Safari/Firefox,
-  // which have no install mechanism at all. Nothing useful to show.
-  if (!deferredPrompt && !ios) return null;
 
   async function handleClick() {
-    if (ios && !deferredPrompt) {
-      setShowIosSteps(true);
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setInstalled(true);
+      setDeferredPrompt(null);
       return;
     }
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setInstalled(true);
-    setDeferredPrompt(null);
+    setShowSteps(true);
   }
 
   return (
@@ -86,16 +93,16 @@ export default function InstallAppButton() {
         <span className="hidden sm:inline">Install App</span>
       </button>
 
-      {showIosSteps && (
+      {showSteps && (
         <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl">
-          <p className="mb-2 font-semibold text-slate-800">Add to Home Screen</p>
+          <p className="mb-2 font-semibold text-slate-800">Install this app</p>
           <ol className="list-decimal space-y-1 pl-4 text-slate-600">
-            <li>Tap the Share icon in Safari's toolbar</li>
-            <li>Scroll down and tap "Add to Home Screen"</li>
-            <li>Tap "Add" to confirm</li>
+            {getManualSteps().map((step) => (
+              <li key={step}>{step}</li>
+            ))}
           </ol>
           <button
-            onClick={() => setShowIosSteps(false)}
+            onClick={() => setShowSteps(false)}
             className="mt-3 w-full rounded-lg bg-slate-100 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200"
           >
             Got it
