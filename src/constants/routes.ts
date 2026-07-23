@@ -54,6 +54,8 @@ export const ROUTES = {
 
   MY_TICKETS: "/support/tickets",
 
+  HELP_CENTER: "/help",
+
   TRAINER_STUDENTS: "/teaching/students",
 
   TRAINER_GRADING_QUEUE: "/teaching/grading",

@@ -25,6 +25,7 @@ import ProjectsPage from "./pages/Projects";
 import CertificateViewPage from "./components/certificate/CertificateViewPage";
 import AttendancePage from "./pages/AttendancePage";
 import MyTicketsPage from "./pages/MyTicketsPage";
+import HelpCenterPage from "./pages/HelpCenterPage";
 import TrainerStudentsPage from "./pages/TrainerStudentsPage";
 import TrainerGradingQueuePage from "./pages/TrainerGradingQueuePage";
 import TrainerCoursesPage from "./pages/TrainerCoursesPage";
@@ -162,6 +163,7 @@ function App() {
         <Route path={ROUTES.CERTIFICATE_VIEW} element={<CertificateViewPage />} />
         <Route path={ROUTES.MY_ATTENDANCE} element={<AttendancePage />} />
         <Route path={ROUTES.MY_TICKETS} element={<MyTicketsPage />} />
+        <Route path={ROUTES.HELP_CENTER} element={<HelpCenterPage />} />
         <Route path={ROUTES.TRAINER_STUDENTS} element={<TrainerStudentsPage />} />
         <Route path={ROUTES.TRAINER_GRADING_QUEUE} element={<TrainerGradingQueuePage />} />
         <Route path={ROUTES.TRAINER_COURSES} element={<TrainerCoursesPage />} />

@@ -18,6 +18,14 @@ export const MENU: MenuItem[] = [
     visible: true,
     group: "Overview",
   },
+  {
+    id: "help-center",
+    title: "Help Center",
+    route: ROUTES.HELP_CENTER,
+    icon: "help-circle",
+    visible: true,
+    group: "Overview",
+  },
 
   // ── My Learning ──────────────────────────────────────────────────────
   {
