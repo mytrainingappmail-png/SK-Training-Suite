@@ -73,11 +73,20 @@ export default function InstallAppButton() {
 
   async function handleClick() {
     if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setInstalled(true);
-      setDeferredPrompt(null);
-      return;
+      try {
+        await deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') setInstalled(true);
+        setDeferredPrompt(null);
+        return;
+      } catch {
+        // The captured prompt can be stale/already-used by the time it's
+        // clicked (Chrome only allows calling prompt() once per event, and
+        // invalidates it after a timeout) - previously this failed with
+        // nothing visible happening at all. Fall through to manual steps
+        // instead of leaving the click looking like it did nothing.
+        setDeferredPrompt(null);
+      }
     }
     setShowSteps(true);
   }
