@@ -117,6 +117,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'reports', label: 'Reports', permission: PERMISSIONS.VIEW_REPORTS },
       { tab: 'notifications', label: 'Notifications' },
       { tab: 'security-migration', label: 'Secure Login Migration' },
+      { tab: 'audit-log', label: 'Audit Log', permission: PERMISSIONS.VIEW_AUDIT_LOG },
     ],
   },
   {

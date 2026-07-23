@@ -54,6 +54,7 @@ import NotificationCenter from "../components/admin/notifications/NotificationCe
 import TicketManagement from "../components/admin/support/TicketManagement";
 import EmailTemplateBuilder from "../components/admin/email/EmailTemplateBuilder";
 import MarketDataManagement from "../components/admin/marketData/MarketDataManagement";
+import AuditLogCenter from "../components/admin/audit/AuditLogCenter";
 
 import { useAuthorization } from "../hooks/useAuthorization";
 import { loadCompany } from "../services/company/companyService";
@@ -441,6 +442,15 @@ function Admin() {
               </button>
             )}
 
+            {can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log") && (
+              <button
+                onClick={() => setActiveTab("audit-log")}
+                className={getTabClass("audit-log")}
+              >
+                Audit Log
+              </button>
+            )}
+
             {matches("Plans") && (
               <button
                 onClick={() => setActiveTab("plans")}
@@ -618,6 +628,8 @@ function Admin() {
             {activeTab === "email-templates" && can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && <EmailTemplateBuilder />}
 
             {activeTab === "market-analytics" && marketAnalyticsEnabled && <MarketDataManagement />}
+
+            {activeTab === "audit-log" && can(PERMISSIONS.VIEW_AUDIT_LOG) && <AuditLogCenter />}
 
             {activeTab === "permissions" && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
             {activeTab === "role-permission" && can(PERMISSIONS.VIEW_PERMISSION) && (

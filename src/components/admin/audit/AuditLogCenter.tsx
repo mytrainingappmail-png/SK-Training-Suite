@@ -41,8 +41,11 @@ import { loadResources } from '../../../services/resource/resourceService';
 import { loadCertificates } from '../../../services/certificate/certificateService';
 import { loadLearningPaths } from '../../../services/learningPath/learningPathService';
 import { loadEnrollments as loadPathEnrollments } from '../../../services/learningPathEnrollment/learningPathEnrollmentService';
+import { loadEntries as loadMarketDataEntries } from '../../../services/marketData/marketDataService';
+import { getCurrentUser } from '../../../services/auth/session';
 
 import type { Company } from '../../../types/company';
+import type { MarketDataEntry } from '../../../types/marketData';
 import type { Branch } from '../../../types/branch';
 import type { Department } from '../../../types/department';
 import type { Role } from '../../../types/role';
@@ -76,7 +79,7 @@ const ACTIVITY_TYPES: ActivityType[] = [
 const MODULES = [
   'Companies', 'Branches', 'Departments', 'Employees', 'Roles', 'Courses', 'Course Builder',
   'Content Editor', 'Assessments', 'Assignments', 'Certificates', 'Enrollments', 'Learning Paths',
-  'Notifications', 'Reports', 'License', 'Branding', 'Feature Toggle',
+  'Notifications', 'Reports', 'License', 'Branding', 'Feature Toggle', 'Market Analytics',
 ];
 
 type Severity = 'info' | 'warning' | 'critical';
@@ -326,6 +329,7 @@ function AuditLogCenter() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
   const [pathEnrollments, setPathEnrollments] = useState<LearningPathEnrollment[]>([]);
+  const [marketDataEntries, setMarketDataEntries] = useState<MarketDataEntry[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -347,13 +351,16 @@ function AuditLogCenter() {
   function fetchAll() {
     setLoading(true);
     setError('');
+    const user = getCurrentUser();
     Promise.all([
       loadCompanies(), branchService.getAll(), departmentService.getAll(), loadRoles(), loadEmployeeRoles(),
       employeeService.getAll(), loadCourses(), loadLessons(), loadEnrollments(), loadAssessments(),
       loadResults(), loadResources(), loadCertificates(), loadLearningPaths(), loadPathEnrollments(),
+      user ? loadMarketDataEntries(user.companyId) : Promise.resolve([]),
     ])
       .then(([companyRows, branchRows, departmentRows, roleRows, employeeRoleRows, employeeRows, courseRows,
-        lessonRows, enrollmentRows, assessmentRows, resultRows, resourceRows, certificateRows, pathRows, pathEnrollRows]) => {
+        lessonRows, enrollmentRows, assessmentRows, resultRows, resourceRows, certificateRows, pathRows, pathEnrollRows,
+        marketDataRows]) => {
         setCompanies(companyRows);
         setBranches(branchRows);
         setDepartments(departmentRows);
@@ -369,6 +376,7 @@ function AuditLogCenter() {
         setCertificates(certificateRows);
         setLearningPaths(pathRows);
         setPathEnrollments(pathEnrollRows);
+        setMarketDataEntries(marketDataRows);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load audit data.');
@@ -546,11 +554,29 @@ function AuditLogCenter() {
       });
     });
 
+    marketDataEntries.forEach((md) => {
+      const quarterLabel = `Q${md.quarter} ${md.year}`;
+      push({
+        timestamp: md.created_at, userName: md.created_by_name || 'System', companyId: md.company_id,
+        companyName: companyById.get(md.company_id)?.company_name ?? '—', module: 'Market Analytics', action: 'Create',
+        description: `${quarterLabel} market data added for ${md.city_name}.`, severity: 'info',
+        beforeValue: 'N/A (new record)', afterValue: `₹${md.avg_rate}/sqft`, changedFields: ['avg_rate', 'rental_avg', 'demand_index', 'supply_index'],
+      });
+      if (md.updated_at && md.updated_at !== md.created_at) {
+        push({
+          timestamp: md.updated_at, userName: md.created_by_name || 'System', companyId: md.company_id,
+          companyName: companyById.get(md.company_id)?.company_name ?? '—', module: 'Market Analytics', action: 'Update',
+          description: `${quarterLabel} market data updated for ${md.city_name}.`, severity: 'info',
+          beforeValue: 'Previous quarterly figures', afterValue: `₹${md.avg_rate}/sqft`, changedFields: ['avg_rate', 'rental_avg', 'demand_index', 'supply_index'],
+        });
+      }
+    });
+
     return entries
       .filter((e) => e.timestamp && !Number.isNaN(new Date(e.timestamp).getTime()))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [companies, branches, departments, roles, employeeRoles, employees, courses, lessons, enrollments,
-      assessments, results, resources, certificates, learningPaths, pathEnrollments, employeeById, companyById, courseById]);
+      assessments, results, resources, certificates, learningPaths, pathEnrollments, marketDataEntries, employeeById, companyById, courseById]);
 
   // ── Filtering ────────────────────────────────────────────────────────────────
 
