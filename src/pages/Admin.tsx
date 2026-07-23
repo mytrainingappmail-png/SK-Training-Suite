@@ -15,6 +15,7 @@ import CourseBuilder from "../components/admin/coursebuilder/CourseBuilder";
 import RoleManagement from "../components/superadmin/RoleManagement";
 import ThemeManagement from "../components/superadmin/ThemeManagement";
 import MenuManagement from "../components/superadmin/MenuManagement";
+import SettingsManagement from "../components/settings/SettingsManagement";
 import PermissionManagement from "../modules/permissions/PermissionManagement";
 import PermissionMatrix from "../modules/permissions/PermissionMatrix";
 import ResourceManagement from "../components/superadmin/ResourceManagement";
@@ -582,6 +583,8 @@ function Admin() {
             )}
 
             {activeTab === "theme" && can(PERMISSIONS.VIEW_THEME) && <ThemeManagement />}
+
+            {activeTab === "settings" && can(PERMISSIONS.VIEW_SETTINGS) && <SettingsManagement />}
 
             {activeTab === "menu" && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
 
