@@ -4,7 +4,8 @@ export type NotificationType =
   | 'course_assigned' | 'course_completed' | 'assignment_assigned' | 'assignment_due_reminder'
   | 'assignment_submitted' | 'assessment_scheduled' | 'assessment_reminder' | 'assessment_result'
   | 'certificate_issued' | 'enrollment' | 'learning_path_assigned' | 'license_expiry'
-  | 'subscription_reminder' | 'system_notification' | 'announcement';
+  | 'subscription_reminder' | 'system_notification' | 'announcement'
+  | 'ticket_created' | 'ticket_reply';
 
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
 

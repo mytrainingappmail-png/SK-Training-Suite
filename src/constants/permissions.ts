@@ -200,4 +200,16 @@ export const PERMISSIONS = {
 
   // Audit
   VIEW_AUDIT_LOG: "view_audit_log",
+
+  // Support Tickets
+  VIEW_SUPPORT_TICKET: "view_support_ticket",
+  CREATE_SUPPORT_TICKET: "create_support_ticket",
+  EDIT_SUPPORT_TICKET: "edit_support_ticket",
+  DELETE_SUPPORT_TICKET: "delete_support_ticket",
+
+  // Email Templates
+  VIEW_EMAIL_TEMPLATE: "view_email_template",
+  CREATE_EMAIL_TEMPLATE: "create_email_template",
+  EDIT_EMAIL_TEMPLATE: "edit_email_template",
+  DELETE_EMAIL_TEMPLATE: "delete_email_template",
 } as const;

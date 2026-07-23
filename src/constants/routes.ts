@@ -52,6 +52,8 @@ export const ROUTES = {
 
   MY_ATTENDANCE: "/learning/attendance",
 
+  MY_TICKETS: "/support/tickets",
+
   TRAINER_STUDENTS: "/teaching/students",
 
   TRAINER_GRADING_QUEUE: "/teaching/grading",

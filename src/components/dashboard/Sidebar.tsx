@@ -118,6 +118,13 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'security-migration', label: 'Secure Login Migration' },
     ],
   },
+  {
+    group: 'Support',
+    items: [
+      { tab: 'support-tickets', label: 'Ticket Management', permission: PERMISSIONS.VIEW_SUPPORT_TICKET },
+      { tab: 'email-templates', label: 'Email Templates', permission: PERMISSIONS.VIEW_EMAIL_TEMPLATE },
+    ],
+  },
 ];
 
 function Sidebar() {

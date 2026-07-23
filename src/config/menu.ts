@@ -100,6 +100,14 @@ export const MENU: MenuItem[] = [
     visible: true,
     group: "Overview",
   },
+  {
+    id: "my-tickets",
+    title: "Support Tickets",
+    route: ROUTES.MY_TICKETS,
+    icon: "life-buoy",
+    visible: true,
+    group: "Overview",
+  },
 
   // ── Teaching (Trainer only) ──────────────────────────────────────────
   {

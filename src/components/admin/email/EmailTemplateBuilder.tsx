@@ -1,11 +1,15 @@
 // src/components/admin/email/EmailTemplateBuilder.tsx
 //
-// Professional Email Template Builder. There is no email-template table,
-// service, or repository anywhere in this app — confirmed before writing
-// anything here. Per instructions, templates are kept as temporary,
-// session-local UI state (nothing fake is persisted; resets on reload).
+// Professional Email Template Builder. Templates persist to the real
+// email_templates table (company-scoped by RLS to the signed-in admin's
+// own company) via src/services/email/emailTemplateService.ts. Local
+// component state stays the in-progress editing buffer — DB writes only
+// happen at explicit save points (Create, Duplicate, Delete, Save Draft,
+// Publish, Archive) so a network round-trip never fires per keystroke.
+// "Send Test Email" compiles the live (possibly-unsaved) draft and sends
+// it for real via the send-email Edge Function (Resend).
 //
-// Everything that IS real is reused as-is:
+// Everything else here is reused as-is:
 //   companyService (loadCompanies)   — company selector; a company's
 //                                      REAL, existing `theme` JSON blob
 //                                      (already written by
@@ -36,8 +40,10 @@ import { loadLessons } from '../../../services/lessonBuilder/lessonBuilderServic
 import { loadLearningPaths } from '../../../services/learningPath/learningPathService';
 import { loadCertificates } from '../../../services/certificate/certificateService';
 import { getCurrentUser } from '../../../services/auth/session';
+import * as emailTemplateService from '../../../services/email/emailTemplateService';
 
 import type { Company } from '../../../types/company';
+import type { EmailTemplate as DbEmailTemplate, EmailTemplateForm as DbEmailTemplateForm } from '../../../types/emailTemplate';
 import type { Employee } from '../../../types/employee';
 import type { Course } from '../../../types/course';
 import type { Assessment } from '../../../types/assessment';
@@ -157,6 +163,40 @@ function brandingDefaultsFromCompany(company: Company | null): TemplateBranding 
     primaryColor: typeof blob.primaryColor === 'string' ? blob.primaryColor : DEFAULT_BRANDING.primaryColor,
     secondaryColor: typeof blob.secondaryColor === 'string' ? blob.secondaryColor : DEFAULT_BRANDING.secondaryColor,
     buttonColor: typeof blob.accentColor === 'string' ? blob.accentColor : DEFAULT_BRANDING.buttonColor,
+  };
+}
+
+// ── DB row <-> local editor shape ────────────────────────────────────────────
+// The email_templates table is company-scoped by RLS to the signed-in
+// admin's own company_id, regardless of which company is selected in the
+// "Branding Company" picker above (that picker only prefills branding
+// defaults from any company's theme — it never changes which company a
+// template is saved under).
+
+function dbRowToLocal(row: DbEmailTemplate): EmailTemplate {
+  return {
+    id: row.id,
+    name: row.name,
+    subject: row.subject,
+    category: row.category as TemplateType,
+    bodyHtml: row.body_html,
+    status: row.status,
+    companyId: row.company_id,
+    branding: { ...DEFAULT_BRANDING, ...(row.branding as Partial<TemplateBranding>) },
+    createdBy: row.created_by_name,
+    createdDate: row.created_at,
+    modifiedDate: row.updated_at,
+  };
+}
+
+function localToDbForm(local: EmailTemplate): DbEmailTemplateForm {
+  return {
+    name: local.name,
+    category: local.category,
+    subject: local.subject,
+    body_html: local.bodyHtml,
+    status: local.status,
+    branding: local.branding,
   };
 }
 
@@ -487,8 +527,11 @@ function EmailTemplateBuilder() {
   function fetchAll() {
     setLoading(true);
     setError('');
-    Promise.all([loadCompanies(), employeeService.getAll(), loadCourses(), loadAssessments(), loadLessons(), loadLearningPaths(), loadCertificates()])
-      .then(([companyRows, employeeRows, courseRows, assessmentRows, lessonRows, pathRows, certificateRows]) => {
+    Promise.all([
+      loadCompanies(), employeeService.getAll(), loadCourses(), loadAssessments(), loadLessons(), loadLearningPaths(), loadCertificates(),
+      emailTemplateService.loadTemplates(user?.companyId ?? ''),
+    ])
+      .then(([companyRows, employeeRows, courseRows, assessmentRows, lessonRows, pathRows, certificateRows, templateRows]) => {
         setCompanies(companyRows);
         setEmployees(employeeRows);
         setCourses(courseRows);
@@ -496,6 +539,7 @@ function EmailTemplateBuilder() {
         setLessons(lessonRows);
         setLearningPaths(pathRows);
         setCertificates(certificateRows);
+        setTemplates(templateRows.map(dbRowToLocal));
         setSelectedCompanyId((prev) => prev || companyRows[0]?.id || '');
       })
       .catch((err: unknown) => {
@@ -514,37 +558,57 @@ function EmailTemplateBuilder() {
 
   // ── Template CRUD ────────────────────────────────────────────────────────────
 
-  function handleCreate() {
+  async function handleCreate() {
+    if (!user) return;
     const branding = brandingDefaultsFromCompany(selectedCompany);
-    const created = newTemplate(actorName, selectedCompanyId, branding);
-    setTemplates((prev) => [created, ...prev]);
-    setActiveTemplateId(created.id);
-    showToast('Template created');
+    const draft = newTemplate(actorName, user.companyId, branding);
+    try {
+      const dbRow = await emailTemplateService.createTemplate(user.companyId, user.id, actorName, localToDbForm(draft));
+      const created = dbRowToLocal(dbRow);
+      setTemplates((prev) => [created, ...prev]);
+      setActiveTemplateId(created.id);
+      showToast('Template created');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to create template.');
+    }
   }
 
-  function handleDuplicate(t: EmailTemplate) {
-    const copy: EmailTemplate = {
-      ...t,
-      id: `tmpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-      name: `${t.name} (Copy)`,
-      status: 'draft',
-      createdBy: actorName,
-      createdDate: new Date().toISOString(),
-      modifiedDate: new Date().toISOString(),
-    };
-    setTemplates((prev) => [copy, ...prev]);
-    setActiveTemplateId(copy.id);
-    showToast('Template duplicated');
+  async function handleDuplicate(t: EmailTemplate) {
+    if (!user) return;
+    try {
+      const dbRow = await emailTemplateService.createTemplate(user.companyId, user.id, actorName, {
+        name: `${t.name} (Copy)`,
+        category: t.category,
+        subject: t.subject,
+        body_html: t.bodyHtml,
+        status: 'draft',
+        branding: t.branding,
+      });
+      const copy = dbRowToLocal(dbRow);
+      setTemplates((prev) => [copy, ...prev]);
+      setActiveTemplateId(copy.id);
+      showToast('Template duplicated');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to duplicate template.');
+    }
   }
 
-  function handleDeleteConfirm() {
+  async function handleDeleteConfirm() {
     if (!deleteTarget) return;
-    setTemplates((prev) => prev.filter((t) => t.id !== deleteTarget.id));
-    if (activeTemplateId === deleteTarget.id) setActiveTemplateId('');
-    setDeleteTarget(null);
-    showToast('Template deleted');
+    try {
+      await emailTemplateService.deleteTemplate(deleteTarget.id);
+      setTemplates((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      if (activeTemplateId === deleteTarget.id) setActiveTemplateId('');
+      showToast('Template deleted');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete template.');
+    } finally {
+      setDeleteTarget(null);
+    }
   }
 
+  // Local-only — fires on every keystroke, so no DB call here. Persistence
+  // happens at explicit save points (setStatus below, plus create/duplicate/delete).
   function updateActiveTemplate(patch: Partial<EmailTemplate>) {
     if (!activeTemplateId) return;
     setTemplates((prev) => prev.map((t) => (t.id === activeTemplateId ? { ...t, ...patch, modifiedDate: new Date().toISOString() } : t)));
@@ -555,16 +619,28 @@ function EmailTemplateBuilder() {
     updateActiveTemplate({ branding: { ...activeTemplate.branding, ...patch } });
   }
 
-  function setStatus(status: TemplateStatus) {
+  async function setStatus(status: TemplateStatus) {
+    if (!activeTemplate) return;
+    const merged: EmailTemplate = { ...activeTemplate, status };
     updateActiveTemplate({ status });
-    showToast(`Marked as ${STATUS_LABEL[status]}`);
+    try {
+      await emailTemplateService.updateTemplate(activeTemplate.id, localToDbForm(merged));
+      showToast(`Saved as ${STATUS_LABEL[status]}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save template.');
+    }
   }
 
-  function handleSendTestEmail() {
-    if (!testEmployeeId) return;
+  async function handleSendTestEmail() {
+    if (!testEmployeeId || !activeTemplate) return;
     const emp = employees.find((e) => e.id === testEmployeeId);
-    showToast(`Preview compiled for ${emp ? `${emp.first_name} ${emp.last_name}` : 'recipient'} — no live email service is connected yet.`);
     setTestEmailOpen(false);
+    if (!emp?.email) {
+      showToast('That employee has no email on file.');
+      return;
+    }
+    const result = await emailTemplateService.sendTestEmailRaw(emp.email, activeTemplate.subject, activeTemplate.bodyHtml, activeTemplate.branding, previewValues());
+    showToast(result.success ? `Test email sent to ${emp.first_name} ${emp.last_name}.` : `Failed to send: ${result.error}`);
   }
 
   // ── Variable preview values (from real, optionally-selected records) ───────
@@ -819,7 +895,7 @@ function EmailTemplateBuilder() {
                 {employees.map((e) => (<option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>))}
               </select>
             </Field>
-            <p className="mt-3 text-xs text-slate-400">No live email service is connected yet — this compiles a preview only.</p>
+            <p className="mt-3 text-xs text-slate-400">Sends the compiled email to that employee's real address via your connected email provider.</p>
             <div className="mt-5 flex justify-end gap-2">
               <SecondaryButton onClick={() => setTestEmailOpen(false)}>Cancel</SecondaryButton>
               <PrimaryButton onClick={handleSendTestEmail} disabled={!testEmployeeId}>Send Test</PrimaryButton>

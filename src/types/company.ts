@@ -51,6 +51,8 @@ export interface Company {
 
   active: boolean;
 
+  is_platform_operator: boolean;
+
   created_at: string;
 
   updated_at: string;

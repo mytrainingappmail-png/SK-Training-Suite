@@ -51,6 +51,8 @@ import AttendanceManagement from "../modules/attendance/AttendanceManagement";
 import SecurityMigration from "../modules/security/SecurityMigration";
 import GeofenceManagement from "../modules/geofence/GeofenceManagement";
 import NotificationCenter from "../components/admin/notifications/NotificationCenter";
+import TicketManagement from "../components/admin/support/TicketManagement";
+import EmailTemplateBuilder from "../components/admin/email/EmailTemplateBuilder";
 
 import { useAuthorization } from "../hooks/useAuthorization";
 
@@ -405,6 +407,24 @@ function Admin() {
               </button>
             )}
 
+            {can(PERMISSIONS.VIEW_SUPPORT_TICKET) && matches("Ticket Management") && (
+              <button
+                onClick={() => setActiveTab("support-tickets")}
+                className={getTabClass("support-tickets")}
+              >
+                Ticket Management
+              </button>
+            )}
+
+            {can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && matches("Email Templates") && (
+              <button
+                onClick={() => setActiveTab("email-templates")}
+                className={getTabClass("email-templates")}
+              >
+                Email Templates
+              </button>
+            )}
+
             {matches("Plans") && (
               <button
                 onClick={() => setActiveTab("plans")}
@@ -576,6 +596,10 @@ function Admin() {
             {activeTab === "reports" && can(PERMISSIONS.VIEW_REPORTS) && <ReportManagement />}
 
             {activeTab === "notifications" && <NotificationCenter />}
+
+            {activeTab === "support-tickets" && can(PERMISSIONS.VIEW_SUPPORT_TICKET) && <TicketManagement />}
+
+            {activeTab === "email-templates" && can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && <EmailTemplateBuilder />}
 
             {activeTab === "permissions" && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
             {activeTab === "role-permission" && can(PERMISSIONS.VIEW_PERMISSION) && (
