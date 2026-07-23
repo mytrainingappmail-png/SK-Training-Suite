@@ -4,6 +4,7 @@ import { loadMyCourses }       from '../../services/myCourses/myCourseService';
 import { getCurrentUser }      from '../../services/auth/session';
 import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
 import { ROUTES } from '../../constants/routes';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { MyCourse, MyCourseStatus } from '../../types/myCourse';
 
 const STATUS_STYLES: Record<MyCourseStatus, string> = {
@@ -117,15 +118,18 @@ function MyCourses() {
     navigate(ROUTES.COURSE_PLAYER.replace(':courseId', course.enrollmentId));
   }
 
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+  const completedCount = courses.filter((c) => c.status === 'COMPLETED').length;
 
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">My Courses</h2>
-          <p className="mt-1 text-slate-500">All courses assigned to you.</p>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="My Courses"
+        subtitle="All courses assigned to you."
+        statLabel="Completed"
+        statValue={`${completedCount}/${courses.length}`}
+      />
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
       <div className="mb-6">
         <input
@@ -237,6 +241,7 @@ function MyCourses() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

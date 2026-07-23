@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
 import { getCurrentUser } from '../../services/auth/session';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { Project } from '../../services/projects/projectsService';
 
 function IconFolder({ className = 'h-6 w-6' }: { className?: string }) {
@@ -168,12 +169,15 @@ function Projects() {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="Projects"
+        subtitle="Browse training by project, with brochures to download."
+        statLabel="Projects"
+        statValue={projects.length}
+      />
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Projects</h2>
-        <p className="mt-1 text-slate-500">Browse training by project, with brochures to download.</p>
-      </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
       <div className="mb-6">
         <input
@@ -233,6 +237,7 @@ function Projects() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

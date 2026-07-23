@@ -13,6 +13,7 @@ import {
   loadAttendanceHistoryForEmployee,
   loadAttendanceSummaryForEmployee,
 } from '../../services/attendance/attendanceService';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { Attendance, AttendanceSummary, AttendanceStatus } from '../../types/attendance';
 
 function IconSpinner({ className = 'h-4 w-4' }: { className?: string }) {
@@ -143,11 +144,13 @@ function MyAttendance() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-bold text-slate-800">My Attendance</h2>
-        <p className="mt-1 text-slate-500">Check in and out, and track your attendance history.</p>
+      <SectionHeroBanner
+        title="My Attendance"
+        subtitle="Check in and out, and track your attendance history."
+      />
 
-        <div className="mt-5 flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
           <div className="flex-1">
             <p className="text-sm text-slate-600">
               {today?.check_in_time ? `Checked in at ${new Date(today.check_in_time).toLocaleTimeString()}` : "You haven't checked in today."}

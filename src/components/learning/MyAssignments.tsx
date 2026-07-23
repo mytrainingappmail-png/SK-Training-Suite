@@ -41,6 +41,7 @@ import {
 } from '../../services/resource/resourceService';
 import { uploadDocument, uploadImage } from '../../services/contentEditor/contentEditorService';
 import { getCurrentUser } from '../../services/auth/session';
+import SectionHeroBanner from './SectionHeroBanner';
 
 import type { Lesson } from '../../types/lessonBuilder';
 import type { Module } from '../../types/module';
@@ -687,15 +688,18 @@ function MyAssignments() {
     );
   }
 
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+  const reviewedCount = items.filter((i) => i.status === 'reviewed').length;
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">My Assignments</h2>
-          <p className="mt-1 text-slate-500">All assignments from your training program.</p>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="My Assignments"
+        subtitle="All assignments from your training program."
+        statLabel="Reviewed"
+        statValue={`${reviewedCount}/${items.length}`}
+      />
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <input
@@ -735,6 +739,7 @@ function MyAssignments() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

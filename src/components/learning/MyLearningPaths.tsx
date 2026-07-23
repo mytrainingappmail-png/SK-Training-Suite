@@ -5,6 +5,7 @@ import { ROUTES } from '../../constants/routes';
 import { useEffect, useMemo, useState } from 'react';
 import { loadMyLearningPaths } from '../../services/myLearningPath/myLearningPathService';
 import { getCurrentUser }      from '../../services/auth/session';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { MyLearningPath, MyLearningPathStatus } from '../../types/myLearningPath';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,15 +260,18 @@ const navigate = useNavigate();
     }
   }
 
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+  const completedPathCount = paths.filter((p) => p.status === 'completed').length;
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">My Learning Paths</h2>
-          <p className="mt-1 text-slate-500">All learning paths assigned to you.</p>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="My Learning Paths"
+        subtitle="All learning paths assigned to you."
+        statLabel="Completed"
+        statValue={`${completedPathCount}/${paths.length}`}
+      />
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
 
       <div className="mb-6">
         <input
@@ -292,6 +296,7 @@ const navigate = useNavigate();
         </div>
       )}
 
+    </div>
     </div>
   );
 }

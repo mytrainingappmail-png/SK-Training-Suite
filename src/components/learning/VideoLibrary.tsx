@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { loadSubjects, loadVideos } from '../../services/videoLibraryContent/videoLibraryContentService';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { VideoSubject, LibraryVideo } from '../../types/videoLibraryContent';
 
 function IconPlay({ className = 'h-10 w-10' }: { className?: string }) {
@@ -63,12 +64,15 @@ function VideoLibrary() {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="Videos"
+        subtitle="Browse videos by subject."
+        statLabel="Videos"
+        statValue={videos.length}
+      />
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Videos</h2>
-        <p className="mt-1 text-slate-500">Browse videos by subject.</p>
-      </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
       <div className="mb-6 flex flex-wrap gap-3">
         <input
@@ -150,6 +154,7 @@ function VideoLibrary() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

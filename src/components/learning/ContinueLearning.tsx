@@ -5,6 +5,7 @@ import { ROUTES } from '../../constants/routes';
 import { useEffect, useMemo, useState } from 'react';
 import { loadContinueLearning } from '../../services/continueLearning/continueLearningService';
 import { getCurrentUser }       from '../../services/auth/session';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { ContinueLearningItem } from '../../types/continueLearning';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -245,14 +246,15 @@ function ContinueLearning({ onContinue }: ContinueLearningProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="Continue Learning"
+        subtitle="Pick up right where you left off."
+        statLabel="In Progress"
+        statValue={items.length}
+      />
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Continue Learning</h2>
-          <p className="mt-1 text-slate-500">Pick up right where you left off.</p>
-        </div>
-      </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
 
       <div className="mb-6">
         <input
@@ -277,6 +279,7 @@ function ContinueLearning({ onContinue }: ContinueLearningProps) {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

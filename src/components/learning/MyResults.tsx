@@ -35,6 +35,7 @@ import { loadModules }        from '../../services/module/moduleService';
 import { loadCourses }        from '../../services/course/courseService';
 import { loadMyAssessments }  from '../../services/myAssessment/myAssessmentService';
 import { getCurrentUser }     from '../../services/auth/session';
+import SectionHeroBanner from './SectionHeroBanner';
 
 import type { AssessmentResult } from '../../types/assessmentResult';
 import type { Assessment }       from '../../types/assessment';
@@ -491,15 +492,18 @@ function MyResults({ onRetake }: MyResultsProps) {
     return <ResultDetail item={activeItem} onBack={() => setActiveResultId('')} onRetake={onRetake} />;
   }
 
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+  const passCount = items.filter((i) => i.result.passed).length;
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">My Results</h2>
-          <p className="mt-1 text-slate-500">Every assessment attempt you've completed.</p>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="My Results"
+        subtitle="Every assessment attempt you've completed."
+        statLabel="Passed"
+        statValue={`${passCount}/${items.length}`}
+      />
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
 
       {!loading && !error && <AnalyticsSummary items={items} />}
 
@@ -559,6 +563,7 @@ function MyResults({ onRetake }: MyResultsProps) {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

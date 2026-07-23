@@ -28,6 +28,7 @@ import { loadMyCourses }      from '../../services/myCourses/myCourseService';
 import { getCurrentUser }     from '../../services/auth/session';
 import { loadCertificateForView } from '../../services/certificate/certificateViewService';
 import CertificateRenderer from '../certificate/CertificateRenderer';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { MyCertificate, MyCertificateStatus } from '../../types/myCertificate';
 import type { MyCourse } from '../../types/myCourse';
 import type { CertificateViewData } from '../../services/certificate/certificateViewService';
@@ -557,15 +558,18 @@ function MyCertificates() {
     );
   }
 
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+  const earnedCount = certificates.filter((c) => c.status === 'valid').length;
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Certificate Center</h2>
-          <p className="mt-1 text-slate-500">Certificates you've earned and are eligible for.</p>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="Certificate Center"
+        subtitle="Certificates you've earned and are eligible for."
+        statLabel="Earned"
+        statValue={`${earnedCount}/${certificates.length}`}
+      />
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <input
@@ -623,6 +627,7 @@ function MyCertificates() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

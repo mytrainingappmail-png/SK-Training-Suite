@@ -22,6 +22,7 @@ import { loadMyAssessments } from '../../services/myAssessment/myAssessmentServi
 import { loadResults }       from '../../services/assessmentResult/assessmentResultService';
 import { getCurrentUser }    from '../../services/auth/session';
 import AssessmentPlayer      from '../assessment/AssessmentPlayer';
+import SectionHeroBanner     from './SectionHeroBanner';
 import type { MyAssessment } from '../../types/myAssessment';
 import type { AssessmentResult } from '../../types/assessmentResult';
 
@@ -528,15 +529,18 @@ function MyAssessments({ onStartAssessment, onViewResult }: MyAssessmentsProps) 
 
   // ── Dashboard view ───────────────────────────────────────────────────────────
 
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+  const passedCount = assessments.filter((a) => a.passed === true).length;
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">My Assessments</h2>
-          <p className="mt-1 text-slate-500">All assessments assigned to you.</p>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <SectionHeroBanner
+        title="My Assessments"
+        subtitle="All assessments assigned to you."
+        statLabel="Passed"
+        statValue={`${passedCount}/${assessments.length}`}
+      />
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
 
       <div className="mb-6">
         <input
@@ -567,6 +571,7 @@ function MyAssessments({ onStartAssessment, onViewResult }: MyAssessmentsProps) 
         </div>
       )}
 
+    </div>
     </div>
   );
 }

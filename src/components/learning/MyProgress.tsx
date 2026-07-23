@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadMyProgress } from '../../services/myProgress/myProgressService';
 import { getCurrentUser } from '../../services/auth/session';
+import SectionHeroBanner from './SectionHeroBanner';
 import type { MyProgress as MyProgressData } from '../../types/myProgress';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,20 +179,19 @@ function MyProgress() {
   return (
     <div className="space-y-6">
 
+      <SectionHeroBanner
+        title="My Progress"
+        subtitle="Your overall learning progress across courses, paths and assessments."
+        statLabel="Overall"
+        statValue={`${summary.overallCourseProgressPct}%`}
+      />
+
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">My Progress</h2>
-            <p className="mt-1 text-slate-500">
-              Your overall learning progress across courses, paths and assessments.
-            </p>
-          </div>
-          {summary.lastActivityDate && (
-            <p className="text-sm text-slate-400">
-              Last activity: {new Date(summary.lastActivityDate).toLocaleString()}
-            </p>
-          )}
-        </div>
+        {summary.lastActivityDate && (
+          <p className="mb-4 text-right text-sm text-slate-400">
+            Last activity: {new Date(summary.lastActivityDate).toLocaleString()}
+          </p>
+        )}
 
         {!hasAnyData ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-400">

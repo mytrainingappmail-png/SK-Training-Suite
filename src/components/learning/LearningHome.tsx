@@ -13,6 +13,7 @@ import { loadLearningHome }    from '../../services/learning/learningService';
 import { getCurrentUser }      from '../../services/auth/session';
 import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
 import { ROUTES } from '../../constants/routes';
+import SectionHeroBanner from './SectionHeroBanner';
 import { MiniBarChart, MiniDonutChart } from '../shared/MiniCharts';
 import type { LearningHome }   from '../../types/learning';
 
@@ -268,28 +269,19 @@ export default function LearningHome() {
     <div className="space-y-6">
 
       {/* ── Hero banner ─────────────────────────────────────────────────────── */}
-      <div
-        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-6 text-white shadow-md"
-        style={{ background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)' }}
-      >
-        <div className="space-y-1">
-          <p className="text-sm text-slate-400">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          <h1 className="text-2xl font-bold">{greeting}, {fullName} 👋</h1>
-          <p className="text-sm text-slate-300">
-            {summary.inProgressCourses > 0
-              ? `${summary.inProgressCourses} course${summary.inProgressCourses > 1 ? 's' : ''} in progress`
-              : summary.totalCourses === 0
-              ? 'No courses assigned yet'
-              : 'All courses completed — great work!'}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-wider text-slate-400">Overall Progress</p>
-          <p className="mt-1 text-5xl font-bold" style={{ color: '#D4AF37' }}>
-            {summary.overallProgressPct}%
-          </p>
-        </div>
-      </div>
+      <SectionHeroBanner
+        eyebrow={new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        title={`${greeting}, ${fullName} 👋`}
+        subtitle={
+          summary.inProgressCourses > 0
+            ? `${summary.inProgressCourses} course${summary.inProgressCourses > 1 ? 's' : ''} in progress`
+            : summary.totalCourses === 0
+            ? 'No courses assigned yet'
+            : 'All courses completed — great work!'
+        }
+        statLabel="Overall Progress"
+        statValue={`${summary.overallProgressPct}%`}
+      />
 
       {/* ── Summary cards ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
