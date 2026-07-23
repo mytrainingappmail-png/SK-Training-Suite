@@ -18,6 +18,7 @@ import { clearCurrentUser }     from '../../services/auth/session';
 import { loadBranding, BRANDING_CHANGED_EVENT } from '../../services/branding/brandingService';
 import ProfileDrawer from '../profile/ProfileDrawer';
 import NotificationBell from '../notifications/NotificationBell';
+import InstallAppButton from './InstallAppButton';
 
 function Header() {
   const navigate           = useNavigate();
@@ -88,6 +89,9 @@ function Header() {
 
       {/* Right — notifications + profile dropdown */}
       <div className="flex items-center gap-4">
+
+        {/* Install app (hides itself when not installable / already installed) */}
+        <InstallAppButton />
 
         {/* Notification bell */}
         <NotificationBell />

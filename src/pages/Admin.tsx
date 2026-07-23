@@ -67,9 +67,24 @@ function Admin() {
   const { can, PERMISSIONS } = useAuthorization();
   const [search, setSearch] = useState("");
   const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
+  // Settings/Menu/Theme/Permissions/Plans/Discount Codes/Payment Settings are
+  // genuinely platform-wide config (no company_id at all — see
+  // 20260722130000_platform_operator_scoping.sql), writable only by the one
+  // platform-operator company. Every other company's admin could already see
+  // these tabs and "successfully" click Save, only to hit a raw Postgres RLS
+  // error with nothing explaining why — hiding them here matches what the
+  // tenant can actually do, the same way the Paid Add-ons section in Company
+  // Management is already hidden for non-operator companies.
+  const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
   useEffect(() => {
-    loadCompany().then((c) => setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false)).catch(() => setMarketAnalyticsEnabled(false));
+    loadCompany().then((c) => {
+      setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false);
+      setIsPlatformOperator(c?.is_platform_operator ?? false);
+    }).catch(() => {
+      setMarketAnalyticsEnabled(false);
+      setIsPlatformOperator(false);
+    });
   }, []);
 
   const getTabClass = (tab: string) =>
@@ -352,7 +367,7 @@ function Admin() {
               </button>
             )}
 
-            {can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions") && (
+            {isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions") && (
               <button
                 onClick={() => setActiveTab("permissions")}
                 className={getTabClass("permissions")}
@@ -370,7 +385,7 @@ function Admin() {
               </button>
             )}
 
-            {can(PERMISSIONS.VIEW_THEME) && matches("Theme") && (
+            {isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && matches("Theme") && (
               <button
                 onClick={() => setActiveTab("theme")}
                 className={getTabClass("theme")}
@@ -379,7 +394,7 @@ function Admin() {
               </button>
             )}
 
-            {can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings") && (
+            {isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings") && (
               <button
                 onClick={() => setActiveTab("settings")}
                 className={getTabClass("settings")}
@@ -388,7 +403,7 @@ function Admin() {
               </button>
             )}
 
-            {can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
+            {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
               <button
                 onClick={() => setActiveTab("menu")}
                 className={getTabClass("menu")}
@@ -451,7 +466,7 @@ function Admin() {
               </button>
             )}
 
-            {matches("Plans") && (
+            {isPlatformOperator && matches("Plans") && (
               <button
                 onClick={() => setActiveTab("plans")}
                 className={getTabClass("plans")}
@@ -469,7 +484,7 @@ function Admin() {
               </button>
             )}
 
-            {matches("Discount Codes") && (
+            {isPlatformOperator && matches("Discount Codes") && (
               <button
                 onClick={() => setActiveTab("discount-codes")}
                 className={getTabClass("discount-codes")}
@@ -487,7 +502,7 @@ function Admin() {
               </button>
             )}
 
-            {matches("Payment Settings") && (
+            {isPlatformOperator && matches("Payment Settings") && (
               <button
                 onClick={() => setActiveTab("payment-settings")}
                 className={getTabClass("payment-settings")}
@@ -631,26 +646,26 @@ function Admin() {
 
             {activeTab === "audit-log" && can(PERMISSIONS.VIEW_AUDIT_LOG) && <AuditLogCenter />}
 
-            {activeTab === "permissions" && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
+            {activeTab === "permissions" && isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
             {activeTab === "role-permission" && can(PERMISSIONS.VIEW_PERMISSION) && (
               <PermissionMatrix />
             )}
 
-            {activeTab === "theme" && can(PERMISSIONS.VIEW_THEME) && <ThemeManagement />}
+            {activeTab === "theme" && isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && <ThemeManagement />}
 
-            {activeTab === "settings" && can(PERMISSIONS.VIEW_SETTINGS) && <SettingsManagement />}
+            {activeTab === "settings" && isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && <SettingsManagement />}
 
-            {activeTab === "menu" && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
+            {activeTab === "menu" && isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
 
-            {activeTab === "plans" && <PlanManagement />}
+            {activeTab === "plans" && isPlatformOperator && <PlanManagement />}
 
             {activeTab === "company-license" && <CompanyLicenseManagement />}
 
-            {activeTab === "discount-codes" && <DiscountCodeManagement />}
+            {activeTab === "discount-codes" && isPlatformOperator && <DiscountCodeManagement />}
 
             {activeTab === "license-notifications" && <NotificationLog />}
 
-            {activeTab === "payment-settings" && <PaymentSettingsManagement />}
+            {activeTab === "payment-settings" && isPlatformOperator && <PaymentSettingsManagement />}
 
             {activeTab === "course-visibility" && <CourseVisibilityMatrix />}
 

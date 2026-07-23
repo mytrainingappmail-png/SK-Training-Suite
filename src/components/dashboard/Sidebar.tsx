@@ -43,6 +43,15 @@ interface AdminSectionItem {
   tab: string;
   label: string;
   permission?: PermissionCode;
+  // True for tabs backed by genuinely platform-wide tables (settings, menus,
+  // permissions, themes, subscription_plans, discount_codes,
+  // payment_settings — see 20260722130000_platform_operator_scoping.sql),
+  // writable only by the one platform-operator company. Every other
+  // company's own SUPER_ADMIN already has the underlying permission (it's
+  // granted per-role, not per-company), so `permission` alone doesn't hide
+  // these — without this flag a tenant admin sees the link, opens the tab,
+  // and any save hits a raw Postgres RLS error with no explanation.
+  operatorOnly?: boolean;
 }
 interface AdminSectionGroup {
   group: string;
@@ -60,7 +69,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'employee', label: 'Employees', permission: PERMISSIONS.VIEW_EMPLOYEE },
       { tab: 'roles', label: 'Roles', permission: PERMISSIONS.VIEW_ROLE },
       { tab: 'employee-role', label: 'Employee Roles', permission: PERMISSIONS.VIEW_EMPLOYEE_ROLE },
-      { tab: 'permissions', label: 'Permissions', permission: PERMISSIONS.VIEW_PERMISSION },
+      { tab: 'permissions', label: 'Permissions', permission: PERMISSIONS.VIEW_PERMISSION, operatorOnly: true },
       { tab: 'role-permission', label: 'Permission Matrix', permission: PERMISSIONS.VIEW_PERMISSION },
     ],
   },
@@ -108,19 +117,19 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
   {
     group: 'Platform & Billing',
     items: [
-      { tab: 'plans', label: 'Plans' },
+      { tab: 'plans', label: 'Plans', operatorOnly: true },
       { tab: 'company-license', label: 'Company Licenses' },
-      { tab: 'discount-codes', label: 'Discount Codes' },
+      { tab: 'discount-codes', label: 'Discount Codes', operatorOnly: true },
       { tab: 'license-notifications', label: 'License Notifications' },
-      { tab: 'payment-settings', label: 'Payment Settings' },
+      { tab: 'payment-settings', label: 'Payment Settings', operatorOnly: true },
     ],
   },
   {
     group: 'System',
     items: [
-      { tab: 'theme', label: 'Theme', permission: PERMISSIONS.VIEW_THEME },
-      { tab: 'settings', label: 'Settings', permission: PERMISSIONS.VIEW_SETTINGS },
-      { tab: 'menu', label: 'Menu', permission: PERMISSIONS.VIEW_MENU },
+      { tab: 'theme', label: 'Theme', permission: PERMISSIONS.VIEW_THEME, operatorOnly: true },
+      { tab: 'settings', label: 'Settings', permission: PERMISSIONS.VIEW_SETTINGS, operatorOnly: true },
+      { tab: 'menu', label: 'Menu', permission: PERMISSIONS.VIEW_MENU, operatorOnly: true },
       { tab: 'reports', label: 'Reports', permission: PERMISSIONS.VIEW_REPORTS },
       { tab: 'notifications', label: 'Notifications' },
       { tab: 'security-migration', label: 'Secure Login Migration' },
@@ -144,6 +153,7 @@ function Sidebar() {
   const [isTrainer, setIsTrainer] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
+  const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
@@ -184,7 +194,13 @@ function Sidebar() {
   }, []);
 
   useEffect(() => {
-    loadCompany().then((c) => setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false)).catch(() => setMarketAnalyticsEnabled(false));
+    loadCompany().then((c) => {
+      setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false);
+      setIsPlatformOperator(c?.is_platform_operator ?? false);
+    }).catch(() => {
+      setMarketAnalyticsEnabled(false);
+      setIsPlatformOperator(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -326,7 +342,9 @@ function Sidebar() {
               </button>
 
               {adminSectionsOpen && ADMIN_SECTIONS.map(({ group, items }) => {
-                const visible = items.filter((item) => !item.permission || can(item.permission));
+                const visible = items.filter((item) =>
+                  (!item.permission || can(item.permission)) && (!item.operatorOnly || isPlatformOperator)
+                );
                 if (visible.length === 0) return null;
                 const isGroupOpen = openAdminGroups.has(group);
                 return (
