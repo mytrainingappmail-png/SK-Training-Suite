@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import SectionHeroBanner from '../learning/SectionHeroBanner';
 import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
-import { loadMyTickets, raiseTicket, replyToTicket, loadTicketMessages } from '../../services/support/supportTicketService';
+import { loadMyTickets, raiseTicket, replyToTicket } from '../../services/support/supportTicketService';
+import { useTicketMessages } from '../../hooks/useTicketMessages';
 import { TICKET_CATEGORIES, TICKET_PRIORITIES } from '../../types/supportTicket';
-import type { SupportTicket, SupportTicketMessage, TicketCategory, TicketPriority } from '../../types/supportTicket';
+import type { SupportTicket, TicketCategory, TicketPriority } from '../../types/supportTicket';
 
 const STATUS_STYLES: Record<string, string> = {
   open: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
@@ -106,21 +107,16 @@ function RaiseTicketModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
 function TicketThread({ ticket, onClose }: { ticket: SupportTicket; onClose: () => void }) {
   const user = getCurrentUser();
-  const [messages, setMessages] = useState<SupportTicketMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { messages, loading, appendLocal } = useTicketMessages(ticket.id);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    loadTicketMessages(ticket.id).then(setMessages).finally(() => setLoading(false));
-  }, [ticket.id]);
 
   async function handleReply() {
     if (!user || !reply.trim() || sending) return;
     setSending(true);
     try {
       const saved = await replyToTicket(ticket, user.id, `${user.firstName} ${user.lastName}`.trim(), false, reply.trim());
-      setMessages((prev) => [...prev, saved]);
+      appendLocal(saved);
       setReply('');
     } finally {
       setSending(false);

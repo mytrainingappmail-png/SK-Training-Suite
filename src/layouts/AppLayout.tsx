@@ -4,6 +4,7 @@ import Sidebar from "../components/dashboard/Sidebar";
 import Header from "../components/dashboard/Header";
 import Footer from "../components/dashboard/Footer";
 import LicenseGuard from "../components/license/LicenseGuard";
+import HelpBotWidget from "../components/help/HelpBotWidget";
 
 function AppLayout() {
   return (
@@ -24,6 +25,8 @@ function AppLayout() {
         <Footer />
 
       </div>
+
+      <HelpBotWidget />
 
     </div>
   );

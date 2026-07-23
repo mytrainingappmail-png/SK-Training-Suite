@@ -56,6 +56,8 @@ export const ROUTES = {
 
   HELP_CENTER: "/help",
 
+  MARKET_ANALYTICS: "/market-analytics",
+
   TRAINER_STUDENTS: "/teaching/students",
 
   TRAINER_GRADING_QUEUE: "/teaching/grading",

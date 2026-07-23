@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { getCurrentUser } from '../../../services/auth/session';
 import PlatformSupportPanel from './PlatformSupportPanel';
 import {
-  loadCompanyTickets, loadTicketMessages, replyToTicket, changeTicketStatus,
+  loadCompanyTickets, replyToTicket, changeTicketStatus,
 } from '../../../services/support/supportTicketService';
+import { useTicketMessages } from '../../../hooks/useTicketMessages';
 import { employeeService } from '../../../services/employee/employeeService';
 import { TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES } from '../../../types/supportTicket';
-import type { SupportTicket, SupportTicketMessage, TicketStatus } from '../../../types/supportTicket';
+import type { SupportTicket, TicketStatus } from '../../../types/supportTicket';
 import type { Employee } from '../../../types/employee';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -37,16 +38,11 @@ function TicketDrawer({
 }) {
   const admin = getCurrentUser();
   const raiser = employeeById.get(ticket.employee_id);
-  const [messages, setMessages] = useState<SupportTicketMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { messages, loading, appendLocal } = useTicketMessages(ticket.id);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<TicketStatus>(ticket.status);
   const [savingStatus, setSavingStatus] = useState(false);
-
-  useEffect(() => {
-    loadTicketMessages(ticket.id).then(setMessages).finally(() => setLoading(false));
-  }, [ticket.id]);
 
   async function handleReply() {
     if (!admin || !reply.trim() || sending) return;
@@ -61,7 +57,7 @@ function TicketDrawer({
         raiser?.email,
         raiser?.first_name
       );
-      setMessages((prev) => [...prev, saved]);
+      appendLocal(saved);
       setReply('');
     } finally {
       setSending(false);

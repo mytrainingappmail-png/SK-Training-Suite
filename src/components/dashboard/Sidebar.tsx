@@ -8,6 +8,7 @@ import { PERMISSIONS } from "../../constants/permissions";
 import { getCurrentUser } from "../../services/auth/session";
 import { loadRoles } from "../../services/role/roleService";
 import { loadBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/brandingService";
+import { loadCompany } from "../../services/company/companyService";
 import type { PermissionCode } from "../../types/authorization";
 
 // Maps each "Manage" / "System" sidebar item to the permission required
@@ -134,6 +135,7 @@ function Sidebar() {
   const { can } = useAuthorization();
   const [isTrainer, setIsTrainer] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
@@ -174,6 +176,10 @@ function Sidebar() {
   }, []);
 
   useEffect(() => {
+    loadCompany().then((c) => setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false)).catch(() => setMarketAnalyticsEnabled(false));
+  }, []);
+
+  useEffect(() => {
     if (!user?.roleId) return;
     loadRoles()
       .then((roles) => {
@@ -191,6 +197,7 @@ function Sidebar() {
     if (!item.visible) return false;
     if (item.group === "Teaching" && !isTrainer) return false;
     if (item.group === "My Learning" && (isTrainer || isSuperAdmin)) return false;
+    if (item.id === "market-analytics" && !marketAnalyticsEnabled) return false;
 
     const requiredPermission = MENU_PERMISSION_MAP[item.id];
     if (!requiredPermission) return true;

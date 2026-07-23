@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 // import Sidebar from "../components/dashboard/Sidebar";
@@ -53,8 +53,10 @@ import GeofenceManagement from "../modules/geofence/GeofenceManagement";
 import NotificationCenter from "../components/admin/notifications/NotificationCenter";
 import TicketManagement from "../components/admin/support/TicketManagement";
 import EmailTemplateBuilder from "../components/admin/email/EmailTemplateBuilder";
+import MarketDataManagement from "../components/admin/marketData/MarketDataManagement";
 
 import { useAuthorization } from "../hooks/useAuthorization";
+import { loadCompany } from "../services/company/companyService";
 
 function Admin() {
   const location = useLocation();
@@ -63,6 +65,11 @@ function Admin() {
   const [activeTab, setActiveTab] = useState(requestedTab || "company");
   const { can, PERMISSIONS } = useAuthorization();
   const [search, setSearch] = useState("");
+  const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
+
+  useEffect(() => {
+    loadCompany().then((c) => setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false)).catch(() => setMarketAnalyticsEnabled(false));
+  }, []);
 
   const getTabClass = (tab: string) =>
     `px-5 py-2 rounded-xl font-semibold transition ${
@@ -425,6 +432,15 @@ function Admin() {
               </button>
             )}
 
+            {marketAnalyticsEnabled && matches("Market Analytics") && (
+              <button
+                onClick={() => setActiveTab("market-analytics")}
+                className={getTabClass("market-analytics")}
+              >
+                Market Analytics
+              </button>
+            )}
+
             {matches("Plans") && (
               <button
                 onClick={() => setActiveTab("plans")}
@@ -600,6 +616,8 @@ function Admin() {
             {activeTab === "support-tickets" && can(PERMISSIONS.VIEW_SUPPORT_TICKET) && <TicketManagement />}
 
             {activeTab === "email-templates" && can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && <EmailTemplateBuilder />}
+
+            {activeTab === "market-analytics" && marketAnalyticsEnabled && <MarketDataManagement />}
 
             {activeTab === "permissions" && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
             {activeTab === "role-permission" && can(PERMISSIONS.VIEW_PERMISSION) && (

@@ -53,6 +53,10 @@ export interface Company {
 
   is_platform_operator: boolean;
 
+  // Optional, paid add-on — only the platform operator can toggle this
+  // (see companies_update_platform_operator RLS policy).
+  market_analytics_enabled: boolean;
+
   created_at: string;
 
   updated_at: string;

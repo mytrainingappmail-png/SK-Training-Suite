@@ -339,6 +339,27 @@ function CompanyManagement() {
         </div>
       </div>
 
+      {company.is_platform_operator && (
+        <div className="mt-8 border-t pt-6">
+          <h3 className="mb-1 text-base font-bold text-slate-800">Paid Add-ons</h3>
+          <p className="mb-4 text-sm text-slate-500">
+            Only visible to the platform operator — toggle a company's optional, extra-cost features here.
+          </p>
+          <label className="flex items-center gap-3 rounded-xl bg-slate-50 p-4">
+            <input
+              type="checkbox"
+              checked={company.market_analytics_enabled ?? false}
+              onChange={(e) => setCompany({ ...company, market_analytics_enabled: e.target.checked })}
+              className="h-5 w-5 rounded"
+            />
+            <span>
+              <span className="block font-semibold text-slate-800">Market Analytics Add-on</span>
+              <span className="block text-xs text-slate-500">Real-estate market analytics dashboard, visible to this company's employees once enabled.</span>
+            </span>
+          </label>
+        </div>
+      )}
+
       <div className="mt-8 border-t pt-6">
         <h3 className="mb-1 text-base font-bold text-slate-800">Branding</h3>
         <p className="mb-5 text-sm text-slate-500">
