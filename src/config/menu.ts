@@ -26,14 +26,6 @@ export const MENU: MenuItem[] = [
     visible: true,
     group: "Overview",
   },
-  {
-    id: "market-analytics",
-    title: "Market Analytics",
-    route: ROUTES.MARKET_ANALYTICS,
-    icon: "trending-up",
-    visible: true,
-    group: "Overview",
-  },
 
   // ── My Learning ──────────────────────────────────────────────────────
   {
@@ -231,6 +223,14 @@ export const MENU: MenuItem[] = [
     title: "Admin",
     route: ROUTES.ADMIN,
     icon: "shield",
+    visible: true,
+    group: "System",
+  },
+  {
+    id: "market-analytics",
+    title: "Market Analytics",
+    route: ROUTES.MARKET_ANALYTICS,
+    icon: "trending-up",
     visible: true,
     group: "System",
   },

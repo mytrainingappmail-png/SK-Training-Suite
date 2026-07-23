@@ -8,7 +8,7 @@ import {
 import { uploadImage } from "../../services/contentEditor/contentEditorService";
 import { invalidateBrandingCache } from "../../services/branding/brandingService";
 
-type ImageFieldKey = "logo" | "login_logo_url" | "app_icon_url";
+type ImageFieldKey = "logo" | "login_logo_url" | "app_icon_url" | "favicon";
 
 function ImageUploadField({
   label,
@@ -382,10 +382,17 @@ function CompanyManagement() {
           />
           <ImageUploadField
             label="App Icon"
-            hint="Browser tab icon and install/home-screen icon."
+            hint="Install/home-screen icon (and browser tab icon, if no separate Favicon is set below)."
             value={company.app_icon_url}
             uploading={uploadingField === "app_icon_url"}
             onUpload={(f) => handleImageUpload("app_icon_url", f)}
+          />
+          <ImageUploadField
+            label="Favicon"
+            hint="Browser tab icon specifically — upload a small, simple image; overrides App Icon for the tab only."
+            value={company.favicon}
+            uploading={uploadingField === "favicon"}
+            onUpload={(f) => handleImageUpload("favicon", f)}
           />
         </div>
       </div>

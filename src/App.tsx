@@ -44,7 +44,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 function App() {
   useEffect(() => {
     function refreshIcon() {
-      loadBranding().then((b) => applyDynamicIcon(b.appIconUrl));
+      loadBranding().then((b) => applyDynamicIcon(b.appIconUrl, b.faviconUrl, b.companyName));
     }
     refreshIcon();
     window.addEventListener(BRANDING_CHANGED_EVENT, refreshIcon);

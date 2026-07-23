@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BRAND } from '../config/branding';
 import logo from '../assets/logo.png';
 import LoginForm from '../components/auth/LoginForm';
@@ -65,14 +65,33 @@ export const LoginPage: React.FC = () => {
   const [primaryColor, setPrimaryColor] = useState(BRAND.primaryColor);
   const [secondaryColor, setSecondaryColor] = useState(BRAND.secondaryColor);
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function applyBranding(b: { companyName: string; loginLogoUrl: string; primaryColor: string; secondaryColor: string }) {
+    setCompanyName(b.companyName);
+    setLoginLogoUrl(b.loginLogoUrl);
+    setPrimaryColor(b.primaryColor);
+    setSecondaryColor(b.secondaryColor);
+  }
+
   useEffect(() => {
-    loadBranding().then((b) => {
-      setCompanyName(b.companyName);
-      setLoginLogoUrl(b.loginLogoUrl);
-      setPrimaryColor(b.primaryColor);
-      setSecondaryColor(b.secondaryColor);
-    });
+    loadBranding().then(applyBranding);
   }, []);
+
+  // Refetches branding for the SPECIFIC company being typed in, debounced
+  // so it doesn't fire on every keystroke — this is what makes an
+  // uploaded logo/colors actually show up before the user even logs in,
+  // instead of always showing whichever company was created first.
+  function handleCompanyCodeChange(code: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!code.trim()) {
+      loadBranding().then(applyBranding);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      loadBranding(code).then(applyBranding);
+    }, 400);
+  }
 
   return (
     <div
@@ -152,7 +171,7 @@ export const LoginPage: React.FC = () => {
         />
 
         <div className="relative z-10 w-full max-w-md">
-          <LoginForm />
+          <LoginForm onCompanyCodeChange={handleCompanyCodeChange} />
         </div>
       </div>
     </div>

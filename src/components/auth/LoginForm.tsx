@@ -183,9 +183,12 @@ export interface LoginFormValues {
 
 interface LoginFormProps {
   onSubmit?: (values: LoginFormValues) => void;
+  // Fired as the user types the Company Code — lets LoginPage refetch that
+  // specific company's branding (logo, colors) before login even completes.
+  onCompanyCodeChange?: (code: string) => void;
 }
 
-const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
+const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange }) => {
   const navigate = useNavigate();
   const { refresh } = useAuthorization();
   const [companyCode, setCompanyCode] = useState('');
@@ -268,7 +271,7 @@ navigate('/dashboard', { replace: true });
           label="Company Code"
           placeholder="Enter company code"
           value={companyCode}
-          onChange={(v) => { setCompanyCode(v); setErrorMessage(null); }}
+          onChange={(v) => { setCompanyCode(v); setErrorMessage(null); onCompanyCodeChange?.(v); }}
           disabled={loading}
           accentColor={accentColor}
         />
