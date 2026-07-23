@@ -7,6 +7,7 @@ import {
   updateModule,
   deleteModule,
   setModuleStatus,
+  convertModuleToCourse as repositoryConvertModuleToCourse,
 } from "../../repositories/module/moduleRepository";
 
 export async function loadModules(): Promise<Module[]> {
@@ -38,6 +39,22 @@ export async function toggleModuleStatus(
 ): Promise<Module> {
   if (!id) throw new Error("Invalid Module ID.");
   return await setModuleStatus(id, active);
+}
+
+// Pulls a module (and every lesson under it) out of its course into a
+// brand-new standalone course. Non-destructive to the source course — it
+// just loses that one module, the rest is untouched. Runs as one atomic
+// DB transaction (see convert_module_to_course) so it can't half-apply.
+export async function convertModuleToCourse(
+  moduleId: string,
+  courseCode: string,
+  courseName: string,
+  categoryId?: string
+): Promise<string> {
+  if (!moduleId) throw new Error("Invalid Module ID.");
+  if (!courseCode.trim()) throw new Error("Course Code is required.");
+  if (!courseName.trim()) throw new Error("Course Name is required.");
+  return await repositoryConvertModuleToCourse(moduleId, courseCode.trim(), courseName.trim(), categoryId);
 }
 
 function validateModuleForm(data: Partial<ModuleForm>): void {

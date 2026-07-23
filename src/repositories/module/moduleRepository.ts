@@ -97,3 +97,24 @@ export async function setModuleStatus(
 
   return data;
 }
+
+export async function convertModuleToCourse(
+  moduleId: string,
+  courseCode: string,
+  courseName: string,
+  categoryId?: string
+): Promise<string> {
+  const { data, error } = await supabase.rpc("convert_module_to_course", {
+    p_module_id: moduleId,
+    p_course_code: courseCode,
+    p_course_name: courseName,
+    p_category_id: categoryId || null,
+  });
+
+  if (error) {
+    console.error("[moduleRepository] convertModuleToCourse:", error);
+    throw new Error(error.message);
+  }
+
+  return data as string;
+}

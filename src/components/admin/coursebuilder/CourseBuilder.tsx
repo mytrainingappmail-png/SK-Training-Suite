@@ -40,7 +40,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { loadCourses } from '../../../services/course/courseService';
-import { loadModules, createModule, saveModule, removeModule } from '../../../services/module/moduleService';
+import { loadModules, createModule, saveModule, removeModule, convertModuleToCourse } from '../../../services/module/moduleService';
 import {
   loadLessons,
   createLesson,
@@ -207,6 +207,13 @@ function IconArrowDown({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
+}
+function IconSwap({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-9L21 3m0 0-4.5 4.5M21 3H7.5" />
     </svg>
   );
 }
@@ -418,6 +425,74 @@ function PreviewDialog({ html, onClose }: { html: string; onClose: () => void })
           </button>
         </div>
         <div className="prose max-w-none rounded-xl bg-white p-5 text-[15px] leading-relaxed text-slate-900" dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </div>
+  );
+}
+
+// Pulls a module out of its course and turns it into its own new,
+// standalone course — the mirror of Course Management's "Convert to
+// Module". Non-destructive to the source course: the module (and every
+// lesson under it) just moves, the rest of the course is untouched.
+function ConvertModuleToCourseModal({
+  module: mod,
+  usedCodes,
+  saving,
+  onConfirm,
+  onClose,
+}: {
+  module: Module;
+  usedCodes: string[];
+  saving: boolean;
+  onConfirm: (courseCode: string, courseName: string) => void;
+  onClose: () => void;
+}) {
+  const [courseCode, setCourseCode] = useState(mod.module_code || '');
+  const [courseName, setCourseName] = useState(mod.module_name);
+  const [err, setErr] = useState('');
+
+  function handleConfirm() {
+    if (!courseCode.trim()) { setErr('Course Code is required.'); return; }
+    if (usedCodes.includes(courseCode.trim().toLowerCase())) { setErr('Course Code already exists.'); return; }
+    if (!courseName.trim()) { setErr('Course Name is required.'); return; }
+    onConfirm(courseCode.trim(), courseName.trim());
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={!saving ? onClose : undefined} />
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <h3 className="mb-1 text-lg font-bold text-slate-100">Convert to Course</h3>
+        <p className="mb-5 text-sm text-slate-400">
+          Turn <span className="font-semibold text-slate-200">{mod.module_name}</span> into its own separate
+          course. All of its lessons move over, in the same order. The rest of the current course is untouched.
+        </p>
+
+        <label className="mb-1.5 block text-xs font-medium text-slate-400">Course Code</label>
+        <input
+          autoFocus
+          value={courseCode}
+          onChange={(e) => { setCourseCode(e.target.value); setErr(''); }}
+          disabled={saving}
+          placeholder="e.g. CRS-002"
+          className={`${PROPERTY_INPUT_CLS} mb-3`}
+        />
+
+        <label className="mb-1.5 block text-xs font-medium text-slate-400">Course Name</label>
+        <input
+          value={courseName}
+          onChange={(e) => { setCourseName(e.target.value); setErr(''); }}
+          disabled={saving}
+          className={PROPERTY_INPUT_CLS}
+        />
+        {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <SecondaryButton onClick={onClose} disabled={saving}>Cancel</SecondaryButton>
+          <PrimaryButton onClick={handleConfirm} disabled={saving}>
+            {saving ? <Spinner className="h-3.5 w-3.5" /> : null} {saving ? 'Converting…' : 'Convert to Course'}
+          </PrimaryButton>
+        </div>
       </div>
     </div>
   );
@@ -2125,6 +2200,8 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
   const [editingModuleName, setEditingModuleName] = useState('');
   const [deleteModuleTarget, setDeleteModuleTarget] = useState<Module | null>(null);
   const [deletingModule, setDeletingModule] = useState(false);
+  const [convertModuleTarget, setConvertModuleTarget] = useState<Module | null>(null);
+  const [convertingModule, setConvertingModule] = useState(false);
 
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editingPageName, setEditingPageName] = useState('');
@@ -2333,6 +2410,8 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
     .filter((m) => m.course_id === selectedCourseId)
     .sort((a, b) => a.module_order - b.module_order);
 
+  const usedCourseCodes = courses.map((c) => c.course_code.trim().toLowerCase());
+
   function lessonsForModule(moduleId: string): Lesson[] {
     return lessons.filter((l) => l.module_id === moduleId).sort((a, b) => a.display_order - b.display_order);
   }
@@ -2478,6 +2557,25 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
         showToast(err instanceof Error ? err.message : 'Failed to delete module.');
       }
     }, 10000);
+  }
+
+  async function handleConvertModuleToCourse(courseCode: string, courseName: string) {
+    if (!convertModuleTarget) return;
+    const target = convertModuleTarget;
+    setConvertingModule(true);
+    try {
+      await convertModuleToCourse(target.id, courseCode, courseName);
+      if (lessonsForModule(target.id).some((p) => p.id === activeLessonId)) setActiveLessonId('');
+      if (selectedModuleId === target.id) setSelectedModuleId('');
+      setConvertModuleTarget(null);
+      fetchOutline();
+      notifyLessonsChanged();
+      showToast(`"${target.module_name}" is now its own course`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to convert module to course.');
+    } finally {
+      setConvertingModule(false);
+    }
   }
 
   async function handleDuplicateModule(mod: Module) {
@@ -3128,6 +3226,9 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
                           >
                             {duplicatingModuleId === mod.id ? <Spinner className="h-3.5 w-3.5" /> : <IconDuplicate />}
                           </button>
+                          <button onClick={() => setConvertModuleTarget(mod)} title="Convert to Course" className="rounded-md p-1 text-slate-500 hover:bg-amber-500/10 hover:text-amber-400">
+                            <IconSwap />
+                          </button>
                           <button onClick={() => setDeleteModuleTarget(mod)} title="Delete Module" className="rounded-md p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400">
                             <IconTrash className="h-3.5 w-3.5" />
                           </button>
@@ -3450,6 +3551,16 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
           busy={deletingModule}
           onConfirm={handleDeleteModuleConfirm}
           onCancel={() => setDeleteModuleTarget(null)}
+        />
+      )}
+
+      {convertModuleTarget && (
+        <ConvertModuleToCourseModal
+          module={convertModuleTarget}
+          usedCodes={usedCourseCodes}
+          saving={convertingModule}
+          onConfirm={handleConvertModuleToCourse}
+          onClose={() => setConvertModuleTarget(null)}
         />
       )}
 
