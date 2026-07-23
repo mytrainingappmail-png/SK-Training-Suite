@@ -1,15 +1,15 @@
-// Resolves the company name + logo shown on the login page, sidebar and
-// header. Order of precedence:
+// Resolves the company name + logo + login image + app icon shown across
+// the app. Order of precedence:
 //   1. VITE_BRAND_OVERRIDE_* env vars — set only on a specific deployment
-//      (e.g. a sales-demo site sharing the same database as production) so
-//      that one deployment can show different branding without touching the
-//      shared companies row everyone else reads.
-//   2. The real companies.company_name / companies.logo from the database
-//      (via get_public_branding()) — this is what makes rebranding an
-//      admin-panel edit (Company Management) instead of a code change.
-//   3. The static BRAND config / bundled logo asset, if the database call
-//      fails for any reason (offline, RPC missing, etc.) — the app must
-//      never show a blank name/logo.
+//      that shares another company's database (e.g. a sales demo) so it can
+//      show different branding without touching the real company row.
+//   2. The real companies.* columns from the database (via
+//      get_public_branding()) — genuinely admin-uploadable from Company
+//      Management, no code change or redeploy ever needed for a real,
+//      single-tenant deployment.
+//   3. The static BRAND config / bundled assets, if the database has
+//      nothing set yet, or the call fails for any reason (offline, etc.) —
+//      the app must never show a blank name/logo/icon.
 
 import { getPublicBranding } from "../../repositories/branding/brandingRepository";
 import { BRAND } from "../../config/branding";
@@ -20,12 +20,24 @@ export interface ResolvedBranding {
   // sidebar/header, where the logo sits in a small white box.
   logoUrl: string;
   // Login-page hero logo — usually the same image as logoUrl, but can be a
-  // transparent-background variant via VITE_BRAND_OVERRIDE_LOGIN_LOGO_URL so
-  // it blends into the dark hero panel instead of sitting in a white box.
+  // transparent-background variant so it blends into the dark hero panel
+  // instead of sitting in a white box.
   loginLogoUrl: string;
+  // Browser tab / PWA install-prompt / home-screen icon.
+  appIconUrl: string;
 }
 
+export const BRANDING_CHANGED_EVENT = "sk:branding-changed";
+
 let cached: ResolvedBranding | null = null;
+
+// Called after Company Management saves a new logo/image so every already-
+// mounted component (sidebar, header) re-fetches instead of showing a stale
+// in-memory value until the next full page reload.
+export function invalidateBrandingCache(): void {
+  cached = null;
+  window.dispatchEvent(new CustomEvent(BRANDING_CHANGED_EVENT));
+}
 
 export async function loadBranding(): Promise<ResolvedBranding> {
   if (cached) return cached;
@@ -33,23 +45,53 @@ export async function loadBranding(): Promise<ResolvedBranding> {
   const overrideName = import.meta.env.VITE_BRAND_OVERRIDE_NAME as string | undefined;
   const overrideLogo = import.meta.env.VITE_BRAND_OVERRIDE_LOGO_URL as string | undefined;
   const overrideLoginLogo = import.meta.env.VITE_BRAND_OVERRIDE_LOGIN_LOGO_URL as string | undefined;
-
-  if (overrideName || overrideLogo || overrideLoginLogo) {
-    const logoUrl = overrideLogo?.trim() || "";
-    cached = {
-      companyName: overrideName?.trim() || BRAND.companyName,
-      logoUrl,
-      loginLogoUrl: overrideLoginLogo?.trim() || logoUrl,
-    };
-    return cached;
-  }
+  const overrideIcon = (import.meta.env.VITE_BRAND_OVERRIDE_ICON_512_URL || import.meta.env.VITE_BRAND_OVERRIDE_ICON_192_URL) as string | undefined;
 
   const row = await getPublicBranding();
-  const logoUrl = row?.logo?.trim() || "";
+  const dbLogo = row?.logo?.trim() || "";
+  const dbLoginLogo = row?.login_logo_url?.trim() || "";
+  const dbIcon = row?.app_icon_url?.trim() || "";
+
+  const logoUrl = overrideLogo?.trim() || dbLogo;
   cached = {
-    companyName: row?.company_name?.trim() || BRAND.companyName,
+    companyName: overrideName?.trim() || row?.company_name?.trim() || BRAND.companyName,
     logoUrl,
-    loginLogoUrl: logoUrl,
+    loginLogoUrl: overrideLoginLogo?.trim() || dbLoginLogo || logoUrl,
+    appIconUrl: overrideIcon?.trim() || dbIcon,
   };
   return cached;
+}
+
+// Applies a custom app icon at runtime — the browser tab favicon and the
+// Apple touch icon update immediately and reliably (plain DOM link swaps).
+// The PWA "Install app" prompt icon is best-effort: browsers read
+// manifest.webmanifest as a real file, so this patches the <link
+// rel="manifest"> to point at a regenerated copy carrying the new icon.
+// Some browsers may still show the old icon in the install prompt until
+// their own manifest cache expires — everything else (favicon, in-app
+// logo, login page) updates immediately regardless.
+export async function applyDynamicIcon(iconUrl: string): Promise<void> {
+  if (!iconUrl) return;
+
+  const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (favicon) favicon.href = iconUrl;
+
+  const appleIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+  if (appleIcon) appleIcon.href = iconUrl;
+
+  const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if (!manifestLink) return;
+
+  try {
+    const res = await fetch(manifestLink.href);
+    const manifest = await res.json();
+    manifest.icons = (manifest.icons ?? []).map((icon: { sizes?: string; purpose?: string }) => ({
+      ...icon,
+      src: iconUrl,
+    }));
+    const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+    manifestLink.href = URL.createObjectURL(blob);
+  } catch {
+    // Non-fatal — the install prompt just keeps the default icon.
+  }
 }

@@ -15,7 +15,7 @@ import { BRAND }                from '../../config/branding';
 import { ROUTES }               from '../../constants/routes';
 import { useAuthorization }     from '../../hooks/useAuthorization';
 import { clearCurrentUser }     from '../../services/auth/session';
-import { loadBranding }         from '../../services/branding/brandingService';
+import { loadBranding, BRANDING_CHANGED_EVENT } from '../../services/branding/brandingService';
 import ProfileDrawer from '../profile/ProfileDrawer';
 import NotificationBell from '../notifications/NotificationBell';
 
@@ -28,7 +28,12 @@ function Header() {
   const [companyName, setCompanyName] = useState(BRAND.companyName);
 
   useEffect(() => {
-    loadBranding().then((b) => setCompanyName(b.companyName));
+    function refreshBranding() {
+      loadBranding().then((b) => setCompanyName(b.companyName));
+    }
+    refreshBranding();
+    window.addEventListener(BRANDING_CHANGED_EVENT, refreshBranding);
+    return () => window.removeEventListener(BRANDING_CHANGED_EVENT, refreshBranding);
   }, []);
 
   // Derive display values from session user

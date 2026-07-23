@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import { ROUTES } from "./constants/routes";
 import { PERMISSIONS } from "./constants/permissions";
+import { loadBranding, applyDynamicIcon, BRANDING_CHANGED_EVENT } from "./services/branding/brandingService";
 
 import AppLayout from "./layouts/AppLayout";
 
@@ -37,6 +39,15 @@ import ContinueLearning from "./components/learning/ContinueLearning";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 function App() {
+  useEffect(() => {
+    function refreshIcon() {
+      loadBranding().then((b) => applyDynamicIcon(b.appIconUrl));
+    }
+    refreshIcon();
+    window.addEventListener(BRANDING_CHANGED_EVENT, refreshIcon);
+    return () => window.removeEventListener(BRANDING_CHANGED_EVENT, refreshIcon);
+  }, []);
+
   return (
     <Routes>
       {/* Public Route */}

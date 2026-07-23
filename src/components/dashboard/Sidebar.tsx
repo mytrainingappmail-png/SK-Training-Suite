@@ -7,7 +7,7 @@ import { useAuthorization } from "../../hooks/useAuthorization";
 import { PERMISSIONS } from "../../constants/permissions";
 import { getCurrentUser } from "../../services/auth/session";
 import { loadRoles } from "../../services/role/roleService";
-import { loadBranding } from "../../services/branding/brandingService";
+import { loadBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/brandingService";
 import type { PermissionCode } from "../../types/authorization";
 
 // Maps each "Manage" / "System" sidebar item to the permission required
@@ -25,6 +25,101 @@ const MENU_PERMISSION_MAP: Record<string, PermissionCode> = {
   admin: PERMISSIONS.VIEW_COMPANY,
 };
 
+// Every tab inside the Admin page (src/pages/Admin.tsx), grouped for the
+// sidebar so each one is reachable directly instead of "click Admin, then
+// find the right tab button". `permission` mirrors exactly what Admin.tsx
+// itself checks for that tab (or is left unset for tabs Admin.tsx shows to
+// anyone who can already reach the Admin page at all) — this only adds a
+// second path to the same already-gated destinations, never a new one.
+interface AdminSectionItem {
+  tab: string;
+  label: string;
+  permission?: PermissionCode;
+}
+interface AdminSectionGroup {
+  group: string;
+  items: AdminSectionItem[];
+}
+
+const ADMIN_SECTIONS: AdminSectionGroup[] = [
+  {
+    group: 'Organization',
+    items: [
+      { tab: 'company', label: 'Company', permission: PERMISSIONS.VIEW_COMPANY },
+      { tab: 'branch', label: 'Branches', permission: PERMISSIONS.VIEW_BRANCH },
+      { tab: 'department', label: 'Departments', permission: PERMISSIONS.VIEW_DEPARTMENT },
+      { tab: 'designation', label: 'Designations', permission: PERMISSIONS.VIEW_DESIGNATION },
+      { tab: 'employee', label: 'Employees', permission: PERMISSIONS.VIEW_EMPLOYEE },
+      { tab: 'roles', label: 'Roles', permission: PERMISSIONS.VIEW_ROLE },
+      { tab: 'employee-role', label: 'Employee Roles', permission: PERMISSIONS.VIEW_EMPLOYEE_ROLE },
+      { tab: 'permissions', label: 'Permissions', permission: PERMISSIONS.VIEW_PERMISSION },
+      { tab: 'role-permission', label: 'Permission Matrix', permission: PERMISSIONS.VIEW_PERMISSION },
+    ],
+  },
+  {
+    group: 'Learning Content',
+    items: [
+      { tab: 'category', label: 'Categories', permission: PERMISSIONS.VIEW_CATEGORY },
+      { tab: 'course', label: 'Courses', permission: PERMISSIONS.VIEW_COURSE },
+      { tab: 'course-builder', label: 'Course Builder', permission: PERMISSIONS.VIEW_COURSE },
+      { tab: 'resource', label: 'Resources', permission: PERMISSIONS.VIEW_RESOURCE },
+      { tab: 'course-visibility', label: 'Course Visibility' },
+      { tab: 'video-library-content', label: 'Video Library' },
+      { tab: 'real-estate-projects', label: 'Projects' },
+    ],
+  },
+  {
+    group: 'Assessments & Certification',
+    items: [
+      { tab: 'assessment', label: 'Assessment', permission: PERMISSIONS.VIEW_ASSESSMENT },
+      { tab: 'question', label: 'Question Bank', permission: PERMISSIONS.VIEW_QUESTION_BANK },
+      { tab: 'assignment', label: 'Assignments', permission: PERMISSIONS.VIEW_ASSIGNMENT },
+      { tab: 'evaluation', label: 'Evaluation Rules', permission: PERMISSIONS.VIEW_EVALUATION_RULE },
+      { tab: 'results', label: 'Results', permission: PERMISSIONS.VIEW_ASSESSMENT_RESULT },
+      { tab: 'certificate', label: 'Certificates', permission: PERMISSIONS.VIEW_CERTIFICATE },
+      { tab: 'certificate-template', label: 'Certificate Templates', permission: PERMISSIONS.VIEW_CERT_TEMPLATE },
+      { tab: 'certificate-generation', label: 'Certificate Queue', permission: PERMISSIONS.VIEW_CERT_QUEUE },
+      { tab: 'certificate-verification', label: 'Certificate Verification', permission: PERMISSIONS.VIEW_CERT_VERIFICATION },
+      { tab: 'bulk-certificate-issue', label: 'Bulk Certificate Issue' },
+    ],
+  },
+  {
+    group: 'Learning Paths & Training',
+    items: [
+      { tab: 'learning-path', label: 'Learning Paths', permission: PERMISSIONS.VIEW_LEARNING_PATH },
+      { tab: 'learning-path-course', label: 'Learning Path Courses', permission: PERMISSIONS.VIEW_LP_COURSE },
+      { tab: 'learning-path-enrollment', label: 'Learning Path Enrollments', permission: PERMISSIONS.VIEW_LP_ENROLLMENT },
+      { tab: 'learning-path-progress', label: 'Learning Path Progress', permission: PERMISSIONS.VIEW_LP_PROGRESS },
+      { tab: 'enrollment', label: 'Enrollments', permission: PERMISSIONS.VIEW_ENROLLMENT },
+      { tab: 'training-batch', label: 'Training Batches', permission: PERMISSIONS.VIEW_TRAINING_BATCH },
+      { tab: 'trainer-assignment', label: 'Trainer Assignments', permission: PERMISSIONS.VIEW_TRAINER_ASSIGNMENT },
+      { tab: 'attendance', label: 'Attendance' },
+      { tab: 'geofence', label: 'Attendance Geofencing' },
+    ],
+  },
+  {
+    group: 'Platform & Billing',
+    items: [
+      { tab: 'plans', label: 'Plans' },
+      { tab: 'company-license', label: 'Company Licenses' },
+      { tab: 'discount-codes', label: 'Discount Codes' },
+      { tab: 'license-notifications', label: 'License Notifications' },
+      { tab: 'payment-settings', label: 'Payment Settings' },
+    ],
+  },
+  {
+    group: 'System',
+    items: [
+      { tab: 'theme', label: 'Theme', permission: PERMISSIONS.VIEW_THEME },
+      { tab: 'settings', label: 'Settings', permission: PERMISSIONS.VIEW_SETTINGS },
+      { tab: 'menu', label: 'Menu', permission: PERMISSIONS.VIEW_MENU },
+      { tab: 'reports', label: 'Reports', permission: PERMISSIONS.VIEW_REPORTS },
+      { tab: 'notifications', label: 'Notifications' },
+      { tab: 'security-migration', label: 'Secure Login Migration' },
+    ],
+  },
+];
+
 function Sidebar() {
   const location = useLocation();
   const user = getCurrentUser();
@@ -36,16 +131,32 @@ function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
   const [logoUrl, setLogoUrl] = useState('');
+  const [adminSectionsOpen, setAdminSectionsOpen] = useState(false);
+  const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(new Set());
+
+  function toggleAdminGroup(group: string) {
+    setOpenAdminGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    loadBranding().then((b) => {
-      setCompanyName(b.companyName);
-      setLogoUrl(b.logoUrl);
-    });
+    function refreshBranding() {
+      loadBranding().then((b) => {
+        setCompanyName(b.companyName);
+        setLogoUrl(b.logoUrl);
+      });
+    }
+    refreshBranding();
+    window.addEventListener(BRANDING_CHANGED_EVENT, refreshBranding);
+    return () => window.removeEventListener(BRANDING_CHANGED_EVENT, refreshBranding);
   }, []);
 
   useEffect(() => {
@@ -167,6 +278,62 @@ function Sidebar() {
 
             </div>
           ))}
+
+          {can(PERMISSIONS.VIEW_COMPANY) && (
+            <div className="mb-5">
+              <button
+                onClick={() => setAdminSectionsOpen((v) => !v)}
+                className="mb-2 flex w-full items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300"
+              >
+                <span>Admin Sections</span>
+                <svg
+                  className={`h-3 w-3 transition-transform ${adminSectionsOpen ? 'rotate-90' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+
+              {adminSectionsOpen && ADMIN_SECTIONS.map(({ group, items }) => {
+                const visible = items.filter((item) => !item.permission || can(item.permission));
+                if (visible.length === 0) return null;
+                const isGroupOpen = openAdminGroups.has(group);
+                return (
+                  <div key={group} className="mb-1">
+                    <button
+                      onClick={() => toggleAdminGroup(group)}
+                      className="mb-1 flex w-full items-center justify-between rounded-lg px-4 py-1.5 text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    >
+                      <span>{group}</span>
+                      <svg
+                        className={`h-3 w-3 transition-transform ${isGroupOpen ? 'rotate-90' : ''}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                    {isGroupOpen && visible.map((item) => {
+                      const isActive = location.pathname === '/admin' && (location.state as { tab?: string } | null)?.tab === item.tab;
+                      return (
+                        <Link
+                          key={item.tab}
+                          to="/admin"
+                          state={{ tab: item.tab }}
+                          className={`block w-full mb-1 rounded-lg px-6 py-2 text-sm transition ${
+                            isActive
+                              ? 'bg-yellow-500 text-black font-semibold'
+                              : 'text-slate-400 hover:bg-yellow-500 hover:text-black'
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
         </nav>
 

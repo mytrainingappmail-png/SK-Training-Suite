@@ -17,6 +17,14 @@ export interface Company {
 
   logo: string;
 
+  // Login-page hero image (dark panel) — falls back to logo, then the
+  // bundled static asset, when empty.
+  login_logo_url: string;
+
+  // Browser tab / PWA install-prompt / home-screen icon — falls back to
+  // the bundled static icon when empty.
+  app_icon_url: string;
+
   favicon: string;
 
   address: string;
