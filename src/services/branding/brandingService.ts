@@ -124,6 +124,15 @@ export async function applyDynamicIcon(iconUrl: string, faviconUrl?: string, com
       manifest.name = companyName;
       manifest.short_name = companyName;
     }
+    // Once served from a blob: URL, any relative path inside the manifest
+    // (start_url, scope) has no real base to resolve against, so Chrome
+    // silently marks them invalid and drops PWA installability entirely -
+    // this was the actual cause of "Install App" doing nothing on some
+    // devices. Resolve both to absolute URLs against the real page origin
+    // before blobbing so they stay valid regardless of the manifest's
+    // delivery mechanism.
+    manifest.start_url = new URL(manifest.start_url ?? "/", window.location.origin).href;
+    manifest.scope = new URL(manifest.scope ?? "/", window.location.origin).href;
     const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
     manifestLink.href = URL.createObjectURL(blob);
   } catch {
