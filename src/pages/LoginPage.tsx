@@ -118,17 +118,21 @@ export const LoginPage: React.FC = () => {
           }}
         />
 
-        <div className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
+        <div className="relative z-10 w-full max-w-lg flex flex-col items-center text-center">
           <div className="mb-7">
             <img
               src={loginLogoUrl || logo}
               alt={companyName}
-              className="h-36 w-36 object-contain"
+              className="h-44 w-44 object-contain"
               style={loginLogoUrl ? undefined : { boxShadow: `0 0 0 1px ${secondaryColor}4D` }}
             />
           </div>
 
-          <h1 className="text-4xl lg:text-5xl font-bold text-white tracking-tight">
+          <h1
+            className={`font-bold text-white tracking-tight whitespace-nowrap ${
+              companyName.length > 18 ? 'text-2xl sm:text-3xl lg:text-4xl' : 'text-4xl lg:text-5xl'
+            }`}
+          >
             {companyName}
           </h1>
 
