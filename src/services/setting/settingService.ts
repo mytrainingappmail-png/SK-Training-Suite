@@ -7,6 +7,7 @@ import {
   updateSetting,
   deleteSetting,
   toggleActive as repositoryToggleActive,
+  getSettingValueByKey,
 } from "../../repositories/setting/settingRepository";
 
 export async function loadSettings(): Promise<Setting[]> {
@@ -46,6 +47,17 @@ export async function toggleActive(
 ): Promise<Setting> {
   if (!id) throw new Error("Invalid Setting ID.");
   return await repositoryToggleActive(id, active);
+}
+
+// Reads a config setting as a number, falling back to `fallback` if it
+// doesn't exist, is inactive, or isn't a valid number — used by real
+// runtime checks (login lockout threshold, upload size limits) so an admin
+// changing the value in Settings actually changes app behaviour.
+export async function getSettingNumber(key: string, fallback: number): Promise<number> {
+  const raw = await getSettingValueByKey(key);
+  if (raw === null) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────

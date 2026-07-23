@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BRAND } from '../../config/branding';
 import { login } from '../../services/auth/authService';
 import { useAuthorization } from '../../hooks/useAuthorization';
+import { loadBranding } from '../../services/branding/brandingService';
 
 interface InputFieldProps {
   id: string;
@@ -13,6 +14,7 @@ interface InputFieldProps {
   onChange: (value: string) => void;
   rightElement?: React.ReactNode;
   disabled?: boolean;
+  accentColor: string;
 }
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -24,6 +26,7 @@ const InputField: React.FC<InputFieldProps> = ({
   onChange,
   rightElement,
   disabled,
+  accentColor,
 }) => (
   <div>
     <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1.5 tracking-wide">
@@ -40,7 +43,7 @@ const InputField: React.FC<InputFieldProps> = ({
         disabled={disabled}
         autoComplete={type === 'password' ? 'current-password' : 'off'}
         className="w-full px-4 py-3 pr-11 rounded-xl bg-white/[0.06] border border-white/[0.12] text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ '--tw-ring-color': `${BRAND.secondaryColor}66` } as React.CSSProperties}
+        style={{ '--tw-ring-color': `${accentColor}66` } as React.CSSProperties}
       />
       {rightElement && (
         <div className="absolute inset-y-0 right-0 flex items-center pr-3.5">{rightElement}</div>
@@ -90,6 +93,18 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit }) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // From the active Theme (Admin → Theme) — falls back to the static
+  // default until branding resolves (loadBranding() is cached, so this is
+  // a cheap call — LoginPage already triggered the same fetch).
+  const [accentColor, setAccentColor] = useState(BRAND.secondaryColor);
+  const [baseColor, setBaseColor] = useState(BRAND.primaryColor);
+
+  useEffect(() => {
+    loadBranding().then((b) => {
+      setAccentColor(b.secondaryColor);
+      setBaseColor(b.primaryColor);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +167,7 @@ navigate('/dashboard', { replace: true });
           value={companyCode}
           onChange={(v) => { setCompanyCode(v); setErrorMessage(null); }}
           disabled={loading}
+          accentColor={accentColor}
         />
 
         <InputField
@@ -161,6 +177,7 @@ navigate('/dashboard', { replace: true });
           value={employeeId}
           onChange={(v) => { setEmployeeId(v); setErrorMessage(null); }}
           disabled={loading}
+          accentColor={accentColor}
         />
 
         <InputField
@@ -171,13 +188,14 @@ navigate('/dashboard', { replace: true });
           value={password}
           onChange={(v) => { setPassword(v); setErrorMessage(null); }}
           disabled={loading}
+          accentColor={accentColor}
           rightElement={
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
               disabled={loading}
               className="text-slate-400 hover:opacity-80 transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ color: showPassword ? BRAND.secondaryColor : undefined }}
+              style={{ color: showPassword ? accentColor : undefined }}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               <EyeIcon open={showPassword} />
@@ -216,7 +234,7 @@ navigate('/dashboard', { replace: true });
               onChange={(e) => setRememberMe(e.target.checked)}
               disabled={loading}
               className="w-4 h-4 rounded border-white/20 bg-white/10 cursor-pointer focus:ring-2 disabled:cursor-not-allowed"
-              style={{ accentColor: BRAND.secondaryColor }}
+              style={{ accentColor }}
             />
             <span className="text-sm text-slate-300">Remember me</span>
           </label>
@@ -224,7 +242,7 @@ navigate('/dashboard', { replace: true });
           <button
             type="button"
             className="text-sm font-medium hover:opacity-80 transition-opacity duration-200"
-            style={{ color: BRAND.secondaryColor }}
+            style={{ color: accentColor }}
           >
             Forgot password?
           </button>
@@ -235,8 +253,8 @@ navigate('/dashboard', { replace: true });
           disabled={loading}
           className="w-full mt-2 py-3.5 rounded-xl font-semibold text-sm tracking-wide hover:shadow-lg active:scale-[0.98] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
           style={{
-            background: `linear-gradient(to right, ${BRAND.secondaryColor}, ${BRAND.secondaryColor}CC)`,
-            color: BRAND.primaryColor,
+            background: `linear-gradient(to right, ${accentColor}, ${accentColor}CC)`,
+            color: baseColor,
           }}
         >
           {loading ? 'Signing In...' : 'Login'}

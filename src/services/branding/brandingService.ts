@@ -12,6 +12,7 @@
 //      the app must never show a blank name/logo/icon.
 
 import { getPublicBranding } from "../../repositories/branding/brandingRepository";
+import { getActiveTheme } from "../../repositories/theme/themeRuntimeRepository";
 import { BRAND } from "../../config/branding";
 
 export interface ResolvedBranding {
@@ -25,6 +26,11 @@ export interface ResolvedBranding {
   loginLogoUrl: string;
   // Browser tab / PWA install-prompt / home-screen icon.
   appIconUrl: string;
+  // From the active row in Theme Management (Admin → Theme) — falls back
+  // to the static BRAND colors when no theme is marked active.
+  primaryColor: string;
+  secondaryColor: string;
+  sidebarColor: string;
 }
 
 export const BRANDING_CHANGED_EVENT = "sk:branding-changed";
@@ -47,7 +53,7 @@ export async function loadBranding(): Promise<ResolvedBranding> {
   const overrideLoginLogo = import.meta.env.VITE_BRAND_OVERRIDE_LOGIN_LOGO_URL as string | undefined;
   const overrideIcon = (import.meta.env.VITE_BRAND_OVERRIDE_ICON_512_URL || import.meta.env.VITE_BRAND_OVERRIDE_ICON_192_URL) as string | undefined;
 
-  const row = await getPublicBranding();
+  const [row, theme] = await Promise.all([getPublicBranding(), getActiveTheme()]);
   const dbLogo = row?.logo?.trim() || "";
   const dbLoginLogo = row?.login_logo_url?.trim() || "";
   const dbIcon = row?.app_icon_url?.trim() || "";
@@ -58,6 +64,9 @@ export async function loadBranding(): Promise<ResolvedBranding> {
     logoUrl,
     loginLogoUrl: overrideLoginLogo?.trim() || dbLoginLogo || logoUrl,
     appIconUrl: overrideIcon?.trim() || dbIcon,
+    primaryColor: theme?.primary_color?.trim() || BRAND.primaryColor,
+    secondaryColor: theme?.secondary_color?.trim() || BRAND.secondaryColor,
+    sidebarColor: theme?.sidebar_color?.trim() || BRAND.primaryColor,
   };
   return cached;
 }

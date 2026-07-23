@@ -96,3 +96,17 @@ export async function toggleActive(
 
   return data;
 }
+
+// Reads a single setting's value by key, safe to call with no session (via
+// the get_setting_value SECURITY DEFINER RPC) — used by config checks that
+// run before login completes (e.g. max_login_attempts).
+export async function getSettingValueByKey(key: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc("get_setting_value", { p_key: key });
+
+  if (error) {
+    console.error("[settingRepository] getSettingValueByKey:", error);
+    return null;
+  }
+
+  return data ?? null;
+}

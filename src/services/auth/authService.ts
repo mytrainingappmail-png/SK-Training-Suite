@@ -24,6 +24,7 @@
 
 import { supabase }       from "../../lib/supabase";
 import { setCurrentUser } from "./session";
+import { getSettingNumber } from "../setting/settingService";
 
 import type { User, UserStatus } from "../../types/app";
 
@@ -31,7 +32,9 @@ import type { User, UserStatus } from "../../types/app";
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_FAILED_ATTEMPTS = 5;
+// Default when no active "max_login_attempts" Setting exists — an admin can
+// override this from Settings Management without any code change.
+const DEFAULT_MAX_FAILED_ATTEMPTS = 5;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -246,7 +249,8 @@ async function handleFailedAttempt(
   currentAttempts: number
 ): Promise<void> {
   const newAttempts = currentAttempts + 1;
-  const shouldLock  = newAttempts >= MAX_FAILED_ATTEMPTS;
+  const maxAttempts = await getSettingNumber("max_login_attempts", DEFAULT_MAX_FAILED_ATTEMPTS);
+  const shouldLock  = newAttempts >= maxAttempts;
 
   // Still pre-session — a wrong password never establishes a Supabase
   // Auth session, so this also has to go through the RPC.

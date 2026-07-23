@@ -7,15 +7,20 @@ import {
   uploadContentMedia,
 } from '../../repositories/contentEditor/contentEditorRepository';
 import { getCurrentUser } from '../auth/session';
+import { getSettingNumber } from '../setting/settingService';
 import type { LessonContent, MediaUploadResult } from '../../types/contentEditor';
 
 const IMAGE_EXTENSIONS    = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 const VIDEO_EXTENSIONS    = ['mp4'];
 const DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip'];
 
-const MAX_IMAGE_BYTES    = 10  * 1024 * 1024; // 10MB
-const MAX_VIDEO_BYTES    = 200 * 1024 * 1024; // 200MB
-const MAX_DOCUMENT_BYTES = 25  * 1024 * 1024; // 25MB
+// Defaults when no active "max_*_upload_mb" Setting exists — an admin can
+// override these from Settings Management without any code change.
+const DEFAULT_MAX_IMAGE_MB    = 10;
+const DEFAULT_MAX_VIDEO_MB    = 200;
+const DEFAULT_MAX_DOCUMENT_MB = 25;
+
+const MAX_VIDEO_BYTES = DEFAULT_MAX_VIDEO_MB * 1024 * 1024;
 
 function getExtension(fileName: string): string {
   const idx = fileName.lastIndexOf('.');
@@ -54,8 +59,9 @@ export async function uploadImage(file: File): Promise<MediaUploadResult> {
   if (!IMAGE_EXTENSIONS.includes(ext)) {
     throw new Error('Unsupported image type. Allowed: JPG, JPEG, PNG, WEBP, GIF.');
   }
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error('Image is too large. Maximum size is 10MB.');
+  const maxImageMb = await getSettingNumber('max_image_upload_mb', DEFAULT_MAX_IMAGE_MB);
+  if (file.size > maxImageMb * 1024 * 1024) {
+    throw new Error(`Image is too large. Maximum size is ${maxImageMb}MB.`);
   }
 
   const employeeId = requireEmployeeId();
@@ -82,8 +88,9 @@ export async function uploadDocument(file: File): Promise<MediaUploadResult> {
       'Unsupported file type. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, ZIP.'
     );
   }
-  if (file.size > MAX_DOCUMENT_BYTES) {
-    throw new Error('File is too large. Maximum size is 25MB.');
+  const maxDocumentMb = await getSettingNumber('max_document_upload_mb', DEFAULT_MAX_DOCUMENT_MB);
+  if (file.size > maxDocumentMb * 1024 * 1024) {
+    throw new Error(`File is too large. Maximum size is ${maxDocumentMb}MB.`);
   }
 
   const employeeId = requireEmployeeId();

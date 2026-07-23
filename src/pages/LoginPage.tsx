@@ -33,18 +33,19 @@ const FeatureIcon: React.FC<{ index: number }> = ({ index }) => {
   );
 };
 
-const FeatureCard: React.FC<{ title: string; description: string; index: number }> = ({
+const FeatureCard: React.FC<{ title: string; description: string; index: number; accentColor: string }> = ({
   title,
   description,
   index,
+  accentColor,
 }) => (
   <div className="group flex items-start gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] transition-all duration-300 cursor-default">
     <div
       className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center group-hover:scale-105 transition-all duration-300"
       style={{
-        backgroundColor: `${BRAND.secondaryColor}1A`,
-        border: `1px solid ${BRAND.secondaryColor}33`,
-        color: BRAND.secondaryColor,
+        backgroundColor: `${accentColor}1A`,
+        border: `1px solid ${accentColor}33`,
+        color: accentColor,
       }}
     >
       <FeatureIcon index={index} />
@@ -59,35 +60,41 @@ const FeatureCard: React.FC<{ title: string; description: string; index: number 
 export const LoginPage: React.FC = () => {
   const [companyName, setCompanyName] = useState(BRAND.companyName);
   const [loginLogoUrl, setLoginLogoUrl] = useState('');
+  // From the active Theme (Admin → Theme) — fall back to the static
+  // defaults until branding resolves, so nothing flashes unstyled.
+  const [primaryColor, setPrimaryColor] = useState(BRAND.primaryColor);
+  const [secondaryColor, setSecondaryColor] = useState(BRAND.secondaryColor);
 
   useEffect(() => {
     loadBranding().then((b) => {
       setCompanyName(b.companyName);
       setLoginLogoUrl(b.loginLogoUrl);
+      setPrimaryColor(b.primaryColor);
+      setSecondaryColor(b.secondaryColor);
     });
   }, []);
 
   return (
     <div
       className="min-h-screen w-full flex flex-col md:flex-row font-sans"
-      style={{ backgroundColor: BRAND.primaryColor }}
+      style={{ backgroundColor: primaryColor }}
     >
       {/* LEFT SIDE */}
       <div
         className="relative w-full md:w-1/2 min-h-[40vh] md:min-h-screen flex flex-col items-center justify-center px-8 lg:px-16 py-16 overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${BRAND.primaryColor}, ${BRAND.primaryColor}E6, ${BRAND.primaryColor}CC)`,
+          background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}E6, ${primaryColor}CC)`,
         }}
       >
         <div
           className="absolute -top-32 -right-32 w-96 h-96 rounded-full blur-3xl"
-          style={{ backgroundColor: `${BRAND.secondaryColor}12` }}
+          style={{ backgroundColor: `${secondaryColor}12` }}
         />
         <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-blue-600/[0.08] blur-3xl" />
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
-            backgroundImage: `radial-gradient(circle at 25% 25%, ${BRAND.secondaryColor} 1px, transparent 1px), radial-gradient(circle at 75% 75%, ${BRAND.secondaryColor} 1px, transparent 1px)`,
+            backgroundImage: `radial-gradient(circle at 25% 25%, ${secondaryColor} 1px, transparent 1px), radial-gradient(circle at 75% 75%, ${secondaryColor} 1px, transparent 1px)`,
             backgroundSize: '60px 60px',
           }}
         />
@@ -98,7 +105,7 @@ export const LoginPage: React.FC = () => {
               src={loginLogoUrl || logo}
               alt={companyName}
               className="h-36 w-36 object-contain"
-              style={loginLogoUrl ? undefined : { boxShadow: `0 0 0 1px ${BRAND.secondaryColor}4D` }}
+              style={loginLogoUrl ? undefined : { boxShadow: `0 0 0 1px ${secondaryColor}4D` }}
             />
           </div>
 
@@ -108,7 +115,7 @@ export const LoginPage: React.FC = () => {
 
           <p
             className="mt-3 text-sm lg:text-base font-light tracking-wide"
-            style={{ color: BRAND.secondaryColor }}
+            style={{ color: secondaryColor }}
           >
             {BRAND.tagline}
           </p>
@@ -116,7 +123,7 @@ export const LoginPage: React.FC = () => {
           <div
             className="w-14 h-px my-8"
             style={{
-              background: `linear-gradient(to right, transparent, ${BRAND.secondaryColor}99, transparent)`,
+              background: `linear-gradient(to right, transparent, ${secondaryColor}99, transparent)`,
             }}
           />
 
@@ -127,6 +134,7 @@ export const LoginPage: React.FC = () => {
                 title={feature.title}
                 description={feature.description}
                 index={index}
+                accentColor={secondaryColor}
               />
             ))}
           </div>
@@ -138,7 +146,7 @@ export const LoginPage: React.FC = () => {
         <div
           className="absolute inset-0 opacity-[0.05]"
           style={{
-            backgroundImage: `radial-gradient(circle at 70% 30%, ${BRAND.secondaryColor} 1px, transparent 1px)`,
+            backgroundImage: `radial-gradient(circle at 70% 30%, ${secondaryColor} 1px, transparent 1px)`,
             backgroundSize: '40px 40px',
           }}
         />

@@ -133,6 +133,11 @@ function Sidebar() {
   const [logoUrl, setLogoUrl] = useState('');
   const [adminSectionsOpen, setAdminSectionsOpen] = useState(false);
   const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(new Set());
+  // From the active Theme (Admin → Theme) — falls back to the static
+  // defaults, which match the current design exactly, so nothing changes
+  // visually until an admin actually activates a different theme.
+  const [sidebarColor, setSidebarColor] = useState(BRAND.primaryColor);
+  const [accentColor, setAccentColor] = useState(BRAND.secondaryColor);
 
   function toggleAdminGroup(group: string) {
     setOpenAdminGroups((prev) => {
@@ -152,6 +157,8 @@ function Sidebar() {
       loadBranding().then((b) => {
         setCompanyName(b.companyName);
         setLogoUrl(b.logoUrl);
+        setSidebarColor(b.sidebarColor);
+        setAccentColor(b.secondaryColor);
       });
     }
     refreshBranding();
@@ -213,7 +220,8 @@ function Sidebar() {
       `}</style>
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800 bg-slate-900 transition-transform duration-200 ease-in-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-56 lg:translate-x-0 ${
+        style={{ backgroundColor: sidebarColor }}
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800 transition-transform duration-200 ease-in-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-56 lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -265,9 +273,10 @@ function Sidebar() {
                     <Link
                       key={item.id}
                       to={item.route}
+                      style={isActive ? { backgroundColor: accentColor, color: "#000" } : undefined}
                       className={`block w-full mb-1 px-4 py-2.5 rounded-xl transition ${
                         isActive
-                          ? "bg-yellow-500 text-black font-semibold"
+                          ? "font-semibold"
                           : "text-slate-300 hover:bg-yellow-500 hover:text-black"
                       }`}
                     >
@@ -319,9 +328,10 @@ function Sidebar() {
                           key={item.tab}
                           to="/admin"
                           state={{ tab: item.tab }}
+                          style={isActive ? { backgroundColor: accentColor, color: "#000" } : undefined}
                           className={`block w-full mb-1 rounded-lg px-6 py-2 text-sm transition ${
                             isActive
-                              ? 'bg-yellow-500 text-black font-semibold'
+                              ? 'font-semibold'
                               : 'text-slate-400 hover:bg-yellow-500 hover:text-black'
                           }`}
                         >
