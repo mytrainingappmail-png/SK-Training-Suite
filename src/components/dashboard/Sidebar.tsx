@@ -222,6 +222,7 @@ function Sidebar() {
     if (item.group === "Teaching" && !isTrainer) return false;
     if (item.group === "My Learning" && (isTrainer || isSuperAdmin)) return false;
     if (item.id === "market-analytics" && !marketAnalyticsEnabled) return false;
+    if (item.id === "settings" && !isPlatformOperator) return false;
 
     const requiredPermission = MENU_PERMISSION_MAP[item.id];
     if (!requiredPermission) return true;
