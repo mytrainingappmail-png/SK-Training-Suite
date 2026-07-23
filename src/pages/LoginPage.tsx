@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BRAND } from '../config/branding';
 import logo from '../assets/logo.png';
 import LoginForm from '../components/auth/LoginForm';
+import { loadBranding } from '../services/branding/brandingService';
 
 const FeatureIcon: React.FC<{ index: number }> = ({ index }) => {
   const icons = [
@@ -56,6 +57,16 @@ const FeatureCard: React.FC<{ title: string; description: string; index: number 
 );
 
 export const LoginPage: React.FC = () => {
+  const [companyName, setCompanyName] = useState(BRAND.companyName);
+  const [logoUrl, setLogoUrl] = useState('');
+
+  useEffect(() => {
+    loadBranding().then((b) => {
+      setCompanyName(b.companyName);
+      setLogoUrl(b.logoUrl);
+    });
+  }, []);
+
   return (
     <div
       className="min-h-screen w-full flex flex-col md:flex-row font-sans"
@@ -84,15 +95,15 @@ export const LoginPage: React.FC = () => {
         <div className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
           <div className="mb-7">
             <img
-              src={logo}
-              alt={BRAND.companyName}
+              src={logoUrl || logo}
+              alt={companyName}
               className="h-36 w-36 object-contain"
               style={{ boxShadow: `0 0 0 1px ${BRAND.secondaryColor}4D` }}
             />
           </div>
 
-          <h1 className="text-4xl lg:text-5xl font-bold text-white tracking-tight whitespace-nowrap">
-            {BRAND.companyName}
+          <h1 className="text-4xl lg:text-5xl font-bold text-white tracking-tight">
+            {companyName}
           </h1>
 
           <p

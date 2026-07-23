@@ -7,6 +7,7 @@ import { useAuthorization } from "../../hooks/useAuthorization";
 import { PERMISSIONS } from "../../constants/permissions";
 import { getCurrentUser } from "../../services/auth/session";
 import { loadRoles } from "../../services/role/roleService";
+import { loadBranding } from "../../services/branding/brandingService";
 import type { PermissionCode } from "../../types/authorization";
 
 // Maps each "Manage" / "System" sidebar item to the permission required
@@ -33,10 +34,19 @@ function Sidebar() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [companyName, setCompanyName] = useState(BRAND.companyName);
+  const [logoUrl, setLogoUrl] = useState('');
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    loadBranding().then((b) => {
+      setCompanyName(b.companyName);
+      setLogoUrl(b.logoUrl);
+    });
+  }, []);
 
   useEffect(() => {
     if (!user?.roleId) return;
@@ -100,14 +110,14 @@ function Sidebar() {
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
 
           <img
-            src={logo}
+            src={logoUrl || logo}
             alt="logo"
             className="w-12 h-12 rounded-xl object-contain bg-white"
           />
 
           <div>
             <h2 className="text-white font-semibold">
-              {BRAND.companyName}
+              {companyName}
             </h2>
 
             <p className="text-slate-400 text-xs">

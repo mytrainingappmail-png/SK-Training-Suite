@@ -15,6 +15,7 @@ import { BRAND }                from '../../config/branding';
 import { ROUTES }               from '../../constants/routes';
 import { useAuthorization }     from '../../hooks/useAuthorization';
 import { clearCurrentUser }     from '../../services/auth/session';
+import { loadBranding }         from '../../services/branding/brandingService';
 import ProfileDrawer from '../profile/ProfileDrawer';
 import NotificationBell from '../notifications/NotificationBell';
 
@@ -24,6 +25,11 @@ function Header() {
   const [open, setOpen]    = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef        = useRef<HTMLDivElement>(null);
+  const [companyName, setCompanyName] = useState(BRAND.companyName);
+
+  useEffect(() => {
+    loadBranding().then((b) => setCompanyName(b.companyName));
+  }, []);
 
   // Derive display values from session user
   const firstName   = user?.firstName  ?? '';
@@ -71,7 +77,7 @@ function Header() {
           Dashboard
         </h1>
         <p className="text-sm text-slate-500">
-          Welcome to {BRAND.companyName}
+          Welcome to {companyName}
         </p>
       </div>
 
