@@ -34,6 +34,13 @@ function dynamicHtmlBranding(): Plugin {
   };
 }
 
+// The "Install app" prompt (browser PWA install) reads name/icons from this
+// manifest, not from the in-app branding — same override vars, same
+// unchanged-when-unset fallback as the HTML title/OG tags above.
+const brandOverrideName = process.env.VITE_BRAND_OVERRIDE_NAME?.trim();
+const brandOverrideIcon192 = process.env.VITE_BRAND_OVERRIDE_ICON_192_URL?.trim();
+const brandOverrideIcon512 = process.env.VITE_BRAND_OVERRIDE_ICON_512_URL?.trim();
+
 export default defineConfig({
   plugins: [
     react(),
@@ -43,8 +50,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'SK Training Suite',
-        short_name: 'SK Training',
+        name: brandOverrideName || 'SK Training Suite',
+        short_name: brandOverrideName || 'SK Training',
         description: 'Enterprise Learning Management Platform',
         theme_color: '#0F172A',
         background_color: '#0F172A',
@@ -54,17 +61,17 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: 'icon-192.png',
+            src: brandOverrideIcon192 || 'icon-192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: 'icon-512.png',
+            src: brandOverrideIcon512 || 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
           },
           {
-            src: 'icon-512.png',
+            src: brandOverrideIcon512 || 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
