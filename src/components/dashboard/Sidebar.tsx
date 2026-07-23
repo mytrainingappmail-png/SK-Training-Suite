@@ -14,6 +14,11 @@ import type { PermissionCode } from "../../types/authorization";
 // Maps each "Manage" / "System" sidebar item to the permission required
 // to see it. Any menu id NOT listed here (all "My Learning" items, plus
 // "Overview") is available to every logged-in user — no gate needed.
+//
+// Support Tickets and Help Center ARE gated here even though they live in
+// the "Overview" group — they're admin-facing (a company's Admin/Super
+// Admin/HR uses them, then trains employees directly), not employee
+// self-service, so plain employees should not see either link.
 const MENU_PERMISSION_MAP: Record<string, PermissionCode> = {
   dashboard: PERMISSIONS.VIEW_DASHBOARD,
   employees: PERMISSIONS.VIEW_EMPLOYEE,
@@ -24,6 +29,8 @@ const MENU_PERMISSION_MAP: Record<string, PermissionCode> = {
   reports: PERMISSIONS.VIEW_REPORTS,
   settings: PERMISSIONS.VIEW_SETTINGS,
   admin: PERMISSIONS.VIEW_COMPANY,
+  "my-tickets": PERMISSIONS.VIEW_SUPPORT_TICKET,
+  "help-center": PERMISSIONS.VIEW_HELP_CENTER,
 };
 
 // Every tab inside the Admin page (src/pages/Admin.tsx), grouped for the

@@ -207,6 +207,9 @@ export const PERMISSIONS = {
   EDIT_SUPPORT_TICKET: "edit_support_ticket",
   DELETE_SUPPORT_TICKET: "delete_support_ticket",
 
+  // Help Center
+  VIEW_HELP_CENTER: "view_help_center",
+
   // Email Templates
   VIEW_EMAIL_TEMPLATE: "view_email_template",
   CREATE_EMAIL_TEMPLATE: "create_email_template",

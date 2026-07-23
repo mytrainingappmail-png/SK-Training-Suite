@@ -163,8 +163,22 @@ function App() {
         <Route path={ROUTES.PROJECTS} element={<ProjectsPage />} />
         <Route path={ROUTES.CERTIFICATE_VIEW} element={<CertificateViewPage />} />
         <Route path={ROUTES.MY_ATTENDANCE} element={<AttendancePage />} />
-        <Route path={ROUTES.MY_TICKETS} element={<MyTicketsPage />} />
-        <Route path={ROUTES.HELP_CENTER} element={<HelpCenterPage />} />
+        <Route
+          path={ROUTES.MY_TICKETS}
+          element={
+            <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_SUPPORT_TICKET]} redirectTo={ROUTES.DASHBOARD}>
+              <MyTicketsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.HELP_CENTER}
+          element={
+            <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_HELP_CENTER]} redirectTo={ROUTES.DASHBOARD}>
+              <HelpCenterPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path={ROUTES.MARKET_ANALYTICS} element={<MarketAnalyticsPage />} />
         <Route path={ROUTES.TRAINER_STUDENTS} element={<TrainerStudentsPage />} />
         <Route path={ROUTES.TRAINER_GRADING_QUEUE} element={<TrainerGradingQueuePage />} />

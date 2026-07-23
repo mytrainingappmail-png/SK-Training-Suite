@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadArticles, searchArticles } from '../../services/help/helpArticleService';
+import { useAuthorization } from '../../hooks/useAuthorization';
 import { ROUTES } from '../../constants/routes';
 import type { HelpArticle } from '../../types/helpArticle';
 
@@ -36,6 +37,7 @@ function IconX({ className = 'h-5 w-5' }: { className?: string }) {
 
 function HelpBotWidget() {
   const navigate = useNavigate();
+  const { can, PERMISSIONS } = useAuthorization();
   const [open, setOpen] = useState(false);
   const [articles, setArticles] = useState<HelpArticle[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -67,6 +69,10 @@ function HelpBotWidget() {
     ]);
     setQuestion('');
   }
+
+  // Help Center is admin-facing now, not employee self-service — hide the
+  // floating bot for anyone who can't see the Help Center itself.
+  if (!can(PERMISSIONS.VIEW_HELP_CENTER)) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-40">
