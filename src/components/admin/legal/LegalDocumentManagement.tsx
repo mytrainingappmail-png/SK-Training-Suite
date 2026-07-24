@@ -97,7 +97,7 @@ function LegalDocumentManagement() {
                   <p className="text-xs text-slate-400">Updated {new Date(doc.updated_at).toLocaleDateString()}</p>
                 </div>
                 <div className="flex gap-2">
-                  <a href={`/legal/${doc.slug}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-slate-500 hover:underline">View</a>
+                  <a href={`/legal/${doc.slug}`} className="text-xs font-semibold text-slate-500 hover:underline">View</a>
                   <button onClick={() => startEdit(doc)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                 </div>
               </div>

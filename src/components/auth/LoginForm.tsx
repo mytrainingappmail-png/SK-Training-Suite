@@ -382,9 +382,9 @@ navigate('/dashboard', { replace: true });
       </p>
 
       <p className="mt-2 text-center text-xs text-slate-500">
-        <a href="/legal/terms-of-service" target="_blank" rel="noopener noreferrer" className="hover:text-white hover:underline">Terms &amp; Conditions</a>
+        <a href="/legal/terms-of-service" className="hover:text-white hover:underline">Terms &amp; Conditions</a>
         <span className="mx-2">·</span>
-        <a href="/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-white hover:underline">Privacy Policy</a>
+        <a href="/legal/privacy-policy" className="hover:text-white hover:underline">Privacy Policy</a>
       </p>
 
       {showForgotPassword && (

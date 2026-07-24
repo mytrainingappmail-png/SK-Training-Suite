@@ -3,16 +3,27 @@
 // Intentionally standalone (no sidebar/header), just the document content.
 
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { loadDocument } from '../services/legal/legalDocumentService';
 import { ROUTES } from '../constants/routes';
 import type { LegalDocument } from '../types/legalDocument';
 
 function LegalDocumentPage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const [doc, setDoc] = useState<LegalDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Goes back to wherever the reader actually came from (the login page,
+  // or the Admin panel if an admin opened this to review it) instead of
+  // always dropping back to Login - real browser-history back, with a
+  // same-tab fallback to Login only for a page opened with no history
+  // (e.g. a shared link opened fresh).
+  function goBack() {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(ROUTES.LOGIN);
+  }
 
   useEffect(() => {
     if (!slug) return;
@@ -29,9 +40,9 @@ function LegalDocumentPage() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-12">
       <div className="mx-auto max-w-3xl">
-        <Link to={ROUTES.LOGIN} className="mb-6 inline-block text-sm font-semibold text-indigo-600 hover:underline">
-          ← Back to Login
-        </Link>
+        <button onClick={goBack} className="mb-6 inline-block text-sm font-semibold text-indigo-600 hover:underline">
+          ← Back
+        </button>
 
         {loading && <div className="h-64 animate-pulse rounded-2xl bg-white shadow-sm" />}
 
