@@ -8,7 +8,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  loadCategories, saveCategory, removeCategory,
   loadProjects, saveProject, editProject, removeProject,
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
@@ -17,7 +16,7 @@ import {
 import { loadAssessments } from '../../services/assessment/assessmentService';
 import { getCurrentUser } from '../../services/auth/session';
 import RichTextEditor from '../../components/shared/RichTextEditor';
-import type { RealEstateProjectCategory, RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
+import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
 import type { RealEstateProjectSection, RealEstateProjectSectionForm, ProjectSectionFaqItem } from '../../types/realEstateProjectSection';
 import { defaultProjectSectionForm } from '../../types/realEstateProjectSection';
 import type { Assessment } from '../../types/assessment';
@@ -29,15 +28,15 @@ const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline
 
 function RealEstateProjectManagement() {
   const user = getCurrentUser();
-  const [categories, setCategories] = useState<RealEstateProjectCategory[]>([]);
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
   const [brochures, setBrochures] = useState<RealEstateProjectBrochure[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
-  const [newCategoryName, setNewCategoryName] = useState('');
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ project_name: '', category_id: '', short_description: '', full_description: '', thumbnail_url: '' });
+  const [draft, setDraft] = useState<{ project_name: string; category_id: string | null; short_description: string; full_description: string; thumbnail_url: string }>(
+    { project_name: '', category_id: null, short_description: '', full_description: '', thumbnail_url: '' }
+  );
   const [savingProject, setSavingProject] = useState(false);
   const [uploadingThumb, setUploadingThumb] = useState(false);
 
@@ -62,8 +61,8 @@ function RealEstateProjectManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadCategories(), loadProjects(), loadAllBrochures()])
-      .then(([c, p, b]) => { setCategories(c); setProjects(p); setBrochures(b); })
+    Promise.all([loadProjects(), loadAllBrochures()])
+      .then(([p, b]) => { setProjects(p); setBrochures(b); })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
   }
@@ -79,29 +78,9 @@ function RealEstateProjectManagement() {
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load sections.'));
   }
 
-  async function handleAddCategory() {
-    if (!newCategoryName.trim() || !user?.companyId) return;
-    try {
-      await saveCategory({ company_id: user.companyId, category_name: newCategoryName.trim(), description: '', active: true });
-      setNewCategoryName('');
-      fetchAll();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to add category.');
-    }
-  }
-
-  async function handleDeleteCategory(id: string) {
-    try {
-      await removeCategory(id);
-      fetchAll();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete category.');
-    }
-  }
-
   function startNewProject() {
     setEditingProjectId('new');
-    setDraft({ project_name: '', category_id: categories[0]?.id ?? '', short_description: '', full_description: '', thumbnail_url: '' });
+    setDraft({ project_name: '', category_id: null, short_description: '', full_description: '', thumbnail_url: '' });
     setSections([]);
     setSectionDraft(null);
   }
@@ -297,14 +276,6 @@ function RealEstateProjectManagement() {
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">Project Name</label>
               <input value={draft.project_name} onChange={(e) => setDraft((d) => ({ ...d, project_name: e.target.value }))} className={INPUT_CLS} />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Category</label>
-              <select value={draft.category_id} onChange={(e) => setDraft((d) => ({ ...d, category_id: e.target.value }))} className={INPUT_CLS}>
-                <option value="">— Select —</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.category_name}</option>)}
-              </select>
             </div>
 
             <div>
@@ -575,22 +546,6 @@ function RealEstateProjectManagement() {
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
-        <p className="mb-3 text-sm font-semibold text-slate-700">Categories</p>
-        <div className="mb-3 flex gap-2">
-          <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="New category name..." className={INPUT_CLS} />
-          <button onClick={handleAddCategory} className="flex-shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add</button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {categories.map((c) => (
-            <span key={c.id} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
-              {c.category_name}
-              <button onClick={() => handleDeleteCategory(c.id)} className="text-red-500 hover:text-red-700">✕</button>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-700">All Projects</p>
           <button onClick={startNewProject} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
@@ -611,7 +566,6 @@ function RealEstateProjectManagement() {
                   )}
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{p.project_name}</p>
-                    <p className="text-xs text-slate-400">{categories.find((c) => c.id === p.category_id)?.category_name ?? '—'}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">

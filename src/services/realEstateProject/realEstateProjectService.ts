@@ -58,7 +58,6 @@ export async function loadProjects(): Promise<RealEstateProject[]> {
 
 function validateProjectForm(form: RealEstateProjectForm): void {
   if (!form.project_name.trim()) throw new Error('Project name is required.');
-  if (!form.category_id) throw new Error('Category is required.');
 }
 
 export async function saveProject(form: RealEstateProjectForm): Promise<RealEstateProject> {

@@ -1,9 +1,12 @@
 // src/components/learning/Projects.tsx
 //
-// "Projects" sidebar section — real Categories, each showing its
-// visible courses and any real "document" (PDF) resource attached as a
-// downloadable brochure. Same visual language as MyCourses/LearningHome,
-// with a more colorful/photographic real-estate-brochure feel.
+// "Projects" sidebar section — a flat, browsable list of real estate
+// projects (no category grouping — every project used to need its own
+// one-to-one category, which added a step without adding real value).
+// Each project can show its description, downloadable brochures, and any
+// Page/Test/FAQ sections an admin has added. Same visual language as
+// MyCourses/LearningHome, with a more colorful/photographic
+// real-estate-brochure feel.
 
 import { useEffect, useState } from 'react';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
@@ -12,9 +15,6 @@ import SectionHeroBanner from './SectionHeroBanner';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import type { Project } from '../../services/projects/projectsService';
 
-function IconFolder({ className = 'h-6 w-6' }: { className?: string }) {
-  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-19.5 0v6a2.25 2.25 0 0 0 2.25 2.25h15a2.25 2.25 0 0 0 2.25-2.25v-6m-19.5 0V6a2.25 2.25 0 0 1 2.25-2.25h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H19.5A2.25 2.25 0 0 1 21.75 9v3.75" /></svg>);
-}
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h9a1.5 1.5 0 0 1 1.5 1.5V21M4.5 3v18M4.5 3H3m10.5 0H15m-1.5 18V15a1.5 1.5 0 0 1 1.5-1.5h1.5A1.5 1.5 0 0 1 18 15v6M15 3l4.5 3v15M18.75 3H15M7.5 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6h1.5m-1.5 3h1.5m-1.5 3h1.5" /></svg>);
 }
@@ -32,8 +32,8 @@ function IconDownload({ className = 'h-4 w-4' }: { className?: string }) {
 }
 
 // Rotating gradient palette so the project grid reads as colorful and
-// distinct, even with no per-category photo available.
-const CATEGORY_GRADIENTS = [
+// distinct, even with no per-project photo available.
+const GRADIENTS = [
   'from-indigo-500 to-violet-500',
   'from-rose-500 to-orange-400',
   'from-emerald-500 to-teal-400',
@@ -57,7 +57,7 @@ function Projects() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
-  const [expandedCourseIds, setExpandedCourseIds] = useState<Set<string>>(new Set());
+  const [showFullDetails, setShowFullDetails] = useState(false);
   const [openFaqKeys, setOpenFaqKeys] = useState<Set<string>>(new Set());
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
 
@@ -66,15 +66,6 @@ function Projects() {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      return next;
-    });
-  }
-
-  function toggleDetails(courseId: string) {
-    setExpandedCourseIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(courseId)) next.delete(courseId);
-      else next.add(courseId);
       return next;
     });
   }
@@ -95,15 +86,12 @@ function Projects() {
 
   const searchTerm = search.trim().toLowerCase();
   const filtered = projects.filter(
-    (p) =>
-      !searchTerm ||
-      p.categoryName.toLowerCase().includes(searchTerm) ||
-      p.courses.some((c) => c.courseName.toLowerCase().includes(searchTerm))
+    (p) => !searchTerm || p.projectName.toLowerCase().includes(searchTerm)
   );
 
-  const openProject = projects.find((p) => p.categoryId === openProjectId) ?? null;
-  const openProjectIndex = projects.findIndex((p) => p.categoryId === openProjectId);
-  const openGradient = CATEGORY_GRADIENTS[Math.max(openProjectIndex, 0) % CATEGORY_GRADIENTS.length];
+  const openProject = projects.find((p) => p.projectId === openProjectId) ?? null;
+  const openProjectIndex = projects.findIndex((p) => p.projectId === openProjectId);
+  const openGradient = GRADIENTS[Math.max(openProjectIndex, 0) % GRADIENTS.length];
 
   if (openProject) {
     return (
@@ -114,137 +102,125 @@ function Projects() {
             <IconArrowLeft /> Back to Projects
           </button>
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <IconBuilding />
+            <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-white/20 backdrop-blur-sm">
+              {openProject.thumbnail ? (
+                <img src={openProject.thumbnail} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center"><IconBuilding className="h-9 w-9" /></div>
+              )}
             </div>
             <div>
-              <h2 className="text-2xl font-bold">{openProject.categoryName}</h2>
-              {openProject.description && <p className="mt-1 text-sm text-white/80">{openProject.description}</p>}
+              <h2 className="text-2xl font-bold">{openProject.projectName}</h2>
+              {openProject.shortDescription && <p className="mt-1 text-sm text-white/80">{openProject.shortDescription}</p>}
             </div>
           </div>
         </div>
 
         <div className="space-y-5 p-8">
-          {openProject.courses.map((course) => (
-            <div key={course.courseId} className="flex flex-wrap items-start gap-4 rounded-2xl border border-slate-200 p-5 transition hover:border-slate-300 hover:shadow-md">
-              <div className={`h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${openGradient}`}>
-                {course.thumbnail ? (
-                  <img src={course.thumbnail} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-white/70"><IconBuilding className="h-9 w-9" /></div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold text-slate-800">{course.courseName}</p>
-                {course.shortDescription && <p className="mt-1 text-sm text-slate-500">{course.shortDescription}</p>}
-
-                {course.fullDescription && (
-                  <>
-                    <button
-                      onClick={() => toggleDetails(course.courseId)}
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"
-                    >
-                      {expandedCourseIds.has(course.courseId) ? 'Hide Full Details ▲' : 'View Full Details ▼'}
-                    </button>
-                    {expandedCourseIds.has(course.courseId) && (
-                      <div
-                        className="prose prose-sm mt-3 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                        dangerouslySetInnerHTML={{ __html: course.fullDescription }}
-                      />
-                    )}
-                  </>
-                )}
-
-                {course.brochures.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {course.brochures.map((b) => (
-                      <a
-                        key={b.resourceId}
-                        href={b.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
-                      >
-                        <IconPdf className="h-4 w-4" />
-                        Download Brochure
-                        <IconDownload className="h-3.5 w-3.5" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                {course.sections.length > 0 && (
-                  <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
-                    {course.sections.map((section) => {
-                      if (section.section_type === 'page') {
-                        const key = `page-${section.id}`;
-                        return (
-                          <div key={section.id}>
-                            <button
-                              onClick={() => toggleFaq(key)}
-                              className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline"
-                            >
-                              {openFaqKeys.has(key) ? '▼' : '▶'} {section.title}
-                            </button>
-                            {openFaqKeys.has(key) && (
-                              <div
-                                className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                                dangerouslySetInnerHTML={{ __html: section.page_content }}
-                              />
-                            )}
-                          </div>
-                        );
-                      }
-                      if (section.section_type === 'faq') {
-                        return (
-                          <div key={section.id}>
-                            <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
-                            <div className="space-y-2">
-                              {section.faq_items.map((item, i) => {
-                                const key = `faq-${section.id}-${i}`;
-                                return (
-                                  <div key={key} className="rounded-xl bg-slate-50 p-3">
-                                    <button
-                                      onClick={() => toggleFaq(key)}
-                                      className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-700"
-                                    >
-                                      {item.question}
-                                      <span className="ml-2 flex-shrink-0 text-slate-400">{openFaqKeys.has(key) ? '−' : '+'}</span>
-                                    </button>
-                                    {openFaqKeys.has(key) && (
-                                      <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</p>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      }
-                      // section_type === 'test'
-                      return (
-                        <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 p-4">
-                          <div>
-                            <p className="text-sm font-semibold text-amber-900">{section.title}</p>
-                            <p className="text-xs text-amber-700">Take this test to confirm you've gone through {course.courseName}.</p>
-                          </div>
-                          {section.assessment_id && (
-                            <button
-                              onClick={() => setActiveTestAssessmentId(section.assessment_id)}
-                              className="flex-shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
-                            >
-                              Take Test
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+          {openProject.fullDescription && (
+            <div>
+              <button
+                onClick={() => setShowFullDetails((v) => !v)}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:underline"
+              >
+                {showFullDetails ? 'Hide Full Details ▲' : 'View Full Details ▼'}
+              </button>
+              {showFullDetails && (
+                <div
+                  className="prose prose-sm mt-3 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                  dangerouslySetInnerHTML={{ __html: openProject.fullDescription }}
+                />
+              )}
             </div>
-          ))}
+          )}
+
+          {openProject.brochures.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {openProject.brochures.map((b) => (
+                <a
+                  key={b.resourceId}
+                  href={b.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
+                >
+                  <IconPdf className="h-4 w-4" />
+                  Download Brochure
+                  <IconDownload className="h-3.5 w-3.5" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {openProject.sections.length > 0 && (
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              {openProject.sections.map((section) => {
+                if (section.section_type === 'page') {
+                  const key = `page-${section.id}`;
+                  return (
+                    <div key={section.id}>
+                      <button
+                        onClick={() => toggleFaq(key)}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline"
+                      >
+                        {openFaqKeys.has(key) ? '▼' : '▶'} {section.title}
+                      </button>
+                      {openFaqKeys.has(key) && (
+                        <div
+                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                          dangerouslySetInnerHTML={{ __html: section.page_content }}
+                        />
+                      )}
+                    </div>
+                  );
+                }
+                if (section.section_type === 'faq') {
+                  return (
+                    <div key={section.id}>
+                      <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
+                      <div className="space-y-2">
+                        {section.faq_items.map((item, i) => {
+                          const key = `faq-${section.id}-${i}`;
+                          return (
+                            <div key={key} className="rounded-xl bg-slate-50 p-3">
+                              <button
+                                onClick={() => toggleFaq(key)}
+                                className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-700"
+                              >
+                                {item.question}
+                                <span className="ml-2 flex-shrink-0 text-slate-400">{openFaqKeys.has(key) ? '−' : '+'}</span>
+                              </button>
+                              {openFaqKeys.has(key) && (
+                                <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+                // section_type === 'test'
+                return (
+                  <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">{section.title}</p>
+                      <p className="text-xs text-amber-700">Take this test to confirm you've gone through {openProject.projectName}.</p>
+                    </div>
+                    {section.assessment_id && (
+                      <button
+                        onClick={() => setActiveTestAssessmentId(section.assessment_id)}
+                        className="flex-shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+                      >
+                        Take Test
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -277,7 +253,7 @@ function Projects() {
       <div className="mb-6">
         <input
           className="w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-          placeholder="Search by project or course name..."
+          placeholder="Search by project name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -298,33 +274,33 @@ function Projects() {
       {!loading && !error && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((project, index) => {
-            const gradient = CATEGORY_GRADIENTS[index % CATEGORY_GRADIENTS.length];
-            const brochureCount = project.courses.reduce((sum, c) => sum + c.brochures.length, 0);
+            const gradient = GRADIENTS[index % GRADIENTS.length];
             return (
               <button
-                key={project.categoryId}
-                onClick={() => setOpenProjectId(project.categoryId)}
+                key={project.projectId}
+                onClick={() => setOpenProjectId(project.projectId)}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl"
               >
                 <div className={`relative h-24 bg-gradient-to-br ${gradient}`}>
-                  <div className="absolute -bottom-6 left-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-md ring-4 ring-white">
-                    <IconFolder className="h-7 w-7" />
+                  <div className="absolute -bottom-6 left-5 h-14 w-14 overflow-hidden rounded-2xl bg-white shadow-md ring-4 ring-white">
+                    {project.thumbnail ? (
+                      <img src={project.thumbnail} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-slate-700"><IconBuilding className="h-7 w-7" /></div>
+                    )}
                   </div>
                   <IconArrowRight className="absolute right-4 top-4 h-5 w-5 text-white/70 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
                 </div>
                 <div className="flex-1 px-5 pb-5 pt-9">
-                  <p className="font-bold text-slate-800">{project.categoryName}</p>
-                  {project.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{project.description}</p>}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                      {project.courses.length} course{project.courses.length === 1 ? '' : 's'}
-                    </span>
-                    {brochureCount > 0 && (
+                  <p className="font-bold text-slate-800">{project.projectName}</p>
+                  {project.shortDescription && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{project.shortDescription}</p>}
+                  {project.brochures.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500">
-                        <IconPdf className="h-3 w-3" /> {brochureCount} brochure{brochureCount === 1 ? '' : 's'}
+                        <IconPdf className="h-3 w-3" /> {project.brochures.length} brochure{project.brochures.length === 1 ? '' : 's'}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </button>
             );
