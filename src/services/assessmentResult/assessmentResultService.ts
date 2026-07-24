@@ -17,7 +17,7 @@ export async function createResult(
   data: AssessmentResultForm
 ): Promise<AssessmentResult> {
   validateResultForm(data);
-  return await repositoryCreateResult(data);
+  return await repositoryCreateResult(normalizeResultForm(data));
 }
 
 export async function saveResult(
@@ -26,7 +26,20 @@ export async function saveResult(
 ): Promise<AssessmentResult> {
   if (!id) throw new Error("Invalid Result ID.");
   validateResultForm(data);
-  return await updateResult(id, data);
+  return await updateResult(id, normalizeResultForm(data));
+}
+
+// "Evaluated At" is the only optional field on this form (everything else
+// has a required-field check in validateResultForm) - left blank, it comes
+// through as "", which Postgres rejects for a timestamptz column ("invalid
+// input syntax for type timestamp with time zone"). Every other reader of
+// this field (certificates, reports, employee-facing results) assumes it's
+// always a real date, so default to "now" rather than storing null.
+function normalizeResultForm(data: AssessmentResultForm): AssessmentResultForm {
+  return {
+    ...data,
+    evaluated_at: data.evaluated_at?.trim() ? data.evaluated_at : new Date().toISOString(),
+  };
 }
 
 export async function removeResult(id: string): Promise<void> {
