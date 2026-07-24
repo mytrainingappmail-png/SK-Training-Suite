@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
+import { loadCompletedProjectIds, markProjectComplete } from '../../services/realEstateProject/realEstateProjectService';
 import { getCurrentUser } from '../../services/auth/session';
 import SectionHeroBanner from './SectionHeroBanner';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
@@ -60,6 +61,8 @@ function Projects() {
   const [showFullDetails, setShowFullDetails] = useState(false);
   const [openFaqKeys, setOpenFaqKeys] = useState<Set<string>>(new Set());
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
+  const [completedProjectIds, setCompletedProjectIds] = useState<Set<string>>(new Set());
+  const [markingComplete, setMarkingComplete] = useState(false);
 
   function toggleFaq(key: string) {
     setOpenFaqKeys((prev) => {
@@ -82,7 +85,19 @@ function Projects() {
       .then(setProjects)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load projects.'))
       .finally(() => setLoading(false));
+    loadCompletedProjectIds(user.id).then((ids) => setCompletedProjectIds(new Set(ids))).catch(() => {});
   }, [user?.id]);
+
+  async function handleMarkComplete() {
+    if (!user?.id || !openProjectId) return;
+    setMarkingComplete(true);
+    try {
+      await markProjectComplete(openProjectId, user.id, user.companyId ?? '');
+      setCompletedProjectIds((prev) => new Set(prev).add(openProjectId));
+    } finally {
+      setMarkingComplete(false);
+    }
+  }
 
   const searchTerm = search.trim().toLowerCase();
   const filtered = projects.filter(
@@ -202,23 +217,48 @@ function Projects() {
                   );
                 }
                 // section_type === 'test'
+                const isUnlocked = completedProjectIds.has(openProject.projectId);
                 return (
-                  <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 p-4">
+                  <div key={section.id} className={`flex items-center justify-between gap-3 rounded-xl p-4 ${isUnlocked ? 'bg-amber-50' : 'bg-slate-100'}`}>
                     <div>
-                      <p className="text-sm font-semibold text-amber-900">{section.title}</p>
-                      <p className="text-xs text-amber-700">Take this test to confirm you've gone through {openProject.projectName}.</p>
+                      <p className={`text-sm font-semibold ${isUnlocked ? 'text-amber-900' : 'text-slate-500'}`}>
+                        {isUnlocked ? '' : '🔒 '}{section.title}
+                      </p>
+                      <p className={`text-xs ${isUnlocked ? 'text-amber-700' : 'text-slate-400'}`}>
+                        {isUnlocked
+                          ? `Take this test to confirm you've gone through ${openProject.projectName}.`
+                          : 'Mark the project complete above to unlock this mandatory test.'}
+                      </p>
                     </div>
                     {section.assessment_id && (
                       <button
-                        onClick={() => setActiveTestAssessmentId(section.assessment_id)}
-                        className="flex-shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+                        onClick={() => isUnlocked && setActiveTestAssessmentId(section.assessment_id)}
+                        disabled={!isUnlocked}
+                        className={`flex-shrink-0 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 ${
+                          isUnlocked ? 'bg-amber-500 text-white hover:bg-amber-600' : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                        }`}
                       >
-                        Take Test
+                        {isUnlocked ? 'Take Test' : 'Locked'}
                       </button>
                     )}
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {openProject.sections.some((s) => s.section_type === 'test') && !completedProjectIds.has(openProject.projectId) && (
+            <div className="rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4 text-center">
+              <p className="mb-3 text-sm font-medium text-indigo-900">
+                Read through this project, then mark it complete to unlock the mandatory test.
+              </p>
+              <button
+                onClick={handleMarkComplete}
+                disabled={markingComplete}
+                className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {markingComplete ? 'Marking…' : '✓ Mark Project as Complete'}
+              </button>
             </div>
           )}
         </div>

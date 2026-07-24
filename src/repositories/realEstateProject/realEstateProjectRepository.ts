@@ -140,6 +140,24 @@ export async function deleteSection(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// ── Completion tracking (gates Test sections until marked complete) ────────────
+
+export async function getCompletionsForEmployee(employeeId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('real_estate_project_progress')
+    .select('project_id')
+    .eq('employee_id', employeeId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.project_id);
+}
+
+export async function markProjectComplete(projectId: string, employeeId: string, companyId: string): Promise<void> {
+  const { error } = await supabase
+    .from('real_estate_project_progress')
+    .upsert({ project_id: projectId, employee_id: employeeId, company_id: companyId }, { onConflict: 'project_id,employee_id' });
+  if (error) throw new Error(error.message);
+}
+
 // ── Real file upload (thumbnail images + brochure PDFs) ────────────────────────
 // Reuses the existing "course-content" public storage bucket, in its
 // images/ and documents/ folders — the same bucket the rest of the app

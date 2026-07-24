@@ -22,6 +22,8 @@ import {
   createSection as repoCreateSection,
   updateSection,
   deleteSection,
+  getCompletionsForEmployee,
+  markProjectComplete as repoMarkProjectComplete,
 } from '../../repositories/realEstateProject/realEstateProjectRepository';
 import type {
   RealEstateProjectCategory,
@@ -145,4 +147,14 @@ export async function editSection(id: string, form: Partial<RealEstateProjectSec
 
 export async function removeSection(id: string): Promise<void> {
   await deleteSection(id);
+}
+
+// ── Completion tracking (gates Test sections until marked complete) ────────────
+
+export async function loadCompletedProjectIds(employeeId: string): Promise<string[]> {
+  return getCompletionsForEmployee(employeeId);
+}
+
+export async function markProjectComplete(projectId: string, employeeId: string, companyId: string): Promise<void> {
+  await repoMarkProjectComplete(projectId, employeeId, companyId);
 }
