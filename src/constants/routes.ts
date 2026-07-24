@@ -47,6 +47,7 @@ export const ROUTES = {
   VIDEOS: "/learning/videos",
 
   PROJECTS: "/learning/projects",
+  BRAINSTORMING: "/learning/brainstorming",
 
   CERTIFICATE_VIEW: "/learning/certificate/:certificateId",
 

@@ -83,6 +83,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'course-visibility', label: 'Course Visibility' },
       { tab: 'video-library-content', label: 'Video Library' },
       { tab: 'real-estate-projects', label: 'Projects' },
+      { tab: 'brainstorming', label: 'Brainstorming', operatorOnly: true },
     ],
   },
   {

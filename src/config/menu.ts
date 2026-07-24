@@ -101,6 +101,14 @@ export const MENU: MenuItem[] = [
     group: "My Learning",
   },
   {
+    id: "brainstorming",
+    title: "Brainstorming",
+    route: ROUTES.BRAINSTORMING,
+    icon: "lightbulb",
+    visible: true,
+    group: "My Learning",
+  },
+  {
     id: "my-attendance",
     title: "My Attendance",
     route: ROUTES.MY_ATTENDANCE,

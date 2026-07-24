@@ -22,6 +22,7 @@ import LearningHome from "./components/learning/LearningHome";
 import MyCourses from "./components/learning/MyCourses";
 import Videos from "./pages/Videos";
 import ProjectsPage from "./pages/Projects";
+import BrainstormingPage from "./pages/Brainstorming";
 import CertificateViewPage from "./components/certificate/CertificateViewPage";
 import AttendancePage from "./pages/AttendancePage";
 import MyTicketsPage from "./pages/MyTicketsPage";
@@ -161,6 +162,7 @@ function App() {
         <Route path={ROUTES.CONTINUE_LEARNING} element={<ContinueLearning />} />
         <Route path={ROUTES.VIDEOS} element={<Videos />} />
         <Route path={ROUTES.PROJECTS} element={<ProjectsPage />} />
+        <Route path={ROUTES.BRAINSTORMING} element={<BrainstormingPage />} />
         <Route path={ROUTES.CERTIFICATE_VIEW} element={<CertificateViewPage />} />
         <Route path={ROUTES.MY_ATTENDANCE} element={<AttendancePage />} />
         <Route

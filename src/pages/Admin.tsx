@@ -45,6 +45,7 @@ import NotificationLog from "../modules/license/NotificationLog";
 import PaymentSettingsManagement from "../modules/payment/PaymentSettingsManagement";
 import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibilityMatrix";
 import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
+import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
 import VideoLibraryManagement from "../modules/videoLibraryContent/VideoLibraryManagement";
 import BulkCertificateIssue from "../modules/certificate/BulkCertificateIssue";
 import AttendanceManagement from "../modules/attendance/AttendanceManagement";
@@ -529,6 +530,15 @@ function Admin() {
               </button>
             )}
 
+            {isPlatformOperator && matches("Brainstorming") && (
+              <button
+                onClick={() => setActiveTab("brainstorming")}
+                className={getTabClass("brainstorming")}
+              >
+                Brainstorming
+              </button>
+            )}
+
             {matches("Video Library") && (
               <button
                 onClick={() => setActiveTab("video-library-content")}
@@ -670,6 +680,8 @@ function Admin() {
             {activeTab === "course-visibility" && <CourseVisibilityMatrix />}
 
             {activeTab === "real-estate-projects" && <RealEstateProjectManagement />}
+
+            {activeTab === "brainstorming" && isPlatformOperator && <BrainstormingManagement />}
 
             {activeTab === "video-library-content" && <VideoLibraryManagement />}
 
