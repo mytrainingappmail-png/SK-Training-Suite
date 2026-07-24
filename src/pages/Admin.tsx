@@ -46,6 +46,7 @@ import PaymentSettingsManagement from "../modules/payment/PaymentSettingsManagem
 import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibilityMatrix";
 import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
 import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
+import EmployeeOfTheMonthManagement from "../components/admin/employeeOfTheMonth/EmployeeOfTheMonthManagement";
 import VideoLibraryManagement from "../modules/videoLibraryContent/VideoLibraryManagement";
 import BulkCertificateIssue from "../modules/certificate/BulkCertificateIssue";
 import AttendanceManagement from "../modules/attendance/AttendanceManagement";
@@ -167,6 +168,15 @@ function Admin() {
                 className={getTabClass("employee")}
               >
                 Employees
+              </button>
+            )}
+
+            {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employee of the Month") && (
+              <button
+                onClick={() => setActiveTab("employee-of-the-month")}
+                className={getTabClass("employee-of-the-month")}
+              >
+                Employee of the Month
               </button>
             )}
 
@@ -597,6 +607,8 @@ function Admin() {
             {activeTab === "roles" && can(PERMISSIONS.VIEW_ROLE) && <RoleManagement />}
 
             {activeTab === "employee" && can(PERMISSIONS.VIEW_EMPLOYEE) && <EmployeeManagement />}
+
+            {activeTab === "employee-of-the-month" && can(PERMISSIONS.VIEW_EMPLOYEE) && <EmployeeOfTheMonthManagement />}
 
             {activeTab === "category" && can(PERMISSIONS.VIEW_CATEGORY) && <CategoryManagement />}
 

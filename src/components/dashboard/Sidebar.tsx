@@ -67,6 +67,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'department', label: 'Departments', permission: PERMISSIONS.VIEW_DEPARTMENT },
       { tab: 'designation', label: 'Designations', permission: PERMISSIONS.VIEW_DESIGNATION },
       { tab: 'employee', label: 'Employees', permission: PERMISSIONS.VIEW_EMPLOYEE },
+      { tab: 'employee-of-the-month', label: 'Employee of the Month', permission: PERMISSIONS.VIEW_EMPLOYEE },
       { tab: 'roles', label: 'Roles', permission: PERMISSIONS.VIEW_ROLE },
       { tab: 'employee-role', label: 'Employee Roles', permission: PERMISSIONS.VIEW_EMPLOYEE_ROLE },
       { tab: 'permissions', label: 'Permissions', permission: PERMISSIONS.VIEW_PERMISSION, operatorOnly: true },

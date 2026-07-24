@@ -14,6 +14,7 @@ import { getCurrentUser }      from '../../services/auth/session';
 import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
 import { ROUTES } from '../../constants/routes';
 import SectionHeroBanner from './SectionHeroBanner';
+import EmployeeOfTheMonthCard from './EmployeeOfTheMonthCard';
 import { MiniBarChart, MiniDonutChart } from '../shared/MiniCharts';
 import type { LearningHome }   from '../../types/learning';
 
@@ -282,6 +283,8 @@ export default function LearningHome() {
         statLabel="Overall Progress"
         statValue={`${summary.overallProgressPct}%`}
       />
+
+      <EmployeeOfTheMonthCard />
 
       {/* ── Summary cards ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
