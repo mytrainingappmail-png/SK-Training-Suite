@@ -8,6 +8,8 @@
 import { loadCategories } from '../realEstateProject/realEstateProjectService';
 import { loadProjects } from '../realEstateProject/realEstateProjectService';
 import { loadAllBrochures } from '../realEstateProject/realEstateProjectService';
+import { loadAllSections } from '../realEstateProject/realEstateProjectService';
+import type { RealEstateProjectSection } from '../../types/realEstateProjectSection';
 
 export interface ProjectBrochure {
   resourceId: string;
@@ -22,6 +24,7 @@ export interface ProjectCourse {
   fullDescription: string;
   thumbnail: string;
   brochures: ProjectBrochure[];
+  sections: RealEstateProjectSection[];
 }
 
 export interface Project {
@@ -32,10 +35,11 @@ export interface Project {
 }
 
 export async function loadProjectsForEmployee(_employeeId: string): Promise<Project[]> {
-  const [categories, projects, brochures] = await Promise.all([
+  const [categories, projects, brochures, sections] = await Promise.all([
     loadCategories(),
     loadProjects(),
     loadAllBrochures(),
+    loadAllSections(),
   ]);
 
   const activeCategories = categories.filter((c) => c.active);
@@ -53,6 +57,9 @@ export async function loadProjectsForEmployee(_employeeId: string): Promise<Proj
           brochures: brochures
             .filter((b) => b.project_id === p.id)
             .map((b) => ({ resourceId: b.id, title: b.title, fileUrl: b.file_url })),
+          sections: sections
+            .filter((s) => s.project_id === p.id)
+            .sort((a, b) => a.display_order - b.display_order),
         }));
 
       return {

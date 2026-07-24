@@ -17,6 +17,11 @@ import {
   deleteBrochure,
   uploadProjectThumbnail,
   uploadProjectBrochure,
+  getSectionsForProject,
+  getAllSections,
+  createSection as repoCreateSection,
+  updateSection,
+  deleteSection,
 } from '../../repositories/realEstateProject/realEstateProjectRepository';
 import type {
   RealEstateProjectCategory,
@@ -25,6 +30,10 @@ import type {
   RealEstateProjectForm,
   RealEstateProjectBrochure,
 } from '../../types/realEstateProject';
+import type {
+  RealEstateProjectSection,
+  RealEstateProjectSectionForm,
+} from '../../types/realEstateProjectSection';
 
 export async function loadCategories(): Promise<RealEstateProjectCategory[]> {
   return getCategories();
@@ -105,4 +114,36 @@ export async function uploadThumbnail(file: File, projectId: string): Promise<st
  * thumbnails, just a distinct random name so nothing collides. */
 export async function uploadInlineImage(file: File): Promise<string> {
   return uploadProjectThumbnail(file, `inline-${Date.now()}-${Math.round(Math.random() * 10000)}`);
+}
+
+// ── Sections (Page / Test / FAQ) ────────────────────────────────────────────────
+
+export async function loadSectionsForProject(projectId: string): Promise<RealEstateProjectSection[]> {
+  return getSectionsForProject(projectId);
+}
+
+export async function loadAllSections(): Promise<RealEstateProjectSection[]> {
+  return getAllSections();
+}
+
+function validateSectionForm(form: RealEstateProjectSectionForm): void {
+  if (!form.project_id) throw new Error('Project is required.');
+  if (!form.title.trim()) throw new Error('Subject line is required.');
+  if (form.section_type === 'test' && !form.assessment_id) {
+    throw new Error('Choose an assessment for this test section.');
+  }
+}
+
+export async function saveSection(form: RealEstateProjectSectionForm): Promise<RealEstateProjectSection> {
+  validateSectionForm(form);
+  return repoCreateSection(form);
+}
+
+export async function editSection(id: string, form: Partial<RealEstateProjectSectionForm>): Promise<RealEstateProjectSection> {
+  if (!id) throw new Error('Invalid section ID.');
+  return updateSection(id, form);
+}
+
+export async function removeSection(id: string): Promise<void> {
+  await deleteSection(id);
 }

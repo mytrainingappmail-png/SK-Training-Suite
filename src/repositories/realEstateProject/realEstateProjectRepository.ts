@@ -13,6 +13,10 @@ import type {
   RealEstateProjectBrochure,
   RealEstateProjectBrochureForm,
 } from '../../types/realEstateProject';
+import type {
+  RealEstateProjectSection,
+  RealEstateProjectSectionForm,
+} from '../../types/realEstateProjectSection';
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
@@ -95,6 +99,44 @@ export async function createBrochure(form: RealEstateProjectBrochureForm): Promi
 
 export async function deleteBrochure(id: string): Promise<void> {
   const { error } = await supabase.from('real_estate_project_brochures').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Sections (Page / Test / FAQ) ────────────────────────────────────────────────
+
+export async function getSectionsForProject(projectId: string): Promise<RealEstateProjectSection[]> {
+  const { data, error } = await supabase
+    .from('real_estate_project_sections')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('display_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getAllSections(): Promise<RealEstateProjectSection[]> {
+  const { data, error } = await supabase
+    .from('real_estate_project_sections')
+    .select('*')
+    .order('display_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function createSection(form: RealEstateProjectSectionForm): Promise<RealEstateProjectSection> {
+  const { data, error } = await supabase.from('real_estate_project_sections').insert(form).select().maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function updateSection(id: string, form: Partial<RealEstateProjectSectionForm>): Promise<RealEstateProjectSection> {
+  const { data, error } = await supabase.from('real_estate_project_sections').update(form).eq('id', id).select().maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function deleteSection(id: string): Promise<void> {
+  const { error } = await supabase.from('real_estate_project_sections').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
 

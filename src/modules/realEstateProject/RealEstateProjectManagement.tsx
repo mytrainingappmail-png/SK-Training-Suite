@@ -12,10 +12,15 @@ import {
   loadProjects, saveProject, editProject, removeProject,
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
+  loadSectionsForProject, saveSection, editSection, removeSection,
 } from '../../services/realEstateProject/realEstateProjectService';
+import { loadAssessments } from '../../services/assessment/assessmentService';
 import { getCurrentUser } from '../../services/auth/session';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import type { RealEstateProjectCategory, RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
+import type { RealEstateProjectSection, RealEstateProjectSectionForm, ProjectSectionFaqItem } from '../../types/realEstateProjectSection';
+import { defaultProjectSectionForm } from '../../types/realEstateProjectSection';
+import type { Assessment } from '../../types/assessment';
 
 function IconSpinner({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z" /></svg>);
@@ -41,6 +46,12 @@ function RealEstateProjectManagement() {
   const [brochureMode, setBrochureMode] = useState<'upload' | 'link'>('upload');
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
 
+  const [sections, setSections] = useState<RealEstateProjectSection[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [sectionDraft, setSectionDraft] = useState<RealEstateProjectSectionForm | null>(null);
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [savingSection, setSavingSection] = useState(false);
+
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const brochureInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,7 +68,16 @@ function RealEstateProjectManagement() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+    loadAssessments().then(setAssessments).catch(() => setAssessments([]));
+  }, []);
+
+  function fetchSections(projectId: string) {
+    loadSectionsForProject(projectId)
+      .then(setSections)
+      .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load sections.'));
+  }
 
   async function handleAddCategory() {
     if (!newCategoryName.trim() || !user?.companyId) return;
@@ -82,6 +102,8 @@ function RealEstateProjectManagement() {
   function startNewProject() {
     setEditingProjectId('new');
     setDraft({ project_name: '', category_id: categories[0]?.id ?? '', short_description: '', full_description: '', thumbnail_url: '' });
+    setSections([]);
+    setSectionDraft(null);
   }
 
   function startEditProject(p: RealEstateProject) {
@@ -93,6 +115,8 @@ function RealEstateProjectManagement() {
       full_description: p.full_description,
       thumbnail_url: p.thumbnail_url,
     });
+    setSectionDraft(null);
+    fetchSections(p.id);
   }
 
   async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -181,6 +205,79 @@ function RealEstateProjectManagement() {
   }
 
   const projectBrochures = brochures.filter((b) => b.project_id === editingProjectId);
+
+  function startNewSection() {
+    if (!editingProjectId || editingProjectId === 'new' || !user?.companyId) return;
+    setEditingSectionId('new');
+    setSectionDraft({ ...defaultProjectSectionForm, company_id: user.companyId, project_id: editingProjectId, display_order: sections.length });
+  }
+
+  function startEditSection(s: RealEstateProjectSection) {
+    setEditingSectionId(s.id);
+    setSectionDraft({
+      company_id: s.company_id,
+      project_id: s.project_id,
+      section_type: s.section_type,
+      title: s.title,
+      display_order: s.display_order,
+      page_content: s.page_content,
+      assessment_id: s.assessment_id,
+      faq_items: s.faq_items,
+    });
+  }
+
+  async function handleSaveSection() {
+    if (!sectionDraft) return;
+    setSavingSection(true);
+    try {
+      if (editingSectionId === 'new') {
+        await saveSection(sectionDraft);
+      } else if (editingSectionId) {
+        await editSection(editingSectionId, sectionDraft);
+      }
+      setEditingSectionId(null);
+      setSectionDraft(null);
+      if (editingProjectId && editingProjectId !== 'new') fetchSections(editingProjectId);
+      showToast('Section saved');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save section.');
+    } finally {
+      setSavingSection(false);
+    }
+  }
+
+  async function handleDeleteSection(id: string) {
+    try {
+      await removeSection(id);
+      if (editingProjectId && editingProjectId !== 'new') fetchSections(editingProjectId);
+      showToast('Section deleted');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete section.');
+    }
+  }
+
+  function updateFaqItem(index: number, field: keyof ProjectSectionFaqItem, value: string) {
+    setSectionDraft((d) => {
+      if (!d) return d;
+      const items = [...d.faq_items];
+      items[index] = { ...items[index], [field]: value };
+      return { ...d, faq_items: items };
+    });
+  }
+
+  function addFaqItem() {
+    setSectionDraft((d) => (d ? { ...d, faq_items: [...d.faq_items, { question: '', answer: '' }] } : d));
+  }
+
+  function removeFaqItem(index: number) {
+    setSectionDraft((d) => (d ? { ...d, faq_items: d.faq_items.filter((_, i) => i !== index) } : d));
+  }
+
+  function sectionTypeLabel(t: string): string {
+    if (t === 'page') return 'Page';
+    if (t === 'test') return 'Test';
+    return 'FAQ';
+  }
 
   if (loading) {
     return <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div>;
@@ -315,6 +412,140 @@ function RealEstateProjectManagement() {
                 <p className="mt-1 text-xs text-slate-400">
                   For a Google Drive link, make sure sharing is set to "Anyone with the link" so employees can open it.
                 </p>
+              </div>
+            )}
+
+            {editingProjectId !== 'new' && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">
+                  Sections — add a Page, a Test, or an FAQ, in the order employees should go through them
+                </label>
+
+                <div className="mb-3 space-y-2">
+                  {sections.length === 0 && (
+                    <p className="text-xs text-slate-400">No sections yet — add one below.</p>
+                  )}
+                  {sections.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                          s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {sectionTypeLabel(s.section_type)}
+                        </span>
+                        <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+                        {s.section_type === 'test' && (
+                          <span className="text-xs text-slate-400">
+                            {assessments.find((a) => a.id === s.assessment_id)?.assessment_title ?? '— assessment not found —'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => startEditSection(s)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
+                        <button onClick={() => handleDeleteSection(s.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {sectionDraft ? (
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">Subject Line</label>
+                        <input
+                          value={sectionDraft.title}
+                          onChange={(e) => setSectionDraft((d) => d && { ...d, title: e.target.value })}
+                          placeholder="e.g. Master Plan Overview"
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">Type</label>
+                        <select
+                          value={sectionDraft.section_type}
+                          onChange={(e) => setSectionDraft((d) => d && { ...d, section_type: e.target.value as 'page' | 'test' | 'faq' })}
+                          className={INPUT_CLS}
+                        >
+                          <option value="page">Page</option>
+                          <option value="test">Test</option>
+                          <option value="faq">FAQ</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {sectionDraft.section_type === 'page' && (
+                      <RichTextEditor
+                        value={sectionDraft.page_content}
+                        onChange={(v) => setSectionDraft((d) => d && { ...d, page_content: v })}
+                        onImageUpload={uploadInlineImage}
+                        minHeight={220}
+                        resetKey={editingSectionId ?? 'new-section'}
+                      />
+                    )}
+
+                    {sectionDraft.section_type === 'test' && (
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">Assessment</label>
+                        <select
+                          value={sectionDraft.assessment_id ?? ''}
+                          onChange={(e) => setSectionDraft((d) => d && { ...d, assessment_id: e.target.value || null })}
+                          className={INPUT_CLS}
+                        >
+                          <option value="">— Select Assessment —</option>
+                          {assessments.map((a) => <option key={a.id} value={a.id}>{a.assessment_title}</option>)}
+                        </select>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Uses your existing Assessment/Question Bank setup — the score is a normal assessment result, so it shows up in Results and Reports automatically.
+                        </p>
+                      </div>
+                    )}
+
+                    {sectionDraft.section_type === 'faq' && (
+                      <div className="space-y-3">
+                        {sectionDraft.faq_items.map((item, i) => (
+                          <div key={i} className="rounded-lg bg-slate-50 p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-xs font-semibold text-slate-500">Question {i + 1}</span>
+                              <button onClick={() => removeFaqItem(i)} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>
+                            </div>
+                            <input
+                              value={item.question}
+                              onChange={(e) => updateFaqItem(i, 'question', e.target.value)}
+                              placeholder="Question"
+                              className={`${INPUT_CLS} mb-2`}
+                            />
+                            <textarea
+                              value={item.answer}
+                              onChange={(e) => updateFaqItem(i, 'answer', e.target.value)}
+                              placeholder="Answer"
+                              rows={2}
+                              className={INPUT_CLS}
+                            />
+                          </div>
+                        ))}
+                        <button onClick={addFaqItem} className="text-xs font-semibold text-indigo-600 hover:underline">+ Add Question</button>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button onClick={() => { setEditingSectionId(null); setSectionDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveSection}
+                        disabled={savingSection}
+                        className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {savingSection ? 'Saving…' : 'Save Section'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={startNewSection} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    + Add Section
+                  </button>
+                )}
               </div>
             )}
           </div>

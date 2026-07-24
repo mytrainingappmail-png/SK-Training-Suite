@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
 import { getCurrentUser } from '../../services/auth/session';
 import SectionHeroBanner from './SectionHeroBanner';
+import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import type { Project } from '../../services/projects/projectsService';
 
 function IconFolder({ className = 'h-6 w-6' }: { className?: string }) {
@@ -57,6 +58,17 @@ function Projects() {
   const [search, setSearch] = useState('');
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [expandedCourseIds, setExpandedCourseIds] = useState<Set<string>>(new Set());
+  const [openFaqKeys, setOpenFaqKeys] = useState<Set<string>>(new Set());
+  const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
+
+  function toggleFaq(key: string) {
+    setOpenFaqKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function toggleDetails(courseId: string) {
     setExpandedCourseIds((prev) => {
@@ -95,6 +107,7 @@ function Projects() {
 
   if (openProject) {
     return (
+      <>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className={`bg-gradient-to-r ${openGradient} px-8 py-8 text-white`}>
           <button onClick={() => setOpenProjectId(null)} className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white/90 transition hover:text-white">
@@ -160,11 +173,93 @@ function Projects() {
                     ))}
                   </div>
                 )}
+
+                {course.sections.length > 0 && (
+                  <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
+                    {course.sections.map((section) => {
+                      if (section.section_type === 'page') {
+                        const key = `page-${section.id}`;
+                        return (
+                          <div key={section.id}>
+                            <button
+                              onClick={() => toggleFaq(key)}
+                              className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline"
+                            >
+                              {openFaqKeys.has(key) ? '▼' : '▶'} {section.title}
+                            </button>
+                            {openFaqKeys.has(key) && (
+                              <div
+                                className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                                dangerouslySetInnerHTML={{ __html: section.page_content }}
+                              />
+                            )}
+                          </div>
+                        );
+                      }
+                      if (section.section_type === 'faq') {
+                        return (
+                          <div key={section.id}>
+                            <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
+                            <div className="space-y-2">
+                              {section.faq_items.map((item, i) => {
+                                const key = `faq-${section.id}-${i}`;
+                                return (
+                                  <div key={key} className="rounded-xl bg-slate-50 p-3">
+                                    <button
+                                      onClick={() => toggleFaq(key)}
+                                      className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-700"
+                                    >
+                                      {item.question}
+                                      <span className="ml-2 flex-shrink-0 text-slate-400">{openFaqKeys.has(key) ? '−' : '+'}</span>
+                                    </button>
+                                    {openFaqKeys.has(key) && (
+                                      <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
+                      // section_type === 'test'
+                      return (
+                        <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 p-4">
+                          <div>
+                            <p className="text-sm font-semibold text-amber-900">{section.title}</p>
+                            <p className="text-xs text-amber-700">Take this test to confirm you've gone through {course.courseName}.</p>
+                          </div>
+                          {section.assessment_id && (
+                            <button
+                              onClick={() => setActiveTestAssessmentId(section.assessment_id)}
+                              className="flex-shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+                            >
+                              Take Test
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      {activeTestAssessmentId && user?.id && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
+            <AssessmentPlayer
+              assessmentId={activeTestAssessmentId}
+              employeeId={user.id}
+              onFinish={() => setActiveTestAssessmentId(null)}
+            />
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 
