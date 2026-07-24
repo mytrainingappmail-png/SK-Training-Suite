@@ -363,6 +363,7 @@ function AssessmentModal({
     isEdit
       ? {
           lesson_id:               editing.lesson_id,
+          company_id:              editing.company_id,
           assessment_code:         editing.assessment_code,
           assessment_title:        editing.assessment_title,
           description:             editing.description,
@@ -490,7 +491,7 @@ function AssessmentModal({
             <FL label="Lesson" required error={errs.lesson_id}>
               <select
                 ref={firstRef}
-                value={form.lesson_id}
+                value={form.lesson_id ?? ''}
                 onChange={(e) => field("lesson_id", e.target.value)}
                 disabled={saving}
                 className={CLS_SELECT}
@@ -1011,7 +1012,7 @@ export default function AssessmentManagement() {
                       </td>
 
                       <td className="px-4 py-3 text-slate-600">
-                        {findName(lessons, ass.lesson_id, "lesson_title")}
+                        {findName(lessons, ass.lesson_id ?? '', "lesson_title")}
                       </td>
 
                       <td className="px-4 py-3">

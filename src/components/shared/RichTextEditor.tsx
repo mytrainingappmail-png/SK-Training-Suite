@@ -12,7 +12,7 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
-import Color from '@tiptap/extension-color';
+import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style';
 import Highlight from '@tiptap/extension-highlight';
 import Underline from '@tiptap/extension-underline';
 import ImageExtension from '@tiptap/extension-image';
@@ -45,36 +45,6 @@ const FONT_SIZES = [
 const TEXT_COLORS = ['#0F172A', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777'];
 const HIGHLIGHT_COLORS = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA'];
 const CELL_COLORS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3', '#FFEDD5', '#FFFFFF'];
-
-// TextStyle has no built-in font size, and Color already extends
-// TextStyle to add color — extending it a second time (separately)
-// for font size would create two extensions with the same internal
-// name and conflict. This combines both into one real, single
-// extension of TextStyle instead.
-const TextStyleExtended = Color.extend({
-  addAttributes() {
-    const parentAttrs = (this as { parent?: () => Record<string, unknown> }).parent?.() ?? {};
-    return {
-      ...parentAttrs,
-      fontSize: {
-        default: null,
-        parseHTML: (element: HTMLElement) => element.style.fontSize || null,
-        renderHTML: (attributes: Record<string, unknown>) => {
-          if (!attributes.fontSize) return {};
-          return { style: `font-size: ${attributes.fontSize}` };
-        },
-      },
-      fontFamily: {
-        default: null,
-        parseHTML: (element: HTMLElement) => element.style.fontFamily || null,
-        renderHTML: (attributes: Record<string, unknown>) => {
-          if (!attributes.fontFamily) return {};
-          return { style: `font-family: ${attributes.fontFamily}` };
-        },
-      },
-    };
-  },
-});
 
 // The default TableCell extension has no concept of a background
 // color — this extends it with one real attribute that reads/writes
@@ -160,7 +130,10 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     extensions: [
       StarterKit,
       Underline,
-      TextStyleExtended,
+      TextStyle,
+      Color,
+      FontFamily,
+      FontSize,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Start writing…' }),
@@ -172,6 +145,11 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     ],
     content: value || '',
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
+    // Without this, TipTap v3 only re-renders the toolbar on content
+    // changes, not on pure selection moves (clicking into a different
+    // cell, moving the cursor) — so button active/disabled states and
+    // the font dropdowns would show stale, one-step-behind values.
+    shouldRerenderOnTransaction: true,
     editorProps: {
       attributes: {
         class: 'rte-content focus:outline-none',
@@ -229,8 +207,8 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         <div className="mx-1 h-5 w-px bg-slate-200" />
 
         <select
-          onChange={(e) => editor.chain().focus().setMark('textStyle', { fontFamily: e.target.value }).run()}
-          defaultValue=""
+          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+          value={editor.getAttributes('textStyle').fontFamily ?? ''}
           className="cursor-pointer rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
           title="Font family"
         >
@@ -239,8 +217,8 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         </select>
 
         <select
-          onChange={(e) => editor.chain().focus().setMark('textStyle', { fontSize: e.target.value }).run()}
-          defaultValue=""
+          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
+          value={editor.getAttributes('textStyle').fontSize ?? ''}
           className="cursor-pointer rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
           title="Font size"
         >

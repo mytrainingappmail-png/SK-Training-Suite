@@ -9,7 +9,11 @@ export interface Assessment {
 
   id: string;
 
-  lesson_id: string;
+  lesson_id: string | null;
+
+  // Only set for lesson-less assessments (e.g. a Project "Test" section) —
+  // course-linked assessments derive their company via lesson_id instead.
+  company_id: string | null;
 
   assessment_code: string;
 
@@ -60,6 +64,7 @@ export type AssessmentForm = Omit<
 
 export const defaultAssessmentForm: AssessmentForm = {
   lesson_id:               "",
+  company_id:              null,
   assessment_code:         "",
   assessment_title:        "",
   description:             "",

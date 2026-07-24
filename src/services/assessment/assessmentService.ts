@@ -67,7 +67,6 @@ export async function toggleAssessmentStatus(
 }
 
 function validateAssessmentForm(data: Partial<AssessmentForm>): void {
-  if (!data.lesson_id)               throw new Error("Lesson is required.");
   if (!data.assessment_code?.trim()) throw new Error("Assessment Code is required.");
   if (!data.assessment_title?.trim()) throw new Error("Assessment Title is required.");
   if (!data.assessment_type)         throw new Error("Assessment Type is required.");

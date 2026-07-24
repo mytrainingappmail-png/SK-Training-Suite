@@ -76,6 +76,7 @@ import type { Category } from '../../../types/category';
 function toAssessmentForm(a: Assessment): AssessmentForm {
   return {
     lesson_id: a.lesson_id,
+    company_id: a.company_id,
     assessment_code: a.assessment_code,
     assessment_title: a.assessment_title,
     description: a.description,
@@ -652,7 +653,7 @@ function AssessmentManagement() {
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   function resolveCourse(a: Assessment): Course | null {
-    const lesson = lessonById.get(a.lesson_id);
+    const lesson = a.lesson_id ? lessonById.get(a.lesson_id) : undefined;
     const mod = lesson ? moduleById.get(lesson.module_id) : undefined;
     return mod ? courseById.get(mod.course_id) ?? null : null;
   }
@@ -705,6 +706,7 @@ function AssessmentManagement() {
       const lesson = lessonById.get(newLessonId);
       const created = await createAssessment({
         lesson_id: newLessonId,
+        company_id: null,
         assessment_code: `ASM-${Date.now().toString(36).toUpperCase()}`,
         assessment_title: lesson?.lesson_title || 'Untitled Assessment',
         description: '',
