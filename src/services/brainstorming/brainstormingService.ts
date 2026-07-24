@@ -12,7 +12,10 @@ export async function loadItems(): Promise<BrainstormingItem[]> {
 
 function validateForm(form: BrainstormingItemForm): void {
   if (!form.question.trim()) throw new Error("Question is required.");
-  if (!form.answer.trim()) throw new Error("Answer is required.");
+  if (!form.option_a.trim() || !form.option_b.trim() || !form.option_c.trim() || !form.option_d.trim()) {
+    throw new Error("All 4 options are required.");
+  }
+  if (!form.correct_option) throw new Error("Mark which option is correct.");
 }
 
 export async function saveItem(form: BrainstormingItemForm): Promise<BrainstormingItem> {
