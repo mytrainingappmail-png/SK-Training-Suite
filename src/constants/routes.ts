@@ -2,6 +2,8 @@ export const ROUTES = {
 
   LOGIN: "/",
 
+  LEGAL_DOCUMENT: "/legal/:slug",
+
   DASHBOARD: "/dashboard",
 
   TRAINING: "/training",

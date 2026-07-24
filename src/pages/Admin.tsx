@@ -47,6 +47,7 @@ import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibility
 import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
 import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
 import EmployeeOfTheMonthManagement from "../components/admin/employeeOfTheMonth/EmployeeOfTheMonthManagement";
+import LegalDocumentManagement from "../components/admin/legal/LegalDocumentManagement";
 import VideoLibraryManagement from "../modules/videoLibraryContent/VideoLibraryManagement";
 import BulkCertificateIssue from "../modules/certificate/BulkCertificateIssue";
 import AttendanceManagement from "../modules/attendance/AttendanceManagement";
@@ -414,6 +415,15 @@ function Admin() {
               </button>
             )}
 
+            {isPlatformOperator && matches("Legal Documents") && (
+              <button
+                onClick={() => setActiveTab("legal-documents")}
+                className={getTabClass("legal-documents")}
+              >
+                Legal Documents
+              </button>
+            )}
+
             {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
               <button
                 onClick={() => setActiveTab("menu")}
@@ -676,6 +686,8 @@ function Admin() {
             {activeTab === "theme" && isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && <ThemeManagement />}
 
             {activeTab === "settings" && isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && <SettingsManagement />}
+
+            {activeTab === "legal-documents" && isPlatformOperator && <LegalDocumentManagement />}
 
             {activeTab === "menu" && isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
 

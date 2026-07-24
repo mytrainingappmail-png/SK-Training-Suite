@@ -131,6 +131,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
     items: [
       { tab: 'theme', label: 'Theme', permission: PERMISSIONS.VIEW_THEME, operatorOnly: true },
       { tab: 'settings', label: 'Settings', permission: PERMISSIONS.VIEW_SETTINGS, operatorOnly: true },
+      { tab: 'legal-documents', label: 'Legal Documents', operatorOnly: true },
       { tab: 'menu', label: 'Menu', permission: PERMISSIONS.VIEW_MENU, operatorOnly: true },
       { tab: 'reports', label: 'Reports', permission: PERMISSIONS.VIEW_REPORTS },
       { tab: 'notifications', label: 'Notifications' },

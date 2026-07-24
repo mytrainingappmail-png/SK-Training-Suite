@@ -23,6 +23,7 @@ import MyCourses from "./components/learning/MyCourses";
 import Videos from "./pages/Videos";
 import ProjectsPage from "./pages/Projects";
 import BrainstormingPage from "./pages/Brainstorming";
+import LegalDocumentPage from "./pages/LegalDocumentPage";
 import CertificateViewPage from "./components/certificate/CertificateViewPage";
 import AttendancePage from "./pages/AttendancePage";
 import MyTicketsPage from "./pages/MyTicketsPage";
@@ -56,6 +57,7 @@ function App() {
     <Routes>
       {/* Public Route */}
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+      <Route path={ROUTES.LEGAL_DOCUMENT} element={<LegalDocumentPage />} />
 
       {/* Protected Application — outer guard only checks "is logged in" */}
       <Route
