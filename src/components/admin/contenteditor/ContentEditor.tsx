@@ -457,6 +457,7 @@ function ContentEditor({ lessonId }: ContentEditorProps) {
         lesson_type: 'text',
         content: '',
         video_url: '',
+        thumbnail: '',
         duration_minutes: 0,
         display_order: siblingCount + 1,
         downloadable: false,

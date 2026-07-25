@@ -26,6 +26,8 @@ export interface Lesson {
 
   video_url: string;
 
+  thumbnail: string;
+
   duration_minutes: number;
 
   display_order: number;
@@ -49,6 +51,7 @@ export const defaultLessonForm: LessonForm = {
   lesson_type:      "video",
   content:          "",
   video_url:        "",
+  thumbnail:        "",
   duration_minutes: 1,
   display_order:    1,
   downloadable:     false,

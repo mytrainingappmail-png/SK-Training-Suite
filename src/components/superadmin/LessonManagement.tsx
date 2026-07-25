@@ -349,6 +349,7 @@ function LessonModal({
           lesson_type:      editing.lesson_type,
           content:          editing.content,
           video_url:        editing.video_url,
+          thumbnail:        editing.thumbnail,
           duration_minutes: editing.duration_minutes,
           display_order:    editing.display_order,
           downloadable:     editing.downloadable,

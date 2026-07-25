@@ -14,13 +14,11 @@ import { loadCompletedProjectIds, markProjectComplete } from '../../services/rea
 import { getCurrentUser } from '../../services/auth/session';
 import SectionHeroBanner from './SectionHeroBanner';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
+import ThumbnailCard from '../shared/ThumbnailCard';
 import type { Project } from '../../services/projects/projectsService';
 
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h9a1.5 1.5 0 0 1 1.5 1.5V21M4.5 3v18M4.5 3H3m10.5 0H15m-1.5 18V15a1.5 1.5 0 0 1 1.5-1.5h1.5A1.5 1.5 0 0 1 18 15v6M15 3l4.5 3v15M18.75 3H15M7.5 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6h1.5m-1.5 3h1.5m-1.5 3h1.5" /></svg>);
-}
-function IconArrowRight({ className = 'h-4 w-4' }: { className?: string }) {
-  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>);
 }
 function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>);
@@ -313,38 +311,21 @@ function Projects() {
 
       {!loading && !error && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((project, index) => {
-            const gradient = GRADIENTS[index % GRADIENTS.length];
-            return (
-              <button
-                key={project.projectId}
-                onClick={() => setOpenProjectId(project.projectId)}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl"
-              >
-                <div className={`relative h-24 bg-gradient-to-br ${gradient}`}>
-                  <div className="absolute -bottom-6 left-5 h-14 w-14 overflow-hidden rounded-2xl bg-white shadow-md ring-4 ring-white">
-                    {project.thumbnail ? (
-                      <img src={project.thumbnail} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-slate-700"><IconBuilding className="h-7 w-7" /></div>
-                    )}
-                  </div>
-                  <IconArrowRight className="absolute right-4 top-4 h-5 w-5 text-white/70 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-                </div>
-                <div className="flex-1 px-5 pb-5 pt-9">
-                  <p className="font-bold text-slate-800">{project.projectName}</p>
-                  {project.shortDescription && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{project.shortDescription}</p>}
-                  {project.brochures.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500">
-                        <IconPdf className="h-3 w-3" /> {project.brochures.length} brochure{project.brochures.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+          {filtered.map((project) => (
+            <ThumbnailCard
+              key={project.projectId}
+              title={project.projectName}
+              subtitle={project.shortDescription}
+              thumbnailUrl={project.thumbnail}
+              onClick={() => setOpenProjectId(project.projectId)}
+            >
+              {project.brochures.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500">
+                  <IconPdf className="h-3 w-3" /> {project.brochures.length} brochure{project.brochures.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </ThumbnailCard>
+          ))}
         </div>
       )}
 

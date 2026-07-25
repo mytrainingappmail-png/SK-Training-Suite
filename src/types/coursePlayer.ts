@@ -19,6 +19,7 @@ export interface CoursePlayerLesson {
   lessonType:      LessonType;
   content:         string;
   videoUrl:        string;
+  thumbnail:       string;
   durationMinutes: number;
   displayOrder:    number;
   downloadable:    boolean;
@@ -33,6 +34,7 @@ export interface CoursePlayerModule {
   description:      string;
   moduleOrder:      number;
   estimatedMinutes: number;
+  thumbnail:        string;
   lessons:          CoursePlayerLesson[];
 }
 

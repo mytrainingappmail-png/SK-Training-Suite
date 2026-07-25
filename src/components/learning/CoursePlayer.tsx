@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCoursePlayer, completeLesson } from '../../services/coursePlayer/coursePlayerService';
 import { getCurrentUser }                   from '../../services/auth/session';
+import ThumbnailCard from '../shared/ThumbnailCard';
 import type {
   CoursePlayerData,
   CoursePlayerModule,
@@ -42,6 +43,36 @@ function ProgressBar({ value }: { value: number }) {
       </div>
       <span className="w-9 text-right text-xs font-bold text-slate-700">{pct}%</span>
     </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 text-center text-slate-400">
+      <svg className="mb-4 h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+      </svg>
+      <p className="font-medium">{text}</p>
+    </div>
+  );
+}
+
+function OrderPill({ order }: { order: number }) {
+  return (
+    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[11px] font-bold text-white">
+      {order}
+    </span>
+  );
+}
+
+function CompletedPill() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+      <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+      </svg>
+      Done
+    </span>
   );
 }
 
@@ -263,14 +294,15 @@ function LessonContent({
 function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }: CoursePlayerProps) {
   const user = getCurrentUser();
 
-  const [data,          setData]          = useState<CoursePlayerData | null>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [error,         setError]         = useState('');
-  const [activeLesson,  setActiveLesson]  = useState<CoursePlayerLesson | null>(null);
-  const [sidebarOpen,   setSidebarOpen]   = useState(true);
-  const [completing,    setCompleting]    = useState(false);
-  const [localPct,      setLocalPct]      = useState(0);
-  const [toast,         setToast]         = useState('');
+  const [data,           setData]           = useState<CoursePlayerData | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState('');
+  const [view,           setView]           = useState<'modules' | 'lessons' | 'lesson'>('modules');
+  const [selectedModule, setSelectedModule] = useState<CoursePlayerModule | null>(null);
+  const [activeLesson,   setActiveLesson]   = useState<CoursePlayerLesson | null>(null);
+  const [completing,     setCompleting]     = useState(false);
+  const [localPct,       setLocalPct]       = useState(0);
+  const [toast,          setToast]          = useState('');
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -322,10 +354,9 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
       .then((d) => {
         setData(d);
         setLocalPct(d.enrollment.completionPercentage);
-        // Resume Learning: jump straight to the first incomplete lesson.
-        const flat = d.course.modules.flatMap((m) => m.lessons);
-        const resume = flat.find((l) => !l.completed) ?? flat[0] ?? null;
-        if (resume) setActiveLesson(resume);
+        // Land on the Modules grid by default — "Continue Learning"
+        // below jumps straight into the resume lesson for anyone who
+        // just wants to pick up where they left off.
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load course.');
@@ -335,9 +366,15 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   }, [enrollmentId, user?.id]);
 
   function selectLesson(mod: CoursePlayerModule, lesson: CoursePlayerLesson) {
-    void mod;
+    setSelectedModule(mod);
     setActiveLesson(lesson);
-    if (window.innerWidth < 1024) setSidebarOpen(false);
+    setView('lesson');
+  }
+
+  function nextModuleAfter(mod: CoursePlayerModule): CoursePlayerModule | null {
+    if (!data) return null;
+    const idx = data.course.modules.findIndex((m) => m.id === mod.id);
+    return idx >= 0 && idx < data.course.modules.length - 1 ? data.course.modules[idx + 1] : null;
   }
 
   function goPrev() {
@@ -480,114 +517,109 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
           <div className="w-40 sm:w-44">
             <ProgressBar value={localPct} />
           </div>
-          <button
-            onClick={() => setSidebarOpen((v) => !v)}
-            className="rounded-xl border border-white/20 p-2 transition hover:bg-white/10"
-            aria-label="Toggle sidebar"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </button>
         </div>
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────────────── */}
       <div className="relative flex flex-1 overflow-hidden">
 
-        {/* Mobile backdrop */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* Sidebar — module / lesson navigation tree */}
-        {sidebarOpen && (
-          <aside className="fixed inset-y-0 left-0 z-30 w-72 flex-shrink-0 overflow-y-auto border-r border-slate-200 bg-white lg:static lg:z-auto">
-            <div className="p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Course Content
-              </p>
-
-              {course.modules.length === 0 ? (
-                <p className="text-sm text-slate-400">No modules available.</p>
-              ) : (
-                <div className="space-y-4">
-                  {course.modules.map((mod) => {
-                    const isModuleComplete = moduleCompleted(mod);
-                    return (
-                      <div key={mod.id}>
-                        {/* module header */}
-                        <div className="mb-1.5 flex items-center gap-2">
-                          <span
-                            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                              isModuleComplete ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {isModuleComplete ? (
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                              </svg>
-                            ) : (
-                              mod.moduleOrder
-                            )}
-                          </span>
-                          <p className="text-xs font-semibold leading-tight text-slate-700">{mod.moduleName}</p>
-                          {isModuleComplete && (
-                            <span className="ml-auto rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
-                              Completed
-                            </span>
-                          )}
-                        </div>
-
-                        {/* lessons */}
-                        <div className="ml-7 space-y-0.5">
-                          {mod.lessons.map((lesson) => {
-                            const isActive = activeLesson?.id === lesson.id;
-                            const isResume = resumeLesson?.id === lesson.id && !lesson.completed;
-                            return (
-                              <button
-                                key={lesson.id}
-                                onClick={() => selectLesson(mod, lesson)}
-                                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                                  isActive
-                                    ? 'bg-yellow-500 font-semibold text-slate-900'
-                                    : 'text-slate-600 hover:bg-slate-100'
-                                }`}
-                              >
-                                <span className={isActive ? 'text-slate-900' : 'text-slate-400'}>
-                                  <LessonIcon type={lesson.lessonType} />
-                                </span>
-                                <span className="flex-1 truncate leading-tight">{lesson.lessonTitle}</span>
-                                {isResume && !isActive && (
-                                  <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-yellow-500" title="Resume here" />
-                                )}
-                                {lesson.completed && (
-                                  <svg className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                                  </svg>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </aside>
-        )}
-
         {/* Main content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+          <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
 
-            {activeLesson ? (
+            {/* ── Level 1: Modules grid, scoped to this course only ── */}
+            {view === 'modules' && (
               <>
+                <h2 className="mb-4 text-lg font-bold text-slate-800">Modules</h2>
+                {course.modules.length === 0 ? (
+                  <EmptyState text="No modules available for this course yet." />
+                ) : (
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    {course.modules.map((mod) => {
+                      const isModuleComplete = moduleCompleted(mod);
+                      return (
+                        <ThumbnailCard
+                          key={mod.id}
+                          title={mod.moduleName}
+                          subtitle={`${mod.lessons.length} lesson${mod.lessons.length === 1 ? '' : 's'} · ${mod.estimatedMinutes} min`}
+                          thumbnailUrl={mod.thumbnail}
+                          cornerTag={<OrderPill order={mod.moduleOrder} />}
+                          badge={isModuleComplete ? <CompletedPill /> : undefined}
+                          onClick={() => { setSelectedModule(mod); setView('lessons'); }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Level 2: Lessons grid, scoped to the selected module only ── */}
+            {view === 'lessons' && selectedModule && (
+              <>
+                <button
+                  onClick={() => setView('modules')}
+                  className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                  </svg>
+                  Back to Modules
+                </button>
+                <h2 className="text-lg font-bold text-slate-800">{selectedModule.moduleName}</h2>
+                {selectedModule.description && (
+                  <p className="mt-1 text-sm text-slate-500">{selectedModule.description}</p>
+                )}
+
+                <div className="mt-4">
+                  {selectedModule.lessons.length === 0 ? (
+                    <EmptyState text="No lessons in this module yet." />
+                  ) : (
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                      {selectedModule.lessons.map((lesson) => (
+                        <ThumbnailCard
+                          key={lesson.id}
+                          title={lesson.lessonTitle}
+                          subtitle={`${lesson.lessonType} · ${lesson.durationMinutes} min`}
+                          thumbnailUrl={lesson.thumbnail}
+                          cornerTag={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"><LessonIcon type={lesson.lessonType} /></span>}
+                          badge={lesson.completed ? <CompletedPill /> : undefined}
+                          onClick={() => selectLesson(selectedModule, lesson)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {nextModuleAfter(selectedModule) && (
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      onClick={() => setSelectedModule(nextModuleAfter(selectedModule))}
+                      className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95"
+                    >
+                      Next Module: {nextModuleAfter(selectedModule)?.moduleName}
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Level 3: Lesson content ── */}
+            {view === 'lesson' && activeLesson && (
+              <>
+                <button
+                  onClick={() => setView('lessons')}
+                  className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                  </svg>
+                  Back to {selectedModule?.moduleName ?? 'Lessons'}
+                </button>
+
                 <LessonContent
                   lesson={activeLesson}
                   onLaunchAssignment={handleLaunchAssignment}
@@ -647,13 +679,6 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   </div>
                 )}
               </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-24 text-center text-slate-400">
-                <svg className="mb-4 h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
-                </svg>
-                <p className="font-medium">No lessons available for this course yet.</p>
-              </div>
             )}
           </div>
         </main>

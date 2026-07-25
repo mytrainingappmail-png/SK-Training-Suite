@@ -1674,9 +1674,9 @@ function extractImageUrls(html: string): string[] {
 
 function LessonCommonSettings({
   lesson, lessonModule, readingResource,
-  uploadingThumbnail, uploadingReading,
+  uploadingThumbnail, uploadingReading, uploadingLessonThumbnail,
   assignmentSettings, mandatory,
-  onThumbnailUpload, onReadingUpload, onReadingLabelChange, onReadingRemove,
+  onThumbnailUpload, onLessonThumbnailUpload, onReadingUpload, onReadingLabelChange, onReadingRemove,
   onAssignmentChange, onMandatoryChange, onLessonChange,
 }: {
   lesson: Lesson;
@@ -1684,9 +1684,11 @@ function LessonCommonSettings({
   readingResource: Resource | null;
   uploadingThumbnail: boolean;
   uploadingReading: boolean;
+  uploadingLessonThumbnail: boolean;
   assignmentSettings: AssignmentSettings;
   mandatory: boolean;
   onThumbnailUpload: (file: File) => void;
+  onLessonThumbnailUpload: (file: File) => void;
   onReadingUpload: (file: File) => void;
   onReadingLabelChange: (label: string) => void;
   onReadingRemove: () => void;
@@ -1695,6 +1697,7 @@ function LessonCommonSettings({
   onLessonChange: (patch: Partial<Lesson>) => void;
 }) {
   const thumbInputRef = useRef<HTMLInputElement>(null);
+  const lessonThumbInputRef = useRef<HTMLInputElement>(null);
   const readingInputRef = useRef<HTMLInputElement>(null);
   // Single source of truth: images embedded in the lesson's own content —
   // the exact same field the Page Editor writes to and Preview renders
@@ -1734,6 +1737,32 @@ function LessonCommonSettings({
           ) : (
             <p className="text-xs text-slate-600">No parent module resolved for this item.</p>
           )}
+        </CommonSection>
+
+        <CommonSection title="Lesson Thumbnail">
+          <div className="flex items-center gap-3">
+            {lesson.thumbnail ? (
+              <div className="relative h-16 w-24 flex-shrink-0">
+                <img
+                  src={lesson.thumbnail}
+                  alt=""
+                  className="h-16 w-24 rounded-lg object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling;
+                    if (fallback instanceof HTMLElement) fallback.classList.remove('hidden');
+                  }}
+                />
+                <div className="hidden absolute inset-0 flex h-16 w-24 items-center justify-center rounded-lg bg-slate-800 text-slate-600"><IconImage className="h-5 w-5" /></div>
+              </div>
+            ) : (
+              <div className="flex h-16 w-24 flex-shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-600"><IconImage className="h-5 w-5" /></div>
+            )}
+            <SecondaryButton onClick={() => lessonThumbInputRef.current?.click()}>
+              {uploadingLessonThumbnail ? <Spinner className="h-3.5 w-3.5" /> : <IconUpload className="h-3.5 w-3.5" />} {lesson.thumbnail ? 'Replace' : 'Upload'}
+            </SecondaryButton>
+            <input ref={lessonThumbInputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onLessonThumbnailUpload(f); }} />
+          </div>
         </CommonSection>
 
         <CommonSection title="Reading Material">
@@ -2215,6 +2244,7 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadingReading, setUploadingReading] = useState(false);
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const [uploadingLessonThumbnail, setUploadingLessonThumbnail] = useState(false);
 
   const [assignmentSettingsById, setAssignmentSettingsById] = useState<Record<string, AssignmentSettings>>({});
   const [mandatoryById, setMandatoryById] = useState<Record<string, boolean>>({});
@@ -2503,6 +2533,7 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
         lesson_type: type,
         content: '',
         video_url: '',
+        thumbnail: '',
         duration_minutes: 0,
         display_order: lessonsForModule(moduleId).length + 1,
         downloadable: false,
@@ -2600,6 +2631,7 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
           lesson_type: item.lesson_type,
           content: item.content,
           video_url: item.video_url,
+          thumbnail: item.thumbnail,
           duration_minutes: item.duration_minutes,
           display_order: item.display_order,
           downloadable: item.downloadable,
@@ -2736,6 +2768,22 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
     }
   }
 
+  async function handleLessonThumbnailUpload(file: File) {
+    if (!activeLesson) return;
+    setUploadingLessonThumbnail(true);
+    try {
+      const result = await uploadImage(file);
+      await updateLesson(activeLesson.id, { thumbnail: result.url });
+      fetchOutline();
+      notifyLessonsChanged();
+      showToast('Lesson thumbnail updated');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Thumbnail upload failed.');
+    } finally {
+      setUploadingLessonThumbnail(false);
+    }
+  }
+
   function startRenamePage(page: Lesson) {
     setEditingPageId(page.id);
     setEditingPageName(page.lesson_title);
@@ -2785,6 +2833,7 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
         lesson_type: page.lesson_type,
         content: page.content,
         video_url: page.video_url,
+        thumbnail: page.thumbnail,
         duration_minutes: page.duration_minutes,
         display_order: lessonsForModule(moduleId).length + 1,
         downloadable: page.downloadable,
@@ -3482,9 +3531,11 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
                 readingResource={readingResource}
                 uploadingThumbnail={uploadingThumbnail}
                 uploadingReading={uploadingReading}
+                uploadingLessonThumbnail={uploadingLessonThumbnail}
                 assignmentSettings={getAssignmentSettings(activeLessonId)}
                 mandatory={getMandatory(activeLessonId)}
                 onThumbnailUpload={handleLessonModuleThumbnailUpload}
+                onLessonThumbnailUpload={handleLessonThumbnailUpload}
                 onReadingUpload={handleReadingUpload}
                 onReadingLabelChange={handleReadingLabelChange}
                 onReadingRemove={handleReadingRemove}

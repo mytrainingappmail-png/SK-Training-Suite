@@ -39,6 +39,7 @@ interface SBLesson {
   lesson_type:      string;
   content:          string;
   video_url:        string;
+  thumbnail:        string;
   duration_minutes: number;
   display_order:    number;
   downloadable:     boolean;
@@ -52,6 +53,7 @@ interface SBModule {
   description:       string;
   module_order:      number;
   estimated_minutes: number;
+  thumbnail:         string;
   lessons:           SBLesson[] | null;
 }
 
@@ -107,6 +109,7 @@ function normaliseLesson(l: SBLesson, completedIds: Set<string>): CoursePlayerLe
     lessonType:      l.lesson_type      as CoursePlayerLesson['lessonType'],
     content:         l.content          ?? '',
     videoUrl:        l.video_url        ?? '',
+    thumbnail:       l.thumbnail        ?? '',
     durationMinutes: l.duration_minutes ?? 0,
     displayOrder:    l.display_order    ?? 1,
     downloadable:    l.downloadable     ?? false,
@@ -124,6 +127,7 @@ function normaliseModule(m: SBModule, completedIds: Set<string>): CoursePlayerMo
     description:      m.description       ?? '',
     moduleOrder:      m.module_order      ?? 1,
     estimatedMinutes: m.estimated_minutes ?? 0,
+    thumbnail:        m.thumbnail         ?? '',
     lessons:          (m.lessons ?? [])
                         .map((l) => normaliseLesson(l, completedIds))
                         .sort((a, b) => a.displayOrder - b.displayOrder),
@@ -181,12 +185,14 @@ export async function getCoursePlayerData(
            description,
            module_order,
            estimated_minutes,
+           thumbnail,
            lessons (
              id,
              lesson_title,
              lesson_type,
              content,
              video_url,
+             thumbnail,
              duration_minutes,
              display_order,
              downloadable,

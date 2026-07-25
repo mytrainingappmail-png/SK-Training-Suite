@@ -34,10 +34,9 @@ import TrainerGradingQueuePage from "./pages/TrainerGradingQueuePage";
 import TrainerCoursesPage from "./pages/TrainerCoursesPage";
 import TrainerBatchesPage from "./pages/TrainerBatchesPage";
 import TrainerResultsPage from "./pages/TrainerResultsPage";
-import { CoursePlayerRoute, LessonPlayerRoute, ResourceViewerRoute } from "./pages/LearningPlayerRoutes";
+import { CoursePlayerRoute, LessonPlayerRoute, ResourceViewerRoute, LearningPathsRoute } from "./pages/LearningPlayerRoutes";
 import MyAssessments from "./components/learning/MyAssessments";
 import MyCertificates from "./components/learning/MyCertificates";
-import MyLearningPaths from "./components/learning/MyLearningPaths";
 import MyProgress from "./components/learning/MyProgress";
 import ContinueLearning from "./components/learning/ContinueLearning";
 
@@ -159,7 +158,7 @@ function App() {
         <Route path={ROUTES.RESOURCE_VIEWER} element={<ResourceViewerRoute />} />
         <Route path={ROUTES.MY_ASSESSMENTS} element={<MyAssessments />} />
         <Route path={ROUTES.MY_CERTIFICATES} element={<MyCertificates />} />
-        <Route path={ROUTES.MY_LEARNING_PATHS} element={<MyLearningPaths />} />
+        <Route path={ROUTES.MY_LEARNING_PATHS} element={<LearningPathsRoute />} />
         <Route path={ROUTES.MY_PROGRESS} element={<MyProgress />} />
         <Route path={ROUTES.CONTINUE_LEARNING} element={<ContinueLearning />} />
         <Route path={ROUTES.VIDEOS} element={<Videos />} />

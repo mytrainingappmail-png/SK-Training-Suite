@@ -5,6 +5,7 @@ import { getCurrentUser }      from '../../services/auth/session';
 import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
 import { ROUTES } from '../../constants/routes';
 import SectionHeroBanner from './SectionHeroBanner';
+import ThumbnailCard from '../shared/ThumbnailCard';
 import type { MyCourse, MyCourseStatus } from '../../types/myCourse';
 
 const STATUS_STYLES: Record<MyCourseStatus, string> = {
@@ -22,17 +23,6 @@ function StatusBadge({ status }: { status: MyCourseStatus }) {
     </span>
   );
 }
-
-// Rotating gradient palette so the course list reads as colorful, even
-// for courses with no thumbnail image.
-const COURSE_GRADIENTS = [
-  'from-indigo-500 to-violet-500',
-  'from-rose-500 to-orange-400',
-  'from-emerald-500 to-teal-400',
-  'from-sky-500 to-cyan-400',
-  'from-amber-500 to-yellow-400',
-  'from-fuchsia-500 to-pink-500',
-];
 
 function ProgressBar({ value }: { value: number }) {
   const pct    = Math.min(100, Math.max(0, value));
@@ -52,10 +42,8 @@ function ProgressBar({ value }: { value: number }) {
 
 function Skeleton() {
   return (
-    <div className="animate-pulse space-y-3">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-20 rounded-xl bg-slate-100" />
-      ))}
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="h-56 animate-pulse rounded-2xl bg-slate-100" />)}
     </div>
   );
 }
@@ -157,86 +145,28 @@ function MyCourses() {
       )}
 
       {!loading && !error && filtered.length > 0 && (
-        <div className="space-y-3">
-          {filtered.map((course, index) => (
-            <div
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((course) => (
+            <ThumbnailCard
               key={course.enrollmentId}
-              className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+              title={course.courseName}
+              subtitle={[course.courseCode, course.categoryName].filter(Boolean).join(' · ')}
+              thumbnailUrl={course.thumbnail}
+              cornerTag={<StatusBadge status={course.status} />}
+              disabled={course.status === 'CANCELLED' || course.status === 'EXPIRED'}
+              onClick={() => openCourse(course)}
             >
-              <div className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${COURSE_GRADIENTS[index % COURSE_GRADIENTS.length]}`}>
-                {course.thumbnail ? (
-                  <img
-                    src={course.thumbnail}
-                    alt={course.courseName}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-white/70">
-                    <svg
-                      className="h-7 w-7"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"
-                      />
-                    </svg>
-                  </div>
+              <ProgressBar value={course.completionPercentage} />
+              <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                {(course.durationDays > 0 || course.durationHours > 0) && (
+                  <span>
+                    {course.durationDays > 0 && `${course.durationDays}d `}
+                    {course.durationHours > 0 && `${course.durationHours}h`}
+                  </span>
                 )}
+                {course.dueDate && <span>Due: {new Date(course.dueDate).toLocaleDateString()}</span>}
               </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate font-semibold text-slate-800">{course.courseName}</p>
-                  {course.courseCode && (
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">
-                      {course.courseCode}
-                    </span>
-                  )}
-                  {course.categoryName && (
-                    <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs text-violet-600">
-                      {course.categoryName}
-                    </span>
-                  )}
-                  <StatusBadge status={course.status} />
-                </div>
-
-                <div className="mt-2 max-w-sm">
-                  <ProgressBar value={course.completionPercentage} />
-                </div>
-
-                <div className="mt-1.5 flex flex-wrap items-center gap-4 text-xs text-slate-400">
-                  {(course.durationDays > 0 || course.durationHours > 0) && (
-                    <span>
-                      {course.durationDays > 0 && `${course.durationDays}d `}
-                      {course.durationHours > 0 && `${course.durationHours}h`}
-                    </span>
-                  )}
-                  {course.dueDate && (
-                    <span>Due: {new Date(course.dueDate).toLocaleDateString()}</span>
-                  )}
-                  {course.completedAt && (
-                    <span>Completed: {new Date(course.completedAt).toLocaleDateString()}</span>
-                  )}
-                </div>
-              </div>
-
-              <button
-                className="flex-shrink-0 rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={course.status === 'CANCELLED' || course.status === 'EXPIRED'}
-                onClick={() => openCourse(course)}
-              >
-                {course.status === 'COMPLETED'
-                  ? 'Review'
-                  : course.completionPercentage > 0
-                  ? 'Continue'
-                  : 'Start'}
-              </button>
-            </div>
+            </ThumbnailCard>
           ))}
         </div>
       )}

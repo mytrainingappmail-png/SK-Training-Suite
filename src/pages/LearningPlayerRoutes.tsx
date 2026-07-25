@@ -6,19 +6,27 @@
 // or LessonPlayer.tsx themselves.
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import CoursePlayer from '../components/learning/CoursePlayer';
 import LessonPlayer from '../components/learning/LessonPlayer';
 import ResourceViewer from '../components/learning/ResourceViewer';
+import MyLearningPaths from '../components/learning/MyLearningPaths';
+import LearningPathDetail from '../components/learning/LearningPathDetail';
 import { loadLesson } from '../services/lessonPlayer/lessonPlayerService';
 import { loadResource } from '../services/resourceViewer/resourceViewerService';
+import { ROUTES } from '../constants/routes';
 
 // ROUTES.COURSE_PLAYER's :courseId param is the enrollment being
 // played (CoursePlayer takes enrollmentId directly, not a course id).
 export function CoursePlayerRoute() {
   const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
   if (!courseId) return null;
-  return <CoursePlayer enrollmentId={courseId} />;
+  function goBack() {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(ROUTES.MY_COURSES);
+  }
+  return <CoursePlayer enrollmentId={courseId} onBack={goBack} />;
 }
 
 // ROUTES.LESSON_PLAYER only carries :lessonId, but LessonPlayer also
@@ -86,4 +94,23 @@ export function ResourceViewerRoute() {
   if (error || !lessonId) return <div className="p-6 text-sm text-red-600">{error || 'Resource not found.'}</div>;
 
   return <ResourceViewer resourceId={resourceId} lessonId={lessonId} />;
+}
+
+// ROUTES.MY_LEARNING_PATHS toggles between the grid and a path's course
+// list — clicking a path used to just redirect to My Courses since no
+// detail screen existed.
+export function LearningPathsRoute() {
+  const [openPath, setOpenPath] = useState<{ id: string; name: string } | null>(null);
+
+  if (openPath) {
+    return (
+      <LearningPathDetail
+        learningPathId={openPath.id}
+        pathName={openPath.name}
+        onBack={() => setOpenPath(null)}
+      />
+    );
+  }
+
+  return <MyLearningPaths onOpenPath={(id, name) => setOpenPath({ id, name })} />;
 }

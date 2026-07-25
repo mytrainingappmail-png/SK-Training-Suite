@@ -13,7 +13,7 @@ import type { MyLearningPath, MyLearningPathStatus } from '../../types/myLearnin
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface MyLearningPathsProps {
-  onOpenPath?: (learningPathId: string) => void;
+  onOpenPath?: (learningPathId: string, pathName: string) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,17 +34,6 @@ function DifficultyBadge({ level }: { level: string }) {
     </span>
   );
 }
-
-// Rotating gradient palette so the grid reads as colorful, even for
-// paths with no thumbnail image.
-const PATH_GRADIENTS = [
-  'from-indigo-500 to-violet-500',
-  'from-rose-500 to-orange-400',
-  'from-emerald-500 to-teal-400',
-  'from-sky-500 to-cyan-400',
-  'from-amber-500 to-yellow-400',
-  'from-fuchsia-500 to-pink-500',
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Progress bar
@@ -111,7 +100,7 @@ function EmptyState({ search }: { search: string }) {
 interface PathCardProps {
   path:   MyLearningPath;
   index:  number;
-  onOpen: (learningPathId: string) => void;
+  onOpen: (learningPathId: string, pathName: string) => void;
 }
 
 const STATUS_ACTION_LABEL: Record<MyLearningPathStatus, string> = {
@@ -121,8 +110,8 @@ const STATUS_ACTION_LABEL: Record<MyLearningPathStatus, string> = {
 };
 
 function PathCard({ path, index, onOpen }: PathCardProps) {
+  void index;
   const isCompleted = path.status === 'completed';
-  const gradient = PATH_GRADIENTS[index % PATH_GRADIENTS.length];
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
@@ -137,14 +126,15 @@ function PathCard({ path, index, onOpen }: PathCardProps) {
       )}
 
       {/* Thumbnail */}
-      <div className={`relative h-28 w-full bg-gradient-to-br ${gradient}`}>
+      <div className="relative aspect-video w-full bg-slate-100">
         {path.thumbnailUrl ? (
           <img src={path.thumbnailUrl} alt={path.pathName} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-white/70">
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-slate-300">
+            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443" />
             </svg>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">No Thumbnail</span>
           </div>
         )}
       </div>
@@ -200,8 +190,8 @@ function PathCard({ path, index, onOpen }: PathCardProps) {
         {/* Action */}
         <div className="mt-auto pt-2">
           <button
-            onClick={() => onOpen(path.learningPathId)}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${gradient} px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95`}
+            onClick={() => onOpen(path.learningPathId, path.pathName)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95"
           >
             {STATUS_ACTION_LABEL[path.status]}
           </button>
@@ -252,9 +242,9 @@ const navigate = useNavigate();
     );
   }, [search, paths]);
 
-  function handleOpen(learningPathId: string) {
+  function handleOpen(learningPathId: string, pathName: string) {
     if (onOpenPath) {
-      onOpenPath(learningPathId);
+      onOpenPath(learningPathId, pathName);
     } else {
       navigate(ROUTES.MY_COURSES);
     }

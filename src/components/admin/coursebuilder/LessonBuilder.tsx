@@ -488,6 +488,7 @@ function SectionFormModal({
           lesson_type:      editing.lesson_type,
           content:          editing.content,
           video_url:        editing.video_url,
+          thumbnail:        editing.thumbnail,
           duration_minutes: editing.duration_minutes,
           display_order:    editing.display_order,
           downloadable:     editing.downloadable,
@@ -497,7 +498,9 @@ function SectionFormModal({
   );
 
   const [errs, setErrs] = useState<SectionErrs>({});
+  const [uploadingThumb, setUploadingThumb] = useState(false);
   const firstRef = useRef<HTMLInputElement>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { firstRef.current?.focus(); }, []);
   useEffect(() => {
@@ -509,6 +512,21 @@ function SectionFormModal({
   function field<K extends keyof LessonBuilderForm>(key: K, val: LessonBuilderForm[K]) {
     setForm((p) => ({ ...p, [key]: val }));
     setErrs((p) => ({ ...p, [key]: undefined }));
+  }
+
+  async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingThumb(true);
+    try {
+      const result = await uploadImage(file);
+      field('thumbnail', result.url);
+    } catch {
+      // Upload failed — thumbnail left unchanged.
+    } finally {
+      setUploadingThumb(false);
+    }
   }
 
   function validate(): boolean {
@@ -540,6 +558,21 @@ function SectionFormModal({
               onChange={(e) => field('lesson_title', e.target.value)}
               disabled={saving}
             />
+          </FL>
+
+          <FL label="Thumbnail">
+            <div className="flex items-center gap-3">
+              {form.thumbnail && <Thumbnail src={form.thumbnail} alt="Thumbnail preview" className="h-16 w-28" />}
+              <input ref={thumbInputRef} type="file" accept="image/*" onChange={handleThumbnailFileChange} className="hidden" />
+              <button
+                type="button"
+                onClick={() => thumbInputRef.current?.click()}
+                disabled={saving || uploadingThumb}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                {uploadingThumb ? <Spinner /> : form.thumbnail ? 'Replace Image' : 'Upload Image'}
+              </button>
+            </div>
           </FL>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -1125,6 +1158,7 @@ function LessonBuilder() {
         lesson_type:      data.lesson_type,
         content:          data.content,
         video_url:        data.video_url,
+        thumbnail:        data.thumbnail,
         duration_minutes: data.duration_minutes,
         display_order:    data.display_order,
         downloadable:     data.downloadable,
