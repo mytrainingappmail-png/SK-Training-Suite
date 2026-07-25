@@ -11,6 +11,13 @@
 // can't satisfy quiz_admins' own RLS policy yet (no row exists for
 // current_quiz_admin_company_id() to find) — the service role bypasses
 // RLS entirely for this one bootstrap insert.
+//
+// The Functions gateway only checks that the caller's Authorization
+// header is A valid Supabase JWT, not that it belongs to companyId —
+// without the check below, any logged-in LMS employee could pass a
+// DIFFERENT company's id/code and provision a quiz admin for it. So this
+// re-verifies the caller's own JWT server-side and requires their
+// employees row's company_id to match the company they're requesting.
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -48,6 +55,22 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const callerJwt = authHeader.replace(/^Bearer\s+/i, "");
+    const { data: callerData, error: callerError } = await supabaseAdmin.auth.getUser(callerJwt);
+    if (callerError || !callerData.user) {
+      throw new Error("You must be signed in to set up a Live Quiz admin.");
+    }
+
+    const { data: callerEmployee, error: employeeError } = await supabaseAdmin
+      .from("employees")
+      .select("company_id")
+      .eq("auth_user_id", callerData.user.id)
+      .maybeSingle();
+    if (employeeError || !callerEmployee || callerEmployee.company_id !== payload.companyId) {
+      throw new Error("You are not authorized to create a Live Quiz admin for this company.");
+    }
 
     const internalEmail = `quiz.${payload.companyCode.toLowerCase()}.${payload.username.toLowerCase()}@internal.sktraining`;
 
