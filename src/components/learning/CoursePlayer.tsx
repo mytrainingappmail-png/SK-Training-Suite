@@ -10,7 +10,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCoursePlayer, completeLesson } from '../../services/coursePlayer/coursePlayerService';
 import { getCurrentUser }                   from '../../services/auth/session';
+import { loadCompany }                      from '../../services/company/companyService';
 import ThumbnailCard from '../shared/ThumbnailCard';
+import CardPagination from '../shared/CardPagination';
 import type {
   CoursePlayerData,
   CoursePlayerModule,
@@ -303,8 +305,17 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   const [completing,     setCompleting]     = useState(false);
   const [localPct,       setLocalPct]       = useState(0);
   const [toast,          setToast]          = useState('');
+  const [cardsPerPage,   setCardsPerPage]   = useState(12);
+  const [modulesPage,    setModulesPage]    = useState(0);
+  const [lessonsPage,    setLessonsPage]    = useState(0);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    loadCompany()
+      .then((c) => setCardsPerPage(c?.cards_per_page || 12))
+      .catch(() => setCardsPerPage(12));
+  }, []);
 
   function showToast(message: string) {
     setToast(message);
@@ -534,8 +545,9 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                 {course.modules.length === 0 ? (
                   <EmptyState text="No modules available for this course yet." />
                 ) : (
+                  <>
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                    {course.modules.map((mod) => {
+                    {course.modules.slice(modulesPage * cardsPerPage, (modulesPage + 1) * cardsPerPage).map((mod) => {
                       const isModuleComplete = moduleCompleted(mod);
                       return (
                         <ThumbnailCard
@@ -545,11 +557,17 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                           thumbnailUrl={mod.thumbnail}
                           cornerTag={<OrderPill order={mod.moduleOrder} />}
                           badge={isModuleComplete ? <CompletedPill /> : undefined}
-                          onClick={() => { setSelectedModule(mod); setView('lessons'); }}
+                          onClick={() => { setSelectedModule(mod); setLessonsPage(0); setView('lessons'); }}
                         />
                       );
                     })}
                   </div>
+                  <CardPagination
+                    page={modulesPage}
+                    totalPages={Math.max(1, Math.ceil(course.modules.length / cardsPerPage))}
+                    onChange={setModulesPage}
+                  />
+                  </>
                 )}
               </>
             )}
@@ -575,8 +593,9 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   {selectedModule.lessons.length === 0 ? (
                     <EmptyState text="No lessons in this module yet." />
                   ) : (
+                    <>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                      {selectedModule.lessons.map((lesson) => (
+                      {selectedModule.lessons.slice(lessonsPage * cardsPerPage, (lessonsPage + 1) * cardsPerPage).map((lesson) => (
                         <ThumbnailCard
                           key={lesson.id}
                           title={lesson.lessonTitle}
@@ -588,13 +607,19 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                         />
                       ))}
                     </div>
+                    <CardPagination
+                      page={lessonsPage}
+                      totalPages={Math.max(1, Math.ceil(selectedModule.lessons.length / cardsPerPage))}
+                      onChange={setLessonsPage}
+                    />
+                    </>
                   )}
                 </div>
 
                 {nextModuleAfter(selectedModule) && (
                   <div className="mt-6 flex justify-end">
                     <button
-                      onClick={() => setSelectedModule(nextModuleAfter(selectedModule))}
+                      onClick={() => { setSelectedModule(nextModuleAfter(selectedModule)); setLessonsPage(0); }}
                       className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95"
                     >
                       Next Module: {nextModuleAfter(selectedModule)?.moduleName}

@@ -57,6 +57,10 @@ export interface Company {
   // (see companies_update_platform_operator RLS policy).
   market_analytics_enabled: boolean;
 
+  // How many cards show per page in the Courses/Modules/Lessons grids
+  // before a "Next" button appears.
+  cards_per_page: number;
+
   created_at: string;
 
   updated_at: string;

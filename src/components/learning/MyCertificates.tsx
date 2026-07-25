@@ -184,6 +184,7 @@ function CertificateDetails({
   const [toast,  setToast]  = useState('');
   const [viewData, setViewData] = useState<CertificateViewData | null>(null);
   const [loadingView, setLoadingView] = useState(true);
+  const [viewError, setViewError] = useState('');
   const [downloading, setDownloading] = useState(false);
 
   const isIssued = certificate.status !== 'pending';
@@ -194,9 +195,14 @@ function CertificateDetails({
       return;
     }
     setLoadingView(true);
+    setViewError('');
     loadCertificateForView(certificate.id)
       .then(setViewData)
-      .catch(() => setViewData(null))
+      .catch((err: unknown) => {
+        setViewData(null);
+        setViewError(err instanceof Error ? err.message : 'Failed to load certificate.');
+        console.error('[MyCertificates] loadCertificateForView:', err);
+      })
       .finally(() => setLoadingView(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [certificate.id, isIssued]);
@@ -347,6 +353,7 @@ function CertificateDetails({
         ) : (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 py-20 text-center text-slate-400">
             <p className="font-medium">Certificate design could not be loaded.</p>
+            {viewError && <p className="text-xs text-slate-400">{viewError}</p>}
           </div>
         )}
       </div>

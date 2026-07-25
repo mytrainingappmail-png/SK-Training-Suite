@@ -3,10 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { loadMyCourses }       from '../../services/myCourses/myCourseService';
 import { getCurrentUser }      from '../../services/auth/session';
 import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
+import { loadCompany } from '../../services/company/companyService';
 import { ROUTES } from '../../constants/routes';
 import SectionHeroBanner from './SectionHeroBanner';
 import ThumbnailCard from '../shared/ThumbnailCard';
+import CardPagination from '../shared/CardPagination';
 import type { MyCourse, MyCourseStatus } from '../../types/myCourse';
+
+const DEFAULT_CARDS_PER_PAGE = 12;
 
 const STATUS_STYLES: Record<MyCourseStatus, string> = {
   COMPLETED:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
@@ -57,6 +61,8 @@ function MyCourses() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [search,   setSearch]   = useState('');
+  const [cardsPerPage, setCardsPerPage] = useState(DEFAULT_CARDS_PER_PAGE);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     if (!user?.id) {
@@ -84,10 +90,15 @@ function MyCourses() {
         console.error(err);
       })
       .finally(() => setLoading(false));
+
+    loadCompany()
+      .then((c) => setCardsPerPage(c?.cards_per_page || DEFAULT_CARDS_PER_PAGE))
+      .catch(() => setCardsPerPage(DEFAULT_CARDS_PER_PAGE));
   }, [user?.id]);
 
   useEffect(() => {
     const kw = search.trim().toLowerCase();
+    setPage(0);
     if (!kw) {
       setFiltered(courses);
       return;
@@ -101,6 +112,9 @@ function MyCourses() {
       )
     );
   }, [search, courses]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / cardsPerPage));
+  const pagedCourses = filtered.slice(page * cardsPerPage, (page + 1) * cardsPerPage);
 
   function openCourse(course: MyCourse) {
     navigate(ROUTES.COURSE_PLAYER.replace(':courseId', course.enrollmentId));
@@ -145,8 +159,9 @@ function MyCourses() {
       )}
 
       {!loading && !error && filtered.length > 0 && (
+        <>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((course) => (
+          {pagedCourses.map((course) => (
             <ThumbnailCard
               key={course.enrollmentId}
               title={course.courseName}
@@ -169,6 +184,8 @@ function MyCourses() {
             </ThumbnailCard>
           ))}
         </div>
+        <CardPagination page={page} totalPages={totalPages} onChange={setPage} />
+        </>
       )}
 
     </div>

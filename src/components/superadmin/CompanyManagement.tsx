@@ -339,6 +339,25 @@ function CompanyManagement() {
         </div>
       </div>
 
+      <div className="mt-8 border-t pt-6">
+        <h3 className="mb-1 text-base font-bold text-slate-800">Display</h3>
+        <p className="mb-4 text-sm text-slate-500">
+          How the Courses, Modules, and Lessons grids are paginated for your employees.
+        </p>
+        <div className="max-w-xs">
+          <label className="block text-sm font-medium mb-2">Cards Per Page</label>
+          <input
+            type="number"
+            min={1}
+            max={48}
+            className="w-full border rounded-xl p-3"
+            value={company.cards_per_page ?? 12}
+            onChange={(e) => setCompany({ ...company, cards_per_page: Math.max(1, Number(e.target.value) || 12) })}
+          />
+          <p className="mt-1 text-xs text-slate-400">A "Next" button appears once a course/module/lesson list has more cards than this.</p>
+        </div>
+      </div>
+
       {company.is_platform_operator && (
         <div className="mt-8 border-t pt-6">
           <h3 className="mb-1 text-base font-bold text-slate-800">Paid Add-ons</h3>

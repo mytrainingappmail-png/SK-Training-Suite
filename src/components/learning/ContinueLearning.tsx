@@ -98,7 +98,7 @@ interface ContinueCardProps {
 function ContinueCard({ item, index, onContinue }: ContinueCardProps) {
   const gradient = CONTINUE_GRADIENTS[index % CONTINUE_GRADIENTS.length];
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+    <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-slate-300 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-xl">
 
       {/* Thumbnail */}
       <div className={`relative h-32 w-full bg-gradient-to-br ${gradient}`}>

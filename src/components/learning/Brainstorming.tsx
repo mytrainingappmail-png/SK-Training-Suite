@@ -7,10 +7,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { loadItems } from '../../services/brainstorming/brainstormingService';
+import { loadBrainstormingSettings } from '../../services/brainstormingSettings/brainstormingSettingsService';
 import { playCorrectSound, playWrongSound, playTickSound, playLockInSound, playLifelineSound } from '../../utils/quizSounds';
+import { startTensionMusic, stopTensionMusic, speakCorrect, speakWrong, stopSpeaking } from '../../utils/quizVoice';
 import type { BrainstormingItem, OptionLetter } from '../../types/brainstorming';
+import type { BrainstormingSettings } from '../../types/brainstormingSettings';
 
 const QUESTION_SECONDS = 30;
+// A round is a short, focused burst — not a march through the entire
+// question bank. Pick a small random batch each time instead.
+const ROUND_SIZE = 10;
 
 function funnyComment(pct: number): { emoji: string; text: string } {
   if (pct === 100) return { emoji: '🏆', text: 'PERFECT SCORE! Are you secretly Google?' };
@@ -61,6 +67,7 @@ function Brainstorming() {
   const [audiencePoll, setAudiencePoll] = useState<Record<OptionLetter, number> | null>(null);
   const [usedFiftyFifty, setUsedFiftyFifty] = useState(false);
   const [usedAudience, setUsedAudience] = useState(false);
+  const [voiceSettings, setVoiceSettings] = useState<BrainstormingSettings | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -70,6 +77,15 @@ function Brainstorming() {
       .then((rows) => setAllItems(rows.filter((r) => r.active)))
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
+    loadBrainstormingSettings().then(setVoiceSettings).catch(() => setVoiceSettings(null));
+  }, []);
+
+  // Stop any in-flight music/speech if the employee navigates away mid-round.
+  useEffect(() => {
+    return () => {
+      stopTensionMusic();
+      stopSpeaking();
+    };
   }, []);
 
   // Pressing the browser Back button while a round is in progress (or the
@@ -90,7 +106,7 @@ function Brainstorming() {
   }, [started]);
 
   function beginRound() {
-    setQueue(shuffle(allItems));
+    setQueue(shuffle(allItems).slice(0, ROUND_SIZE));
     setIndex(0);
     setStreak(0);
     setCorrectCount(0);
@@ -113,6 +129,16 @@ function Brainstorming() {
 
   const current = queue[index] ?? null;
 
+  // Background tension music plays for as long as a question is live
+  // (not locked/revealed yet) and stops the moment it's answered.
+  useEffect(() => {
+    const shouldPlay = started && !!current && !locked && !revealed && (voiceSettings?.music_enabled ?? false);
+    if (shouldPlay) startTensionMusic();
+    else stopTensionMusic();
+    return () => stopTensionMusic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started, current?.id, locked, revealed, voiceSettings?.music_enabled]);
+
   // Countdown timer — stops once an answer is locked in or revealed.
   useEffect(() => {
     if (!started || !current || locked || revealed) {
@@ -134,11 +160,19 @@ function Brainstorming() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, current?.id, locked, revealed]);
 
+  function announce(correct: boolean) {
+    if (!voiceSettings?.voice_enabled) return;
+    const opts = { style: voiceSettings.voice_style, voiceURI: voiceSettings.voice_uri || undefined };
+    if (correct) speakCorrect(opts);
+    else speakWrong(opts);
+  }
+
   function handleTimeout() {
     if (!current) return;
     setLocked(true);
     setRevealed(true);
     playWrongSound();
+    announce(false);
     setStreak(0);
     setAnsweredCount((n) => n + 1);
   }
@@ -153,6 +187,7 @@ function Brainstorming() {
       setAnsweredCount((n) => n + 1);
       if (letter === current.correct_option) {
         playCorrectSound();
+        announce(true);
         setCorrectCount((c) => c + 1);
         setStreak((s) => {
           const next = s + 1;
@@ -161,6 +196,7 @@ function Brainstorming() {
         });
       } else {
         playWrongSound();
+        announce(false);
         setStreak(0);
       }
     }, 700);
