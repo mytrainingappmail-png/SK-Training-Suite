@@ -35,6 +35,8 @@ interface ProvisionRequest {
   displayName: string;
   password: string;
   role: "super_admin" | "admin";
+  contactEmail?: string;
+  contactMobile?: string;
 }
 
 serve(async (req) => {
@@ -89,6 +91,8 @@ serve(async (req) => {
         username: payload.username.toLowerCase(),
         display_name: payload.displayName || payload.username,
         role: payload.role || "admin",
+        contact_email: payload.contactEmail || null,
+        contact_mobile: payload.contactMobile || null,
       })
       .select()
       .single();
@@ -97,6 +101,12 @@ serve(async (req) => {
       // Roll back the auth user so a failed insert never leaves an
       // orphaned, unusable login behind.
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      // username is unique GLOBALLY now (the login screen only asks for
+      // username + password, no company code) — surface the common case
+      // in plain language instead of a raw Postgres constraint error.
+      if (insertError.code === "23505") {
+        throw new Error("That username is already taken. Please choose a different one.");
+      }
       throw new Error(insertError.message);
     }
 

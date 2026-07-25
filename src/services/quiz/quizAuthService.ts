@@ -4,7 +4,6 @@ import { getAdminByAuthUserId } from "../../repositories/quiz/quizAdminRepositor
 import type { QuizAdmin } from "../../types/quiz";
 
 export interface QuizLoginCredentials {
-  companyCode: string;
   username: string;
   password: string;
 }
@@ -17,35 +16,34 @@ function internalEmailFor(companyCode: string, username: string): string {
   return `quiz.${companyCode.toLowerCase()}.${username.toLowerCase()}@internal.sktraining`;
 }
 
-interface CompanyLoginRow {
-  id: string;
-  active: boolean;
+interface LoginInfoRow {
+  company_code: string;
   live_quiz_enabled: boolean;
 }
 
 export async function login(credentials: QuizLoginCredentials): Promise<QuizLoginResult> {
-  const { companyCode, username, password } = credentials;
+  const { username, password } = credentials;
 
-  if (!companyCode.trim()) return fail("Company code is required.");
   if (!username.trim()) return fail("Username is required.");
   if (!password) return fail("Password is required.");
 
-  const { data: companyRows, error: companyError } = await supabaseQuiz.rpc("get_company_for_quiz_login", {
-    p_company_code: companyCode.trim(),
+  // username is globally unique across quiz_admins, so the company is
+  // resolved automatically — no Company Code field needed on this login.
+  const { data: infoRows, error: infoError } = await supabaseQuiz.rpc("get_quiz_admin_login_info", {
+    p_username: username.trim(),
   });
 
-  if (companyError) {
-    console.error("[quizAuthService] get_company_for_quiz_login:", companyError.message);
-    return fail("Invalid company code.");
+  if (infoError) {
+    console.error("[quizAuthService] get_quiz_admin_login_info:", infoError.message);
+    return fail("Invalid username or password.");
   }
 
-  const company = (companyRows as CompanyLoginRow[] | null)?.[0];
-  if (!company) return fail("Invalid company code.");
-  if (!company.active) return fail("This company account is inactive. Contact support.");
-  if (!company.live_quiz_enabled) return fail("Live Quiz is not enabled for this company. Contact your administrator.");
+  const info = (infoRows as LoginInfoRow[] | null)?.[0];
+  if (!info) return fail("Invalid username or password.");
+  if (!info.live_quiz_enabled) return fail("Live Quiz is not enabled for this company. Contact your administrator.");
 
   const { error: signInError } = await supabaseQuiz.auth.signInWithPassword({
-    email: internalEmailFor(companyCode.trim(), username.trim()),
+    email: internalEmailFor(info.company_code, username.trim()),
     password,
   });
 
@@ -75,6 +73,56 @@ export async function login(credentials: QuizLoginCredentials): Promise<QuizLogi
 export async function logout(): Promise<void> {
   await supabaseQuiz.auth.signOut();
   clearCurrentQuizAdmin();
+}
+
+export interface RequestPasswordResetResult {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Always returns a generic success message (whether or not the identifier
+ * matched an account) — the same standard anti-enumeration practice used
+ * everywhere else a "forgot password" flow exists.
+ */
+export async function requestPasswordReset(identifier: string): Promise<RequestPasswordResetResult> {
+  if (!identifier.trim()) {
+    return { success: false, message: "Enter your registered email or mobile number." };
+  }
+
+  const { data, error } = await supabaseQuiz.functions.invoke("quiz-admin-forgot-password", {
+    body: {
+      identifier: identifier.trim(),
+      redirectTo: `${window.location.origin}/quiz-admin/reset-password`,
+    },
+  });
+
+  if (error) {
+    console.error("[quizAuthService] requestPasswordReset:", error.message);
+    return { success: false, message: "Something went wrong. Please try again in a moment." };
+  }
+
+  return { success: true, message: data?.message ?? "If an account matches, a reset link has been sent." };
+}
+
+export interface UpdatePasswordResult {
+  success: boolean;
+  error: string | null;
+}
+
+/** Called from the reset-password page after the user arrives via the emailed recovery link. */
+export async function updatePasswordFromRecovery(newPassword: string): Promise<UpdatePasswordResult> {
+  if (newPassword.length < 8) {
+    return { success: false, error: "Password must be at least 8 characters." };
+  }
+
+  const { error } = await supabaseQuiz.auth.updateUser({ password: newPassword });
+  if (error) {
+    console.error("[quizAuthService] updatePasswordFromRecovery:", error.message);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, error: null };
 }
 
 function fail(error: string): QuizLoginResult {

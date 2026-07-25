@@ -44,6 +44,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 import QuizAdminGuard from "./components/quiz/QuizAdminGuard";
 import QuizAdminLoginPage from "./pages/quiz/QuizAdminLoginPage";
+import QuizAdminResetPasswordPage from "./pages/quiz/QuizAdminResetPasswordPage";
 import QuizAdminLayout from "./pages/quiz/QuizAdminLayout";
 import QuizDashboardPage from "./pages/quiz/QuizDashboardPage";
 import QuizListPage from "./pages/quiz/QuizListPage";
@@ -74,6 +75,7 @@ function App() {
           tab from the LMS Sidebar; a completely separate app section
           living in the same SPA bundle. */}
       <Route path={ROUTES.QUIZ_ADMIN_LOGIN} element={<QuizAdminLoginPage />} />
+      <Route path={ROUTES.QUIZ_ADMIN_RESET_PASSWORD} element={<QuizAdminResetPasswordPage />} />
       <Route element={<QuizAdminGuard><QuizAdminLayout /></QuizAdminGuard>}>
         <Route path={ROUTES.QUIZ_ADMIN_DASHBOARD} element={<QuizDashboardPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_QUIZZES} element={<QuizListPage />} />

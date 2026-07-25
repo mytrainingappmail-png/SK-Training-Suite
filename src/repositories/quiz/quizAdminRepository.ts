@@ -38,6 +38,8 @@ export interface ProvisionAdminPayload {
   displayName: string;
   password: string;
   role: "super_admin" | "admin";
+  contactEmail?: string;
+  contactMobile?: string;
 }
 
 export interface ProvisionAdminResult {

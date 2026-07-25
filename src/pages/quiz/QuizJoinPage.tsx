@@ -74,6 +74,13 @@ export default function QuizJoinPage() {
           >
             {loading ? "Joining…" : "Join Now →"}
           </button>
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.QUIZ_ADMIN_LOGIN)}
+            className="w-full text-slate-400 hover:text-slate-200 text-xs font-semibold py-2"
+          >
+            ← Admin Login
+          </button>
         </form>
 
         <p className="mt-5 text-xs text-slate-500">Get the PIN from your trainer</p>

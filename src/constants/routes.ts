@@ -77,6 +77,7 @@ export const ROUTES = {
   // ===========================
 
   QUIZ_ADMIN_LOGIN: "/quiz-admin/login",
+  QUIZ_ADMIN_RESET_PASSWORD: "/quiz-admin/reset-password",
   QUIZ_ADMIN_DASHBOARD: "/quiz-admin/dashboard",
   QUIZ_ADMIN_QUIZZES: "/quiz-admin/quizzes",
   QUIZ_ADMIN_BUILDER_NEW: "/quiz-admin/quizzes/new",

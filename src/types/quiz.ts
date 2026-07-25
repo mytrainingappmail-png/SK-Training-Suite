@@ -13,6 +13,8 @@ export interface QuizAdmin {
   display_name: string;
   role: QuizAdminRole;
   status: QuizAdminStatus;
+  contact_email: string | null;
+  contact_mobile: string | null;
   created_at: string;
 }
 

@@ -13,9 +13,11 @@ export default function QuizAdminSetupPanel() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactMobile, setContactMobile] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [created, setCreated] = useState<{ companyCode: string; internalEmail: string; username: string } | null>(null);
+  const [created, setCreated] = useState<{ username: string } | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -28,6 +30,10 @@ export default function QuizAdminSetupPanel() {
     }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (!contactEmail.trim()) {
+      setError("A contact email is required — it's how a forgotten password gets reset.");
       return;
     }
 
@@ -44,16 +50,20 @@ export default function QuizAdminSetupPanel() {
           displayName: displayName.trim() || username.trim(),
           password,
           role: "super_admin",
+          contactEmail: contactEmail.trim(),
+          contactMobile: contactMobile.trim(),
         },
       });
 
       if (fnError) throw new Error(fnError.message);
       if (!data?.success) throw new Error(data?.error || "Could not create the quiz admin account.");
 
-      setCreated({ companyCode: company.company_code, internalEmail: data.internalEmail, username: username.trim() });
+      setCreated({ username: username.trim() });
       setUsername("");
       setDisplayName("");
       setPassword("");
+      setContactEmail("");
+      setContactMobile("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -66,8 +76,8 @@ export default function QuizAdminSetupPanel() {
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Live Quiz — Admin Setup</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Create a login for the standalone Live Quiz app. It has its own username/password, completely separate
-          from LMS employee accounts — use it to sign in at the "Live Quiz" link in the sidebar.
+          Create a login for the standalone Live Quiz app. Just a username and password to sign in — no company code
+          needed — completely separate from LMS employee accounts.
         </p>
       </div>
 
@@ -76,17 +86,18 @@ export default function QuizAdminSetupPanel() {
       {created && (
         <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 space-y-1">
           <div className="font-semibold">Quiz admin created ✅</div>
-          <div>Company Code: <span className="font-mono font-semibold">{created.companyCode}</span></div>
           <div>Username: <span className="font-mono font-semibold">{created.username}</span></div>
           <div className="text-xs text-emerald-700 mt-1">
-            Use these plus the password you chose to log in at the Live Quiz link.
+            Use this plus the password you chose to log in at the Live Quiz link.
           </div>
         </div>
       )}
 
       <form onSubmit={handleCreate} className="space-y-3 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</label>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            Username (must be unique across all companies)
+          </label>
           <input
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-violet-500"
             value={username}
@@ -111,6 +122,29 @@ export default function QuizAdminSetupPanel() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="At least 8 characters"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            Contact Email *
+          </label>
+          <input
+            type="email"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-violet-500"
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
+            placeholder="A real, reachable email — used for Forgot Password"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            Contact Mobile (optional)
+          </label>
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-violet-500"
+            value={contactMobile}
+            onChange={(e) => setContactMobile(e.target.value)}
+            placeholder="For reference — password resets are sent by email"
           />
         </div>
         <button
