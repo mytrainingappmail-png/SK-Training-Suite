@@ -1,21 +1,20 @@
 // supabase/functions/quiz-admin-forgot-password/index.ts
 //
-// Public (pre-session) "forgot password" for Live Quiz admins. The
-// account's real Supabase Auth email is a synthetic internal one
+// Public (pre-session) "forgot password" for Live Quiz admins, step 1 of
+// 2 (step 2 is quiz-admin-reset-with-otp). The account's real Supabase
+// Auth email is a synthetic internal one
 // (quiz.{code}.{username}@internal.sktraining) — not deliverable — so
 // this looks the admin up by their REAL contact email/mobile on file
-// (quiz_admins.contact_email / contact_mobile), generates a genuine
-// Supabase password-recovery link for their internal auth account via
-// the Admin API, and emails that link to their real contact_email using
-// the same Resend setup as the existing send-email function.
+// (quiz_admins.contact_email / contact_mobile), asks Supabase's Admin API
+// for a recovery link for that internal account, and pulls the plain
+// 6-digit OTP Supabase generates alongside it (`properties.email_otp`)
+// — the SAME code the link itself would have redeemed — then emails just
+// that code (not the link) via the existing Resend setup. A true SMS OTP
+// isn't possible here: no SMS provider is wired into this app.
 //
 // Always responds with the same generic message regardless of whether a
 // match was found — standard practice so this endpoint can't be used to
 // find out which emails/mobiles have an account.
-//
-// Mobile-only accounts (no contact_email on file) can be identified but
-// not actually sent anything — there is no SMS provider wired into this
-// app. That's a known, honest limitation, not a bug.
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -26,11 +25,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GENERIC_MESSAGE = "If a Live Quiz admin account matches that email or mobile number, a reset link has been sent to its registered email address.";
+const GENERIC_MESSAGE = "If a Live Quiz admin account matches that email or mobile number, a 6-digit code has been sent to its registered email address.";
 
 interface ForgotPasswordRequest {
   identifier: string; // email or mobile, whichever the user typed
-  redirectTo: string; // e.g. `${window.location.origin}/quiz-admin/reset-password`
 }
 
 serve(async (req) => {
@@ -49,9 +47,7 @@ serve(async (req) => {
 
     const payload: ForgotPasswordRequest = await req.json();
     const identifier = (payload.identifier ?? "").trim();
-    if (!identifier || !payload.redirectTo) {
-      throw new Error("identifier and redirectTo are required.");
-    }
+    if (!identifier) throw new Error("identifier is required.");
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
@@ -76,20 +72,20 @@ serve(async (req) => {
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
       email: internalEmail,
-      options: { redirectTo: payload.redirectTo },
     });
     if (linkError) throw new Error(linkError.message);
 
-    if (resendApiKey && resendFromEmail) {
-      const actionLink = linkData.properties?.action_link;
+    const otp = linkData.properties?.email_otp;
+
+    if (otp && resendApiKey && resendFromEmail) {
       await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: resendFromEmail,
           to: admin.contact_email,
-          subject: "Reset your Live Quiz admin password",
-          html: `<p>Someone requested a password reset for the Live Quiz admin account <b>${admin.username}</b>.</p><p><a href="${actionLink}">Click here to set a new password</a>. This link expires soon and can only be used once.</p><p>If you didn't request this, you can safely ignore this email.</p>`,
+          subject: "Your Live Quiz password reset code",
+          html: `<p>Someone requested a password reset for the Live Quiz admin account <b>${admin.username}</b>.</p><p style="font-size:28px;font-weight:700;letter-spacing:4px;">${otp}</p><p>Enter this code on the reset page. It expires shortly and can only be used once.</p><p>If you didn't request this, you can safely ignore this email.</p>`,
         }),
       });
     }

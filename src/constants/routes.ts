@@ -77,13 +77,14 @@ export const ROUTES = {
   // ===========================
 
   QUIZ_ADMIN_LOGIN: "/quiz-admin/login",
-  QUIZ_ADMIN_RESET_PASSWORD: "/quiz-admin/reset-password",
   QUIZ_ADMIN_DASHBOARD: "/quiz-admin/dashboard",
   QUIZ_ADMIN_QUIZZES: "/quiz-admin/quizzes",
   QUIZ_ADMIN_BUILDER_NEW: "/quiz-admin/quizzes/new",
   QUIZ_ADMIN_BUILDER_EDIT: "/quiz-admin/quizzes/:quizId",
   QUIZ_ADMIN_HOST: "/quiz-admin/host/:sessionId",
   QUIZ_ADMIN_RESULTS: "/quiz-admin/results",
+  QUIZ_ADMIN_USERS: "/quiz-admin/users",
+  QUIZ_ADMIN_SETTINGS: "/quiz-admin/settings",
 
   QUIZ_JOIN: "/quiz/join",
   QUIZ_PLAY: "/quiz/play/:sessionId",

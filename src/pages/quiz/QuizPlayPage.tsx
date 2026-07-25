@@ -6,7 +6,9 @@ import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { getCurrentQuestion, submitAnswer } from "../../services/quiz/quizPlayService";
 import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
-import type { PublicQuizQuestion, SubmitAnswerResult } from "../../types/quiz";
+import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
+import { playTone } from "../../services/quiz/quizSoundService";
+import type { PublicQuizQuestion, SubmitAnswerResult, QuizPlayerSettings } from "../../types/quiz";
 
 interface LocationState {
   participantId?: string;
@@ -27,9 +29,15 @@ export default function QuizPlayPage() {
   const [answered, setAnswered] = useState(false);
   const [feedback, setFeedback] = useState<SubmitAnswerResult | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [playerSettings, setPlayerSettings] = useState<QuizPlayerSettings | null>(null);
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    getPlayerSettings(sessionId).then(setPlayerSettings).catch(() => {});
+  }, [sessionId]);
 
   // Recover participantId after a page refresh (router state is lost on reload).
   useEffect(() => {
@@ -64,11 +72,13 @@ export default function QuizPlayPage() {
       setQuestion(q);
       questionStartedAt.current = Date.now();
       setSecondsLeft(q.timer_seconds);
+      if (playerSettings?.sound_enabled !== false) playTone("pop");
     });
 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, session?.phase, session?.current_question_index]);
 
   useEffect(() => {
@@ -81,6 +91,7 @@ export default function QuizPlayPage() {
           handleSubmit(null);
           return 0;
         }
+        if (s <= 6 && playerSettings?.sound_enabled !== false) playTone("tick");
         return s - 1;
       });
     }, 1000);
@@ -101,6 +112,7 @@ export default function QuizPlayPage() {
     try {
       const result = await submitAnswer(sessionId, question.question_id, optionId, responseTimeMs);
       setFeedback(result);
+      if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
     } catch {
       // network hiccup — leave the answer locked, host will still advance the quiz for everyone
     }
@@ -113,6 +125,9 @@ export default function QuizPlayPage() {
   if (session.phase === "lobby") {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
+        {playerSettings?.brand_logo_url && (
+          <img src={playerSettings.brand_logo_url} alt="" className="h-16 w-16 object-contain rounded-xl" />
+        )}
         <div className="h-8 w-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
         <div className="text-lg font-semibold text-white">Waiting for trainer to start…</div>
         <div className="text-sm text-slate-400">{locationState.quizTitle}</div>
@@ -157,6 +172,15 @@ export default function QuizPlayPage() {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-500">Loading question…</div>;
   }
 
+  const fallbackColors = [
+    { box: "#e11d48", font: "#fff" },
+    { box: "#2563eb", font: "#fff" },
+    { box: "#f59e0b", font: "#fff" },
+    { box: "#16a34a", font: "#fff" },
+  ];
+  const colors = playerSettings?.option_colors?.length ? playerSettings.option_colors : fallbackColors;
+  const fontSize = playerSettings?.option_font_size ?? 16;
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800">
@@ -173,7 +197,7 @@ export default function QuizPlayPage() {
 
         <div className="px-4 grid grid-cols-1 gap-3">
           {question.options.map((opt, i) => {
-            const colors = ["bg-rose-600", "bg-blue-600", "bg-amber-500", "bg-emerald-600"];
+            const c = colors[i % colors.length];
             const isSelected = selectedOptionId === opt.option_id;
             const isCorrectReveal = answered && feedback && opt.option_id === feedback.correct_option_id;
             return (
@@ -181,7 +205,8 @@ export default function QuizPlayPage() {
                 key={opt.option_id}
                 disabled={answered}
                 onClick={() => handleSubmit(opt.option_id)}
-                className={`${colors[i % colors.length]} rounded-2xl py-5 px-4 text-white font-bold text-sm transition-opacity disabled:cursor-default ${
+                style={{ backgroundColor: c.box, color: c.font, fontSize }}
+                className={`rounded-2xl py-5 px-4 font-bold transition-opacity disabled:cursor-default ${
                   answered && !isSelected && !isCorrectReveal ? "opacity-30" : "opacity-100"
                 } ${isCorrectReveal ? "ring-4 ring-white/70" : ""}`}
               >

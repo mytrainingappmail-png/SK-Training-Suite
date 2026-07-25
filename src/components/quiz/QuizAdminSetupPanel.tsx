@@ -45,7 +45,6 @@ export default function QuizAdminSetupPanel() {
       const { data, error: fnError } = await supabase.functions.invoke("provision-quiz-admin-auth", {
         body: {
           companyId: company.id,
-          companyCode: company.company_code,
           username: username.trim(),
           displayName: displayName.trim() || username.trim(),
           password,

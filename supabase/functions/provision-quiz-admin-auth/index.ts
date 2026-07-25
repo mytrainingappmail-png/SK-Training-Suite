@@ -16,8 +16,11 @@
 // header is A valid Supabase JWT, not that it belongs to companyId —
 // without the check below, any logged-in LMS employee could pass a
 // DIFFERENT company's id/code and provision a quiz admin for it. So this
-// re-verifies the caller's own JWT server-side and requires their
-// employees row's company_id to match the company they're requesting.
+// re-verifies the caller's own JWT server-side, accepting EITHER an LMS
+// employee (the in-LMS bootstrap panel, for a company's first admin) OR
+// an already-active quiz_admin (the standalone app's own Users page,
+// once at least one admin exists) — either way their own company_id
+// must match the one they're requesting.
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -30,7 +33,6 @@ const corsHeaders = {
 
 interface ProvisionRequest {
   companyId: string;
-  companyCode: string;
   username: string;
   displayName: string;
   password: string;
@@ -52,8 +54,8 @@ serve(async (req) => {
     }
 
     const payload: ProvisionRequest = await req.json();
-    if (!payload.companyId || !payload.companyCode || !payload.username || !payload.password) {
-      throw new Error("companyId, companyCode, username and password are all required.");
+    if (!payload.companyId || !payload.username || !payload.password) {
+      throw new Error("companyId, username and password are all required.");
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
@@ -65,16 +67,35 @@ serve(async (req) => {
       throw new Error("You must be signed in to set up a Live Quiz admin.");
     }
 
-    const { data: callerEmployee, error: employeeError } = await supabaseAdmin
+    const { data: callerEmployee } = await supabaseAdmin
       .from("employees")
       .select("company_id")
       .eq("auth_user_id", callerData.user.id)
       .maybeSingle();
-    if (employeeError || !callerEmployee || callerEmployee.company_id !== payload.companyId) {
+
+    const { data: callerQuizAdmin } = await supabaseAdmin
+      .from("quiz_admins")
+      .select("company_id, status")
+      .eq("auth_user_id", callerData.user.id)
+      .maybeSingle();
+
+    const authorizedAsEmployee = callerEmployee?.company_id === payload.companyId;
+    const authorizedAsQuizAdmin = callerQuizAdmin?.status === "active" && callerQuizAdmin.company_id === payload.companyId;
+
+    if (!authorizedAsEmployee && !authorizedAsQuizAdmin) {
       throw new Error("You are not authorized to create a Live Quiz admin for this company.");
     }
 
-    const internalEmail = `quiz.${payload.companyCode.toLowerCase()}.${payload.username.toLowerCase()}@internal.sktraining`;
+    // Resolved server-side, never trusted from the client — the internal
+    // email's company segment must match the ALREADY-VERIFIED companyId.
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from("companies")
+      .select("company_code")
+      .eq("id", payload.companyId)
+      .maybeSingle();
+    if (companyError || !company) throw new Error("Could not resolve the company.");
+
+    const internalEmail = `quiz.${company.company_code.toLowerCase()}.${payload.username.toLowerCase()}@internal.sktraining`;
 
     const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: internalEmail,

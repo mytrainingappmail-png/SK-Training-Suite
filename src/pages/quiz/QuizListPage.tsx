@@ -5,6 +5,7 @@ import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
 import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz } from "../../services/quiz/quizService";
 import { launchSession } from "../../services/quiz/quizSessionService";
+import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import type { Quiz } from "../../types/quiz";
 
 export default function QuizListPage() {
@@ -58,7 +59,8 @@ export default function QuizListPage() {
     setBusyId(q.id);
     setError("");
     try {
-      const session = await launchSession(q.id, admin.company_id, admin.id, "open");
+      const settings = await getSettings(admin.company_id);
+      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode);
       navigate(ROUTES.QUIZ_ADMIN_HOST.replace(":sessionId", session.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to launch.");

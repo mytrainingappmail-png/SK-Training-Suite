@@ -161,3 +161,45 @@ export interface SubmitAnswerResult {
   correct_option_id: string | null;
   points_awarded: number;
 }
+
+export interface OptionColor {
+  box: string;
+  font: string;
+}
+
+export type CertTemplate = "classic_gold" | "royal_blue" | "modern_purple" | "minimal_white" | "dark_elegant";
+export type ChampMusic = "builtin" | "custom" | "off";
+
+export interface QuizSettings {
+  company_id: string;
+  brand_name: string | null;
+  brand_tagline: string | null;
+  brand_logo_url: string | null;
+  option_font_size: number;
+  option_colors: OptionColor[];
+  sound_enabled: boolean;
+  default_join_mode: QuizJoinMode;
+  cert_template: CertTemplate;
+  cert_company_name: string | null;
+  cert_logo_url: string | null;
+  cert_title: string;
+  cert_achievement_line: string;
+  cert_signatory1_name: string | null;
+  cert_signatory1_title: string | null;
+  cert_signatory1_image_url: string | null;
+  cert_signatory2_name: string | null;
+  cert_signatory2_title: string | null;
+  cert_signatory2_image_url: string | null;
+  champ_music: ChampMusic;
+  champ_music_url: string | null;
+  updated_at: string;
+}
+
+/** Correctness-free subset a participant's browser can see, via get_quiz_player_settings RPC. */
+export interface QuizPlayerSettings {
+  option_font_size: number;
+  option_colors: OptionColor[];
+  sound_enabled: boolean;
+  brand_name: string | null;
+  brand_logo_url: string | null;
+}

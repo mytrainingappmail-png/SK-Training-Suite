@@ -81,9 +81,10 @@ export interface RequestPasswordResetResult {
 }
 
 /**
- * Always returns a generic success message (whether or not the identifier
- * matched an account) — the same standard anti-enumeration practice used
- * everywhere else a "forgot password" flow exists.
+ * Step 1 of 2. Always returns a generic success message (whether or not
+ * the identifier matched an account) — standard anti-enumeration
+ * practice. Emails a 6-digit code (not a link) to the matched account's
+ * contact email.
  */
 export async function requestPasswordReset(identifier: string): Promise<RequestPasswordResetResult> {
   if (!identifier.trim()) {
@@ -91,10 +92,7 @@ export async function requestPasswordReset(identifier: string): Promise<RequestP
   }
 
   const { data, error } = await supabaseQuiz.functions.invoke("quiz-admin-forgot-password", {
-    body: {
-      identifier: identifier.trim(),
-      redirectTo: `${window.location.origin}/quiz-admin/reset-password`,
-    },
+    body: { identifier: identifier.trim() },
   });
 
   if (error) {
@@ -102,23 +100,53 @@ export async function requestPasswordReset(identifier: string): Promise<RequestP
     return { success: false, message: "Something went wrong. Please try again in a moment." };
   }
 
-  return { success: true, message: data?.message ?? "If an account matches, a reset link has been sent." };
+  return { success: true, message: data?.message ?? "If an account matches, a code has been sent." };
 }
 
-export interface UpdatePasswordResult {
+export interface ResetWithOtpResult {
   success: boolean;
   error: string | null;
 }
 
-/** Called from the reset-password page after the user arrives via the emailed recovery link. */
-export async function updatePasswordFromRecovery(newPassword: string): Promise<UpdatePasswordResult> {
+/** Step 2 of 2 — the code the user received plus their chosen new password. */
+export async function resetPasswordWithOtp(
+  identifier: string,
+  otp: string,
+  newPassword: string
+): Promise<ResetWithOtpResult> {
+  if (newPassword.length < 8) {
+    return { success: false, error: "Password must be at least 8 characters." };
+  }
+
+  const { data, error } = await supabaseQuiz.functions.invoke("quiz-admin-reset-with-otp", {
+    body: { identifier: identifier.trim(), otp: otp.trim(), newPassword },
+  });
+
+  if (error) {
+    console.error("[quizAuthService] resetPasswordWithOtp:", error.message);
+    return { success: false, error: "Something went wrong. Please try again." };
+  }
+  if (!data?.success) {
+    return { success: false, error: data?.error ?? "That code is invalid or has expired." };
+  }
+
+  return { success: true, error: null };
+}
+
+export interface ChangePasswordResult {
+  success: boolean;
+  error: string | null;
+}
+
+/** Self-service password change while already logged in — no code needed. */
+export async function changeOwnPassword(newPassword: string): Promise<ChangePasswordResult> {
   if (newPassword.length < 8) {
     return { success: false, error: "Password must be at least 8 characters." };
   }
 
   const { error } = await supabaseQuiz.auth.updateUser({ password: newPassword });
   if (error) {
-    console.error("[quizAuthService] updatePasswordFromRecovery:", error.message);
+    console.error("[quizAuthService] changeOwnPassword:", error.message);
     return { success: false, error: error.message };
   }
 

@@ -33,7 +33,6 @@ export async function listAdmins(companyId: string): Promise<QuizAdmin[]> {
 
 export interface ProvisionAdminPayload {
   companyId: string;
-  companyCode: string;
   username: string;
   displayName: string;
   password: string;
@@ -70,4 +69,21 @@ export async function updateAdminStatus(id: string, status: "active" | "disabled
     console.error("[quizAdminRepository] updateAdminStatus:", error);
     throw new Error(error.message);
   }
+}
+
+export interface UpdateProfilePayload {
+  display_name?: string;
+  contact_email?: string;
+  contact_mobile?: string;
+}
+
+export async function updateProfile(id: string, patch: UpdateProfilePayload): Promise<QuizAdmin> {
+  const { data, error } = await supabaseQuiz.from("quiz_admins").update(patch).eq("id", id).select().single();
+
+  if (error) {
+    console.error("[quizAdminRepository] updateProfile:", error);
+    throw new Error(error.message);
+  }
+
+  return data;
 }

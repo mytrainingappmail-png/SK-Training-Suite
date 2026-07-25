@@ -44,7 +44,6 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 import QuizAdminGuard from "./components/quiz/QuizAdminGuard";
 import QuizAdminLoginPage from "./pages/quiz/QuizAdminLoginPage";
-import QuizAdminResetPasswordPage from "./pages/quiz/QuizAdminResetPasswordPage";
 import QuizAdminLayout from "./pages/quiz/QuizAdminLayout";
 import QuizDashboardPage from "./pages/quiz/QuizDashboardPage";
 import QuizListPage from "./pages/quiz/QuizListPage";
@@ -53,6 +52,8 @@ import QuizHostLivePage from "./pages/quiz/QuizHostLivePage";
 import QuizResultsPage from "./pages/quiz/QuizResultsPage";
 import QuizJoinPage from "./pages/quiz/QuizJoinPage";
 import QuizPlayPage from "./pages/quiz/QuizPlayPage";
+import QuizUsersPage from "./pages/quiz/QuizUsersPage";
+import QuizSettingsPage from "./pages/quiz/QuizSettingsPage";
 
 function App() {
   useEffect(() => {
@@ -75,13 +76,14 @@ function App() {
           tab from the LMS Sidebar; a completely separate app section
           living in the same SPA bundle. */}
       <Route path={ROUTES.QUIZ_ADMIN_LOGIN} element={<QuizAdminLoginPage />} />
-      <Route path={ROUTES.QUIZ_ADMIN_RESET_PASSWORD} element={<QuizAdminResetPasswordPage />} />
       <Route element={<QuizAdminGuard><QuizAdminLayout /></QuizAdminGuard>}>
         <Route path={ROUTES.QUIZ_ADMIN_DASHBOARD} element={<QuizDashboardPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_QUIZZES} element={<QuizListPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_BUILDER_NEW} element={<QuizBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_BUILDER_EDIT} element={<QuizBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_RESULTS} element={<QuizResultsPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_USERS} element={<QuizUsersPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_SETTINGS} element={<QuizSettingsPage />} />
       </Route>
       {/* Host Live renders its own full-bleed screen without QuizAdminLayout's nav chrome */}
       <Route element={<QuizAdminGuard><Outlet /></QuizAdminGuard>}>

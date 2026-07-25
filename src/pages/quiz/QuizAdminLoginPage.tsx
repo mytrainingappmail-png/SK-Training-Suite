@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { login, requestPasswordReset } from "../../services/quiz/quizAuthService";
+import { login, requestPasswordReset, resetPasswordWithOtp } from "../../services/quiz/quizAuthService";
+
+type Mode = "login" | "forgot-request" | "forgot-verify";
 
 export default function QuizAdminLoginPage() {
   const navigate = useNavigate();
@@ -11,9 +13,13 @@ export default function QuizAdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [showForgot, setShowForgot] = useState(false);
+  const [mode, setMode] = useState<Mode>("login");
   const [identifier, setIdentifier] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -32,14 +38,53 @@ export default function QuizAdminLoginPage() {
     navigate(ROUTES.QUIZ_ADMIN_DASHBOARD, { replace: true });
   }
 
-  async function handleForgotSubmit(e: React.FormEvent) {
+  async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
     setForgotLoading(true);
     setForgotMessage("");
+    setForgotError("");
 
     const result = await requestPasswordReset(identifier);
     setForgotLoading(false);
     setForgotMessage(result.message);
+    setMode("forgot-verify");
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError("");
+
+    if (newPassword !== confirmPassword) {
+      setForgotError("Passwords don't match.");
+      return;
+    }
+
+    setForgotLoading(true);
+    const result = await resetPasswordWithOtp(identifier, otp, newPassword);
+    setForgotLoading(false);
+
+    if (!result.success) {
+      setForgotError(result.error ?? "Could not reset password.");
+      return;
+    }
+
+    setMode("login");
+    setForgotMessage("");
+    setOtp("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setError("");
+    setPassword("");
+  }
+
+  function backToLogin() {
+    setMode("login");
+    setForgotMessage("");
+    setForgotError("");
+    setIdentifier("");
+    setOtp("");
+    setNewPassword("");
+    setConfirmPassword("");
   }
 
   return (
@@ -51,7 +96,7 @@ export default function QuizAdminLoginPage() {
           <p className="text-xs text-slate-400 mt-1">Separate login from the main LMS</p>
         </div>
 
-        {!showForgot ? (
+        {mode === "login" && (
           <>
             {error && (
               <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
@@ -79,10 +124,7 @@ export default function QuizAdminLoginPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowForgot(true);
-                      setForgotMessage("");
-                    }}
+                    onClick={() => setMode("forgot-request")}
                     className="text-xs text-violet-400 hover:text-violet-300"
                   >
                     Forgot password?
@@ -119,11 +161,12 @@ export default function QuizAdminLoginPage() {
               </button>
             </div>
           </>
-        ) : (
+        )}
+
+        {mode === "forgot-request" && (
           <>
             <p className="text-sm text-slate-400 mb-4 text-center">
-              Enter the email or mobile number registered to your admin account and we'll send a reset link to your
-              email.
+              Enter the email or mobile number registered to your admin account and we'll email you a 6-digit code.
             </p>
 
             {forgotMessage && (
@@ -132,7 +175,7 @@ export default function QuizAdminLoginPage() {
               </div>
             )}
 
-            <form onSubmit={handleForgotSubmit} className="space-y-3">
+            <form onSubmit={handleRequestOtp} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
                   Email or Mobile Number
@@ -150,14 +193,87 @@ export default function QuizAdminLoginPage() {
                 disabled={forgotLoading}
                 className="w-full rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 transition-colors"
               >
-                {forgotLoading ? "Sending…" : "Send Reset Link"}
+                {forgotLoading ? "Sending…" : "Send Code"}
               </button>
               <button
                 type="button"
-                onClick={() => setShowForgot(false)}
+                onClick={backToLogin}
                 className="w-full text-slate-400 hover:text-slate-200 text-xs font-semibold py-2"
               >
                 ← Back to Login
+              </button>
+            </form>
+          </>
+        )}
+
+        {mode === "forgot-verify" && (
+          <>
+            <p className="text-sm text-slate-400 mb-4 text-center">
+              Enter the 6-digit code we emailed you, along with your new password.
+            </p>
+
+            {forgotMessage && (
+              <div className="mb-4 text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+                {forgotMessage}
+              </div>
+            )}
+            {forgotError && (
+              <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                {forgotError}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  6-Digit Code
+                </label>
+                <input
+                  className="w-full text-center font-mono text-xl tracking-[0.3em] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-white outline-none focus:border-violet-500"
+                  maxLength={6}
+                  inputMode="numeric"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={forgotLoading}
+                className="w-full rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 transition-colors"
+              >
+                {forgotLoading ? "Updating…" : "Reset Password"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("forgot-request")}
+                className="w-full text-slate-400 hover:text-slate-200 text-xs font-semibold py-2"
+              >
+                ← Didn't get a code? Try again
               </button>
             </form>
           </>
