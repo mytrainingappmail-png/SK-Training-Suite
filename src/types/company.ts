@@ -57,6 +57,11 @@ export interface Company {
   // (see companies_update_platform_operator RLS policy).
   market_analytics_enabled: boolean;
 
+  // Optional, paid add-on — the Live Quiz module (its own isolated
+  // schema/auth, opens in a new tab). Same platform-operator-only toggle
+  // pattern as market_analytics_enabled.
+  live_quiz_enabled: boolean;
+
   // How many cards show per page in the Courses/Modules/Lessons grids
   // before a "Next" button appears.
   cards_per_page: number;

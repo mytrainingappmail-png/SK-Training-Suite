@@ -57,6 +57,7 @@ import NotificationCenter from "../components/admin/notifications/NotificationCe
 import TicketManagement from "../components/admin/support/TicketManagement";
 import EmailTemplateBuilder from "../components/admin/email/EmailTemplateBuilder";
 import MarketDataManagement from "../components/admin/marketData/MarketDataManagement";
+import QuizAdminSetupPanel from "../components/quiz/QuizAdminSetupPanel";
 import AuditLogCenter from "../components/admin/audit/AuditLogCenter";
 
 import { useAuthorization } from "../hooks/useAuthorization";
@@ -70,6 +71,7 @@ function Admin() {
   const { can, PERMISSIONS } = useAuthorization();
   const [search, setSearch] = useState("");
   const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
+  const [liveQuizEnabled, setLiveQuizEnabled] = useState(false);
   // Settings/Menu/Theme/Permissions/Plans/Discount Codes/Payment Settings are
   // genuinely platform-wide config (no company_id at all — see
   // 20260722130000_platform_operator_scoping.sql), writable only by the one
@@ -83,9 +85,11 @@ function Admin() {
   useEffect(() => {
     loadCompany().then((c) => {
       setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false);
+      setLiveQuizEnabled(c?.live_quiz_enabled ?? false);
       setIsPlatformOperator(c?.is_platform_operator ?? false);
     }).catch(() => {
       setMarketAnalyticsEnabled(false);
+      setLiveQuizEnabled(false);
       setIsPlatformOperator(false);
     });
   }, []);
@@ -478,6 +482,15 @@ function Admin() {
               </button>
             )}
 
+            {liveQuizEnabled && matches("Live Quiz") && (
+              <button
+                onClick={() => setActiveTab("live-quiz")}
+                className={getTabClass("live-quiz")}
+              >
+                Live Quiz
+              </button>
+            )}
+
             {can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log") && (
               <button
                 onClick={() => setActiveTab("audit-log")}
@@ -675,6 +688,8 @@ function Admin() {
             {activeTab === "email-templates" && can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && <EmailTemplateBuilder />}
 
             {activeTab === "market-analytics" && marketAnalyticsEnabled && <MarketDataManagement />}
+
+            {activeTab === "live-quiz" && liveQuizEnabled && <QuizAdminSetupPanel />}
 
             {activeTab === "audit-log" && can(PERMISSIONS.VIEW_AUDIT_LOG) && <AuditLogCenter />}
 

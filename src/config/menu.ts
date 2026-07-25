@@ -7,9 +7,24 @@ export interface MenuItem {
   icon: string;
   visible: boolean;
   group: string;
+  // Opens in a new browser tab via a plain <a target="_blank"> instead of
+  // client-side navigation — for Live Quiz, which is a logically separate
+  // app section (own auth, own layout) living in the same SPA bundle.
+  external?: boolean;
 }
 
 export const MENU: MenuItem[] = [
+  // Live Quiz sits first — Admin-tier only, and only once the company has
+  // purchased the add-on (see Sidebar.tsx: liveQuizEnabled + VIEW_COMPANY).
+  {
+    id: "live-quiz",
+    title: "Live Quiz",
+    route: ROUTES.QUIZ_ADMIN_DASHBOARD,
+    icon: "gamepad-2",
+    visible: true,
+    group: "Overview",
+    external: true,
+  },
   {
     id: "dashboard",
     title: "Dashboard",

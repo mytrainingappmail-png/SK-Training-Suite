@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 import { ROUTES } from "./constants/routes";
 import { PERMISSIONS } from "./constants/permissions";
@@ -42,6 +42,17 @@ import ContinueLearning from "./components/learning/ContinueLearning";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
+import QuizAdminGuard from "./components/quiz/QuizAdminGuard";
+import QuizAdminLoginPage from "./pages/quiz/QuizAdminLoginPage";
+import QuizAdminLayout from "./pages/quiz/QuizAdminLayout";
+import QuizDashboardPage from "./pages/quiz/QuizDashboardPage";
+import QuizListPage from "./pages/quiz/QuizListPage";
+import QuizBuilderPage from "./pages/quiz/QuizBuilderPage";
+import QuizHostLivePage from "./pages/quiz/QuizHostLivePage";
+import QuizResultsPage from "./pages/quiz/QuizResultsPage";
+import QuizJoinPage from "./pages/quiz/QuizJoinPage";
+import QuizPlayPage from "./pages/quiz/QuizPlayPage";
+
 function App() {
   useEffect(() => {
     function refreshIcon() {
@@ -57,6 +68,25 @@ function App() {
       {/* Public Route */}
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.LEGAL_DOCUMENT} element={<LegalDocumentPage />} />
+
+      {/* Live Quiz (premium add-on) — standalone, no LMS sidebar/header,
+          own auth (quiz_admins), own feature flag. Opens in a new browser
+          tab from the LMS Sidebar; a completely separate app section
+          living in the same SPA bundle. */}
+      <Route path={ROUTES.QUIZ_ADMIN_LOGIN} element={<QuizAdminLoginPage />} />
+      <Route element={<QuizAdminGuard><QuizAdminLayout /></QuizAdminGuard>}>
+        <Route path={ROUTES.QUIZ_ADMIN_DASHBOARD} element={<QuizDashboardPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_QUIZZES} element={<QuizListPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_BUILDER_NEW} element={<QuizBuilderPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_BUILDER_EDIT} element={<QuizBuilderPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_RESULTS} element={<QuizResultsPage />} />
+      </Route>
+      {/* Host Live renders its own full-bleed screen without QuizAdminLayout's nav chrome */}
+      <Route element={<QuizAdminGuard><Outlet /></QuizAdminGuard>}>
+        <Route path={ROUTES.QUIZ_ADMIN_HOST} element={<QuizHostLivePage />} />
+      </Route>
+      <Route path={ROUTES.QUIZ_JOIN} element={<QuizJoinPage />} />
+      <Route path={ROUTES.QUIZ_PLAY} element={<QuizPlayPage />} />
 
       {/* Protected Application — outer guard only checks "is logged in" */}
       <Route

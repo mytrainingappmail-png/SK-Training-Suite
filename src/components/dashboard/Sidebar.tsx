@@ -156,6 +156,7 @@ function Sidebar() {
   const [isTrainer, setIsTrainer] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
+  const [liveQuizEnabled, setLiveQuizEnabled] = useState(false);
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -199,9 +200,11 @@ function Sidebar() {
   useEffect(() => {
     loadCompany().then((c) => {
       setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false);
+      setLiveQuizEnabled(c?.live_quiz_enabled ?? false);
       setIsPlatformOperator(c?.is_platform_operator ?? false);
     }).catch(() => {
       setMarketAnalyticsEnabled(false);
+      setLiveQuizEnabled(false);
       setIsPlatformOperator(false);
     });
   }, []);
@@ -226,6 +229,10 @@ function Sidebar() {
     if (item.group === "My Learning" && (isTrainer || isSuperAdmin)) return false;
     if (item.id === "market-analytics" && !marketAnalyticsEnabled) return false;
     if (item.id === "settings" && !isPlatformOperator) return false;
+    // Live Quiz: Admin-tier only (same gate as the "Admin" console link)
+    // AND only once the company has purchased the add-on. Employees,
+    // Trainers, and Managers must never see it, per spec.
+    if (item.id === "live-quiz" && (!liveQuizEnabled || !can(PERMISSIONS.VIEW_COMPANY))) return false;
 
     const requiredPermission = MENU_PERMISSION_MAP[item.id];
     if (!requiredPermission) return true;
@@ -311,6 +318,21 @@ function Sidebar() {
                 .filter((item) => item.group === group)
                 .map((item) => {
                   const isActive = location.pathname === item.route;
+
+                  if (item.external) {
+                    return (
+                      <a
+                        key={item.id}
+                        href={item.route}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full mb-1 px-4 py-2.5 rounded-xl transition text-slate-300 hover:bg-yellow-500 hover:text-black"
+                      >
+                        {item.title} <span className="text-[10px] align-super opacity-70">↗</span>
+                      </a>
+                    );
+                  }
+
                   return (
                     <Link
                       key={item.id}

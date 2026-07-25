@@ -71,4 +71,25 @@ export const ROUTES = {
 
   TRAINER_RESULTS: "/teaching/results",
 
+  // ===========================
+  // Live Quiz (premium add-on) — standalone, no LMS sidebar/header.
+  // Admin routes require a quiz_admins session; join/play are public.
+  // ===========================
+
+  QUIZ_ADMIN_LOGIN: "/quiz-admin/login",
+  QUIZ_ADMIN_DASHBOARD: "/quiz-admin/dashboard",
+  QUIZ_ADMIN_QUIZZES: "/quiz-admin/quizzes",
+  QUIZ_ADMIN_BUILDER_NEW: "/quiz-admin/quizzes/new",
+  QUIZ_ADMIN_BUILDER_EDIT: "/quiz-admin/quizzes/:quizId",
+  QUIZ_ADMIN_HOST: "/quiz-admin/host/:sessionId",
+  QUIZ_ADMIN_RESULTS: "/quiz-admin/results",
+
+  QUIZ_JOIN: "/quiz/join",
+  QUIZ_PLAY: "/quiz/play/:sessionId",
+
+  // In-LMS bootstrap for a company's first Live Quiz admin account —
+  // SuperAdmin only, rendered inside AppLayout since it needs the LMS's
+  // own real Supabase Auth session to call the provisioning edge function.
+  QUIZ_ADMIN_SETUP: "/settings/live-quiz-setup",
+
 } as const;
