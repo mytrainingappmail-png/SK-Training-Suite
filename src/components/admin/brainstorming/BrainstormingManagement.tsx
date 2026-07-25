@@ -299,6 +299,13 @@ function BrainstormingManagement() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<BrainstormingItemForm>(defaultBrainstormingItemForm);
   const [saving, setSaving] = useState(false);
+  const [listSearch, setListSearch] = useState('');
+
+  const filteredItems = items.filter((item) => {
+    const term = listSearch.trim().toLowerCase();
+    if (!term) return true;
+    return item.question.toLowerCase().includes(term) || item.category.toLowerCase().includes(term);
+  });
 
   function showToast(message: string) {
     setToast(message);
@@ -452,28 +459,41 @@ function BrainstormingManagement() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-700">All Questions ({items.length})</p>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-700">All Questions ({filteredItems.length}{filteredItems.length !== items.length ? ` of ${items.length}` : ''})</p>
             <button onClick={startNew} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">+ New Question</button>
           </div>
-          <div className="space-y-2">
-            {items.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-400">No questions yet — add one above.</p>
-            ) : (
-              items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-800">{item.question}</p>
-                    <p className="text-xs text-slate-400">{item.category} · {item.difficulty} · Correct: {optionText(item)} · {item.active ? 'Active' : 'Inactive'}</p>
+
+          <input
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            placeholder="Search by question or category..."
+            className={`${INPUT_CLS} mb-4`}
+          />
+
+          {items.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">No questions yet — add one above.</p>
+          ) : filteredItems.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">No questions match "{listSearch}".</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredItems.map((item) => (
+                <div key={item.id} className="flex flex-col rounded-2xl border border-slate-200 p-4 transition hover:border-indigo-200 hover:shadow-sm">
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">{item.category}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{item.difficulty}</span>
+                    {!item.active && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-500">Inactive</span>}
                   </div>
-                  <div className="flex flex-shrink-0 gap-2">
+                  <p className="line-clamp-3 flex-1 text-sm font-medium text-slate-800">{item.question}</p>
+                  <p className="mt-2 truncate text-xs text-emerald-600">✓ {optionText(item)}</p>
+                  <div className="mt-3 flex justify-end gap-3 border-t border-slate-100 pt-3">
                     <button onClick={() => startEdit(item)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                     <button onClick={() => handleDelete(item.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

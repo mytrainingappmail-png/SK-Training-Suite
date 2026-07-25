@@ -101,14 +101,6 @@ export const MENU: MenuItem[] = [
     group: "My Learning",
   },
   {
-    id: "brainstorming",
-    title: "Brainstorming",
-    route: ROUTES.BRAINSTORMING,
-    icon: "lightbulb",
-    visible: true,
-    group: "My Learning",
-  },
-  {
     id: "my-attendance",
     title: "My Attendance",
     route: ROUTES.MY_ATTENDANCE,
@@ -241,5 +233,15 @@ export const MENU: MenuItem[] = [
     icon: "trending-up",
     visible: true,
     group: "System",
+  },
+
+  // ── Extras — just for fun, not part of the learning curriculum ────────
+  {
+    id: "brainstorming",
+    title: "Brainstorming",
+    route: ROUTES.BRAINSTORMING,
+    icon: "lightbulb",
+    visible: true,
+    group: "Extras",
   },
 ];
