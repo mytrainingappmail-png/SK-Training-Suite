@@ -5,12 +5,21 @@
 // style quizzes generally — no branding, names, or actual show music are
 // used; all sound effects are generated in-browser (see utils/quizSounds).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadItems } from '../../services/brainstorming/brainstormingService';
 import { playCorrectSound, playWrongSound, playTickSound, playLockInSound, playLifelineSound } from '../../utils/quizSounds';
 import type { BrainstormingItem, OptionLetter } from '../../types/brainstorming';
 
 const QUESTION_SECONDS = 30;
+
+function funnyComment(pct: number): { emoji: string; text: string } {
+  if (pct === 100) return { emoji: '🏆', text: 'PERFECT SCORE! Are you secretly Google?' };
+  if (pct >= 80) return { emoji: '🔥', text: "On fire! Your brain deserves a raise." };
+  if (pct >= 60) return { emoji: '😎', text: 'Solid! Not bad for a human.' };
+  if (pct >= 40) return { emoji: '🤔', text: 'Middle of the pack — coffee break?' };
+  if (pct >= 20) return { emoji: '😅', text: 'Yikes. Google exists for a reason.' };
+  return { emoji: '🙈', text: 'Well... at least you showed up!' };
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -35,8 +44,8 @@ function Brainstorming() {
   const [allItems, setAllItems] = useState<BrainstormingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
   const [started, setStarted] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   const [queue, setQueue] = useState<BrainstormingItem[]>([]);
   const [index, setIndex] = useState(0);
@@ -46,6 +55,8 @@ function Brainstorming() {
   const [timeLeft, setTimeLeft] = useState(QUESTION_SECONDS);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [answeredCount, setAnsweredCount] = useState(0);
   const [hiddenOptions, setHiddenOptions] = useState<Set<OptionLetter>>(new Set());
   const [audiencePoll, setAudiencePoll] = useState<Record<OptionLetter, number> | null>(null);
   const [usedFiftyFifty, setUsedFiftyFifty] = useState(false);
@@ -61,13 +72,30 @@ function Brainstorming() {
       .finally(() => setLoading(false));
   }, []);
 
-  const categories = useMemo(() => Array.from(new Set(allItems.map((i) => i.category))).sort(), [allItems]);
+  // Pressing the browser Back button while a round is in progress (or the
+  // summary popup is open) should just exit back to the start screen on
+  // this same page — not leave Brainstorming for whatever section was
+  // visited before it. Pushing a history entry when the round starts
+  // means Back consumes that entry first (via popstate) instead of
+  // navigating away; a second Back press then behaves normally.
+  useEffect(() => {
+    if (!started) return;
+    window.history.pushState({ brainstorming: true }, '');
+    function onPopState() {
+      setStarted(false);
+      setShowSummary(false);
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [started]);
 
   function beginRound() {
-    const pool = categoryFilter ? allItems.filter((i) => i.category === categoryFilter) : allItems;
-    setQueue(shuffle(pool));
+    setQueue(shuffle(allItems));
     setIndex(0);
     setStreak(0);
+    setCorrectCount(0);
+    setAnsweredCount(0);
+    setShowSummary(false);
     setUsedFiftyFifty(false);
     setUsedAudience(false);
     resetQuestionState();
@@ -112,6 +140,7 @@ function Brainstorming() {
     setRevealed(true);
     playWrongSound();
     setStreak(0);
+    setAnsweredCount((n) => n + 1);
   }
 
   function handleSelect(letter: OptionLetter) {
@@ -121,8 +150,10 @@ function Brainstorming() {
     setLocked(true);
     window.setTimeout(() => {
       setRevealed(true);
+      setAnsweredCount((n) => n + 1);
       if (letter === current.correct_option) {
         playCorrectSound();
+        setCorrectCount((c) => c + 1);
         setStreak((s) => {
           const next = s + 1;
           setBestStreak((b) => Math.max(b, next));
@@ -137,11 +168,16 @@ function Brainstorming() {
 
   function handleNext() {
     if (index + 1 >= queue.length) {
-      setStarted(false);
+      setShowSummary(true);
       return;
     }
     setIndex((i) => i + 1);
     resetQuestionState();
+  }
+
+  function closeSummary() {
+    setShowSummary(false);
+    setStarted(false);
   }
 
   function useFiftyFifty() {
@@ -216,29 +252,6 @@ function Brainstorming() {
 
         {!started && !error && (
           <div className="mt-8">
-            {categories.length > 1 && (
-              <div className="mb-5 flex flex-wrap gap-2">
-                <button
-                  onClick={() => setCategoryFilter('')}
-                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                    categoryFilter === '' ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-violet-100 hover:bg-white/20'
-                  }`}
-                >
-                  All Categories
-                </button>
-                {categories.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCategoryFilter(c)}
-                    className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                      categoryFilter === c ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-violet-100 hover:bg-white/20'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
             <button
               onClick={beginRound}
               className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-500 px-6 py-4 text-lg font-extrabold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:scale-[1.01] hover:shadow-xl active:scale-[0.99]"
@@ -257,9 +270,6 @@ function Brainstorming() {
                 </span>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${difficultyCls(current.difficulty)}`}>
                   {current.difficulty}
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-violet-100 ring-1 ring-white/20">
-                  {current.category}
                 </span>
               </div>
 
@@ -344,18 +354,97 @@ function Brainstorming() {
           </div>
         )}
 
-        {started && !current && (
+        {started && !current && !showSummary && (
           <div className="mt-8 rounded-2xl bg-white/10 p-8 text-center ring-1 ring-white/20">
-            <p className="text-2xl font-extrabold text-amber-300">🎉 Round Complete!</p>
-            <p className="mt-2 text-sm text-violet-100">Best streak this round: <span className="font-bold text-white">{bestStreak}</span></p>
+            <p className="text-lg font-semibold text-violet-100">No questions available.</p>
             <button
-              onClick={() => setStarted(false)}
+              onClick={closeSummary}
               className="mt-5 rounded-xl bg-white/10 px-6 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 hover:bg-white/20"
             >
-              Play Again
+              Back
             </button>
           </div>
         )}
+      </div>
+
+      {showSummary && (
+        <SummaryPopup
+          correctCount={correctCount}
+          totalCount={answeredCount}
+          bestStreak={bestStreak}
+          onClose={closeSummary}
+          onPlayAgain={beginRound}
+        />
+      )}
+    </div>
+  );
+}
+
+function SummaryPopup({ correctCount, totalCount, bestStreak, onClose, onPlayAgain }: {
+  correctCount: number; totalCount: number; bestStreak: number; onClose: () => void; onPlayAgain: () => void;
+}) {
+  const pct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+  const { emoji, text } = funnyComment(pct);
+  const confetti = ['🎉', '✨', '🎊', '⭐', '🎈'];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <style>{`
+        @keyframes summary-pop-in { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes summary-bounce-emoji { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-14px) rotate(-8deg); } }
+        @keyframes summary-confetti-fall { 0% { transform: translateY(-20px) rotate(0deg); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(220px) rotate(360deg); opacity: 0; } }
+      `}</style>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-sm overflow-hidden rounded-3xl p-6 text-center text-white shadow-2xl sm:p-8"
+        style={{ background: 'linear-gradient(135deg, #0F0A2E 0%, #2A1259 45%, #4C1D95 100%)', animation: 'summary-pop-in 0.35s cubic-bezier(0.34,1.56,0.64,1)' }}
+      >
+        {confetti.map((c, i) => (
+          <span
+            key={i}
+            className="pointer-events-none absolute top-0 text-xl"
+            style={{
+              left: `${10 + i * 18}%`,
+              animation: `summary-confetti-fall ${1.6 + i * 0.3}s ease-in ${i * 0.15}s infinite`,
+            }}
+          >
+            {c}
+          </span>
+        ))}
+
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20"
+        >
+          ✕
+        </button>
+
+        <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">Round Complete</p>
+
+        <div className="mt-3 text-6xl" style={{ animation: 'summary-bounce-emoji 1.4s ease-in-out infinite' }}>
+          {emoji}
+        </div>
+
+        <p className="mt-3 text-lg font-extrabold text-white">{text}</p>
+
+        <div className="mt-6 flex justify-center gap-3">
+          <div className="rounded-2xl bg-white/10 px-4 py-3 text-center ring-1 ring-white/20">
+            <p className="text-[10px] uppercase tracking-wide text-violet-200">Score</p>
+            <p className="text-xl font-bold text-amber-300">{correctCount} / {totalCount}</p>
+          </div>
+          <div className="rounded-2xl bg-white/10 px-4 py-3 text-center ring-1 ring-white/20">
+            <p className="text-[10px] uppercase tracking-wide text-violet-200">Best Streak</p>
+            <p className="text-xl font-bold text-white">{bestStreak}</p>
+          </div>
+        </div>
+
+        <button
+          onClick={onPlayAgain}
+          className="mt-6 w-full rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-5 py-3 text-sm font-bold text-slate-900 shadow-md transition hover:scale-[1.01] active:scale-[0.99]"
+        >
+          ▶ Play Again
+        </button>
       </div>
     </div>
   );

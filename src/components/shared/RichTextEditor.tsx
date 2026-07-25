@@ -91,6 +91,18 @@ function IconImage({ className = 'h-4 w-4' }: { className?: string }) {
 function IconTable({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5h16.5A.75.75 0 0 1 21 5.25v13.5a.75.75 0 0 1-.75.75H3.75a.75.75 0 0 1-.75-.75V5.25a.75.75 0 0 1 .75-.75Zm0 5.25h16.5m-16.5 5.25h16.5M9 4.5v15m6-15v15" /></svg>);
 }
+function IconAlignLeft({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h10.5m-10.5 5.25h16.5" /></svg>);
+}
+function IconAlignCenter({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M6.75 12h10.5M3.75 17.25h16.5" /></svg>);
+}
+function IconAlignRight({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M9.75 12h10.5m-16.5 5.25h16.5" /></svg>);
+}
+function IconAlignJustify({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" /></svg>);
+}
 function IconUndo({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>);
 }
@@ -269,6 +281,13 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
 
         <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} title="Bullet list"><IconBulletList /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} title="Numbered list"><IconNumberList /></ToolbarButton>
+
+        <div className="mx-1 h-5 w-px bg-slate-200" />
+
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Align left"><IconAlignLeft /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Align center"><IconAlignCenter /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align right"><IconAlignRight /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('justify').run()} active={editor.isActive({ textAlign: 'justify' })} title="Justify"><IconAlignJustify /></ToolbarButton>
 
         <div className="mx-1 h-5 w-px bg-slate-200" />
 
