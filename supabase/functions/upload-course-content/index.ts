@@ -28,6 +28,7 @@ const FOLDER_BY_KIND: Record<string, string> = {
   image: 'images',
   video: 'videos',
   document: 'documents',
+  audio: 'audio',
 };
 
 const CORS_HEADERS = {

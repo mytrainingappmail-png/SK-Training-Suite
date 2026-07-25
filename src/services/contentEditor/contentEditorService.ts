@@ -13,12 +13,14 @@ import type { LessonContent, MediaUploadResult } from '../../types/contentEditor
 const IMAGE_EXTENSIONS    = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 const VIDEO_EXTENSIONS    = ['mp4'];
 const DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip'];
+const AUDIO_EXTENSIONS    = ['mp3', 'wav', 'ogg', 'm4a', 'webm', 'aac'];
 
 // Defaults when no active "max_*_upload_mb" Setting exists — an admin can
 // override these from Settings Management without any code change.
 const DEFAULT_MAX_IMAGE_MB    = 10;
 const DEFAULT_MAX_VIDEO_MB    = 200;
 const DEFAULT_MAX_DOCUMENT_MB = 25;
+const DEFAULT_MAX_AUDIO_MB    = 15;
 
 const MAX_VIDEO_BYTES = DEFAULT_MAX_VIDEO_MB * 1024 * 1024;
 
@@ -95,4 +97,18 @@ export async function uploadDocument(file: File): Promise<MediaUploadResult> {
 
   const employeeId = requireEmployeeId();
   return await uploadContentMedia('document', file, employeeId);
+}
+
+export async function uploadAudio(file: File): Promise<MediaUploadResult> {
+  const ext = getExtension(file.name);
+  if (!AUDIO_EXTENSIONS.includes(ext)) {
+    throw new Error('Unsupported audio type. Allowed: MP3, WAV, OGG, M4A, WEBM, AAC.');
+  }
+  const maxAudioMb = await getSettingNumber('max_audio_upload_mb', DEFAULT_MAX_AUDIO_MB);
+  if (file.size > maxAudioMb * 1024 * 1024) {
+    throw new Error(`Audio file is too large. Maximum size is ${maxAudioMb}MB.`);
+  }
+
+  const employeeId = requireEmployeeId();
+  return await uploadContentMedia('audio', file, employeeId);
 }

@@ -111,24 +111,51 @@ function EmptyState({ search }: { search: string }) {
 // Certificate card (dashboard)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CertificateCard({ certificate, onOpen }: { certificate: MyCertificate; onOpen: () => void }) {
+function CertificateCard({ certificate, employeeName, onOpen }: { certificate: MyCertificate; employeeName: string; onOpen: () => void }) {
   const isIssued = certificate.status === 'valid';
+  const [preview, setPreview] = useState<CertificateViewData | null>(null);
+
+  useEffect(() => {
+    if (certificate.status === 'pending') return;
+    let cancelled = false;
+    loadCertificateForView(certificate.id)
+      .then((v) => { if (!cancelled) setPreview(v); })
+      .catch(() => { if (!cancelled) setPreview(null); });
+    return () => { cancelled = true; };
+  }, [certificate.id, certificate.status]);
+
   return (
     <button
       onClick={onOpen}
       className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl"
     >
-      {/* Gold ribbon header — celebratory treatment for an earned/eligible achievement */}
-      <div className={`relative h-20 bg-gradient-to-br ${isIssued ? 'from-amber-400 via-yellow-500 to-amber-600' : 'from-slate-300 to-slate-400'} px-5 pt-4`}>
-        <svg className="absolute -right-3 -top-3 h-24 w-24 text-white/10" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2l2.4 4.86 5.37.78-3.89 3.79.92 5.35L12 14.27l-4.8 2.51.92-5.35-3.89-3.79 5.37-.78L12 2z" />
-        </svg>
-        <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/25 text-white backdrop-blur-sm">
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.623 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+      {/* Live certificate preview when available, gold ribbon icon otherwise */}
+      {preview ? (
+        <div className="relative aspect-video w-full overflow-hidden border-b border-slate-100 bg-slate-50">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-2">
+            <CertificateRenderer
+              template={preview.template}
+              data={{
+                employeeName: preview.employeeName || employeeName,
+                courseName: preview.courseName || certificate.courseName,
+                issueDate: formatDate(certificate.issueDate),
+                certificateNo: certificate.certificateNumber,
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className={`relative h-20 bg-gradient-to-br ${isIssued ? 'from-amber-400 via-yellow-500 to-amber-600' : 'from-slate-300 to-slate-400'} px-5 pt-4`}>
+          <svg className="absolute -right-3 -top-3 h-24 w-24 text-white/10" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l2.4 4.86 5.37.78-3.89 3.79.92 5.35L12 14.27l-4.8 2.51.92-5.35-3.89-3.79 5.37-.78L12 2z" />
           </svg>
-        </span>
-      </div>
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/25 text-white backdrop-blur-sm">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.623 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+            </svg>
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-3 flex items-start justify-between gap-2">
@@ -628,6 +655,7 @@ function MyCertificates() {
             <CertificateCard
               key={certificate.id}
               certificate={certificate}
+              employeeName={employeeName}
               onOpen={() => setActiveCertificateId(certificate.id)}
             />
           ))}

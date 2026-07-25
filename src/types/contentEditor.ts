@@ -12,7 +12,8 @@ export interface LessonContent {
 export type MediaUploadKind =
   | "image"
   | "video"
-  | "document";
+  | "document"
+  | "audio";
 
 export interface MediaUploadResult {
   url: string;

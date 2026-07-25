@@ -114,7 +114,7 @@ function PathCard({ path, index, onOpen }: PathCardProps) {
   const isCompleted = path.status === 'completed';
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border-2 border-slate-300 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-xl">
 
       {isCompleted && (
         <span className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">

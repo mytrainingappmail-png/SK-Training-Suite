@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { loadItems, saveItem, editItem, removeItem } from '../../../services/brainstorming/brainstormingService';
 import { loadBrainstormingSettings, saveBrainstormingSettings } from '../../../services/brainstormingSettings/brainstormingSettingsService';
-import { listVoices, speakSample, startTensionMusic, stopTensionMusic } from '../../../utils/quizVoice';
+import { uploadAudio } from '../../../services/contentEditor/contentEditorService';
+import { listVoices, speakSample, startTensionMusic, stopTensionMusic, playCustomSound, startCustomMusic, stopCustomMusic } from '../../../utils/quizVoice';
 import type { BrainstormingItem, BrainstormingItemForm, OptionLetter } from '../../../types/brainstorming';
 import { defaultBrainstormingItemForm } from '../../../types/brainstorming';
 import type { BrainstormingSettings, BrainstormingVoiceStyle } from '../../../types/brainstormingSettings';
@@ -20,12 +22,85 @@ const VOICE_STYLE_OPTIONS: { value: BrainstormingVoiceStyle; label: string; hint
   { value: 'dramatic', label: 'Dramatic Narrator', hint: 'Deep, slow, suspenseful' },
 ];
 
+function AudioUploadRow({
+  label, url, uploading, inputRef, onUpload, onRemove, onTest, onStopTest, holdToTest,
+}: {
+  label: string;
+  url: string;
+  uploading: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
+  onUpload: (file: File) => void;
+  onRemove: () => void;
+  onTest: () => void;
+  onStopTest?: () => void;
+  holdToTest?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 p-3">
+      <div className="min-w-[140px] flex-1">
+        <p className="text-sm font-medium text-slate-700">{label}</p>
+        <p className="truncate text-xs text-slate-400">{url ? url.split('/').pop() : 'No file uploaded'}</p>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="audio/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onUpload(f); }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+      >
+        {uploading ? 'Uploading…' : url ? 'Replace' : 'Upload'}
+      </button>
+      {url && (
+        <>
+          {holdToTest ? (
+            <button
+              type="button"
+              onMouseDown={onTest}
+              onMouseUp={onStopTest}
+              onMouseLeave={onStopTest}
+              className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              ▶ Hold to Play
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onTest}
+              className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              ▶ Play
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100"
+          >
+            Remove
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function VoiceoverSettingsPanel() {
   const [settings, setSettings] = useState<BrainstormingSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [uploadingField, setUploadingField] = useState<'music_url' | 'correct_sound_url' | 'wrong_sound_url' | null>(null);
+
+  const musicInputRef = useRef<HTMLInputElement>(null);
+  const correctInputRef = useRef<HTMLInputElement>(null);
+  const wrongInputRef = useRef<HTMLInputElement>(null);
 
   function showToast(message: string) {
     setToast(message);
@@ -60,12 +135,27 @@ function VoiceoverSettingsPanel() {
         voice_enabled: next.voice_enabled,
         voice_style: next.voice_style,
         voice_uri: next.voice_uri,
+        music_url: next.music_url,
+        correct_sound_url: next.correct_sound_url,
+        wrong_sound_url: next.wrong_sound_url,
       });
       showToast('Saved');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to save.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAudioUpload(field: 'music_url' | 'correct_sound_url' | 'wrong_sound_url', file: File) {
+    setUploadingField(field);
+    try {
+      const result = await uploadAudio(file);
+      await persist({ [field]: result.url });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setUploadingField(null);
     }
   }
 
@@ -129,20 +219,60 @@ function VoiceoverSettingsPanel() {
           )}
         </div>
 
+        <div className="border-t border-slate-100 pt-4">
+          <p className="mb-1 text-sm font-semibold text-slate-700">Custom Audio (optional)</p>
+          <p className="mb-3 text-xs text-slate-500">
+            Upload your own recording — e.g. your own mimicry/impression — and it plays instead of the browser voice and
+            generated music above. Since it's audio you recorded and uploaded yourself, there's no copyright concern on our end.
+          </p>
+
+          <div className="space-y-3">
+            <AudioUploadRow
+              label="Background Music"
+              url={settings.music_url}
+              uploading={uploadingField === 'music_url'}
+              inputRef={musicInputRef}
+              onUpload={(f) => handleAudioUpload('music_url', f)}
+              onRemove={() => persist({ music_url: '' })}
+              onTest={() => startCustomMusic(settings.music_url)}
+              onStopTest={() => stopCustomMusic()}
+              holdToTest
+            />
+            <AudioUploadRow
+              label="Correct Answer Sound"
+              url={settings.correct_sound_url}
+              uploading={uploadingField === 'correct_sound_url'}
+              inputRef={correctInputRef}
+              onUpload={(f) => handleAudioUpload('correct_sound_url', f)}
+              onRemove={() => persist({ correct_sound_url: '' })}
+              onTest={() => playCustomSound(settings.correct_sound_url)}
+            />
+            <AudioUploadRow
+              label="Wrong Answer Sound"
+              url={settings.wrong_sound_url}
+              uploading={uploadingField === 'wrong_sound_url'}
+              inputRef={wrongInputRef}
+              onUpload={(f) => handleAudioUpload('wrong_sound_url', f)}
+              onRemove={() => persist({ wrong_sound_url: '' })}
+              onTest={() => playCustomSound(settings.wrong_sound_url)}
+            />
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           <button
             type="button"
             onClick={() => speakSample({ style: settings.voice_style, voiceURI: settings.voice_uri || undefined }, true)}
             className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
           >
-            🔊 Test "Correct"
+            🔊 Test Browser "Correct"
           </button>
           <button
             type="button"
             onClick={() => speakSample({ style: settings.voice_style, voiceURI: settings.voice_uri || undefined }, false)}
             className="rounded-xl bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
           >
-            🔊 Test "Wrong"
+            🔊 Test Browser "Wrong"
           </button>
           <button
             type="button"
@@ -151,7 +281,7 @@ function VoiceoverSettingsPanel() {
             onMouseLeave={() => stopTensionMusic()}
             className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
           >
-            🎵 Hold to Test Music
+            🎵 Hold to Test Generated Music
           </button>
         </div>
       </div>

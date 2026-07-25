@@ -121,3 +121,34 @@ export function stopTensionMusic(): void {
     musicTimer = null;
   }
 }
+
+// ── Admin-uploaded custom audio ─────────────────────────────────────────────
+// Their own recording (e.g. their own mimicry/impression) — plays instead
+// of the generated tension music / TTS reactions when a URL is set.
+
+let customMusicEl: HTMLAudioElement | null = null;
+
+export function startCustomMusic(url: string): void {
+  stopCustomMusic();
+  customMusicEl = new Audio(url);
+  customMusicEl.loop = true;
+  customMusicEl.volume = 0.5;
+  void customMusicEl.play().catch(() => {
+    // Autoplay may be blocked until a user gesture — non-fatal.
+  });
+}
+
+export function stopCustomMusic(): void {
+  if (customMusicEl) {
+    customMusicEl.pause();
+    customMusicEl.currentTime = 0;
+    customMusicEl = null;
+  }
+}
+
+export function playCustomSound(url: string): void {
+  const audio = new Audio(url);
+  void audio.play().catch(() => {
+    // Non-fatal — playback may require a prior user gesture.
+  });
+}
