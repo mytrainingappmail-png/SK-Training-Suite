@@ -13,7 +13,7 @@ import {
   getPlanModules, setPlanModule as setPlanModuleRepo, deletePlanModule,
 } from '../../repositories/license/licenseRepository';
 import { listAppModules } from '../../repositories/company/appModuleRepository';
-import { setCompanyModule } from '../../services/company/appModuleService';
+import { setCompanyModules } from '../../services/company/appModuleService';
 
 import { employeeService } from '../employee/employeeService';
 import { loadCourses } from '../course/courseService';
@@ -80,9 +80,10 @@ export async function clearPlanModuleOverride(planId: string, moduleKey: string)
 /** The actual integration: applies every module in a plan's resolved set to one company as an explicit override — this is what makes issuing (or changing) a license automatically configure what that company can access, instead of the operator having to separately remember to flip toggles in Company Modules. */
 export async function applyPlanModulesToCompany(companyId: string, planId: string): Promise<void> {
   const states = await getPlanModuleStates(planId);
-  for (const s of states) {
-    await setCompanyModule(companyId, s.key, s.enabled);
-  }
+  // One batched upsert, not a loop of N independent round trips — a single
+  // statement covering every module is all-or-nothing, so a company can
+  // never end up with only some of a plan's modules applied.
+  await setCompanyModules(companyId, states.map((s) => ({ moduleKey: s.key, enabled: s.enabled })));
 }
 
 export async function seedDefaultPlans(existingPlans: SubscriptionPlan[]): Promise<SubscriptionPlan[]> {

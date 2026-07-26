@@ -27,6 +27,13 @@ export async function setCompanyModule(companyId: string, moduleKey: string, ena
   return appModuleRepo.setCompanyModule(companyId, moduleKey, enabled);
 }
 
+export async function setCompanyModules(
+  companyId: string,
+  entries: { moduleKey: string; enabled: boolean }[]
+): Promise<void> {
+  return appModuleRepo.setCompanyModules(companyId, entries);
+}
+
 export async function clearCompanyModuleOverride(companyId: string, moduleKey: string): Promise<void> {
   return appModuleRepo.clearCompanyModuleOverride(companyId, moduleKey);
 }

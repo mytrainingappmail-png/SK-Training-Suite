@@ -45,6 +45,26 @@ export async function setCompanyModule(companyId: string, moduleKey: string, ena
   }
 }
 
+/** Applies a whole set of module states to a company in one request — a single upsert statement covering every row is all-or-nothing at the database level, unlike calling setCompanyModule in a loop (which can leave a company half-applied if a later row in the loop fails). Used when a license/plan is assigned so a company's modules never end up in a partially-updated state. */
+export async function setCompanyModules(
+  companyId: string,
+  entries: { moduleKey: string; enabled: boolean }[]
+): Promise<void> {
+  if (entries.length === 0) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("company_modules")
+    .upsert(
+      entries.map((e) => ({ company_id: companyId, module_key: e.moduleKey, enabled: e.enabled, updated_at: now })),
+      { onConflict: "company_id,module_key" }
+    );
+
+  if (error) {
+    console.error("[appModuleRepository] setCompanyModules:", error);
+    throw new Error(error.message);
+  }
+}
+
 /** Removes an explicit override so the module falls back to its own default_enabled again. */
 export async function clearCompanyModuleOverride(companyId: string, moduleKey: string): Promise<void> {
   const { error } = await supabase
