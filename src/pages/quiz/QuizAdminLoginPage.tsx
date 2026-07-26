@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { login, requestPasswordReset, resetPasswordWithOtp } from "../../services/quiz/quizAuthService";
+import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
+import type { QuizPublicBranding } from "../../types/quiz";
 
 type Mode = "login" | "forgot-request" | "forgot-verify";
 
@@ -21,6 +23,11 @@ export default function QuizAdminLoginPage() {
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotError, setForgotError] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
+
+  useEffect(() => {
+    getPublicQuizBranding().then(setBranding);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,12 +95,22 @@ export default function QuizAdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-8">
+    <div
+      className="min-h-screen flex items-center justify-center bg-slate-950 px-4 bg-cover bg-center"
+      style={branding?.login_background_url ? { backgroundImage: `url(${branding.login_background_url})` } : undefined}
+    >
+      <div className="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-slate-800 rounded-2xl p-8">
+        {branding?.login_banner_url && (
+          <img src={branding.login_banner_url} alt="" className="w-full h-28 object-cover rounded-xl mb-5" />
+        )}
         <div className="text-center mb-6">
-          <div className="h-2.5 w-2.5 rounded-full bg-amber-400 mx-auto mb-2 animate-pulse" />
-          <h1 className="text-lg font-semibold text-white">Live Quiz — Admin</h1>
-          <p className="text-xs text-slate-400 mt-1">Separate login from the main LMS</p>
+          {branding?.brand_logo_url ? (
+            <img src={branding.brand_logo_url} alt="" className="h-12 w-12 object-contain rounded-lg mx-auto mb-2" />
+          ) : (
+            <div className="h-2.5 w-2.5 rounded-full bg-amber-400 mx-auto mb-2 animate-pulse" />
+          )}
+          <h1 className="text-lg font-semibold text-white">{branding?.brand_name || branding?.company_name || "Live Quiz — Admin"}</h1>
+          <p className="text-xs text-slate-400 mt-1">{branding?.brand_tagline || "Separate login from the main LMS"}</p>
         </div>
 
         {mode === "login" && (

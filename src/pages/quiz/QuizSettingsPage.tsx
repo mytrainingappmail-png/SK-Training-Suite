@@ -4,6 +4,7 @@ import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/qui
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { renderCertificateToCanvas, CERT_TEMPLATE_LABELS } from "../../services/quiz/quizCertificateRenderer";
 import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from "../../services/quiz/quizBackupService";
+import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
 import type { QuizSettings, OptionColor, CertTemplate } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -102,6 +103,8 @@ export default function QuizSettingsPage() {
         brand_name: settings.brand_name,
         brand_tagline: settings.brand_tagline,
         brand_logo_url: settings.brand_logo_url,
+        login_background_url: settings.login_background_url,
+        login_banner_url: settings.login_banner_url,
       });
       setBrandingMessage("Branding saved.");
     } finally {
@@ -173,7 +176,7 @@ export default function QuizSettingsPage() {
     reader.readAsText(file);
   }
 
-  if (loading || !settings) return <div className="text-slate-500 text-sm">Loading…</div>;
+  if (loading || !settings || !me) return <div className="text-slate-500 text-sm">Loading…</div>;
 
   return (
     <div className="space-y-8">
@@ -300,6 +303,43 @@ export default function QuizSettingsPage() {
             />
           </div>
         </div>
+
+        <QuizBrandingImageField
+          label="Company Logo"
+          hint="Upload an image instead of pasting a URL — this replaces the Logo URL above once uploaded."
+          value={settings.brand_logo_url}
+          kind="logo"
+          companyId={me.company_id}
+          onChange={(url) => setSettings({ ...settings, brand_logo_url: url })}
+        />
+
+        <div className="pt-2 border-t border-slate-800 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">🖥️ Login Page Branding</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Shown on the Live Quiz admin login screen — leave blank to use the default look</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <QuizBrandingImageField
+              label="Login Background Image"
+              hint="Fills the page behind the login card"
+              value={settings.login_background_url}
+              kind="login-background"
+              companyId={me.company_id}
+              onChange={(url) => setSettings({ ...settings, login_background_url: url })}
+              previewClassName="h-16 w-28 object-cover rounded-lg bg-slate-800 border border-slate-700"
+            />
+            <QuizBrandingImageField
+              label="Login Banner Image"
+              hint="Shown above the login form, inside the card"
+              value={settings.login_banner_url}
+              kind="login-banner"
+              companyId={me.company_id}
+              onChange={(url) => setSettings({ ...settings, login_banner_url: url })}
+              previewClassName="h-16 w-28 object-cover rounded-lg bg-slate-800 border border-slate-700"
+            />
+          </div>
+        </div>
+
         {brandingMessage && <div className="text-sm text-emerald-300">{brandingMessage}</div>}
         <button
           onClick={handleSaveBranding}

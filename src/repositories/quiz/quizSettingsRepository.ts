@@ -1,11 +1,13 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { QuizSettings, QuizPlayerSettings } from "../../types/quiz";
+import type { QuizSettings, QuizPlayerSettings, QuizPublicBranding } from "../../types/quiz";
 
 const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   brand_name: null,
   brand_tagline: null,
   brand_logo_url: null,
+  login_background_url: null,
+  login_banner_url: null,
   option_font_size: 16,
   option_colors: [
     { box: "#DC2626", font: "#FFFFFF" },
@@ -69,4 +71,17 @@ export async function getPlayerSettings(sessionId: string): Promise<QuizPlayerSe
 
   const row = (data as QuizPlayerSettings[] | null)?.[0];
   return row ?? { ...DEFAULT_SETTINGS, brand_name: null, brand_logo_url: null };
+}
+
+/** Pre-auth branding for the quiz admin login page — no company context exists yet (global unique usernames, no company code field), so this resolves to the first company with the module enabled, same fallback the main LMS login uses before a company code is typed. */
+export async function getPublicQuizBranding(): Promise<QuizPublicBranding | null> {
+  const { data, error } = await supabaseQuiz.rpc("get_quiz_public_branding");
+
+  if (error) {
+    console.error("[quizSettingsRepository] getPublicQuizBranding:", error);
+    return null;
+  }
+
+  const row = (data as QuizPublicBranding[] | null)?.[0];
+  return row ?? null;
 }

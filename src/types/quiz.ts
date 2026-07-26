@@ -178,6 +178,8 @@ export interface QuizSettings {
   brand_name: string | null;
   brand_tagline: string | null;
   brand_logo_url: string | null;
+  login_background_url: string | null;
+  login_banner_url: string | null;
   option_font_size: number;
   option_colors: OptionColor[];
   sound_enabled: boolean;
@@ -206,6 +208,16 @@ export interface QuizPlayerSettings {
   sound_enabled: boolean;
   brand_name: string | null;
   brand_logo_url: string | null;
+}
+
+/** Pre-auth branding for the quiz admin login page, via get_quiz_public_branding RPC. */
+export interface QuizPublicBranding {
+  company_name: string | null;
+  brand_name: string | null;
+  brand_tagline: string | null;
+  brand_logo_url: string | null;
+  login_background_url: string | null;
+  login_banner_url: string | null;
 }
 
 export interface QuizCertificate {
@@ -238,6 +250,93 @@ export interface AnswerDistributionQuestion {
   display_order: number;
   options: AnswerDistributionOption[];
   totalAnswered: number;
+}
+
+export interface DashboardFilters {
+  fromIso?: string;
+  toIso?: string;
+  categoryId?: string | null;
+  quizId?: string | null;
+  trainerId?: string | null;
+}
+
+export interface DashboardTrendPoint {
+  label: string;
+  value: number;
+}
+
+export interface DashboardKpis {
+  totalQuizzes: number;
+  publishedQuizzes: number;
+  draftQuizzes: number;
+  liveSessionsNow: number;
+  completedSessions: number;
+  todaysParticipants: number;
+  totalParticipants: number;
+  questionBankSize: number;
+  averageScorePct: number;
+  passPct: number;
+  failPct: number;
+  improvePct: number;
+  completionPct: number;
+  avgResponseTimeMs: number;
+  certificatesGenerated: number;
+}
+
+export interface DashboardFilterOptions {
+  categories: { id: string; name: string }[];
+  quizzes: { id: string; title: string }[];
+  trainers: { id: string; name: string }[];
+}
+
+export interface DashboardRecentQuiz {
+  id: string;
+  title: string;
+  status: QuizStatus;
+  updatedAt: string;
+}
+
+export interface DashboardRecentSession {
+  id: string;
+  quizTitle: string;
+  phase: QuizSessionPhase;
+  participantCount: number;
+  createdAt: string;
+}
+
+export interface DashboardRecentResult {
+  sessionId: string;
+  participantId: string;
+  quizTitle: string;
+  displayName: string;
+  percent: number;
+  grade: QuizGrade;
+  endedAt: string;
+}
+
+export interface DashboardRecentCertificate {
+  id: string;
+  candidateName: string;
+  quizTitle: string;
+  issuedAt: string;
+}
+
+export interface DashboardSnapshot {
+  kpis: DashboardKpis;
+  participationTrend: DashboardTrendPoint[];
+  scoreTrend: DashboardTrendPoint[];
+  certificateTrend: DashboardTrendPoint[];
+  passFail: { label: string; value: number; color: string }[];
+  categoryPerformance: DashboardTrendPoint[];
+  difficultyPerformance: DashboardTrendPoint[];
+  trainerPerformance: DashboardTrendPoint[];
+  topQuizzes: DashboardTrendPoint[];
+  bottomQuizzes: DashboardTrendPoint[];
+  topParticipants: DashboardTrendPoint[];
+  recentQuizActivity: DashboardRecentQuiz[];
+  recentSessions: DashboardRecentSession[];
+  recentResults: DashboardRecentResult[];
+  recentCertificates: DashboardRecentCertificate[];
 }
 
 export interface ChampionRow {
