@@ -4,6 +4,8 @@
 
 export type QuizAdminRole = "super_admin" | "admin";
 export type QuizAdminStatus = "active" | "disabled";
+/** Only meaningful for role "admin" — a super_admin always has full edit rights regardless of this value. "admin" + view_only sees everything, changes nothing; "admin" + edit has full content/session control but can't manage other users. */
+export type QuizPermissionLevel = "view_only" | "edit";
 
 export interface QuizAdmin {
   id: string;
@@ -12,6 +14,7 @@ export interface QuizAdmin {
   username: string;
   display_name: string;
   role: QuizAdminRole;
+  permission_level: QuizPermissionLevel;
   status: QuizAdminStatus;
   contact_email: string | null;
   contact_mobile: string | null;
@@ -202,4 +205,39 @@ export interface QuizPlayerSettings {
   sound_enabled: boolean;
   brand_name: string | null;
   brand_logo_url: string | null;
+}
+
+export interface QuizCertificate {
+  id: string;
+  cert_number: string;
+  candidate_name: string;
+  quiz_title: string;
+  score_line: string;
+  template: CertTemplate;
+  issued_at: string;
+  company_name: string;
+  cert_title: string;
+  achievement_line: string;
+  signatory1_name: string | null;
+  signatory1_title: string | null;
+  signatory2_name: string | null;
+  signatory2_title: string | null;
+}
+
+/** One row per option, returned by get_my_answer_review — group client-side by question_index. */
+export interface AnswerReviewOptionRow {
+  question_index: number;
+  question_text: string;
+  explanation: string;
+  option_id: string;
+  option_text: string;
+  is_correct: boolean;
+  was_chosen: boolean;
+}
+
+export interface AnswerReviewQuestion {
+  question_index: number;
+  question_text: string;
+  explanation: string;
+  options: { option_id: string; option_text: string; is_correct: boolean; was_chosen: boolean }[];
 }

@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
+import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { createQuiz, getQuiz, updateQuizMeta, saveQuestions, publishQuiz } from "../../services/quiz/quizService";
+import { buildSampleCsv, parseCsv, csvRowsToQuestions, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
 import type { QuizDifficulty } from "../../types/quiz";
 
@@ -50,6 +51,7 @@ export default function QuizBuilderPage() {
   const navigate = useNavigate();
   const { quizId } = useParams<{ quizId: string }>();
   const isNew = !quizId;
+  const canEdit = canEditQuizContent();
 
   const [form, setForm] = useState<QuizForm>(DEFAULT_FORM);
   const [questions, setQuestions] = useState<EditableQuestion[]>([blankQuestion()]);
@@ -58,6 +60,12 @@ export default function QuizBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [csvImportedCount, setCsvImportedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isNew && !canEdit) navigate(ROUTES.QUIZ_ADMIN_QUIZZES, { replace: true });
+  }, [isNew, canEdit, navigate]);
 
   useEffect(() => {
     if (isNew || !quizId) return;
@@ -148,6 +156,38 @@ export default function QuizBuilderPage() {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
   }
 
+  function isBlankQuestion(q: EditableQuestion): boolean {
+    return !q.question_text.trim() && q.options.every((o) => !o.option_text.trim());
+  }
+
+  function handleDownloadSampleCsv() {
+    downloadCsvFile("live-quiz-sample.csv", buildSampleCsv());
+  }
+
+  function handleCsvFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      const rows = parseCsv(text);
+      const { questions: imported, errors } = csvRowsToQuestions(rows);
+
+      setCsvErrors(errors);
+      setCsvImportedCount(imported.length);
+      if (imported.length === 0) return;
+
+      const newQuestions: EditableQuestion[] = imported.map((q) => ({ ...q, localId: nextLocalId() }));
+      setQuestions((prev) => {
+        const keep = prev.filter((q) => !isBlankQuestion(q));
+        return [...keep, ...newQuestions];
+      });
+    };
+    reader.readAsText(file);
+  }
+
   async function persist(publish: boolean): Promise<string | null> {
     if (!admin) return null;
     setError("");
@@ -214,7 +254,7 @@ export default function QuizBuilderPage() {
       )}
 
       {/* Settings */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      <fieldset disabled={!canEdit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
         <h2 className="text-sm font-semibold text-slate-300">Settings</h2>
         <div>
           <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Title *</label>
@@ -289,18 +329,56 @@ export default function QuizBuilderPage() {
           />
           Shuffle answer order for each player
         </label>
+      </fieldset>
+
+      {/* Bulk import */}
+      {canEdit && (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-300">📄 Bulk Import Questions (CSV)</h2>
+        <p className="text-xs text-slate-500">
+          Download the sample to see the exact format, fill it in with your own questions, then upload it here —
+          it's added straight into this quiz below.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleDownloadSampleCsv}
+            className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5"
+          >
+            ⬇ Download Sample CSV
+          </button>
+          <label className="text-xs font-semibold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg px-3 py-1.5 cursor-pointer">
+            ⬆ Import from CSV
+            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvFileSelected} />
+          </label>
+        </div>
+        {csvImportedCount !== null && (
+          <div className="text-sm text-emerald-300">
+            ✅ Imported {csvImportedCount} question{csvImportedCount === 1 ? "" : "s"}.
+          </div>
+        )}
+        {csvErrors.length > 0 && (
+          <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 space-y-1">
+            <div className="font-semibold">{csvErrors.length} row(s) skipped:</div>
+            {csvErrors.map((e, i) => (
+              <div key={i}>• {e}</div>
+            ))}
+          </div>
+        )}
       </div>
+      )}
 
       {/* Questions */}
-      <div className="space-y-4">
+      <fieldset disabled={!canEdit} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-300">{questions.length} question(s)</h2>
+          {canEdit && (
           <button
             onClick={addQuestion}
             className="text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-3 py-1.5"
           >
             + Add Question
           </button>
+          )}
         </div>
 
         {questions.map((q, qi) => (
@@ -374,8 +452,9 @@ export default function QuizBuilderPage() {
             />
           </div>
         ))}
-      </div>
+      </fieldset>
 
+      {canEdit ? (
       <div className="flex gap-3 justify-end sticky bottom-4">
         <button
           disabled={saving}
@@ -392,6 +471,9 @@ export default function QuizBuilderPage() {
           🚀 Publish Quiz
         </button>
       </div>
+      ) : (
+        <div className="text-xs text-slate-500 text-right">👁 View only — you don't have permission to edit quizzes.</div>
+      )}
     </div>
   );
 }

@@ -5,16 +5,22 @@ import { ROUTES } from "../../constants/routes";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { getQuiz } from "../../services/quiz/quizService";
 import { startQuiz, advanceQuestion, endSession } from "../../services/quiz/quizSessionService";
+import { canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import type { QuizWithQuestions } from "../../types/quiz";
 
 export default function QuizHostLivePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { session, participants } = useQuizSessionRealtime(sessionId ?? null);
+  const canEdit = canEditQuizContent();
 
   const [quiz, setQuiz] = useState<QuizWithQuestions | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!canEdit) navigate(ROUTES.QUIZ_ADMIN_QUIZZES, { replace: true });
+  }, [canEdit, navigate]);
 
   useEffect(() => {
     if (!session) return;

@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
-import { listAdmins, provisionAdmin, updateAdminStatus } from "../../repositories/quiz/quizAdminRepository";
+import {
+  listAdmins,
+  provisionAdmin,
+  updateAdminStatus,
+  updateAdminPermissions,
+} from "../../repositories/quiz/quizAdminRepository";
 import {
   listRoster,
   addRosterEntry,
@@ -9,7 +14,7 @@ import {
   removeRosterEntry,
 } from "../../repositories/quiz/quizRosterRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
-import type { QuizAdmin, QuizRosterEntry, QuizJoinMode } from "../../types/quiz";
+import type { QuizAdmin, QuizRosterEntry, QuizJoinMode, QuizAdminRole, QuizPermissionLevel } from "../../types/quiz";
 
 export default function QuizUsersPage() {
   const me = getCurrentQuizAdmin();
@@ -23,6 +28,8 @@ export default function QuizUsersPage() {
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newContactEmail, setNewContactEmail] = useState("");
+  const [newRole, setNewRole] = useState<QuizAdminRole>("admin");
+  const [newPermissionLevel, setNewPermissionLevel] = useState<QuizPermissionLevel>("edit");
   const [addUserError, setAddUserError] = useState("");
   const [addUserLoading, setAddUserLoading] = useState(false);
 
@@ -64,7 +71,8 @@ export default function QuizUsersPage() {
       username: newUsername.trim(),
       displayName: newDisplayName.trim() || newUsername.trim(),
       password: newPassword,
-      role: "admin",
+      role: newRole,
+      permissionLevel: newPermissionLevel,
       contactEmail: newContactEmail.trim(),
     });
     setAddUserLoading(false);
@@ -79,11 +87,23 @@ export default function QuizUsersPage() {
     setNewDisplayName("");
     setNewPassword("");
     setNewContactEmail("");
+    setNewRole("admin");
+    setNewPermissionLevel("edit");
     refresh();
   }
 
   async function handleToggleStatus(admin: QuizAdmin) {
     await updateAdminStatus(admin.id, admin.status === "active" ? "disabled" : "active");
+    refresh();
+  }
+
+  async function handleRoleChange(admin: QuizAdmin, role: QuizAdminRole) {
+    await updateAdminPermissions(admin.id, { role });
+    refresh();
+  }
+
+  async function handlePermissionChange(admin: QuizAdmin, permission_level: QuizPermissionLevel) {
+    await updateAdminPermissions(admin.id, { permission_level });
     refresh();
   }
 
@@ -165,6 +185,29 @@ export default function QuizUsersPage() {
               value={newContactEmail}
               onChange={(e) => setNewContactEmail(e.target.value)}
             />
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Role</label>
+              <select
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value as QuizAdminRole)}
+              >
+                <option value="admin">Admin</option>
+                <option value="super_admin">Super Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Access Level</label>
+              <select
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+                value={newRole === "super_admin" ? "edit" : newPermissionLevel}
+                disabled={newRole === "super_admin"}
+                onChange={(e) => setNewPermissionLevel(e.target.value as QuizPermissionLevel)}
+              >
+                <option value="view_only">View Only</option>
+                <option value="edit">Can Edit</option>
+              </select>
+            </div>
           </div>
           <button
             type="submit"
@@ -183,37 +226,68 @@ export default function QuizUsersPage() {
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Username</th>
               <th className="px-4 py-3">Role</th>
+              <th className="px-4 py-3">Access</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {admins.map((a) => (
-              <tr key={a.id} className="border-b border-slate-800 last:border-0">
-                <td className="px-4 py-3 text-white">{a.display_name}</td>
-                <td className="px-4 py-3 font-mono text-slate-400">{a.username}</td>
-                <td className="px-4 py-3">
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">
-                    {a.role === "super_admin" ? "Super Admin" : "Admin"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${a.status === "active" ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700/50 text-slate-400"}`}>
-                    {a.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {a.id !== me?.id && me?.role === "super_admin" && (
-                    <button
-                      onClick={() => handleToggleStatus(a)}
-                      className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1"
-                    >
-                      {a.status === "active" ? "Disable" : "Enable"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {admins.map((a) => {
+              const canManage = a.id !== me?.id && me?.role === "super_admin";
+              return (
+                <tr key={a.id} className="border-b border-slate-800 last:border-0">
+                  <td className="px-4 py-3 text-white">{a.display_name}</td>
+                  <td className="px-4 py-3 font-mono text-slate-400">{a.username}</td>
+                  <td className="px-4 py-3">
+                    {canManage ? (
+                      <select
+                        value={a.role}
+                        onChange={(e) => handleRoleChange(a, e.target.value as QuizAdminRole)}
+                        className="text-[10px] font-bold uppercase bg-amber-500/15 text-amber-300 rounded px-2 py-1 border-none outline-none"
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                      </select>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                        {a.role === "super_admin" ? "Super Admin" : "Admin"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {a.role === "super_admin" ? (
+                      <span className="text-xs text-slate-500">Full access</span>
+                    ) : canManage ? (
+                      <select
+                        value={a.permission_level}
+                        onChange={(e) => handlePermissionChange(a, e.target.value as QuizPermissionLevel)}
+                        className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200"
+                      >
+                        <option value="view_only">View Only</option>
+                        <option value="edit">Can Edit</option>
+                      </select>
+                    ) : (
+                      <span className="text-xs text-slate-400">{a.permission_level === "edit" ? "Can Edit" : "View Only"}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${a.status === "active" ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700/50 text-slate-400"}`}>
+                      {a.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {canManage && (
+                      <button
+                        onClick={() => handleToggleStatus(a)}
+                        className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1"
+                      >
+                        {a.status === "active" ? "Disable" : "Enable"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

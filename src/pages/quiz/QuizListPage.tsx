@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
+import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz } from "../../services/quiz/quizService";
 import { launchSession } from "../../services/quiz/quizSessionService";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
@@ -10,6 +10,7 @@ import type { Quiz } from "../../types/quiz";
 
 export default function QuizListPage() {
   const admin = getCurrentQuizAdmin();
+  const canEdit = canEditQuizContent();
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [search, setSearch] = useState("");
@@ -75,12 +76,14 @@ export default function QuizListPage() {
           <h1 className="text-xl font-bold text-white">My Quizzes</h1>
           <p className="text-sm text-slate-400 mt-0.5">Manage and launch</p>
         </div>
-        <Link
-          to={ROUTES.QUIZ_ADMIN_BUILDER_NEW}
-          className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
-        >
-          + New Quiz
-        </Link>
+        {canEdit && (
+          <Link
+            to={ROUTES.QUIZ_ADMIN_BUILDER_NEW}
+            className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+          >
+            + New Quiz
+          </Link>
+        )}
       </div>
 
       <input
@@ -120,20 +123,26 @@ export default function QuizListPage() {
               <div className="text-xs text-slate-500 mb-4 line-clamp-2">{q.description || "No description"}</div>
 
               <div className="mt-auto flex flex-wrap gap-2 pt-3 border-t border-slate-800">
-                <Link
-                  to={ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", q.id)}
-                  className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5"
-                >
-                  Edit
-                </Link>
-                <button
-                  disabled={busyId === q.id}
-                  onClick={() => handleTogglePublish(q)}
-                  className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
-                >
-                  {q.status === "published" ? "Unpublish" : "Publish"}
-                </button>
-                {q.status === "published" && (
+                {canEdit ? (
+                  <Link
+                    to={ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", q.id)}
+                    className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5"
+                  >
+                    Edit
+                  </Link>
+                ) : (
+                  <span className="text-xs text-slate-500 italic px-1 py-1.5">View only</span>
+                )}
+                {canEdit && (
+                  <button
+                    disabled={busyId === q.id}
+                    onClick={() => handleTogglePublish(q)}
+                    className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+                  >
+                    {q.status === "published" ? "Unpublish" : "Publish"}
+                  </button>
+                )}
+                {q.status === "published" && canEdit && (
                   <button
                     disabled={busyId === q.id}
                     onClick={() => handleLaunch(q)}
@@ -142,13 +151,15 @@ export default function QuizListPage() {
                     ▶ Launch
                   </button>
                 )}
-                <button
-                  disabled={busyId === q.id}
-                  onClick={() => handleDelete(q.id)}
-                  className="text-xs font-semibold text-red-300 hover:text-red-200 border border-red-900/50 rounded-lg px-2.5 py-1.5 disabled:opacity-50 ml-auto"
-                >
-                  🗑
-                </button>
+                {canEdit && (
+                  <button
+                    disabled={busyId === q.id}
+                    onClick={() => handleDelete(q.id)}
+                    className="text-xs font-semibold text-red-300 hover:text-red-200 border border-red-900/50 rounded-lg px-2.5 py-1.5 disabled:opacity-50 ml-auto"
+                  >
+                    🗑
+                  </button>
+                )}
               </div>
             </div>
           ))}

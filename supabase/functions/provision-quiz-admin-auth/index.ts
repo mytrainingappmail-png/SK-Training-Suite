@@ -37,6 +37,7 @@ interface ProvisionRequest {
   displayName: string;
   password: string;
   role: "super_admin" | "admin";
+  permissionLevel?: "view_only" | "edit";
   contactEmail?: string;
   contactMobile?: string;
 }
@@ -75,7 +76,7 @@ serve(async (req) => {
 
     const { data: callerQuizAdmin } = await supabaseAdmin
       .from("quiz_admins")
-      .select("company_id, status")
+      .select("company_id, status, role")
       .eq("auth_user_id", callerData.user.id)
       .maybeSingle();
 
@@ -84,6 +85,16 @@ serve(async (req) => {
 
     if (!authorizedAsEmployee && !authorizedAsQuizAdmin) {
       throw new Error("You are not authorized to create a Live Quiz admin for this company.");
+    }
+
+    // Only a super_admin (or the LMS bootstrap panel, which only ever
+    // requests super_admin for a company's very first account) may grant
+    // super_admin — otherwise any active "admin" could call this function
+    // directly and escalate themselves or a new user to full user-
+    // management rights, bypassing the Users page's own UI gating.
+    const requestingSuperAdmin = (payload.role ?? "admin") === "super_admin";
+    if (requestingSuperAdmin && authorizedAsQuizAdmin && !authorizedAsEmployee && callerQuizAdmin?.role !== "super_admin") {
+      throw new Error("Only a Super Admin can grant Super Admin access.");
     }
 
     // Resolved server-side, never trusted from the client — the internal
@@ -112,6 +123,7 @@ serve(async (req) => {
         username: payload.username.toLowerCase(),
         display_name: payload.displayName || payload.username,
         role: payload.role || "admin",
+        permission_level: payload.permissionLevel || "edit",
         contact_email: payload.contactEmail || null,
         contact_mobile: payload.contactMobile || null,
       })

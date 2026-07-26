@@ -1,5 +1,5 @@
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { PublicQuizQuestion, PublicQuizQuestionOption, SubmitAnswerResult } from "../../types/quiz";
+import type { PublicQuizQuestion, PublicQuizQuestionOption, SubmitAnswerResult, AnswerReviewOptionRow, AnswerReviewQuestion } from "../../types/quiz";
 
 interface RawQuestionOptionRow {
   question_id: string;
@@ -63,4 +63,36 @@ export async function submitAnswer(
   const row = (data as SubmitAnswerResult[] | null)?.[0];
   if (!row) throw new Error("Could not submit your answer.");
   return row;
+}
+
+/** Only available once the session has ended — groups the flat option rows into one entry per question. */
+export async function getMyAnswerReview(sessionId: string): Promise<AnswerReviewQuestion[]> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_my_answer_review", { p_session_id: sessionId });
+
+  if (error) {
+    console.error("[quizAnswerRepository] getMyAnswerReview:", error);
+    throw new Error(error.message);
+  }
+
+  const rows = (data as AnswerReviewOptionRow[] | null) ?? [];
+  const byIndex = new Map<number, AnswerReviewQuestion>();
+
+  for (const r of rows) {
+    if (!byIndex.has(r.question_index)) {
+      byIndex.set(r.question_index, {
+        question_index: r.question_index,
+        question_text: r.question_text,
+        explanation: r.explanation,
+        options: [],
+      });
+    }
+    byIndex.get(r.question_index)!.options.push({
+      option_id: r.option_id,
+      option_text: r.option_text,
+      is_correct: r.is_correct,
+      was_chosen: r.was_chosen,
+    });
+  }
+
+  return [...byIndex.values()].sort((a, b) => a.question_index - b.question_index);
 }

@@ -41,6 +41,11 @@ export function loadCurrentQuizAdmin(): QuizAdmin | null {
   }
 }
 
+/** UI-level convenience only — RLS (current_quiz_admin_can_edit()) is the real enforcement boundary. */
+export function canEditQuizContent(): boolean {
+  return cache?.role === "super_admin" || cache?.permission_level === "edit";
+}
+
 export function clearCurrentQuizAdmin(): void {
   cache = null;
   try {

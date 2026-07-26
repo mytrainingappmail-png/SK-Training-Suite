@@ -37,6 +37,7 @@ export interface ProvisionAdminPayload {
   displayName: string;
   password: string;
   role: "super_admin" | "admin";
+  permissionLevel?: "view_only" | "edit";
   contactEmail?: string;
   contactMobile?: string;
 }
@@ -67,6 +68,19 @@ export async function updateAdminStatus(id: string, status: "active" | "disabled
 
   if (error) {
     console.error("[quizAdminRepository] updateAdminStatus:", error);
+    throw new Error(error.message);
+  }
+}
+
+/** Role changes are blocked by RLS/the edge function's own rules where it matters (only a super_admin session can act here at all, per the Users page's UI gating) — this just persists the choice. */
+export async function updateAdminPermissions(
+  id: string,
+  patch: { role?: "super_admin" | "admin"; permission_level?: "view_only" | "edit" }
+): Promise<void> {
+  const { error } = await supabaseQuiz.from("quiz_admins").update(patch).eq("id", id);
+
+  if (error) {
+    console.error("[quizAdminRepository] updateAdminPermissions:", error);
     throw new Error(error.message);
   }
 }
