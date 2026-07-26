@@ -81,8 +81,8 @@ export async function finalizeAssessmentResult(attemptId: string): Promise<Final
       selected.size === correctOptionIds.size &&
       Array.from(selected).every((id) => correctOptionIds.has(id));
 
-    let marksAwarded = 0;
-    let isCorrect = false;
+    let marksAwarded: number;
+    let isCorrect: boolean;
 
     if (answer.is_skipped || selected.size === 0) {
       marksAwarded = 0;
