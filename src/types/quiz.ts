@@ -110,6 +110,7 @@ export interface QuizParticipant {
   display_name: string;
   score: number;
   correct_count: number;
+  total_response_time_ms: number;
   tab_switch_count: number;
   joined_at: string;
 }
@@ -141,9 +142,14 @@ export interface QuizSessionResultRow {
   display_name: string;
   score: number;
   correct_count: number;
+  total_response_time_ms: number;
+  rank: number;
   percent_correct: number;
   grade: QuizGrade;
 }
+
+/** Who certificates go to for a quiz, admin-configured — a competition, not a participation trophy. */
+export type CertEligibility = "all_pass" | "top1" | "top3";
 
 /** Public, correctness-free payload returned by get_current_quiz_question RPC. */
 export interface PublicQuizQuestionOption {
@@ -166,6 +172,7 @@ export interface SubmitAnswerResult {
   is_correct: boolean;
   correct_option_id: string | null;
   points_awarded: number;
+  explanation: string | null;
 }
 
 export interface OptionColor {
@@ -209,6 +216,7 @@ export interface QuizSettings {
   result_improve_message: string | null;
   result_fail_title: string | null;
   result_fail_message: string | null;
+  cert_eligibility: CertEligibility;
   updated_at: string;
 }
 
@@ -226,6 +234,7 @@ export interface QuizPlayerSettings {
   result_improve_message: string | null;
   result_fail_title: string | null;
   result_fail_message: string | null;
+  cert_eligibility: CertEligibility;
 }
 
 /** The calling participant's own outcome, via get_my_result RPC. */

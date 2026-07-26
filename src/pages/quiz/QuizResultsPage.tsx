@@ -6,14 +6,17 @@ import { getCompanySessionResults, getAnswerDistribution } from "../../repositor
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { buildDetailedReportCsv, buildTraineeSummaryCsv, computeChampions } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
+import { isCertEligible, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizAnswerDistributionBars from "../../components/quiz/QuizAnswerDistributionBars";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
+import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
 import type {
   QuizSession,
   QuizSessionResultRow,
   AnswerDistributionQuestion,
   ChampionRow,
   ChampMusic,
+  CertEligibility,
 } from "../../types/quiz";
 
 const GRADE_STYLE: Record<string, string> = {
@@ -76,6 +79,7 @@ export default function QuizResultsPage() {
   const [periodTitle, setPeriodTitle] = useState("");
   const [revealChampions, setRevealChampions] = useState<ChampionRow[] | null>(null);
 
+  const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
   const [musicChoice, setMusicChoice] = useState<ChampMusic>("builtin");
   const [musicUrl, setMusicUrl] = useState("");
   const [musicVolume, setMusicVolume] = useState(70);
@@ -97,6 +101,7 @@ export default function QuizResultsPage() {
       .then(([s, r, settings]) => {
         setSessions(s.filter((x) => x.phase === "ended"));
         setAllResults(r);
+        setCertEligibility(settings.cert_eligibility);
         setMusicChoice(settings.champ_music);
         setMusicUrl(settings.champ_music_url ?? "");
         setMusicVolume(settings.champ_music_volume);
@@ -499,9 +504,10 @@ export default function QuizResultsPage() {
                     ) : (
                       rows
                         .slice()
-                        .sort((a, b) => b.score - a.score)
+                        .sort((a, b) => a.rank - b.rank)
                         .map((r) => (
                           <div key={r.participant_id} className="flex items-center gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
+                            <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[r.rank - 1] ?? `#${r.rank}`}</span>
                             <span className="flex-1 truncate">{r.display_name}</span>
                             <span className="text-xs text-slate-400">
                               {r.correct_count}/{r.total_questions} · {r.percent_correct}%
@@ -509,6 +515,9 @@ export default function QuizResultsPage() {
                             <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
                               {r.grade.replace("_", " ")}
                             </span>
+                            {isCertEligible(r.rank, r.grade, certEligibility) && (
+                              <QuizAdminCertificateButton participantId={r.participant_id} />
+                            )}
                           </div>
                         ))
                     )}

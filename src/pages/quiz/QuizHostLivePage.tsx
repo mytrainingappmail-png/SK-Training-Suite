@@ -5,17 +5,19 @@ import { ROUTES } from "../../constants/routes";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { getQuiz } from "../../services/quiz/quizService";
 import { startQuiz, advanceQuestion, endSession } from "../../services/quiz/quizSessionService";
-import { canEditQuizContent } from "../../services/quiz/quizAdminSession";
+import { canEditQuizContent, getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
 import { getSessionResults } from "../../repositories/quiz/quizSessionRepository";
 import { getAnswerDistribution } from "../../repositories/quiz/quizAnalyticsRepository";
+import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import { playTone } from "../../services/quiz/quizSoundService";
+import { rankByMarks, isCertEligible, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResultCardButton";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
 import { HorizontalBars, type ChartPoint } from "../../components/quiz/QuizDashboardCharts";
-import type { QuizWithQuestions, QuizGrade } from "../../types/quiz";
+import type { QuizWithQuestions, QuizGrade, CertEligibility } from "../../types/quiz";
 
 const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 
@@ -30,7 +32,10 @@ export default function QuizHostLivePage() {
   const [csvDownloading, setCsvDownloading] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [optionBars, setOptionBars] = useState<ChartPoint[]>([]);
+  const [revealed, setRevealed] = useState(false);
+  const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoAdvancedRef = useRef(false);
   const endedHandledRef = useRef(false);
 
@@ -43,6 +48,12 @@ export default function QuizHostLivePage() {
     getQuiz(session.quiz_id).then(setQuiz);
   }, [session?.quiz_id]);
 
+  useEffect(() => {
+    const admin = getCurrentQuizAdmin();
+    if (!admin) return;
+    getSettings(admin.company_id).then((s) => setCertEligibility(s.cert_eligibility));
+  }, []);
+
   // quiz.questions is always in natural display_order — when the quiz has
   // shuffle_questions on, session.question_order (set once at launch) holds
   // the actual per-session sequence, and the host must follow it too so the
@@ -53,8 +64,12 @@ export default function QuizHostLivePage() {
       : quiz?.questions ?? [];
   const currentQuestion = session ? orderedQuestions[session.current_question_index] ?? null : null;
 
+  const REVEAL_PAUSE_MS = 2500;
+
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    setRevealed(false);
     if (!session || session.phase !== "question" || !currentQuestion) return;
 
     const total = currentQuestion.timer_seconds ?? quiz?.default_timer_seconds ?? 30;
@@ -66,7 +81,10 @@ export default function QuizHostLivePage() {
         if (s <= 1) {
           if (!autoAdvancedRef.current) {
             autoAdvancedRef.current = true;
-            handleNext();
+            // Pop the correct option in color for the host before auto-advancing,
+            // instead of jumping straight to the next question.
+            setRevealed(true);
+            revealTimerRef.current = setTimeout(() => handleNext(), REVEAL_PAUSE_MS);
           }
           return 0;
         }
@@ -77,6 +95,7 @@ export default function QuizHostLivePage() {
 
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.phase, session?.current_question_index]);
@@ -114,6 +133,11 @@ export default function QuizHostLivePage() {
 
   async function handleNext() {
     if (!sessionId || !quiz) return;
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    autoAdvancedRef.current = true;
     const result = await advanceQuestion(sessionId, quiz.questions.length);
     if (result === "ended") {
       // realtime pushes phase='ended' to this same page — stay here to show the podium
@@ -210,8 +234,16 @@ export default function QuizHostLivePage() {
 
               <div className="space-y-2">
                 {currentQuestion.options.map((opt) => (
-                  <div key={opt.id} className="bg-slate-800 rounded-lg px-4 py-3 text-sm font-medium">
-                    {opt.option_text}
+                  <div
+                    key={opt.id}
+                    className={`rounded-lg px-4 py-3 text-sm font-medium flex items-center justify-between transition-colors ${
+                      revealed && opt.is_correct
+                        ? "bg-emerald-500/20 border-2 border-emerald-400 text-emerald-200"
+                        : "bg-slate-800"
+                    }`}
+                  >
+                    <span>{opt.option_text}</span>
+                    {revealed && opt.is_correct && <span className="text-emerald-300 font-bold">✓ Correct</span>}
                   </div>
                 ))}
               </div>
@@ -244,10 +276,10 @@ export default function QuizHostLivePage() {
                     data={{
                       quizTitle: quiz.title,
                       pin: session.pin,
-                      participants: participants
-                        .slice()
-                        .sort((a, b) => b.score - a.score)
-                        .map((p) => ({ display_name: p.display_name, score: p.score })),
+                      participants: rankByMarks(participants).map((p) => ({
+                        display_name: p.display_name,
+                        percent: quiz.questions.length === 0 ? 0 : Math.round((p.correct_count / quiz.questions.length) * 100),
+                      })),
                       ...gradeCounts(participants, quiz),
                     }}
                   />
@@ -299,18 +331,16 @@ export default function QuizHostLivePage() {
 
                   {/* All Participants with grade + integrity */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                    <div className="text-sm font-bold text-white mb-3">👥 All Participants</div>
+                    <div className="text-sm font-bold text-white mb-3">👥 All Participants — ranked by marks</div>
                     <div className="space-y-1.5">
-                      {participants
-                        .slice()
-                        .sort((a, b) => b.score - a.score)
-                        .map((p) => {
+                      {rankByMarks(participants).map((p, i) => {
                           const grade = participantGrade(p.correct_count, quiz);
                           return (
                             <div key={p.id} className="flex items-center gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
+                              <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[i] ?? `#${i + 1}`}</span>
                               <span className="flex-1 truncate">{p.display_name}</span>
                               <span className="text-xs text-slate-400">
-                                {p.correct_count}/{quiz.questions.length} · {p.score}
+                                {p.correct_count}/{quiz.questions.length}
                               </span>
                               {p.tab_switch_count > 0 && (
                                 <span
@@ -356,15 +386,19 @@ export default function QuizHostLivePage() {
                     </div>
                   )}
 
-                  {/* Certificates */}
+                  {/* Certificates — competition-gated by cert_eligibility, not just a passing score */}
                   {(() => {
-                    const passers = participants.filter((p) => participantGrade(p.correct_count, quiz) === "PASS");
-                    if (passers.length === 0) return null;
+                    const ranked = rankByMarks(participants);
+                    const eligible = ranked.filter((p, i) => isCertEligible(i + 1, participantGrade(p.correct_count, quiz), certEligibility));
+                    if (eligible.length === 0) return null;
+                    const eligibilityLabel =
+                      certEligibility === "top1" ? "Rank #1 only" : certEligibility === "top3" ? "Top 3 ranks" : "Everyone who passed";
                     return (
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                        <div className="text-sm font-bold text-white mb-3">🎖️ Certificates ({passers.length} passed)</div>
+                        <div className="text-sm font-bold text-white mb-1">🎖️ Certificates ({eligible.length} eligible)</div>
+                        <p className="text-xs text-slate-500 mb-3">Eligibility: {eligibilityLabel} — set in Quiz Settings</p>
                         <div className="space-y-2">
-                          {passers.map((p) => (
+                          {eligible.map((p) => (
                             <div key={p.id} className="flex items-center justify-between gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
                               <span className="flex-1 truncate">
                                 {p.display_name} <span className="text-slate-500">({Math.round((p.correct_count / quiz.questions.length) * 100)}%)</span>
@@ -443,16 +477,19 @@ function gradeCounts(
   return { passCount, improveCount, failCount };
 }
 
-function Podium({ participants }: { participants: { id: string; display_name: string; score: number }[] }) {
-  const sorted = participants.slice().sort((a, b) => b.score - a.score).slice(0, 3);
-  const medals = ["🥇", "🥈", "🥉"];
+function Podium({
+  participants,
+}: {
+  participants: { id: string; display_name: string; correct_count: number; total_response_time_ms: number }[];
+}) {
+  const sorted = rankByMarks(participants).slice(0, 3);
   return (
     <div className="flex items-end justify-center gap-4">
       {sorted.map((p, i) => (
         <div key={p.id} className="text-center">
-          <div className="text-2xl">{medals[i]}</div>
+          <div className="text-2xl">{MEDALS[i]}</div>
           <div className="text-sm font-semibold mt-1">{p.display_name}</div>
-          <div className="text-xs font-mono text-amber-400">{p.score}</div>
+          <div className="text-xs font-mono text-amber-400">{p.correct_count} correct</div>
         </div>
       ))}
       {sorted.length === 0 && <div className="text-slate-500 text-sm">No participants.</div>}

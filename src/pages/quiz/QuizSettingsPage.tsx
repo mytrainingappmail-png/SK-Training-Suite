@@ -130,6 +130,7 @@ export default function QuizSettingsPage() {
         cert_signatory1_title: settings.cert_signatory1_title,
         cert_signatory2_name: settings.cert_signatory2_name,
         cert_signatory2_title: settings.cert_signatory2_title,
+        cert_eligibility: settings.cert_eligibility,
       });
       setCertMessage("Certificate settings saved.");
     } finally {
@@ -405,6 +406,32 @@ export default function QuizSettingsPage() {
         <div>
           <h2 className="font-semibold text-white">🏆 Certificate of Achievement</h2>
           <p className="text-xs text-slate-500 mt-0.5">Trainees who pass a quiz can download this as a PNG certificate</p>
+        </div>
+
+        <div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Who gets a certificate</div>
+          <p className="text-xs text-slate-500 mb-2">Make it a competition, or hand one to everyone who passes.</p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { value: "all_pass", label: "Everyone who passes" },
+                { value: "top1", label: "Only rank #1" },
+                { value: "top3", label: "Top 3 ranks" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSettings({ ...settings, cert_eligibility: opt.value })}
+                className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                  settings.cert_eligibility === opt.value
+                    ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                    : "border-slate-700 text-slate-300 hover:border-slate-600"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>

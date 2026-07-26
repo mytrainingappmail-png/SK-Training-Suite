@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   result_improve_message: "Good effort — review the material and try again!",
   result_fail_title: "💪 Keep Practicing",
   result_fail_message: "Don't worry — review the material and retake the quiz when ready.",
+  cert_eligibility: "all_pass",
 };
 
 /** Returns saved settings, or sensible defaults if this company has never saved any yet (no row exists until the first Save). */

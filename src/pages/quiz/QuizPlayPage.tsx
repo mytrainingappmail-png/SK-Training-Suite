@@ -11,6 +11,7 @@ import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService
 import { playTone } from "../../services/quiz/quizSoundService";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
 import { getMyAnswerReview, getMyResult, flagTabSwitch } from "../../repositories/quiz/quizAnswerRepository";
+import { rankByMarks, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizCertificateButton from "../../components/quiz/QuizCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
 import type { PublicQuizQuestion, SubmitAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
@@ -42,6 +43,7 @@ export default function QuizPlayPage() {
   const [reviewQuestions, setReviewQuestions] = useState<AnswerReviewQuestion[] | null>(null);
   const [reviewSecondsLeft, setReviewSecondsLeft] = useState(REVIEW_VISIBLE_SECONDS);
   const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
+  const [endStep, setEndStep] = useState<"splash" | "details">("splash");
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -139,6 +141,7 @@ export default function QuizPlayPage() {
   useEffect(() => {
     if (!sessionId || session?.phase !== "ended" || endedHandled.current) return;
     endedHandled.current = true;
+    setEndStep("splash");
 
     setShowConfetti(true);
     const confettiTimer = setTimeout(() => setShowConfetti(false), 4000);
@@ -158,20 +161,23 @@ export default function QuizPlayPage() {
     return () => clearTimeout(confettiTimer);
   }, [sessionId, session?.phase]);
 
+  // Once the trainee moves past the splash into their certificate/answer review,
+  // this screen auto-closes back to the Join Quiz page after a few minutes.
   useEffect(() => {
-    if (!reviewQuestions) return;
+    if (endStep !== "details") return;
+    setReviewSecondsLeft(REVIEW_VISIBLE_SECONDS);
     const t = setInterval(() => {
       setReviewSecondsLeft((s) => {
         if (s <= 1) {
           clearInterval(t);
-          setReviewQuestions(null);
+          navigate(ROUTES.QUIZ_JOIN, { replace: true });
           return 0;
         }
         return s - 1;
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [reviewQuestions]);
+  }, [endStep, navigate]);
 
   async function handleSubmit(optionId: string | null) {
     if (!sessionId || !question || answered) return;
@@ -218,10 +224,12 @@ export default function QuizPlayPage() {
   }
 
   if (session.phase === "ended") {
-    const sorted = participants.slice().sort((a, b) => b.score - a.score);
-    const rank = sorted.findIndex((p) => p.id === participantId) + 1;
-    const me = sorted.find((p) => p.id === participantId);
-    const medals = ["🥇", "🥈", "🥉"];
+    // Marks-based rank (correct answers, tie broken by speed) — deliberately
+    // NOT the gamified "score" the in-quiz leaderboard sidebar uses, which
+    // stays purely for fun and has no bearing on the trainee's actual result.
+    const ranked = rankByMarks(participants);
+    const myIndex = ranked.findIndex((p) => p.id === participantId);
+    const rank = myIndex + 1;
     const reviewMins = Math.floor(reviewSecondsLeft / 60);
     const reviewSecs = reviewSecondsLeft % 60;
 
@@ -244,26 +252,57 @@ export default function QuizPlayPage() {
             ? playerSettings?.result_fail_message
             : null;
 
+    const commonStyles = (
+      <style>{`
+        @keyframes quiz-pop-in {
+          0% { transform: scale(0.6); opacity: 0; }
+          70% { transform: scale(1.08); opacity: 1; }
+          100% { transform: scale(1); }
+        }
+        @keyframes quiz-glow {
+          0%, 100% { text-shadow: 0 0 20px rgba(251,191,36,0.55); }
+          50% { text-shadow: 0 0 44px rgba(251,191,36,0.9); }
+        }
+      `}</style>
+    );
+
+    if (endStep === "splash") {
+      return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 px-6 text-center">
+          {showConfetti && <QuizConfetti />}
+          {commonStyles}
+          <div className="flex flex-col items-center gap-1 animate-[quiz-pop-in_0.5s_ease-out]">
+            <div className="text-6xl">{MEDALS[rank - 1] ?? "🎖️"}</div>
+            <div className="text-2xl mt-1">🏆</div>
+            <div className="text-2xl font-extrabold text-white mt-2">{resultTitle}</div>
+            <div className="text-6xl font-black text-amber-400 mt-2 animate-[quiz-glow_2s_ease-in-out_infinite]">
+              {myResult ? `${myResult.percent_correct}%` : "…"}
+            </div>
+            {resultMessage && <div className="text-sm text-slate-300 max-w-xs mt-2">{resultMessage}</div>}
+          </div>
+          <button
+            onClick={() => setEndStep("details")}
+            className="mt-2 bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold rounded-full px-10 py-3.5 text-lg shadow-lg shadow-amber-500/20"
+          >
+            Let's Go! 🚀
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center gap-3 px-6 py-10 text-center overflow-y-auto">
-        {showConfetti && <QuizConfetti />}
+        {commonStyles}
+        <div className="text-xs font-mono text-amber-400">
+          Closing in {reviewMins}:{String(reviewSecs).padStart(2, "0")}
+        </div>
 
-        <div className="flex flex-col items-center gap-3 animate-[quiz-pop-in_0.5s_ease-out]">
-          <style>{`
-            @keyframes quiz-pop-in {
-              0% { transform: scale(0.6); opacity: 0; }
-              70% { transform: scale(1.08); opacity: 1; }
-              100% { transform: scale(1); }
-            }
-          `}</style>
-          <div className="text-4xl">{medals[rank - 1] ?? "🎖️"}</div>
-          <div className="text-xl font-bold text-white">{resultTitle}</div>
-          {resultMessage && <div className="text-sm text-violet-300 max-w-xs">{resultMessage}</div>}
-          {rank > 0 && <div className="text-sm text-slate-400">Rank #{rank} of {sorted.length}</div>}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl px-8 py-5 mt-2">
-            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Your Score</div>
-            <div className="text-4xl font-mono font-bold text-amber-400">{me?.score ?? 0}</div>
-            <div className="text-xs text-slate-500 mt-1">{me?.correct_count ?? 0} correct</div>
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl px-8 py-5">
+          <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Your Result</div>
+          <div className="text-4xl font-mono font-bold text-amber-400">{myResult?.percent_correct ?? 0}%</div>
+          <div className="text-xs text-slate-500 mt-1">
+            {myResult?.correct_count ?? 0}/{myResult?.total_questions ?? 0} correct
+            {rank > 0 && ` · Rank #${rank} of ${ranked.length}`}
           </div>
         </div>
 
@@ -271,12 +310,7 @@ export default function QuizPlayPage() {
 
         {reviewQuestions && reviewQuestions.length > 0 && (
           <div className="w-full max-w-lg mt-4 text-left">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold text-white">📋 Your Answer Sheet</div>
-              <div className="text-xs font-mono text-amber-400">
-                disappears in {reviewMins}:{String(reviewSecs).padStart(2, "0")}
-              </div>
-            </div>
+            <div className="text-sm font-semibold text-white mb-2">📋 Your Answer Sheet</div>
             <div className="flex flex-col gap-3 pb-6">
               {reviewQuestions.map((q) => (
                 <div key={q.question_index} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -370,6 +404,11 @@ export default function QuizPlayPage() {
                 <div className="font-bold text-white">
                   {feedback.is_correct ? `Correct! +${feedback.points_awarded}` : selectedOptionId ? "Wrong answer" : "Time's up!"}
                 </div>
+                {feedback.explanation && (
+                  <div className="text-sm text-slate-300 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-3 max-w-md mx-auto text-left">
+                    💡 {feedback.explanation}
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-slate-400 text-sm">Recording your answer…</div>

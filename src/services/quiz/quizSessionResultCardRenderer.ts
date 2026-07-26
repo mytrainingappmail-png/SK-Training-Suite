@@ -5,7 +5,7 @@
 
 export interface SessionResultCardParticipant {
   display_name: string;
-  score: number;
+  percent: number;
 }
 
 export interface SessionResultCardData {
@@ -66,7 +66,7 @@ export function renderSessionResultCardToCanvas(canvas: HTMLCanvasElement, data:
     ctx.fillText(truncate(p.display_name, 14), x, podiumY + 60);
     ctx.fillStyle = "#FDE68A";
     ctx.font = "700 26px Arial, sans-serif";
-    ctx.fillText(String(p.score), x, podiumY + 95);
+    ctx.fillText(`${p.percent}%`, x, podiumY + 95);
     ctx.fillStyle = "#FFFFFF";
   });
 
@@ -109,7 +109,7 @@ export function renderSessionResultCardToCanvas(canvas: HTMLCanvasElement, data:
     ctx.fillText(`${i + 1}. ${truncate(p.display_name, 26)}`, listX, listY);
     ctx.textAlign = "right";
     ctx.fillStyle = "#FDE68A";
-    ctx.fillText(String(p.score), SIZE - 100, listY);
+    ctx.fillText(`${p.percent}%`, SIZE - 100, listY);
     ctx.textAlign = "left";
     listY += 34;
   });
