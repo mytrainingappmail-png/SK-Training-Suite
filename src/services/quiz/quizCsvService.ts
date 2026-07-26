@@ -12,7 +12,7 @@ export const SAMPLE_ROWS: string[][] = [
   ["Registration under RERA is mandatory for all agents.", "truefalse", "True", "False", "", "", "True", "15", "1", "All agents must register before any transaction."],
 ];
 
-function csvEscape(value: string): string {
+export function csvEscape(value: string): string {
   const v = String(value ?? "");
   if (v.includes(",") || v.includes('"') || v.includes("\n")) {
     return `"${v.replace(/"/g, '""')}"`;

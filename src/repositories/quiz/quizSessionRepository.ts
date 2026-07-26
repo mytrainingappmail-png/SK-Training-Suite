@@ -88,6 +88,24 @@ export async function listSessionsForCompany(companyId: string): Promise<QuizSes
   return data ?? [];
 }
 
+export async function deleteSession(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.from("quiz_sessions").delete().eq("id", sessionId);
+
+  if (error) {
+    console.error("[quizSessionRepository] deleteSession:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteAllSessions(companyId: string): Promise<void> {
+  const { error } = await supabaseQuiz.from("quiz_sessions").delete().eq("company_id", companyId);
+
+  if (error) {
+    console.error("[quizSessionRepository] deleteAllSessions:", error);
+    throw new Error(error.message);
+  }
+}
+
 export async function getSessionResults(sessionId: string): Promise<QuizSessionResultRow[]> {
   const { data, error } = await supabaseQuiz
     .from("quiz_session_results")

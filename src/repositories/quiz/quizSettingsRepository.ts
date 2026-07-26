@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   cert_signatory2_image_url: null,
   champ_music: "builtin",
   champ_music_url: null,
+  champ_music_volume: 70,
 };
 
 /** Returns saved settings, or sensible defaults if this company has never saved any yet (no row exists until the first Save). */

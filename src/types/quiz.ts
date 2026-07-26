@@ -195,6 +195,7 @@ export interface QuizSettings {
   cert_signatory2_image_url: string | null;
   champ_music: ChampMusic;
   champ_music_url: string | null;
+  champ_music_volume: number;
   updated_at: string;
 }
 
@@ -222,6 +223,28 @@ export interface QuizCertificate {
   signatory1_title: string | null;
   signatory2_name: string | null;
   signatory2_title: string | null;
+}
+
+export interface AnswerDistributionOption {
+  option_id: string;
+  option_text: string;
+  is_correct: boolean;
+  count: number;
+}
+
+export interface AnswerDistributionQuestion {
+  question_id: string;
+  question_text: string;
+  display_order: number;
+  options: AnswerDistributionOption[];
+  totalAnswered: number;
+}
+
+export interface ChampionRow {
+  participant_id: string;
+  display_name: string;
+  best_percent: number;
+  sessions_played: number;
 }
 
 /** One row per option, returned by get_my_answer_review — group client-side by question_index. */

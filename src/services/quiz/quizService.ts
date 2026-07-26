@@ -74,3 +74,84 @@ export async function publishQuiz(quizId: string): Promise<void> {
 export async function unpublishQuiz(quizId: string): Promise<void> {
   await quizRepo.setQuizStatus(quizId, "draft");
 }
+
+/** Clones a quiz and all its questions/options as a new, unpublished draft. */
+export async function duplicateQuiz(quizId: string, companyId: string, createdBy: string | null): Promise<Quiz> {
+  const source = await quizRepo.getQuizWithQuestions(quizId);
+  if (!source) throw new Error("Quiz not found.");
+
+  const created = await quizRepo.createQuiz(companyId, createdBy, {
+    title: `${source.title} (Copy)`,
+    description: source.description,
+    category_id: source.category_id,
+    difficulty: source.difficulty,
+    default_timer_seconds: source.default_timer_seconds,
+    passing_score_pct: source.passing_score_pct,
+    improve_threshold_pct: source.improve_threshold_pct,
+    shuffle_options: source.shuffle_options,
+  });
+
+  if (source.questions.length > 0) {
+    await quizRepo.replaceQuestions(
+      created.id,
+      source.questions.map((q) => ({
+        question_text: q.question_text,
+        type: q.type,
+        timer_seconds: q.timer_seconds,
+        marks: q.marks,
+        explanation: q.explanation,
+        options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+      }))
+    );
+  }
+
+  return created;
+}
+
+/** Combines every question from the selected quizzes (in the order given) into one new draft quiz. */
+export async function mergeQuizzes(
+  quizIds: string[],
+  companyId: string,
+  createdBy: string | null,
+  title: string
+): Promise<Quiz> {
+  if (quizIds.length < 2) throw new Error("Select at least two quizzes to merge.");
+
+  const sources = await Promise.all(quizIds.map((id) => quizRepo.getQuizWithQuestions(id)));
+  const found = sources.filter((q): q is QuizWithQuestions => q !== null);
+  if (found.length < 2) throw new Error("Could not load the selected quizzes.");
+
+  const hardest = found.some((q) => q.difficulty === "Hard")
+    ? "Hard"
+    : found.some((q) => q.difficulty === "Medium")
+    ? "Medium"
+    : "Easy";
+
+  const created = await quizRepo.createQuiz(companyId, createdBy, {
+    title: title.trim() || found.map((q) => q.title).join(" + "),
+    description: `Merged from: ${found.map((q) => q.title).join(", ")}`,
+    category_id: found[0].category_id,
+    difficulty: hardest,
+    default_timer_seconds: found[0].default_timer_seconds,
+    passing_score_pct: Math.round(found.reduce((sum, q) => sum + q.passing_score_pct, 0) / found.length),
+    improve_threshold_pct: Math.round(found.reduce((sum, q) => sum + q.improve_threshold_pct, 0) / found.length),
+    shuffle_options: found.some((q) => q.shuffle_options),
+  });
+
+  const mergedQuestions = found.flatMap((q) =>
+    q.questions.map((question) => ({
+      question_text: question.question_text,
+      type: question.type,
+      timer_seconds: question.timer_seconds,
+      marks: question.marks,
+      explanation: question.explanation,
+      options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    }))
+  );
+
+  if (mergedQuestions.length > 0) {
+    await quizRepo.replaceQuestions(created.id, mergedQuestions);
+  }
+
+  return created;
+}

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
-import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz } from "../../services/quiz/quizService";
+import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes } from "../../services/quiz/quizService";
 import { launchSession } from "../../services/quiz/quizSessionService";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import type { Quiz } from "../../types/quiz";
@@ -17,6 +17,10 @@ export default function QuizListPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [merging, setMerging] = useState(false);
+  const [mergeTitle, setMergeTitle] = useState("");
+  const [showMergeForm, setShowMergeForm] = useState(false);
 
   function refresh() {
     if (!admin) return;
@@ -69,8 +73,49 @@ export default function QuizListPage() {
     }
   }
 
+  async function handleDuplicate(q: Quiz) {
+    if (!admin) return;
+    setBusyId(q.id);
+    setError("");
+    try {
+      await duplicateQuiz(q.id, admin.company_id, admin.id);
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to duplicate.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleMerge() {
+    if (!admin || selected.size < 2) return;
+    setMerging(true);
+    setError("");
+    try {
+      const titles = quizzes.filter((q) => selected.has(q.id)).map((q) => q.title);
+      await mergeQuizzes([...selected], admin.company_id, admin.id, mergeTitle || titles.join(" + "));
+      setSelected(new Set());
+      setMergeTitle("");
+      setShowMergeForm(false);
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to merge quizzes.");
+    } finally {
+      setMerging(false);
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-white">My Quizzes</h1>
@@ -106,7 +151,12 @@ export default function QuizListPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((q) => (
-            <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col">
+            <div
+              key={q.id}
+              className={`bg-slate-900 border rounded-2xl p-5 flex flex-col ${
+                selected.has(q.id) ? "border-violet-500" : "border-slate-800"
+              }`}
+            >
               <div className="flex items-center gap-2 mb-2">
                 <span
                   className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
@@ -128,7 +178,7 @@ export default function QuizListPage() {
                     to={ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", q.id)}
                     className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5"
                   >
-                    Edit
+                    ✏️ Edit
                   </Link>
                 ) : (
                   <span className="text-xs text-slate-500 italic px-1 py-1.5">View only</span>
@@ -160,9 +210,74 @@ export default function QuizListPage() {
                     🗑
                   </button>
                 )}
+                {canEdit && (
+                  <button
+                    disabled={busyId === q.id}
+                    onClick={() => handleDuplicate(q)}
+                    className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+                  >
+                    📄 Duplicate
+                  </button>
+                )}
+                {canEdit && (
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 border border-dashed border-slate-700 rounded-lg px-2.5 py-1.5 cursor-pointer">
+                    <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelected(q.id)} />
+                    Merge
+                  </label>
+                )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {canEdit && selected.size >= 2 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900 border border-violet-500 rounded-2xl shadow-2xl p-4 w-[92%] max-w-lg">
+          {!showMergeForm ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-white font-semibold flex-1">{selected.size} quizzes selected</span>
+              <button
+                onClick={() => setShowMergeForm(true)}
+                className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+              >
+                🔗 Merge Selected
+              </button>
+              <button
+                onClick={() => setSelected(new Set())}
+                className="text-xs text-slate-400 hover:text-white px-2"
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                New quiz title
+              </label>
+              <input
+                autoFocus
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                placeholder={quizzes.filter((q) => selected.has(q.id)).map((q) => q.title).join(" + ")}
+                value={mergeTitle}
+                onChange={(e) => setMergeTitle(e.target.value)}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowMergeForm(false)}
+                  className="text-xs text-slate-400 hover:text-white px-3 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={merging}
+                  onClick={handleMerge}
+                  className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
+                >
+                  {merging ? "Merging…" : "🔗 Create Merged Quiz"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
