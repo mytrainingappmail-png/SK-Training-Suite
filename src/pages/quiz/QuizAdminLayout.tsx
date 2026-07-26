@@ -4,6 +4,8 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { logout } from "../../services/quiz/quizAuthService";
 import { getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
+import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
+import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import QuizAccountModal from "../../components/quiz/QuizAccountModal";
 
 const navItems = [
@@ -19,6 +21,7 @@ export default function QuizAdminLayout() {
   const admin = getCurrentQuizAdmin();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [footerText, setFooterText] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,6 +31,14 @@ export default function QuizAdminLayout() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!admin) return;
+    getSettings(admin.company_id).then((s) => {
+      applyQuizFavicon(s.favicon_url);
+      setFooterText(s.footer_text);
+    });
+  }, [admin]);
 
   async function handleLogout() {
     await logout();
@@ -123,6 +134,12 @@ export default function QuizAdminLayout() {
       <main className="max-w-5xl mx-auto px-6 py-8">
         <Outlet />
       </main>
+
+      {footerText && (
+        <footer className="border-t border-slate-800 px-6 py-4 text-center text-[11px] text-slate-500 whitespace-pre-line">
+          {footerText}
+        </footer>
+      )}
 
       {accountModalOpen && <QuizAccountModal onClose={() => setAccountModalOpen(false)} />}
     </div>

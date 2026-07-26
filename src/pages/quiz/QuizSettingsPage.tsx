@@ -105,6 +105,8 @@ export default function QuizSettingsPage() {
         brand_logo_url: settings.brand_logo_url,
         login_background_url: settings.login_background_url,
         login_banner_url: settings.login_banner_url,
+        favicon_url: settings.favicon_url,
+        footer_text: settings.footer_text,
       });
       setBrandingMessage("Branding saved.");
     } finally {
@@ -337,6 +339,33 @@ export default function QuizSettingsPage() {
               onChange={(url) => setSettings({ ...settings, login_banner_url: url })}
               previewClassName="h-16 w-28 object-cover rounded-lg bg-slate-800 border border-slate-700"
             />
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">🔖 Favicon &amp; Footer</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Browser tab icon and a footer line shown across the Live Quiz app</p>
+          </div>
+          <QuizBrandingImageField
+            label="Favicon"
+            hint="Shown in the browser tab — a square image works best"
+            value={settings.favicon_url}
+            kind="favicon"
+            companyId={me.company_id}
+            onChange={(url) => setSettings({ ...settings, favicon_url: url })}
+            previewClassName="h-10 w-10 object-contain rounded bg-slate-800 border border-slate-700"
+          />
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Footer Text</label>
+            <textarea
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              rows={2}
+              value={settings.footer_text ?? ""}
+              onChange={(e) => setSettings({ ...settings, footer_text: e.target.value })}
+              placeholder="e.g. Siddharth & Kunal Enterprise, 123 Main Road, Gurugram — support@example.com"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Shown at the bottom of the admin panel and the trainee join screen — good for a company address or contact line.</p>
           </div>
         </div>
 

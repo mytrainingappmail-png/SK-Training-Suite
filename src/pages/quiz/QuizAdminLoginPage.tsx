@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { login, requestPasswordReset, resetPasswordWithOtp } from "../../services/quiz/quizAuthService";
 import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
+import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import type { QuizPublicBranding } from "../../types/quiz";
 
 type Mode = "login" | "forgot-request" | "forgot-verify";
@@ -26,7 +27,10 @@ export default function QuizAdminLoginPage() {
   const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
 
   useEffect(() => {
-    getPublicQuizBranding().then(setBranding);
+    getPublicQuizBranding().then((b) => {
+      setBranding(b);
+      applyQuizFavicon(b?.favicon_url);
+    });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -294,6 +298,12 @@ export default function QuizAdminLoginPage() {
               </button>
             </form>
           </>
+        )}
+
+        {branding?.footer_text && (
+          <p className="mt-6 pt-4 border-t border-slate-800 text-center text-[11px] text-slate-500 whitespace-pre-line">
+            {branding.footer_text}
+          </p>
         )}
       </div>
     </div>

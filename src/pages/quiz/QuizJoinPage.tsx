@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { joinByPin, getSavedPlayerName } from "../../services/quiz/quizPlayService";
+import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
+import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
+import type { QuizPublicBranding } from "../../types/quiz";
 
 export default function QuizJoinPage() {
   const navigate = useNavigate();
@@ -10,6 +13,14 @@ export default function QuizJoinPage() {
   const [name, setName] = useState(getSavedPlayerName());
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
+
+  useEffect(() => {
+    getPublicQuizBranding().then((b) => {
+      setBranding(b);
+      applyQuizFavicon(b?.favicon_url);
+    });
+  }, []);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -84,6 +95,12 @@ export default function QuizJoinPage() {
         </form>
 
         <p className="mt-5 text-xs text-slate-500">Get the PIN from your trainer</p>
+
+        {branding?.footer_text && (
+          <p className="mt-4 pt-4 border-t border-slate-800 text-[11px] text-slate-500 whitespace-pre-line">
+            {branding.footer_text}
+          </p>
+        )}
       </div>
     </div>
   );

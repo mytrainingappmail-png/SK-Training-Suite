@@ -57,6 +57,11 @@ import QuizSettingsPage from "./pages/quiz/QuizSettingsPage";
 
 function App() {
   useEffect(() => {
+    // Live Quiz is a separate app that opens in its own tab with its own favicon
+    // (see QuizAdminLayout/QuizAdminLoginPage/QuizJoinPage) — this root-level
+    // effect must not reassert the main LMS's icon over it on that tab.
+    if (window.location.pathname.startsWith("/quiz")) return;
+
     function refreshIcon() {
       loadBranding().then((b) => applyDynamicIcon(b.appIconUrl, b.faviconUrl, b.companyName));
     }

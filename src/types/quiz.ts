@@ -180,6 +180,8 @@ export interface QuizSettings {
   brand_logo_url: string | null;
   login_background_url: string | null;
   login_banner_url: string | null;
+  favicon_url: string | null;
+  footer_text: string | null;
   option_font_size: number;
   option_colors: OptionColor[];
   sound_enabled: boolean;
@@ -208,6 +210,7 @@ export interface QuizPlayerSettings {
   sound_enabled: boolean;
   brand_name: string | null;
   brand_logo_url: string | null;
+  favicon_url: string | null;
 }
 
 /** Pre-auth branding for the quiz admin login page, via get_quiz_public_branding RPC. */
@@ -218,6 +221,8 @@ export interface QuizPublicBranding {
   brand_logo_url: string | null;
   login_background_url: string | null;
   login_banner_url: string | null;
+  favicon_url: string | null;
+  footer_text: string | null;
 }
 
 export interface QuizCertificate {

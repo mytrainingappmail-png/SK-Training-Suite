@@ -8,6 +8,8 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   brand_logo_url: null,
   login_background_url: null,
   login_banner_url: null,
+  favicon_url: null,
+  footer_text: null,
   option_font_size: 16,
   option_colors: [
     { box: "#DC2626", font: "#FFFFFF" },
@@ -70,7 +72,7 @@ export async function getPlayerSettings(sessionId: string): Promise<QuizPlayerSe
   }
 
   const row = (data as QuizPlayerSettings[] | null)?.[0];
-  return row ?? { ...DEFAULT_SETTINGS, brand_name: null, brand_logo_url: null };
+  return row ?? { ...DEFAULT_SETTINGS, brand_name: null, brand_logo_url: null, favicon_url: null };
 }
 
 /** Pre-auth branding for the quiz admin login page — no company context exists yet (global unique usernames, no company code field), so this resolves to the first company with the module enabled, same fallback the main LMS login uses before a company code is typed. */

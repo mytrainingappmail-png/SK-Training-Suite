@@ -7,6 +7,7 @@ import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime"
 import { getCurrentQuestion, submitAnswer } from "../../services/quiz/quizPlayService";
 import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
+import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
 import { getMyAnswerReview } from "../../repositories/quiz/quizAnswerRepository";
@@ -47,7 +48,12 @@ export default function QuizPlayPage() {
 
   useEffect(() => {
     if (!sessionId) return;
-    getPlayerSettings(sessionId).then(setPlayerSettings).catch(() => {});
+    getPlayerSettings(sessionId)
+      .then((s) => {
+        setPlayerSettings(s);
+        applyQuizFavicon(s.favicon_url);
+      })
+      .catch(() => {});
   }, [sessionId]);
 
   // Recover participantId after a page refresh (router state is lost on reload).

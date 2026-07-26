@@ -9,9 +9,17 @@ import { supabaseQuiz } from "../../lib/supabaseQuiz";
 
 const BUCKET = "quiz-branding";
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"];
+const ALLOWED_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+  "image/gif",
+  "image/x-icon",
+  "image/vnd.microsoft.icon",
+];
 
-export type BrandingImageKind = "logo" | "login-background" | "login-banner";
+export type BrandingImageKind = "logo" | "login-background" | "login-banner" | "favicon";
 
 export interface UploadedBrandingImage {
   url: string;
@@ -30,7 +38,7 @@ export async function uploadBrandingImage(
   file: File
 ): Promise<UploadedBrandingImage> {
   if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error("Please upload a PNG, JPEG, WEBP, GIF or SVG image.");
+    throw new Error("Please upload a PNG, JPEG, WEBP, GIF, SVG or ICO image.");
   }
   if (file.size > MAX_SIZE_BYTES) {
     throw new Error("Image must be under 5 MB.");
