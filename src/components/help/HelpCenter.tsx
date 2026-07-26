@@ -7,6 +7,7 @@ import { loadArticles, createArticle, updateArticle, deleteArticle, searchArticl
 import { HELP_CATEGORIES } from '../../types/helpArticle';
 import type { HelpArticle, HelpArticleStatus } from '../../types/helpArticle';
 import { ROUTES } from '../../constants/routes';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
@@ -277,7 +278,7 @@ function HelpCenter() {
                     </div>
                   )}
                 </div>
-                <div className="prose prose-slate max-w-none text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: selected.content_html }} />
+                <div className="prose prose-slate max-w-none text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.content_html) }} />
                 <div className="mt-6 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
                   Still stuck? <button onClick={() => navigate(ROUTES.MY_TICKETS)} className="font-semibold text-indigo-600 hover:underline">Raise a support ticket</button> and your admin team will help directly.
                 </div>

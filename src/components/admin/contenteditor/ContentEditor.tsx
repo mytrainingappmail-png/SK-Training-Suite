@@ -105,6 +105,7 @@ import {
   updateLesson,
 } from '../../../services/lessonBuilder/lessonBuilderService';
 import { loadModules, createModule } from '../../../services/module/moduleService';
+import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 import { loadCourses } from '../../../services/course/courseService';
 import {
   loadResources,
@@ -1185,7 +1186,7 @@ handleInput();
                   />
                 </>
               ) : (
-                <div className="prose prose-slate min-h-[420px] max-w-none text-[15px] leading-relaxed" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                <div className="prose prose-slate min-h-[420px] max-w-none text-[15px] leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }} />
               )}
             </div>
           )}

@@ -15,6 +15,7 @@ import { getCurrentUser } from '../../services/auth/session';
 import SectionHeroBanner from './SectionHeroBanner';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ThumbnailCard from '../shared/ThumbnailCard';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type { Project } from '../../services/projects/projectsService';
 
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
@@ -141,7 +142,7 @@ function Projects() {
               {showFullDetails && (
                 <div
                   className="prose prose-sm mt-3 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                  dangerouslySetInnerHTML={{ __html: openProject.fullDescription }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(openProject.fullDescription) }}
                 />
               )}
             </div>
@@ -182,7 +183,7 @@ function Projects() {
                       {openFaqKeys.has(key) && (
                         <div
                           className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                          dangerouslySetInnerHTML={{ __html: section.page_content }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
                         />
                       )}
                     </div>

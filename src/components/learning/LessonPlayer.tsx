@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { loadLesson, loadModuleLessons } from '../../services/lessonPlayer/lessonPlayerService';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type {
   LessonPlayerLesson,
   LessonPlayerResource,
@@ -332,7 +333,7 @@ function LessonPlayer({ lessonId, moduleId, onBack, onComplete }: LessonPlayerPr
       {lesson.lessonType === 'text' && lesson.content && (
         <div
           className="prose prose-slate max-w-none rounded-2xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-700"
-          dangerouslySetInnerHTML={{ __html: lesson.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content) }}
         />
       )}
 

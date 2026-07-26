@@ -48,6 +48,7 @@ import {
   deleteLesson,
 } from '../../../services/lessonBuilder/lessonBuilderService';
 import { loadLessonContent, uploadVideo, uploadDocument, uploadImage } from '../../../services/contentEditor/contentEditorService';
+import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 import {
   loadResources,
   createResource,
@@ -424,7 +425,7 @@ function PreviewDialog({ html, onClose }: { html: string; onClose: () => void })
             <IconX className="h-4 w-4" />
           </button>
         </div>
-        <div className="prose max-w-none rounded-xl bg-white p-5 text-[15px] leading-relaxed text-slate-900" dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="prose max-w-none rounded-xl bg-white p-5 text-[15px] leading-relaxed text-slate-900" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
       </div>
     </div>
   );

@@ -41,6 +41,7 @@ import {
 } from '../../services/resource/resourceService';
 import { uploadDocument, uploadImage } from '../../services/contentEditor/contentEditorService';
 import { getCurrentUser } from '../../services/auth/session';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import SectionHeroBanner from './SectionHeroBanner';
 
 import type { Lesson } from '../../types/lessonBuilder';
@@ -457,7 +458,7 @@ function AssignmentWorkspace({
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Instructions</h3>
           <div
             className="prose prose-slate max-w-none rounded-2xl bg-slate-50 p-6 text-sm leading-relaxed text-slate-700"
-            dangerouslySetInnerHTML={{ __html: item.instructions }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.instructions) }}
           />
         </div>
       )}

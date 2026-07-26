@@ -7,6 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { loadDocument } from '../services/legal/legalDocumentService';
 import { ROUTES } from '../constants/routes';
 import type { LegalDocument } from '../types/legalDocument';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 function LegalDocumentPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -58,7 +59,7 @@ function LegalDocumentPage() {
             </p>
             <div
               className="prose prose-sm max-w-none leading-relaxed text-slate-700"
-              dangerouslySetInnerHTML={{ __html: doc.content_html }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(doc.content_html) }}
             />
           </div>
         )}

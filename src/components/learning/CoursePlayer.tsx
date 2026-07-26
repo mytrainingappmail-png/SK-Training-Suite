@@ -13,6 +13,7 @@ import { getCurrentUser }                   from '../../services/auth/session';
 import { loadCompany }                      from '../../services/company/companyService';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import CardPagination from '../shared/CardPagination';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type {
   CoursePlayerData,
   CoursePlayerModule,
@@ -222,7 +223,7 @@ function LessonContent({
       {(lesson.lessonType === 'text' || lesson.lessonType === 'document') && lesson.content && (
         <div
           className="prose prose-slate max-w-none rounded-2xl border border-slate-200 bg-slate-50 p-6 text-sm leading-relaxed text-slate-700"
-          dangerouslySetInnerHTML={{ __html: lesson.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content) }}
         />
       )}
 

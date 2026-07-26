@@ -41,6 +41,7 @@ import { loadLearningPaths } from '../../../services/learningPath/learningPathSe
 import { loadCertificates } from '../../../services/certificate/certificateService';
 import { getCurrentUser } from '../../../services/auth/session';
 import * as emailTemplateService from '../../../services/email/emailTemplateService';
+import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 
 import type { Company } from '../../../types/company';
 import type { EmailTemplate as DbEmailTemplate, EmailTemplateForm as DbEmailTemplateForm } from '../../../types/emailTemplate';
@@ -464,7 +465,7 @@ function EmailPreview({
       </div>
       <div className="bg-white p-5">
         <p className="mb-3 text-sm font-semibold text-slate-800">{compileHtml(template.subject, values) || 'Subject line'}</p>
-        <div className="prose prose-sm max-w-none text-slate-700" dangerouslySetInnerHTML={{ __html: compileHtml(template.bodyHtml, values) }} />
+        <div className="prose prose-sm max-w-none text-slate-700" dangerouslySetInnerHTML={{ __html: sanitizeHtml(compileHtml(template.bodyHtml, values)) }} />
         <div className="mt-4">
           <span className="inline-block rounded-lg px-4 py-2 text-xs font-semibold text-white" style={{ backgroundColor: template.branding.buttonColor }}>
             Take Action
