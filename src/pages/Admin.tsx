@@ -43,6 +43,7 @@ import CompanyLicenseManagement from "../modules/license/CompanyLicenseManagemen
 import DiscountCodeManagement from "../modules/license/DiscountCodeManagement";
 import NotificationLog from "../modules/license/NotificationLog";
 import PaymentSettingsManagement from "../modules/payment/PaymentSettingsManagement";
+import CompanyModulesManagement from "../components/superadmin/CompanyModulesManagement";
 import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibilityMatrix";
 import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
 import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
@@ -62,6 +63,28 @@ import AuditLogCenter from "../components/admin/audit/AuditLogCenter";
 
 import { useAuthorization } from "../hooks/useAuthorization";
 import { loadCompany } from "../services/company/companyService";
+import { loadCompanyModuleFlags } from "../services/company/appModuleService";
+
+// Mirrors the moduleKey annotations on ADMIN_SECTIONS in Sidebar.tsx (single
+// concept, two static maps — the sidebar's quick-links and this page's tab
+// content are separate render trees, but both must genuinely hide a
+// company-disabled module, not just its shortcut link).
+const TAB_MODULE_MAP: Record<string, string> = {
+  category: "courses", course: "courses", "course-builder": "courses", resource: "courses",
+  "course-visibility": "courses", "video-library-content": "courses",
+  "real-estate-projects": "projects",
+  brainstorming: "brainstorming",
+  assessment: "assessments", question: "assessments", assignment: "assessments",
+  evaluation: "assessments", results: "assessments",
+  certificate: "certificates", "certificate-template": "certificates",
+  "certificate-generation": "certificates", "certificate-verification": "certificates",
+  "bulk-certificate-issue": "certificates",
+  "learning-path": "learning_paths", "learning-path-course": "learning_paths",
+  "learning-path-enrollment": "learning_paths", "learning-path-progress": "learning_paths",
+  attendance: "attendance", geofence: "attendance",
+  "support-tickets": "support_tickets", "email-templates": "support_tickets",
+  "employee-of-the-month": "employee_of_the_month",
+};
 
 function Admin() {
   const location = useLocation();
@@ -70,8 +93,7 @@ function Admin() {
   const [activeTab, setActiveTab] = useState(requestedTab || "company");
   const { can, PERMISSIONS } = useAuthorization();
   const [search, setSearch] = useState("");
-  const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
-  const [liveQuizEnabled, setLiveQuizEnabled] = useState(false);
+  const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
   // Settings/Menu/Theme/Permissions/Plans/Discount Codes/Payment Settings are
   // genuinely platform-wide config (no company_id at all — see
   // 20260722130000_platform_operator_scoping.sql), writable only by the one
@@ -82,15 +104,23 @@ function Admin() {
   // Management is already hidden for non-operator companies.
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
+  // A tab whose module has been switched off for this company still renders
+  // its button (cosmetic-only elsewhere), but never its real content below —
+  // that's the part that actually exposes data/functionality.
+  const moduleAllowed = (tab: string) => {
+    const key = TAB_MODULE_MAP[tab];
+    return !key || moduleFlags[key] !== false;
+  };
+
   useEffect(() => {
     loadCompany().then((c) => {
-      setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false);
-      setLiveQuizEnabled(c?.live_quiz_enabled ?? false);
       setIsPlatformOperator(c?.is_platform_operator ?? false);
+      if (c?.id) {
+        loadCompanyModuleFlags(c.id).then(setModuleFlags).catch(() => setModuleFlags({}));
+      }
     }).catch(() => {
-      setMarketAnalyticsEnabled(false);
-      setLiveQuizEnabled(false);
       setIsPlatformOperator(false);
+      setModuleFlags({});
     });
   }, []);
 
@@ -473,7 +503,7 @@ function Admin() {
               </button>
             )}
 
-            {marketAnalyticsEnabled && matches("Market Analytics") && (
+            {moduleFlags.market_analytics && matches("Market Analytics") && (
               <button
                 onClick={() => setActiveTab("market-analytics")}
                 className={getTabClass("market-analytics")}
@@ -482,7 +512,7 @@ function Admin() {
               </button>
             )}
 
-            {liveQuizEnabled && matches("Live Quiz") && (
+            {moduleFlags.live_quiz && matches("Live Quiz") && (
               <button
                 onClick={() => setActiveTab("live-quiz")}
                 className={getTabClass("live-quiz")}
@@ -542,6 +572,15 @@ function Admin() {
                 className={getTabClass("payment-settings")}
               >
                 Payment Settings
+              </button>
+            )}
+
+            {isPlatformOperator && matches("Company Modules") && (
+              <button
+                onClick={() => setActiveTab("company-modules")}
+                className={getTabClass("company-modules")}
+              >
+                Company Modules
               </button>
             )}
 
@@ -631,41 +670,41 @@ function Admin() {
 
             {activeTab === "employee" && can(PERMISSIONS.VIEW_EMPLOYEE) && <EmployeeManagement />}
 
-            {activeTab === "employee-of-the-month" && can(PERMISSIONS.VIEW_EMPLOYEE) && <EmployeeOfTheMonthManagement />}
+            {activeTab === "employee-of-the-month" && can(PERMISSIONS.VIEW_EMPLOYEE) && moduleAllowed("employee-of-the-month") && <EmployeeOfTheMonthManagement />}
 
-            {activeTab === "category" && can(PERMISSIONS.VIEW_CATEGORY) && <CategoryManagement />}
+            {activeTab === "category" && can(PERMISSIONS.VIEW_CATEGORY) && moduleAllowed("category") && <CategoryManagement />}
 
-            {activeTab === "course" && can(PERMISSIONS.VIEW_COURSE) && <CourseManagement />}
+            {activeTab === "course" && can(PERMISSIONS.VIEW_COURSE) && moduleAllowed("course") && <CourseManagement />}
 
-            {activeTab === "course-builder" && can(PERMISSIONS.VIEW_COURSE) && <CourseBuilder initialCourseId={requestedCourseId} />}
-            {activeTab === "resource" && can(PERMISSIONS.VIEW_RESOURCE) && <ResourceManagement />}
-            {activeTab === "assessment" && can(PERMISSIONS.VIEW_ASSESSMENT) && <AssessmentManagement />}
-            {activeTab === "question" && can(PERMISSIONS.VIEW_QUESTION_BANK) && <QuestionManagement />}
-            {activeTab === "assignment" && can(PERMISSIONS.VIEW_ASSIGNMENT) && <AssessmentAssignmentManagement />}
-            {activeTab === "evaluation" && can(PERMISSIONS.VIEW_EVALUATION_RULE) && <EvaluationRuleManagement />}
-            {activeTab === "results" && can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && <AssessmentResultManagement />}
-            {activeTab === "certificate" && can(PERMISSIONS.VIEW_CERTIFICATE) && <CertificateManagement />}
+            {activeTab === "course-builder" && can(PERMISSIONS.VIEW_COURSE) && moduleAllowed("course-builder") && <CourseBuilder initialCourseId={requestedCourseId} />}
+            {activeTab === "resource" && can(PERMISSIONS.VIEW_RESOURCE) && moduleAllowed("resource") && <ResourceManagement />}
+            {activeTab === "assessment" && can(PERMISSIONS.VIEW_ASSESSMENT) && moduleAllowed("assessment") && <AssessmentManagement />}
+            {activeTab === "question" && can(PERMISSIONS.VIEW_QUESTION_BANK) && moduleAllowed("question") && <QuestionManagement />}
+            {activeTab === "assignment" && can(PERMISSIONS.VIEW_ASSIGNMENT) && moduleAllowed("assignment") && <AssessmentAssignmentManagement />}
+            {activeTab === "evaluation" && can(PERMISSIONS.VIEW_EVALUATION_RULE) && moduleAllowed("evaluation") && <EvaluationRuleManagement />}
+            {activeTab === "results" && can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && moduleAllowed("results") && <AssessmentResultManagement />}
+            {activeTab === "certificate" && can(PERMISSIONS.VIEW_CERTIFICATE) && moduleAllowed("certificate") && <CertificateManagement />}
 
-            {activeTab === "certificate-template" && can(PERMISSIONS.VIEW_CERT_TEMPLATE) && (
+            {activeTab === "certificate-template" && can(PERMISSIONS.VIEW_CERT_TEMPLATE) && moduleAllowed("certificate-template") && (
               <CertificateTemplateManagement />
             )}
 
-            {activeTab === "certificate-generation" && can(PERMISSIONS.VIEW_CERT_QUEUE) && (
+            {activeTab === "certificate-generation" && can(PERMISSIONS.VIEW_CERT_QUEUE) && moduleAllowed("certificate-generation") && (
               <CertificateGenerationManagement />
             )}
-            {activeTab === "certificate-verification" && can(PERMISSIONS.VIEW_CERT_VERIFICATION) && (
+            {activeTab === "certificate-verification" && can(PERMISSIONS.VIEW_CERT_VERIFICATION) && moduleAllowed("certificate-verification") && (
               <CertificateVerificationManagement />
             )}
-            {activeTab === "learning-path" && can(PERMISSIONS.VIEW_LEARNING_PATH) && (
+            {activeTab === "learning-path" && can(PERMISSIONS.VIEW_LEARNING_PATH) && moduleAllowed("learning-path") && (
               <LearningPathManagement />
             )}
-            {activeTab === "learning-path-course" && can(PERMISSIONS.VIEW_LP_COURSE) && (
+            {activeTab === "learning-path-course" && can(PERMISSIONS.VIEW_LP_COURSE) && moduleAllowed("learning-path-course") && (
               <LearningPathCourseManagement />
             )}
-            {activeTab === "learning-path-enrollment" && can(PERMISSIONS.VIEW_LP_ENROLLMENT) && (
+            {activeTab === "learning-path-enrollment" && can(PERMISSIONS.VIEW_LP_ENROLLMENT) && moduleAllowed("learning-path-enrollment") && (
               <LearningPathEnrollmentManagement />
             )}
-            {activeTab === "learning-path-progress" && can(PERMISSIONS.VIEW_LP_PROGRESS) && (
+            {activeTab === "learning-path-progress" && can(PERMISSIONS.VIEW_LP_PROGRESS) && moduleAllowed("learning-path-progress") && (
               <LearningPathProgressManagement />
             )}
             {activeTab === "enrollment" && can(PERMISSIONS.VIEW_ENROLLMENT) && (
@@ -683,13 +722,13 @@ function Admin() {
 
             {activeTab === "notifications" && <NotificationCenter />}
 
-            {activeTab === "support-tickets" && can(PERMISSIONS.VIEW_SUPPORT_TICKET) && <TicketManagement />}
+            {activeTab === "support-tickets" && can(PERMISSIONS.VIEW_SUPPORT_TICKET) && moduleAllowed("support-tickets") && <TicketManagement />}
 
-            {activeTab === "email-templates" && can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && <EmailTemplateBuilder />}
+            {activeTab === "email-templates" && can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && moduleAllowed("email-templates") && <EmailTemplateBuilder />}
 
-            {activeTab === "market-analytics" && marketAnalyticsEnabled && <MarketDataManagement />}
+            {activeTab === "market-analytics" && moduleFlags.market_analytics && <MarketDataManagement />}
 
-            {activeTab === "live-quiz" && liveQuizEnabled && <QuizAdminSetupPanel />}
+            {activeTab === "live-quiz" && moduleFlags.live_quiz && <QuizAdminSetupPanel />}
 
             {activeTab === "audit-log" && can(PERMISSIONS.VIEW_AUDIT_LOG) && <AuditLogCenter />}
 
@@ -716,21 +755,23 @@ function Admin() {
 
             {activeTab === "payment-settings" && isPlatformOperator && <PaymentSettingsManagement />}
 
-            {activeTab === "course-visibility" && <CourseVisibilityMatrix />}
+            {activeTab === "company-modules" && isPlatformOperator && <CompanyModulesManagement />}
 
-            {activeTab === "real-estate-projects" && <RealEstateProjectManagement />}
+            {activeTab === "course-visibility" && moduleAllowed("course-visibility") && <CourseVisibilityMatrix />}
 
-            {activeTab === "brainstorming" && isPlatformOperator && <BrainstormingManagement />}
+            {activeTab === "real-estate-projects" && moduleAllowed("real-estate-projects") && <RealEstateProjectManagement />}
 
-            {activeTab === "video-library-content" && <VideoLibraryManagement />}
+            {activeTab === "brainstorming" && isPlatformOperator && moduleAllowed("brainstorming") && <BrainstormingManagement />}
 
-            {activeTab === "bulk-certificate-issue" && <BulkCertificateIssue />}
+            {activeTab === "video-library-content" && moduleAllowed("video-library-content") && <VideoLibraryManagement />}
 
-            {activeTab === "attendance" && <AttendanceManagement />}
+            {activeTab === "bulk-certificate-issue" && moduleAllowed("bulk-certificate-issue") && <BulkCertificateIssue />}
+
+            {activeTab === "attendance" && moduleAllowed("attendance") && <AttendanceManagement />}
 
             {activeTab === "security-migration" && <SecurityMigration />}
 
-            {activeTab === "geofence" && <GeofenceManagement />}
+            {activeTab === "geofence" && moduleAllowed("geofence") && <GeofenceManagement />}
           </div>
         </main>
       </div>

@@ -23,6 +23,13 @@ export interface SubscriptionPlan {
 
 export type SubscriptionPlanForm = Omit<SubscriptionPlan, 'id' | 'created_at' | 'updated_at'>;
 
+/** Which app_modules a plan includes — see supabase/migrations/20260726410000_plan_modules.sql. Assigning this plan to a company (or changing an existing license's plan) applies this set as that company's module overrides. */
+export interface PlanModule {
+  plan_id: string;
+  module_key: string;
+  enabled: boolean;
+}
+
 export const defaultPlanForm: SubscriptionPlanForm = {
   plan_name: '',
   plan_code: '',

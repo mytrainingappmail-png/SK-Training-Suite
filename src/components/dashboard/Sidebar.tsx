@@ -9,7 +9,32 @@ import { getCurrentUser } from "../../services/auth/session";
 import { loadRoles } from "../../services/role/roleService";
 import { loadBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/brandingService";
 import { loadCompany } from "../../services/company/companyService";
+import { loadCompanyModuleFlags } from "../../services/company/appModuleService";
 import type { PermissionCode } from "../../types/authorization";
+
+// Maps a MENU item id to the app_modules key that must be enabled for the
+// company before the item shows at all — on top of whatever permission
+// gate already applies. Items not listed here are core/structural (running
+// the company at all, e.g. Employees/Reports/Settings) and always show.
+const MENU_MODULE_MAP: Record<string, string> = {
+  "market-analytics": "market_analytics",
+  "live-quiz": "live_quiz",
+  projects: "projects",
+  brainstorming: "brainstorming",
+  "help-center": "help_center",
+  "my-tickets": "support_tickets",
+  "my-attendance": "attendance",
+  "my-courses": "courses",
+  "continue-learning": "courses",
+  "learning-home": "courses",
+  videos: "courses",
+  courses: "courses",
+  training: "courses",
+  "my-learning-paths": "learning_paths",
+  "my-assessments": "assessments",
+  assessment: "assessments",
+  "my-certificates": "certificates",
+};
 
 // Maps each "Manage" / "System" sidebar item to the permission required
 // to see it. Any menu id NOT listed here (all "My Learning" items, plus
@@ -52,6 +77,12 @@ interface AdminSectionItem {
   // these — without this flag a tenant admin sees the link, opens the tab,
   // and any save hits a raw Postgres RLS error with no explanation.
   operatorOnly?: boolean;
+  // Gates this tab on the company's app_modules toggle (see
+  // src/services/company/appModuleService.ts) — for tabs that manage
+  // content belonging to an optional section (e.g. Real Estate Projects),
+  // as opposed to structural admin capability every company needs
+  // (Branches, Roles, Employees, ...) which is never gated this way.
+  moduleKey?: string;
 }
 interface AdminSectionGroup {
   group: string;
@@ -67,7 +98,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'department', label: 'Departments', permission: PERMISSIONS.VIEW_DEPARTMENT },
       { tab: 'designation', label: 'Designations', permission: PERMISSIONS.VIEW_DESIGNATION },
       { tab: 'employee', label: 'Employees', permission: PERMISSIONS.VIEW_EMPLOYEE },
-      { tab: 'employee-of-the-month', label: 'Employee of the Month', permission: PERMISSIONS.VIEW_EMPLOYEE },
+      { tab: 'employee-of-the-month', label: 'Employee of the Month', permission: PERMISSIONS.VIEW_EMPLOYEE, moduleKey: 'employee_of_the_month' },
       { tab: 'roles', label: 'Roles', permission: PERMISSIONS.VIEW_ROLE },
       { tab: 'employee-role', label: 'Employee Roles', permission: PERMISSIONS.VIEW_EMPLOYEE_ROLE },
       { tab: 'permissions', label: 'Permissions', permission: PERMISSIONS.VIEW_PERMISSION, operatorOnly: true },
@@ -77,43 +108,43 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
   {
     group: 'Learning Content',
     items: [
-      { tab: 'category', label: 'Categories', permission: PERMISSIONS.VIEW_CATEGORY },
-      { tab: 'course', label: 'Courses', permission: PERMISSIONS.VIEW_COURSE },
-      { tab: 'course-builder', label: 'Course Builder', permission: PERMISSIONS.VIEW_COURSE },
-      { tab: 'resource', label: 'Resources', permission: PERMISSIONS.VIEW_RESOURCE },
-      { tab: 'course-visibility', label: 'Course Visibility' },
-      { tab: 'video-library-content', label: 'Video Library' },
-      { tab: 'real-estate-projects', label: 'Projects' },
-      { tab: 'brainstorming', label: 'Brainstorming', operatorOnly: true },
+      { tab: 'category', label: 'Categories', permission: PERMISSIONS.VIEW_CATEGORY, moduleKey: 'courses' },
+      { tab: 'course', label: 'Courses', permission: PERMISSIONS.VIEW_COURSE, moduleKey: 'courses' },
+      { tab: 'course-builder', label: 'Course Builder', permission: PERMISSIONS.VIEW_COURSE, moduleKey: 'courses' },
+      { tab: 'resource', label: 'Resources', permission: PERMISSIONS.VIEW_RESOURCE, moduleKey: 'courses' },
+      { tab: 'course-visibility', label: 'Course Visibility', moduleKey: 'courses' },
+      { tab: 'video-library-content', label: 'Video Library', moduleKey: 'courses' },
+      { tab: 'real-estate-projects', label: 'Projects', moduleKey: 'projects' },
+      { tab: 'brainstorming', label: 'Brainstorming', operatorOnly: true, moduleKey: 'brainstorming' },
     ],
   },
   {
     group: 'Assessments & Certification',
     items: [
-      { tab: 'assessment', label: 'Assessment', permission: PERMISSIONS.VIEW_ASSESSMENT },
-      { tab: 'question', label: 'Question Bank', permission: PERMISSIONS.VIEW_QUESTION_BANK },
-      { tab: 'assignment', label: 'Assignments', permission: PERMISSIONS.VIEW_ASSIGNMENT },
-      { tab: 'evaluation', label: 'Evaluation Rules', permission: PERMISSIONS.VIEW_EVALUATION_RULE },
-      { tab: 'results', label: 'Results', permission: PERMISSIONS.VIEW_ASSESSMENT_RESULT },
-      { tab: 'certificate', label: 'Certificates', permission: PERMISSIONS.VIEW_CERTIFICATE },
-      { tab: 'certificate-template', label: 'Certificate Templates', permission: PERMISSIONS.VIEW_CERT_TEMPLATE },
-      { tab: 'certificate-generation', label: 'Certificate Queue', permission: PERMISSIONS.VIEW_CERT_QUEUE },
-      { tab: 'certificate-verification', label: 'Certificate Verification', permission: PERMISSIONS.VIEW_CERT_VERIFICATION },
-      { tab: 'bulk-certificate-issue', label: 'Bulk Certificate Issue' },
+      { tab: 'assessment', label: 'Assessment', permission: PERMISSIONS.VIEW_ASSESSMENT, moduleKey: 'assessments' },
+      { tab: 'question', label: 'Question Bank', permission: PERMISSIONS.VIEW_QUESTION_BANK, moduleKey: 'assessments' },
+      { tab: 'assignment', label: 'Assignments', permission: PERMISSIONS.VIEW_ASSIGNMENT, moduleKey: 'assessments' },
+      { tab: 'evaluation', label: 'Evaluation Rules', permission: PERMISSIONS.VIEW_EVALUATION_RULE, moduleKey: 'assessments' },
+      { tab: 'results', label: 'Results', permission: PERMISSIONS.VIEW_ASSESSMENT_RESULT, moduleKey: 'assessments' },
+      { tab: 'certificate', label: 'Certificates', permission: PERMISSIONS.VIEW_CERTIFICATE, moduleKey: 'certificates' },
+      { tab: 'certificate-template', label: 'Certificate Templates', permission: PERMISSIONS.VIEW_CERT_TEMPLATE, moduleKey: 'certificates' },
+      { tab: 'certificate-generation', label: 'Certificate Queue', permission: PERMISSIONS.VIEW_CERT_QUEUE, moduleKey: 'certificates' },
+      { tab: 'certificate-verification', label: 'Certificate Verification', permission: PERMISSIONS.VIEW_CERT_VERIFICATION, moduleKey: 'certificates' },
+      { tab: 'bulk-certificate-issue', label: 'Bulk Certificate Issue', moduleKey: 'certificates' },
     ],
   },
   {
     group: 'Learning Paths & Training',
     items: [
-      { tab: 'learning-path', label: 'Learning Paths', permission: PERMISSIONS.VIEW_LEARNING_PATH },
-      { tab: 'learning-path-course', label: 'Learning Path Courses', permission: PERMISSIONS.VIEW_LP_COURSE },
-      { tab: 'learning-path-enrollment', label: 'Learning Path Enrollments', permission: PERMISSIONS.VIEW_LP_ENROLLMENT },
-      { tab: 'learning-path-progress', label: 'Learning Path Progress', permission: PERMISSIONS.VIEW_LP_PROGRESS },
+      { tab: 'learning-path', label: 'Learning Paths', permission: PERMISSIONS.VIEW_LEARNING_PATH, moduleKey: 'learning_paths' },
+      { tab: 'learning-path-course', label: 'Learning Path Courses', permission: PERMISSIONS.VIEW_LP_COURSE, moduleKey: 'learning_paths' },
+      { tab: 'learning-path-enrollment', label: 'Learning Path Enrollments', permission: PERMISSIONS.VIEW_LP_ENROLLMENT, moduleKey: 'learning_paths' },
+      { tab: 'learning-path-progress', label: 'Learning Path Progress', permission: PERMISSIONS.VIEW_LP_PROGRESS, moduleKey: 'learning_paths' },
       { tab: 'enrollment', label: 'Enrollments', permission: PERMISSIONS.VIEW_ENROLLMENT },
       { tab: 'training-batch', label: 'Training Batches', permission: PERMISSIONS.VIEW_TRAINING_BATCH },
       { tab: 'trainer-assignment', label: 'Trainer Assignments', permission: PERMISSIONS.VIEW_TRAINER_ASSIGNMENT },
-      { tab: 'attendance', label: 'Attendance' },
-      { tab: 'geofence', label: 'Attendance Geofencing' },
+      { tab: 'attendance', label: 'Attendance', moduleKey: 'attendance' },
+      { tab: 'geofence', label: 'Attendance Geofencing', moduleKey: 'attendance' },
     ],
   },
   {
@@ -124,6 +155,7 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
       { tab: 'discount-codes', label: 'Discount Codes', operatorOnly: true },
       { tab: 'license-notifications', label: 'License Notifications' },
       { tab: 'payment-settings', label: 'Payment Settings', operatorOnly: true },
+      { tab: 'company-modules', label: 'Company Modules', operatorOnly: true },
     ],
   },
   {
@@ -142,8 +174,8 @@ const ADMIN_SECTIONS: AdminSectionGroup[] = [
   {
     group: 'Support',
     items: [
-      { tab: 'support-tickets', label: 'Ticket Management', permission: PERMISSIONS.VIEW_SUPPORT_TICKET },
-      { tab: 'email-templates', label: 'Email Templates', permission: PERMISSIONS.VIEW_EMAIL_TEMPLATE },
+      { tab: 'support-tickets', label: 'Ticket Management', permission: PERMISSIONS.VIEW_SUPPORT_TICKET, moduleKey: 'support_tickets' },
+      { tab: 'email-templates', label: 'Email Templates', permission: PERMISSIONS.VIEW_EMAIL_TEMPLATE, moduleKey: 'support_tickets' },
     ],
   },
 ];
@@ -155,8 +187,7 @@ function Sidebar() {
   const { can } = useAuthorization();
   const [isTrainer, setIsTrainer] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [marketAnalyticsEnabled, setMarketAnalyticsEnabled] = useState(false);
-  const [liveQuizEnabled, setLiveQuizEnabled] = useState(false);
+  const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -199,13 +230,13 @@ function Sidebar() {
 
   useEffect(() => {
     loadCompany().then((c) => {
-      setMarketAnalyticsEnabled(c?.market_analytics_enabled ?? false);
-      setLiveQuizEnabled(c?.live_quiz_enabled ?? false);
       setIsPlatformOperator(c?.is_platform_operator ?? false);
+      if (c?.id) {
+        loadCompanyModuleFlags(c.id).then(setModuleFlags).catch(() => setModuleFlags({}));
+      }
     }).catch(() => {
-      setMarketAnalyticsEnabled(false);
-      setLiveQuizEnabled(false);
       setIsPlatformOperator(false);
+      setModuleFlags({});
     });
   }, []);
 
@@ -227,12 +258,13 @@ function Sidebar() {
     if (!item.visible) return false;
     if (item.group === "Teaching" && !isTrainer) return false;
     if (item.group === "My Learning" && (isTrainer || isSuperAdmin)) return false;
-    if (item.id === "market-analytics" && !marketAnalyticsEnabled) return false;
     if (item.id === "settings" && !isPlatformOperator) return false;
     // Live Quiz: Admin-tier only (same gate as the "Admin" console link)
     // AND only once the company has purchased the add-on. Employees,
     // Trainers, and Managers must never see it, per spec.
-    if (item.id === "live-quiz" && (!liveQuizEnabled || !can(PERMISSIONS.VIEW_COMPANY))) return false;
+    if (item.id === "live-quiz" && !can(PERMISSIONS.VIEW_COMPANY)) return false;
+    const requiredModule = MENU_MODULE_MAP[item.id];
+    if (requiredModule && moduleFlags[requiredModule] === false) return false;
 
     const requiredPermission = MENU_PERMISSION_MAP[item.id];
     if (!requiredPermission) return true;
@@ -369,7 +401,9 @@ function Sidebar() {
 
               {adminSectionsOpen && ADMIN_SECTIONS.map(({ group, items }) => {
                 const visible = items.filter((item) =>
-                  (!item.permission || can(item.permission)) && (!item.operatorOnly || isPlatformOperator)
+                  (!item.permission || can(item.permission)) &&
+                  (!item.operatorOnly || isPlatformOperator) &&
+                  (!item.moduleKey || moduleFlags[item.moduleKey] !== false)
                 );
                 if (visible.length === 0) return null;
                 const isGroupOpen = openAdminGroups.has(group);

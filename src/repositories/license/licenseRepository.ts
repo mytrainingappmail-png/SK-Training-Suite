@@ -10,6 +10,7 @@ import type {
   CompanyLicense, CompanyLicenseForm, LicenseStatus,
   DiscountCode, DiscountCodeForm,
   LicenseNotification, LicenseNotificationForm,
+  PlanModule,
 } from '../../types/license';
 
 // ── Subscription Plans ──────────────────────────────────────────────────────
@@ -36,6 +37,26 @@ export async function updatePlan(id: string, form: Partial<SubscriptionPlanForm>
 
 export async function deletePlan(id: string): Promise<void> {
   const { error } = await supabase.from('subscription_plans').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Plan Modules ─────────────────────────────────────────────────────────────
+
+export async function getPlanModules(planId: string): Promise<PlanModule[]> {
+  const { data, error } = await supabase.from('plan_modules').select('*').eq('plan_id', planId);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function setPlanModule(planId: string, moduleKey: string, enabled: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('plan_modules')
+    .upsert({ plan_id: planId, module_key: moduleKey, enabled }, { onConflict: 'plan_id,module_key' });
+  if (error) throw new Error(error.message);
+}
+
+export async function deletePlanModule(planId: string, moduleKey: string): Promise<void> {
+  const { error } = await supabase.from('plan_modules').delete().eq('plan_id', planId).eq('module_key', moduleKey);
   if (error) throw new Error(error.message);
 }
 

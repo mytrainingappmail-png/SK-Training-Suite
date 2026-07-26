@@ -10,7 +10,10 @@ import {
   getCompanyLicenses, createCompanyLicense, updateCompanyLicense, deleteCompanyLicense,
   getDiscountCodes, createDiscountCode, updateDiscountCode, deleteDiscountCode,
   getLicenseNotifications, recordLicenseNotification,
+  getPlanModules, setPlanModule as setPlanModuleRepo, deletePlanModule,
 } from '../../repositories/license/licenseRepository';
+import { listAppModules } from '../../repositories/company/appModuleRepository';
+import { setCompanyModule } from '../../services/company/appModuleService';
 
 import { employeeService } from '../employee/employeeService';
 import { loadCourses } from '../course/courseService';
@@ -20,7 +23,9 @@ import type {
   CompanyLicense, CompanyLicenseForm, LicenseStatus,
   DiscountCode, DiscountCodeForm,
   LicenseNotification, LicenseNotificationForm,
+  PlanModule,
 } from '../../types/license';
+import type { CompanyModuleState } from '../../types/appModule';
 import { DEFAULT_PLANS } from '../../types/license';
 
 // ── Subscription Plans ───────────────────────────────────────────────────────
@@ -49,6 +54,35 @@ export async function savePlan(id: string, form: Partial<SubscriptionPlanForm>):
 
 export async function removePlan(id: string): Promise<void> {
   await deletePlan(id);
+}
+
+// ── Plan Modules — which app_modules a plan includes ────────────────────────
+
+/** Merges the module registry with a plan's configured overrides — same resolution rule as a company's (override if set, else the module's own default) — what the plan editor's checklist renders. */
+export async function getPlanModuleStates(planId: string): Promise<CompanyModuleState[]> {
+  const [modules, overrides] = await Promise.all([listAppModules(), getPlanModules(planId)]);
+  const overrideMap = new Map(overrides.map((o: PlanModule) => [o.module_key, o.enabled]));
+  return modules.map((m) => ({
+    ...m,
+    enabled: overrideMap.get(m.key) ?? m.default_enabled,
+    hasOverride: overrideMap.has(m.key),
+  }));
+}
+
+export async function setPlanModule(planId: string, moduleKey: string, enabled: boolean): Promise<void> {
+  return setPlanModuleRepo(planId, moduleKey, enabled);
+}
+
+export async function clearPlanModuleOverride(planId: string, moduleKey: string): Promise<void> {
+  return deletePlanModule(planId, moduleKey);
+}
+
+/** The actual integration: applies every module in a plan's resolved set to one company as an explicit override — this is what makes issuing (or changing) a license automatically configure what that company can access, instead of the operator having to separately remember to flip toggles in Company Modules. */
+export async function applyPlanModulesToCompany(companyId: string, planId: string): Promise<void> {
+  const states = await getPlanModuleStates(planId);
+  for (const s of states) {
+    await setCompanyModule(companyId, s.key, s.enabled);
+  }
 }
 
 export async function seedDefaultPlans(existingPlans: SubscriptionPlan[]): Promise<SubscriptionPlan[]> {
@@ -108,12 +142,20 @@ function validateCompanyLicenseForm(form: CompanyLicenseForm): void {
 export async function saveNewCompanyLicense(form: CompanyLicenseForm): Promise<CompanyLicense> {
   validateCompanyLicenseForm(form);
   const status = computeLicenseStatus(form.end_date, form.grace_period_days);
-  return createCompanyLicense({ ...form, status });
+  const license = await createCompanyLicense({ ...form, status });
+  // Issuing a license IS "this company now gets whatever this plan includes" —
+  // apply the plan's module set immediately, not as a separate manual step.
+  await applyPlanModulesToCompany(form.company_id, form.plan_id);
+  return license;
 }
 
 export async function saveCompanyLicense(id: string, form: Partial<CompanyLicenseForm>): Promise<CompanyLicense> {
   if (!id) throw new Error('Invalid license id.');
-  return updateCompanyLicense(id, form);
+  const license = await updateCompanyLicense(id, form);
+  if (form.company_id && form.plan_id) {
+    await applyPlanModulesToCompany(form.company_id, form.plan_id);
+  }
+  return license;
 }
 
 export async function suspendCompanyLicense(id: string): Promise<CompanyLicense> {
