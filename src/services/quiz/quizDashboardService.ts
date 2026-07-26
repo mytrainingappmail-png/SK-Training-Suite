@@ -22,8 +22,10 @@ import type {
   DashboardFilterOptions,
   DashboardSnapshot,
   DashboardTrendPoint,
+  QuizPerformanceRow,
   QuizSessionResultRow,
   QuizSession,
+  Quiz,
 } from "../../types/quiz";
 
 function dayKey(iso: string): string {
@@ -56,16 +58,20 @@ function average(nums: number[]): number {
 }
 
 export async function getDashboardFilterOptions(companyId: string): Promise<DashboardFilterOptions> {
-  const [quizzes, categories, admins] = await Promise.all([
+  const [quizzes, categories, admins, allResults] = await Promise.all([
     listQuizzes(companyId),
     listCategories(companyId),
     listAdmins(companyId),
+    getCompanySessionResults(companyId),
   ]);
 
   return {
     categories: categories.map((c) => ({ id: c.id, name: c.name })),
     quizzes: quizzes.map((q) => ({ id: q.id, title: q.title })),
-    trainers: admins.map((a) => ({ id: a.id, name: a.display_name })),
+    // Disabled trainers are excluded here (and from every aggregate below) rather than deleted —
+    // re-enabling them from the Users page brings their data straight back into view.
+    trainers: admins.filter((a) => a.status === "active").map((a) => ({ id: a.id, name: a.display_name })),
+    employees: [...new Set(allResults.map((r) => r.display_name.trim()))].sort(),
   };
 }
 
@@ -88,8 +94,20 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
   const quizById = new Map(quizzes.map((q) => [q.id, q]));
   const sessionById = new Map<string, QuizSession>(sessions.map((s) => [s.id, s]));
 
+  // A disabled trainer's sessions are excluded from every KPI/chart/panel below —
+  // "disabled" only means "not for use" here, never deleted, so re-enabling them
+  // from the Users page brings their historical data straight back into view.
+  const disabledTrainerIds = new Set(admins.filter((a) => a.status === "disabled").map((a) => a.id));
+  const hostIsDisabled = (sessionId: string): boolean => {
+    const host = sessionById.get(sessionId)?.host_admin_id;
+    return !!host && disabledTrainerIds.has(host);
+  };
+
+  const employeeName = filters.employeeName?.trim() || null;
+
   // ── Apply the global filter set to the session-results rows (the primary dataset behind most KPIs/charts) ──
   const filteredResults: QuizSessionResultRow[] = allResults.filter((r) => {
+    if (hostIsDisabled(r.session_id)) return false;
     if (filters.quizId && r.quiz_id !== filters.quizId) return false;
     if (filters.categoryId) {
       const quiz = quizById.get(r.quiz_id);
@@ -99,11 +117,13 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
       const session = sessionById.get(r.session_id);
       if (!session || session.host_admin_id !== filters.trainerId) return false;
     }
+    if (employeeName && r.display_name.trim() !== employeeName) return false;
     if (!inRange(r.ended_at, filters.fromIso, filters.toIso)) return false;
     return true;
   });
 
   const filteredSessions = sessions.filter((s) => {
+    if (s.host_admin_id && disabledTrainerIds.has(s.host_admin_id)) return false;
     if (filters.quizId && s.quiz_id !== filters.quizId) return false;
     if (filters.categoryId) {
       const quiz = quizById.get(s.quiz_id);
@@ -121,15 +141,22 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
   });
 
   const filteredCertificates = certificates.filter((c) => {
+    if (hostIsDisabled(c.session_id)) return false;
     if (filters.quizId) {
       const quiz = quizById.get(filters.quizId);
       if (quiz && c.quiz_title !== quiz.title) return false;
     }
+    if (employeeName && c.candidate_name.trim() !== employeeName) return false;
     if (!inRange(c.issued_at, filters.fromIso, filters.toIso)) return false;
     return true;
   });
 
-  const filteredJoinTimes = joinTimes.filter((j) => {
+  const participantNameById = new Map(allResults.map((r) => [r.participant_id, r.display_name]));
+
+  // Everything except the date range — reused for both "in range" totals and the
+  // always-"today" pulse KPI, which intentionally ignores whatever date range is selected.
+  function joinTimeMatchesNonDateFilters(j: { session_id: string; participant_id: string }): boolean {
+    if (hostIsDisabled(j.session_id)) return false;
     const session = sessionById.get(j.session_id);
     if (filters.quizId && session?.quiz_id !== filters.quizId) return false;
     if (filters.categoryId) {
@@ -137,15 +164,22 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
       if (!quiz || quiz.category_id !== filters.categoryId) return false;
     }
     if (filters.trainerId && session?.host_admin_id !== filters.trainerId) return false;
+    if (employeeName && (participantNameById.get(j.participant_id) ?? "").trim() !== employeeName) return false;
     return true;
-  });
+  }
+
+  const filteredJoinTimes = joinTimes
+    .filter(joinTimeMatchesNonDateFilters)
+    .filter((j) => inRange(j.joined_at, filters.fromIso, filters.toIso));
+
+  const todaysJoinTimes = joinTimes.filter((j) => joinTimeMatchesNonDateFilters(j) && isTodayIso(j.joined_at));
 
   // ── KPIs ──
   const publishedQuizzes = filteredQuizzes.filter((q) => q.status === "published").length;
   const draftQuizzes = filteredQuizzes.filter((q) => q.status === "draft").length;
   const liveSessionsNow = filteredSessions.filter((s) => s.phase === "lobby" || s.phase === "question" || s.phase === "paused").length;
   const completedSessions = filteredSessions.filter((s) => s.phase === "ended").length;
-  const todaysParticipants = joinTimes.filter((j) => isTodayIso(j.joined_at)).length;
+  const todaysParticipants = todaysJoinTimes.length;
   const totalParticipants = filteredJoinTimes.length;
   const passCount = filteredResults.filter((r) => r.grade === "PASS").length;
   const improveCount = filteredResults.filter((r) => r.grade === "NEED_IMPROVEMENT").length;
@@ -224,13 +258,15 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
       .sort((a, b) => b.value - a.value)
       .slice(0, 8),
 
-    recentQuizActivity: quizzes
+    quizPerformanceTable: buildQuizPerformanceTable(filteredQuizzes, filteredResults, filteredSessions, categoryNameById),
+
+    recentQuizActivity: filteredQuizzes
       .slice()
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .slice(0, 6)
       .map((q) => ({ id: q.id, title: q.title, status: q.status, updatedAt: q.updated_at })),
 
-    recentSessions: sessions
+    recentSessions: filteredSessions
       .slice()
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, 6)
@@ -238,11 +274,11 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
         id: s.id,
         quizTitle: quizById.get(s.quiz_id)?.title ?? "Quiz session",
         phase: s.phase,
-        participantCount: allResults.filter((r) => r.session_id === s.id).length,
+        participantCount: filteredResults.filter((r) => r.session_id === s.id).length,
         createdAt: s.created_at,
       })),
 
-    recentResults: allResults
+    recentResults: filteredResults
       .slice()
       .filter((r) => r.ended_at)
       .sort((a, b) => (b.ended_at ?? "").localeCompare(a.ended_at ?? ""))
@@ -257,7 +293,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
         endedAt: r.ended_at ?? "",
       })),
 
-    recentCertificates: certificates.slice(0, 6).map((c) => ({
+    recentCertificates: filteredCertificates.slice(0, 6).map((c) => ({
       id: c.id,
       candidateName: c.candidate_name,
       quizTitle: c.quiz_title,
@@ -266,6 +302,34 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
   };
 
   return snapshot;
+}
+
+/** One row per quiz (not just the top/bottom 5) so the admin can compare every quiz side by side, not only the extremes. */
+function buildQuizPerformanceTable(
+  quizzesInScope: Quiz[],
+  results: QuizSessionResultRow[],
+  sessionsInScope: QuizSession[],
+  categoryNameById: Map<string, string>
+): QuizPerformanceRow[] {
+  return quizzesInScope
+    .map((q) => {
+      const rows = results.filter((r) => r.quiz_id === q.id);
+      const sessionIds = new Set(sessionsInScope.filter((s) => s.quiz_id === q.id).map((s) => s.id));
+      const passCount = rows.filter((r) => r.grade === "PASS").length;
+
+      return {
+        quizId: q.id,
+        title: q.title,
+        categoryName: q.category_id ? categoryNameById.get(q.category_id) ?? null : null,
+        difficulty: q.difficulty,
+        status: q.status,
+        sessionsCount: sessionIds.size,
+        participantsCount: rows.length,
+        averageScorePct: average(rows.map((r) => r.percent_correct)),
+        passPct: rows.length === 0 ? 0 : Math.round((passCount / rows.length) * 100),
+      };
+    })
+    .sort((a, b) => b.averageScorePct - a.averageScorePct);
 }
 
 function groupAverage(rows: QuizSessionResultRow[], keyFn: (row: QuizSessionResultRow) => string | null): DashboardTrendPoint[] {

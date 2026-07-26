@@ -258,6 +258,7 @@ export interface DashboardFilters {
   categoryId?: string | null;
   quizId?: string | null;
   trainerId?: string | null;
+  employeeName?: string | null;
 }
 
 export interface DashboardTrendPoint {
@@ -287,6 +288,19 @@ export interface DashboardFilterOptions {
   categories: { id: string; name: string }[];
   quizzes: { id: string; title: string }[];
   trainers: { id: string; name: string }[];
+  employees: string[];
+}
+
+export interface QuizPerformanceRow {
+  quizId: string;
+  title: string;
+  categoryName: string | null;
+  difficulty: QuizDifficulty;
+  status: QuizStatus;
+  sessionsCount: number;
+  participantsCount: number;
+  averageScorePct: number;
+  passPct: number;
 }
 
 export interface DashboardRecentQuiz {
@@ -333,6 +347,7 @@ export interface DashboardSnapshot {
   topQuizzes: DashboardTrendPoint[];
   bottomQuizzes: DashboardTrendPoint[];
   topParticipants: DashboardTrendPoint[];
+  quizPerformanceTable: QuizPerformanceRow[];
   recentQuizActivity: DashboardRecentQuiz[];
   recentSessions: DashboardRecentSession[];
   recentResults: DashboardRecentResult[];

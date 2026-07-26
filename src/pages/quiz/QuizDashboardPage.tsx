@@ -82,13 +82,14 @@ export default function QuizDashboardPage() {
   const admin = getCurrentQuizAdmin();
 
   const [now, setNow] = useState(new Date());
-  const [filterOptions, setFilterOptions] = useState<DashboardFilterOptions>({ categories: [], quizzes: [], trainers: [] });
+  const [filterOptions, setFilterOptions] = useState<DashboardFilterOptions>({ categories: [], quizzes: [], trainers: [], employees: [] });
   const [datePreset, setDatePreset] = useState<DatePreset>("30d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [quizId, setQuizId] = useState("");
   const [trainerId, setTrainerId] = useState("");
+  const [employeeName, setEmployeeName] = useState("");
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [liveTick, setLiveTick] = useState(0);
@@ -104,16 +105,35 @@ export default function QuizDashboardPage() {
     getDashboardFilterOptions(admin.company_id).then(setFilterOptions);
   }, [admin]);
 
+  const range = useMemo(() => presetToRange(datePreset, customFrom, customTo), [datePreset, customFrom, customTo]);
+
+  // The calendar inputs always show the EFFECTIVE range, even when it came from a preset
+  // like "Last 7 Days" rather than being typed directly — so the admin can see exactly
+  // what's applied, and fine-tune it (which switches the preset to "Custom Range").
+  const displayFrom = range.fromIso ? range.fromIso.slice(0, 10) : "";
+  const displayTo = range.toIso ? range.toIso.slice(0, 10) : "";
+
+  function handleFromChange(value: string) {
+    setCustomFrom(value);
+    setCustomTo((prev) => prev || displayTo);
+    setDatePreset("custom");
+  }
+  function handleToChange(value: string) {
+    setCustomTo(value);
+    setCustomFrom((prev) => prev || displayFrom);
+    setDatePreset("custom");
+  }
+
   const filters: DashboardFilters = useMemo(() => {
-    const range = presetToRange(datePreset, customFrom, customTo);
     return {
       ...range,
       categoryId: categoryId || null,
       quizId: quizId || null,
       trainerId: trainerId || null,
+      employeeName: employeeName || null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datePreset, customFrom, customTo, categoryId, quizId, trainerId]);
+  }, [range, categoryId, quizId, trainerId, employeeName]);
 
   useEffect(() => {
     if (!admin) return;
@@ -153,7 +173,7 @@ export default function QuizDashboardPage() {
     };
   }, [admin]);
 
-  const hasActiveFilters = categoryId || quizId || trainerId || datePreset !== "30d";
+  const hasActiveFilters = categoryId || quizId || trainerId || employeeName || datePreset !== "30d";
 
   return (
     <div className="space-y-6 pb-16">
@@ -222,6 +242,19 @@ export default function QuizDashboardPage() {
         </select>
 
         <select
+          className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 max-w-[14rem]"
+          value={employeeName}
+          onChange={(e) => setEmployeeName(e.target.value)}
+        >
+          <option value="">All Employees</option>
+          {filterOptions.employees.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+
+        <select
           className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
           value={datePreset}
           onChange={(e) => setDatePreset(e.target.value as DatePreset)}
@@ -237,23 +270,22 @@ export default function QuizDashboardPage() {
           <option value="custom">Custom Range</option>
         </select>
 
-        {datePreset === "custom" && (
-          <>
-            <input
-              type="date"
-              className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-            />
-            <span className="text-xs text-slate-500">to</span>
-            <input
-              type="date"
-              className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-            />
-          </>
-        )}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-slate-500">From</label>
+          <input
+            type="date"
+            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+            value={displayFrom}
+            onChange={(e) => handleFromChange(e.target.value)}
+          />
+          <label className="text-xs text-slate-500">Till</label>
+          <input
+            type="date"
+            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+            value={displayTo}
+            onChange={(e) => handleToChange(e.target.value)}
+          />
+        </div>
 
         {hasActiveFilters && (
           <button
@@ -261,6 +293,7 @@ export default function QuizDashboardPage() {
               setCategoryId("");
               setQuizId("");
               setTrainerId("");
+              setEmployeeName("");
               setDatePreset("30d");
               setCustomFrom("");
               setCustomTo("");
@@ -335,6 +368,54 @@ export default function QuizDashboardPage() {
             <ChartCard title="Certificate Generation Trend" subtitle="Issued per day">
               <AreaChart data={snapshot.certificateTrend} color="#f59e0b" />
             </ChartCard>
+          </div>
+
+          {/* Quiz-wise Performance */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-white">📚 Quiz-wise Performance</h3>
+              <p className="text-xs text-slate-500">Every quiz in scope — not just the top/bottom 5</p>
+            </div>
+            {snapshot.quizPerformanceTable.length === 0 ? (
+              <EmptyRow />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-slate-800">
+                      <th className="py-2 pr-3">Quiz</th>
+                      <th className="py-2 pr-3">Category</th>
+                      <th className="py-2 pr-3">Difficulty</th>
+                      <th className="py-2 pr-3">Status</th>
+                      <th className="py-2 pr-3 text-right">Sessions</th>
+                      <th className="py-2 pr-3 text-right">Participants</th>
+                      <th className="py-2 pr-3 text-right">Avg Score</th>
+                      <th className="py-2 pr-3 text-right">Pass %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.quizPerformanceTable.map((q) => (
+                      <tr key={q.quizId} className="border-b border-slate-800/60 last:border-0">
+                        <td className="py-2 pr-3">
+                          <Link to={ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", q.quizId)} className="text-slate-200 hover:text-violet-300 font-medium">
+                            {q.title}
+                          </Link>
+                        </td>
+                        <td className="py-2 pr-3 text-slate-400">{q.categoryName ?? "—"}</td>
+                        <td className="py-2 pr-3 text-slate-400">{q.difficulty}</td>
+                        <td className="py-2 pr-3">
+                          <Badge tone={q.status === "published" ? "emerald" : "slate"}>{q.status}</Badge>
+                        </td>
+                        <td className="py-2 pr-3 text-right font-mono text-slate-300">{q.sessionsCount}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-slate-300">{q.participantsCount}</td>
+                        <td className="py-2 pr-3 text-right font-mono text-white font-semibold">{q.averageScorePct}%</td>
+                        <td className="py-2 pr-3 text-right font-mono text-emerald-300">{q.passPct}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Summary Panels */}
