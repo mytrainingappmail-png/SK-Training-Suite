@@ -10,10 +10,10 @@ import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepositor
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
-import { getMyAnswerReview } from "../../repositories/quiz/quizAnswerRepository";
+import { getMyAnswerReview, getMyResult, flagTabSwitch } from "../../repositories/quiz/quizAnswerRepository";
 import QuizCertificateButton from "../../components/quiz/QuizCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
-import type { PublicQuizQuestion, SubmitAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion } from "../../types/quiz";
+import type { PublicQuizQuestion, SubmitAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
 const REVIEW_VISIBLE_SECONDS = 5 * 60;
 
@@ -41,6 +41,7 @@ export default function QuizPlayPage() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [reviewQuestions, setReviewQuestions] = useState<AnswerReviewQuestion[] | null>(null);
   const [reviewSecondsLeft, setReviewSecondsLeft] = useState(REVIEW_VISIBLE_SECONDS);
+  const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -55,6 +56,22 @@ export default function QuizPlayPage() {
       })
       .catch(() => {});
   }, [sessionId]);
+
+  // Integrity check: flag it if the trainee's tab is backgrounded (app-switch, screen-off,
+  // alt-tab) while a session they've joined is actually running — visible to the host
+  // afterwards as a per-participant warning, never blocking or auto-failing anyone.
+  useEffect(() => {
+    if (!sessionId || !session || session.phase === "lobby" || session.phase === "ended") return;
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden" && sessionId) {
+        flagTabSwitch(sessionId);
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [sessionId, session]);
 
   // Recover participantId after a page refresh (router state is lost on reload).
   useEffect(() => {
@@ -129,6 +146,8 @@ export default function QuizPlayPage() {
     getMyAnswerReview(sessionId)
       .then(setReviewQuestions)
       .catch(() => {});
+
+    getMyResult(sessionId).then(setMyResult);
 
     issueMyCertificate(sessionId)
       .then(setCertificate)
@@ -206,6 +225,25 @@ export default function QuizPlayPage() {
     const reviewMins = Math.floor(reviewSecondsLeft / 60);
     const reviewSecs = reviewSecondsLeft % 60;
 
+    const resultTitle =
+      myResult?.grade === "PASS"
+        ? playerSettings?.result_pass_title || "🏆 Champion!"
+        : myResult?.grade === "NEED_IMPROVEMENT"
+          ? playerSettings?.result_improve_title || "📈 Need Improvement"
+          : myResult?.grade === "FAIL"
+            ? playerSettings?.result_fail_title || "💪 Keep Practicing"
+            : rank === 1
+              ? "You Won! 🎉"
+              : "Well Done!";
+    const resultMessage =
+      myResult?.grade === "PASS"
+        ? playerSettings?.result_pass_message
+        : myResult?.grade === "NEED_IMPROVEMENT"
+          ? playerSettings?.result_improve_message
+          : myResult?.grade === "FAIL"
+            ? playerSettings?.result_fail_message
+            : null;
+
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center gap-3 px-6 py-10 text-center overflow-y-auto">
         {showConfetti && <QuizConfetti />}
@@ -219,9 +257,8 @@ export default function QuizPlayPage() {
             }
           `}</style>
           <div className="text-4xl">{medals[rank - 1] ?? "🎖️"}</div>
-          <div className="text-xl font-bold text-white">
-            {rank === 1 ? "You Won! 🎉" : rank > 0 && rank <= 3 ? "Top 3! 🌟" : "Well Done!"}
-          </div>
+          <div className="text-xl font-bold text-white">{resultTitle}</div>
+          {resultMessage && <div className="text-sm text-violet-300 max-w-xs">{resultMessage}</div>}
           {rank > 0 && <div className="text-sm text-slate-400">Rank #{rank} of {sorted.length}</div>}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl px-8 py-5 mt-2">
             <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Your Score</div>
@@ -292,7 +329,11 @@ export default function QuizPlayPage() {
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
           Q{question.question_index + 1} of {question.total_questions}
         </span>
-        <span className="h-12 w-12 rounded-full border-2 border-amber-400 flex items-center justify-center font-mono font-bold">
+        <span
+          className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-mono font-bold ${
+            secondsLeft <= 5 ? "border-red-500 text-red-400 animate-pulse" : "border-amber-400 text-white"
+          }`}
+        >
           {secondsLeft}
         </span>
       </div>

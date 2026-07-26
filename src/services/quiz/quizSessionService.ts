@@ -2,6 +2,15 @@ import * as sessionRepo from "../../repositories/quiz/quizSessionRepository";
 import { getQuiz } from "./quizService";
 import type { QuizSession, QuizJoinMode } from "../../types/quiz";
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = arr.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 export async function launchSession(
   quizId: string,
   companyId: string,
@@ -13,7 +22,11 @@ export async function launchSession(
   if (quiz.status !== "published") throw new Error("Only a published quiz can be launched live.");
   if (quiz.questions.length === 0) throw new Error("This quiz has no questions yet.");
 
-  return sessionRepo.createSession(quizId, companyId, hostAdminId, joinMode);
+  // Decided once at launch, not per-participant — current_question_index is a
+  // single value broadcast to everyone, so every player must see the same order.
+  const questionOrder = quiz.shuffle_questions ? shuffleArray(quiz.questions.map((q) => q.id)) : null;
+
+  return sessionRepo.createSession(quizId, companyId, hostAdminId, joinMode, questionOrder);
 }
 
 export async function startQuiz(sessionId: string): Promise<void> {

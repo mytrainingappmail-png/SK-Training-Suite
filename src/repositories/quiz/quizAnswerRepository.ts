@@ -1,5 +1,5 @@
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { PublicQuizQuestion, PublicQuizQuestionOption, SubmitAnswerResult, AnswerReviewOptionRow, AnswerReviewQuestion } from "../../types/quiz";
+import type { PublicQuizQuestion, PublicQuizQuestionOption, SubmitAnswerResult, AnswerReviewOptionRow, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
 interface RawQuestionOptionRow {
   question_id: string;
@@ -95,4 +95,24 @@ export async function getMyAnswerReview(sessionId: string): Promise<AnswerReview
   }
 
   return [...byIndex.values()].sort((a, b) => a.question_index - b.question_index);
+}
+
+/** The calling participant's own grade for a finished session — used to pick the admin-configured Champion/Improve/Fail message. */
+export async function getMyResult(sessionId: string): Promise<MyQuizResult | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_my_result", { p_session_id: sessionId });
+
+  if (error) {
+    console.error("[quizAnswerRepository] getMyResult:", error);
+    return null;
+  }
+
+  return (data as MyQuizResult[] | null)?.[0] ?? null;
+}
+
+/** Fire-and-forget — records that the trainee's browser tab was backgrounded/switched during a live quiz. */
+export async function flagTabSwitch(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuizPlayer.rpc("flag_tab_switch", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizAnswerRepository] flagTabSwitch:", error);
+  }
 }

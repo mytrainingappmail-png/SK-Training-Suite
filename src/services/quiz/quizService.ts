@@ -89,6 +89,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     passing_score_pct: source.passing_score_pct,
     improve_threshold_pct: source.improve_threshold_pct,
     shuffle_options: source.shuffle_options,
+    shuffle_questions: source.shuffle_questions,
   });
 
   if (source.questions.length > 0) {
@@ -136,6 +137,7 @@ export async function mergeQuizzes(
     passing_score_pct: Math.round(found.reduce((sum, q) => sum + q.passing_score_pct, 0) / found.length),
     improve_threshold_pct: Math.round(found.reduce((sum, q) => sum + q.improve_threshold_pct, 0) / found.length),
     shuffle_options: found.some((q) => q.shuffle_options),
+    shuffle_questions: found.some((q) => q.shuffle_questions),
   });
 
   const mergedQuestions = found.flatMap((q) =>

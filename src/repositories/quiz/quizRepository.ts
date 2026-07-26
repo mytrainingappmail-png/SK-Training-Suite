@@ -10,6 +10,7 @@ export interface QuizForm {
   passing_score_pct: number;
   improve_threshold_pct: number;
   shuffle_options: boolean;
+  shuffle_questions: boolean;
 }
 
 export interface QuestionOptionForm {

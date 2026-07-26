@@ -33,6 +33,12 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   champ_music: "builtin",
   champ_music_url: null,
   champ_music_volume: 70,
+  result_pass_title: "🏆 Champion!",
+  result_pass_message: "Outstanding performance — you've mastered this!",
+  result_improve_title: "📈 Need Improvement",
+  result_improve_message: "Good effort — review the material and try again!",
+  result_fail_title: "💪 Keep Practicing",
+  result_fail_message: "Don't worry — review the material and retake the quiz when ready.",
 };
 
 /** Returns saved settings, or sensible defaults if this company has never saved any yet (no row exists until the first Save). */

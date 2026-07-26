@@ -37,6 +37,7 @@ interface BackupQuiz {
   passing_score_pct: number;
   improve_threshold_pct: number;
   shuffle_options: boolean;
+  shuffle_questions: boolean;
   status: QuizStatus;
   questions: BackupQuestion[];
 }
@@ -72,6 +73,7 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
         passing_score_pct: q.passing_score_pct,
         improve_threshold_pct: q.improve_threshold_pct,
         shuffle_options: q.shuffle_options,
+        shuffle_questions: q.shuffle_questions,
         status: q.status,
         questions: (full?.questions ?? []).map((question) => ({
           question_text: question.question_text,
@@ -185,6 +187,7 @@ export async function importBackup(
       passing_score_pct: quiz.passing_score_pct,
       improve_threshold_pct: quiz.improve_threshold_pct,
       shuffle_options: quiz.shuffle_options,
+      shuffle_questions: quiz.shuffle_questions ?? false,
     });
 
     if (quiz.questions.length > 0) {

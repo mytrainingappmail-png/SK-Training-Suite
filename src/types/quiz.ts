@@ -43,6 +43,7 @@ export interface Quiz {
   passing_score_pct: number;
   improve_threshold_pct: number;
   shuffle_options: boolean;
+  shuffle_questions: boolean;
   status: QuizStatus;
   created_at: string;
   updated_at: string;
@@ -96,6 +97,7 @@ export interface QuizSession {
   phase: QuizSessionPhase;
   current_question_index: number;
   join_mode: QuizJoinMode;
+  question_order: string[] | null;
   started_at: string | null;
   ended_at: string | null;
   created_at: string;
@@ -108,6 +110,7 @@ export interface QuizParticipant {
   display_name: string;
   score: number;
   correct_count: number;
+  tab_switch_count: number;
   joined_at: string;
 }
 
@@ -200,6 +203,12 @@ export interface QuizSettings {
   champ_music: ChampMusic;
   champ_music_url: string | null;
   champ_music_volume: number;
+  result_pass_title: string | null;
+  result_pass_message: string | null;
+  result_improve_title: string | null;
+  result_improve_message: string | null;
+  result_fail_title: string | null;
+  result_fail_message: string | null;
   updated_at: string;
 }
 
@@ -211,6 +220,20 @@ export interface QuizPlayerSettings {
   brand_name: string | null;
   brand_logo_url: string | null;
   favicon_url: string | null;
+  result_pass_title: string | null;
+  result_pass_message: string | null;
+  result_improve_title: string | null;
+  result_improve_message: string | null;
+  result_fail_title: string | null;
+  result_fail_message: string | null;
+}
+
+/** The calling participant's own outcome, via get_my_result RPC. */
+export interface MyQuizResult {
+  correct_count: number;
+  total_questions: number;
+  percent_correct: number;
+  grade: QuizGrade;
 }
 
 /** Pre-auth branding for the quiz admin login page, via get_quiz_public_branding RPC. */

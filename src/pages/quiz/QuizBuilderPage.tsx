@@ -44,6 +44,7 @@ const DEFAULT_FORM: QuizForm = {
   passing_score_pct: 60,
   improve_threshold_pct: 40,
   shuffle_options: false,
+  shuffle_questions: false,
 };
 
 export default function QuizBuilderPage() {
@@ -84,6 +85,7 @@ export default function QuizBuilderPage() {
           passing_score_pct: quiz.passing_score_pct,
           improve_threshold_pct: quiz.improve_threshold_pct,
           shuffle_options: quiz.shuffle_options,
+          shuffle_questions: quiz.shuffle_questions,
         });
         setQuestions(
           quiz.questions.length > 0
@@ -328,6 +330,14 @@ export default function QuizBuilderPage() {
             onChange={(e) => setForm({ ...form, shuffle_options: e.target.checked })}
           />
           Shuffle answer order for each player
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={form.shuffle_questions}
+            onChange={(e) => setForm({ ...form, shuffle_questions: e.target.checked })}
+          />
+          Shuffle question order for each session
         </label>
       </fieldset>
 

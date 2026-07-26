@@ -20,6 +20,8 @@ export default function QuizSettingsPage() {
   const [brandingMessage, setBrandingMessage] = useState("");
   const [certSaving, setCertSaving] = useState(false);
   const [certMessage, setCertMessage] = useState("");
+  const [messagesSaving, setMessagesSaving] = useState(false);
+  const [messagesSavedMessage, setMessagesSavedMessage] = useState("");
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const canEdit = canEditQuizContent();
   const [exporting, setExporting] = useState(false);
@@ -132,6 +134,25 @@ export default function QuizSettingsPage() {
       setCertMessage("Certificate settings saved.");
     } finally {
       setCertSaving(false);
+    }
+  }
+
+  async function handleSaveMessages() {
+    if (!me || !settings) return;
+    setMessagesSaving(true);
+    setMessagesSavedMessage("");
+    try {
+      await saveSettings(me.company_id, {
+        result_pass_title: settings.result_pass_title,
+        result_pass_message: settings.result_pass_message,
+        result_improve_title: settings.result_improve_title,
+        result_improve_message: settings.result_improve_message,
+        result_fail_title: settings.result_fail_title,
+        result_fail_message: settings.result_fail_message,
+      });
+      setMessagesSavedMessage("Result messages saved.");
+    } finally {
+      setMessagesSaving(false);
     }
   }
 
@@ -481,6 +502,76 @@ export default function QuizSettingsPage() {
           className="rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold text-sm px-4 py-2"
         >
           💾 {certSaving ? "Saving…" : "Save Certificate Settings"}
+        </button>
+      </fieldset>
+
+      {/* Result Messages */}
+      <fieldset disabled={!canEdit} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
+        <div>
+          <h2 className="font-semibold text-white">🎯 Result Messages</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            What a trainee sees at the end of a quiz, based on their own grade — write these however fits your team
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wide text-emerald-300">🏆 Pass / Champion</div>
+            <input
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+              value={settings.result_pass_title ?? ""}
+              onChange={(e) => setSettings({ ...settings, result_pass_title: e.target.value })}
+              placeholder="🏆 Champion!"
+            />
+            <textarea
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+              rows={2}
+              value={settings.result_pass_message ?? ""}
+              onChange={(e) => setSettings({ ...settings, result_pass_message: e.target.value })}
+              placeholder="Outstanding performance — you've mastered this!"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wide text-amber-300">📈 Need Improvement</div>
+            <input
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-amber-500"
+              value={settings.result_improve_title ?? ""}
+              onChange={(e) => setSettings({ ...settings, result_improve_title: e.target.value })}
+              placeholder="📈 Need Improvement"
+            />
+            <textarea
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-amber-500"
+              rows={2}
+              value={settings.result_improve_message ?? ""}
+              onChange={(e) => setSettings({ ...settings, result_improve_message: e.target.value })}
+              placeholder="Good effort — review the material and try again!"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wide text-red-300">💪 Fail</div>
+            <input
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-red-500"
+              value={settings.result_fail_title ?? ""}
+              onChange={(e) => setSettings({ ...settings, result_fail_title: e.target.value })}
+              placeholder="💪 Keep Practicing"
+            />
+            <textarea
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-red-500"
+              rows={2}
+              value={settings.result_fail_message ?? ""}
+              onChange={(e) => setSettings({ ...settings, result_fail_message: e.target.value })}
+              placeholder="Don't worry — review the material and retake the quiz when ready."
+            />
+          </div>
+        </div>
+
+        {messagesSavedMessage && <div className="text-sm text-emerald-300">{messagesSavedMessage}</div>}
+        <button
+          onClick={handleSaveMessages}
+          disabled={messagesSaving}
+          className="rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold text-sm px-4 py-2"
+        >
+          💾 {messagesSaving ? "Saving…" : "Save Result Messages"}
         </button>
       </fieldset>
 
