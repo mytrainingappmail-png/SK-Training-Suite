@@ -6,6 +6,7 @@ import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime"
 import { getQuiz } from "../../services/quiz/quizService";
 import { startQuiz, advanceQuestion, endSession } from "../../services/quiz/quizSessionService";
 import { canEditQuizContent } from "../../services/quiz/quizAdminSession";
+import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResultCardButton";
 import type { QuizWithQuestions } from "../../types/quiz";
 
 export default function QuizHostLivePage() {
@@ -159,6 +160,23 @@ export default function QuizHostLivePage() {
                 <div className="text-xl font-bold">Quiz Complete!</div>
               </div>
               <Podium participants={participants} />
+
+              {participants.length > 0 && (
+                <div className="flex justify-center">
+                  <QuizSessionResultCardButton
+                    data={{
+                      quizTitle: quiz.title,
+                      pin: session.pin,
+                      participants: participants
+                        .slice()
+                        .sort((a, b) => b.score - a.score)
+                        .map((p) => ({ display_name: p.display_name, score: p.score })),
+                      ...gradeCounts(participants, quiz),
+                    }}
+                  />
+                </div>
+              )}
+
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => navigate(ROUTES.QUIZ_ADMIN_RESULTS)}
@@ -195,6 +213,25 @@ export default function QuizHostLivePage() {
       </div>
     </div>
   );
+}
+
+function gradeCounts(
+  participants: { correct_count: number }[],
+  quiz: QuizWithQuestions
+): { passCount: number; improveCount: number; failCount: number } {
+  const total = quiz.questions.length;
+  let passCount = 0;
+  let improveCount = 0;
+  let failCount = 0;
+
+  for (const p of participants) {
+    const pct = total === 0 ? 0 : Math.round((p.correct_count / total) * 100);
+    if (pct >= quiz.passing_score_pct) passCount += 1;
+    else if (pct >= quiz.improve_threshold_pct) improveCount += 1;
+    else failCount += 1;
+  }
+
+  return { passCount, improveCount, failCount };
 }
 
 function Podium({ participants }: { participants: { id: string; display_name: string; score: number }[] }) {
