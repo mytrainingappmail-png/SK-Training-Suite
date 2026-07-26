@@ -34,10 +34,18 @@ export default function QuizHostLivePage() {
   const [optionBars, setOptionBars] = useState<ChartPoint[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
+  const [advancing, setAdvancing] = useState(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoAdvancedRef = useRef(false);
   const endedHandledRef = useRef(false);
+  // Synchronous re-entry guard — a manual Next click can otherwise race the
+  // auto-advance timer's own in-flight call (or a second real click), each
+  // independently calling advanceQuestion() and incrementing
+  // current_question_index twice instead of once. `advancing` (state) only
+  // drives the button's disabled look; this ref is what actually blocks it,
+  // since state updates aren't synchronous.
+  const advancingRef = useRef(false);
 
   useEffect(() => {
     if (!canEdit) navigate(ROUTES.QUIZ_ADMIN_QUIZZES, { replace: true });
@@ -133,14 +141,22 @@ export default function QuizHostLivePage() {
 
   async function handleNext() {
     if (!sessionId || !quiz) return;
+    if (advancingRef.current) return; // already advancing — ignore a racing second trigger
+    advancingRef.current = true;
+    setAdvancing(true);
     if (revealTimerRef.current) {
       clearTimeout(revealTimerRef.current);
       revealTimerRef.current = null;
     }
     autoAdvancedRef.current = true;
-    const result = await advanceQuestion(sessionId, quiz.questions.length);
-    if (result === "ended") {
-      // realtime pushes phase='ended' to this same page — stay here to show the podium
+    try {
+      const result = await advanceQuestion(sessionId, quiz.questions.length);
+      if (result === "ended") {
+        // realtime pushes phase='ended' to this same page — stay here to show the podium
+      }
+    } finally {
+      advancingRef.current = false;
+      setAdvancing(false);
     }
   }
 
@@ -251,9 +267,10 @@ export default function QuizHostLivePage() {
               <div className="flex justify-end">
                 <button
                   onClick={handleNext}
-                  className="bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-lg px-5 py-2.5"
+                  disabled={advancing}
+                  className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-5 py-2.5"
                 >
-                  {session.current_question_index + 1 >= quiz.questions.length ? "Finish Quiz ✓" : "Next Question →"}
+                  {advancing ? "…" : session.current_question_index + 1 >= quiz.questions.length ? "Finish Quiz ✓" : "Next Question →"}
                 </button>
               </div>
             </div>
