@@ -19,7 +19,7 @@ const ALLOWED_TYPES = [
   "image/vnd.microsoft.icon",
 ];
 
-export type BrandingImageKind = "logo" | "login-background" | "login-banner" | "favicon";
+export type BrandingImageKind = "logo" | "login-background" | "login-banner" | "favicon" | "signatory-1" | "signatory-2";
 
 export interface UploadedBrandingImage {
   url: string;

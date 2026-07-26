@@ -8,14 +8,14 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function handleDownload() {
+  async function handleDownload() {
     setLoading(true);
     setError("");
     try {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      renderCertificateToCanvas(canvas, cert.template, {
+      await renderCertificateToCanvas(canvas, cert.template, {
         candidateName: cert.candidate_name,
         quizTitle: cert.quiz_title,
         scoreLine: cert.score_line,
@@ -26,8 +26,10 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         achievementLine: cert.achievement_line,
         signatory1Name: cert.signatory1_name,
         signatory1Title: cert.signatory1_title,
+        signatory1ImageUrl: cert.signatory1_image_url,
         signatory2Name: cert.signatory2_name,
         signatory2Title: cert.signatory2_title,
+        signatory2ImageUrl: cert.signatory2_image_url,
       });
 
       downloadCanvasAsPng(canvas, `certificate-${cert.cert_number}.png`);

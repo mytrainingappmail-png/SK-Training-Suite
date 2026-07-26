@@ -15,8 +15,10 @@ export interface CertificateData {
   achievementLine: string;
   signatory1Name?: string | null;
   signatory1Title?: string | null;
+  signatory1ImageUrl?: string | null;
   signatory2Name?: string | null;
   signatory2Title?: string | null;
+  signatory2ImageUrl?: string | null;
 }
 
 const WIDTH = 1200;
@@ -102,7 +104,24 @@ const PALETTES: Record<CertTemplate, Palette> = {
   },
 };
 
-export function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): void {
+/** Resolves to null (rather than rejecting) on a broken/unreachable URL, so one bad signature image doesn't stop the whole certificate from rendering. */
+function loadImage(url: string | null | undefined): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
+  const [sig1Image, sig2Image] = await Promise.all([loadImage(data.signatory1ImageUrl), loadImage(data.signatory2ImageUrl)]);
+
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext("2d");
@@ -167,8 +186,17 @@ export function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: C
 
   // Signatures
   const sigY = 720;
-  const drawSignature = (x: number, name?: string | null, title?: string | null) => {
+  const drawSignature = (x: number, name?: string | null, title?: string | null, image?: HTMLImageElement | null) => {
     if (!name) return;
+    if (image) {
+      // Fit the signature image into a fixed box, preserving its aspect ratio, sitting just above the line.
+      const boxW = 200;
+      const boxH = 64;
+      const scale = Math.min(boxW / image.width, boxH / image.height);
+      const w = image.width * scale;
+      const h = image.height * scale;
+      ctx.drawImage(image, x - w / 2, sigY - 10 - h, w, h);
+    }
     ctx.strokeStyle = p.muted;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -184,8 +212,8 @@ export function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: C
   };
 
   if (data.signatory1Name || data.signatory2Name) {
-    drawSignature(WIDTH / 2 - 250, data.signatory1Name, data.signatory1Title);
-    drawSignature(WIDTH / 2 + 250, data.signatory2Name, data.signatory2Title);
+    drawSignature(WIDTH / 2 - 250, data.signatory1Name, data.signatory1Title, sig1Image);
+    drawSignature(WIDTH / 2 + 250, data.signatory2Name, data.signatory2Title, sig2Image);
   }
 
   // Cert number, bottom-right, small

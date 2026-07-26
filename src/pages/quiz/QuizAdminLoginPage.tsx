@@ -105,7 +105,7 @@ export default function QuizAdminLoginPage() {
     >
       <div className="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-slate-800 rounded-2xl p-8">
         {branding?.login_banner_url && (
-          <img src={branding.login_banner_url} alt="" className="w-full h-28 object-cover rounded-xl mb-5" />
+          <img src={branding.login_banner_url} alt="" className="w-full h-28 object-contain rounded-xl mb-5 bg-slate-950/40" />
         )}
         <div className="text-center mb-6">
           {branding?.brand_logo_url ? (

@@ -48,8 +48,12 @@ export default function QuizSettingsPage() {
       achievementLine: settings.cert_achievement_line,
       signatory1Name: settings.cert_signatory1_name,
       signatory1Title: settings.cert_signatory1_title,
+      signatory1ImageUrl: settings.cert_signatory1_image_url,
       signatory2Name: settings.cert_signatory2_name,
       signatory2Title: settings.cert_signatory2_title,
+      signatory2ImageUrl: settings.cert_signatory2_image_url,
+    }).catch(() => {
+      // preview only — a failed render just leaves the canvas as-is
     });
   }, [
     settings?.cert_template,
@@ -58,8 +62,10 @@ export default function QuizSettingsPage() {
     settings?.cert_achievement_line,
     settings?.cert_signatory1_name,
     settings?.cert_signatory1_title,
+    settings?.cert_signatory1_image_url,
     settings?.cert_signatory2_name,
     settings?.cert_signatory2_title,
+    settings?.cert_signatory2_image_url,
   ]);
 
   function updateOptionColor(index: number, field: "box" | "font", value: string) {
@@ -128,8 +134,10 @@ export default function QuizSettingsPage() {
         cert_achievement_line: settings.cert_achievement_line,
         cert_signatory1_name: settings.cert_signatory1_name,
         cert_signatory1_title: settings.cert_signatory1_title,
+        cert_signatory1_image_url: settings.cert_signatory1_image_url,
         cert_signatory2_name: settings.cert_signatory2_name,
         cert_signatory2_title: settings.cert_signatory2_title,
+        cert_signatory2_image_url: settings.cert_signatory2_image_url,
         cert_eligibility: settings.cert_eligibility,
       });
       setCertMessage("Certificate settings saved.");
@@ -354,12 +362,12 @@ export default function QuizSettingsPage() {
             />
             <QuizBrandingImageField
               label="Login Banner Image"
-              hint="Shown above the login form, inside the card"
+              hint="Shown above the login form, inside the card — fitted to fill the width without cropping, whatever its shape"
               value={settings.login_banner_url}
               kind="login-banner"
               companyId={me.company_id}
               onChange={(url) => setSettings({ ...settings, login_banner_url: url })}
-              previewClassName="h-16 w-28 object-cover rounded-lg bg-slate-800 border border-slate-700"
+              previewClassName="h-16 w-28 object-contain rounded-lg bg-slate-800 border border-slate-700"
             />
           </div>
         </div>
@@ -515,6 +523,27 @@ export default function QuizSettingsPage() {
               placeholder="Optional"
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+          <QuizBrandingImageField
+            label="Signatory 1 Signature"
+            hint="Upload a scanned/transparent signature image — shown above the name on the certificate"
+            value={settings.cert_signatory1_image_url}
+            kind="signatory-1"
+            companyId={me.company_id}
+            onChange={(url) => setSettings({ ...settings, cert_signatory1_image_url: url })}
+            previewClassName="h-16 w-40 object-contain rounded-lg bg-slate-800 border border-slate-700"
+          />
+          <QuizBrandingImageField
+            label="Signatory 2 Signature"
+            hint="Optional — same as above, for the second signatory"
+            value={settings.cert_signatory2_image_url}
+            kind="signatory-2"
+            companyId={me.company_id}
+            onChange={(url) => setSettings({ ...settings, cert_signatory2_image_url: url })}
+            previewClassName="h-16 w-40 object-contain rounded-lg bg-slate-800 border border-slate-700"
+          />
         </div>
 
         <div>

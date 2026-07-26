@@ -270,8 +270,10 @@ export interface QuizCertificate {
   achievement_line: string;
   signatory1_name: string | null;
   signatory1_title: string | null;
+  signatory1_image_url: string | null;
   signatory2_name: string | null;
   signatory2_title: string | null;
+  signatory2_image_url: string | null;
 }
 
 export interface AnswerDistributionOption {
