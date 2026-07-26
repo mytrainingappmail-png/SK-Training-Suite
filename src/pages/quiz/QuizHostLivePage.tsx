@@ -6,6 +6,9 @@ import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime"
 import { getQuiz } from "../../services/quiz/quizService";
 import { startQuiz, advanceQuestion, endSession } from "../../services/quiz/quizSessionService";
 import { canEditQuizContent } from "../../services/quiz/quizAdminSession";
+import { getSessionResults } from "../../repositories/quiz/quizSessionRepository";
+import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
+import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResultCardButton";
 import type { QuizWithQuestions } from "../../types/quiz";
 
@@ -17,6 +20,7 @@ export default function QuizHostLivePage() {
 
   const [quiz, setQuiz] = useState<QuizWithQuestions | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [csvDownloading, setCsvDownloading] = useState(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -62,6 +66,18 @@ export default function QuizHostLivePage() {
     if (!sessionId) return;
     if (!confirm("End this quiz now?")) return;
     await endSession(sessionId);
+  }
+
+  async function handleDownloadCsv() {
+    if (!sessionId) return;
+    setCsvDownloading(true);
+    try {
+      const rows = await getSessionResults(sessionId);
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadCsvFile(`quiz-result-${stamp}.csv`, buildDetailedReportCsv(rows));
+    } finally {
+      setCsvDownloading(false);
+    }
   }
 
   if (!session || !quiz) {
@@ -162,7 +178,7 @@ export default function QuizHostLivePage() {
               <Podium participants={participants} />
 
               {participants.length > 0 && (
-                <div className="flex justify-center">
+                <div className="flex flex-wrap justify-center gap-3">
                   <QuizSessionResultCardButton
                     data={{
                       quizTitle: quiz.title,
@@ -174,6 +190,13 @@ export default function QuizHostLivePage() {
                       ...gradeCounts(participants, quiz),
                     }}
                   />
+                  <button
+                    onClick={handleDownloadCsv}
+                    disabled={csvDownloading}
+                    className="text-sm font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-amber-950 rounded-lg px-4 py-2"
+                  >
+                    ⬇ {csvDownloading ? "Preparing…" : "Download CSV"}
+                  </button>
                 </div>
               )}
 
