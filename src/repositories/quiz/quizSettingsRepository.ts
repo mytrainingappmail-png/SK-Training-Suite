@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   cert_template: "dark_elegant",
   cert_company_name: null,
   cert_logo_url: null,
+  cert_logo_position: "top_center",
   cert_title: "Certificate of Achievement",
   cert_achievement_line: "has successfully completed",
   cert_signatory1_name: null,

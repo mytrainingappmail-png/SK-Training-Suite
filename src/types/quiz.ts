@@ -182,6 +182,8 @@ export interface OptionColor {
 
 export type CertTemplate = "classic_gold" | "royal_blue" | "modern_purple" | "minimal_white" | "dark_elegant";
 export type ChampMusic = "builtin" | "custom" | "off";
+/** Where the uploaded certificate logo is placed — a crest above the title, a corner mark, or a faint full-page watermark. */
+export type CertLogoPosition = "top_center" | "top_left" | "top_right" | "watermark";
 
 export interface QuizSettings {
   company_id: string;
@@ -199,6 +201,7 @@ export interface QuizSettings {
   cert_template: CertTemplate;
   cert_company_name: string | null;
   cert_logo_url: string | null;
+  cert_logo_position: CertLogoPosition;
   cert_title: string;
   cert_achievement_line: string;
   cert_signatory1_name: string | null;
@@ -268,6 +271,8 @@ export interface QuizCertificate {
   template: CertTemplate;
   issued_at: string;
   company_name: string;
+  cert_logo_url: string | null;
+  cert_logo_position: CertLogoPosition;
   cert_title: string;
   achievement_line: string;
   signatory1_name: string | null;

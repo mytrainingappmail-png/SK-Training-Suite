@@ -24,6 +24,8 @@ export default function QuizAdminCertificateButton({ participantId }: { particip
         certNumber: cert.cert_number,
         issuedDate: new Date(cert.issued_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
         companyName: cert.company_name,
+        logoUrl: cert.cert_logo_url,
+        logoPosition: cert.cert_logo_position,
         title: cert.cert_title,
         achievementLine: cert.achievement_line,
         signatory1Name: cert.signatory1_name,

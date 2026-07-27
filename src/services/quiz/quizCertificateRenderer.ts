@@ -2,7 +2,7 @@
 // No external fonts/images required, so it always renders identically
 // regardless of company branding being configured or not.
 
-import type { CertTemplate } from "../../types/quiz";
+import type { CertTemplate, CertLogoPosition } from "../../types/quiz";
 
 export interface CertificateData {
   candidateName: string;
@@ -11,6 +11,8 @@ export interface CertificateData {
   certNumber: string;
   issuedDate: string;
   companyName: string;
+  logoUrl?: string | null;
+  logoPosition?: CertLogoPosition | null;
   title: string;
   achievementLine: string;
   signatory1Name?: string | null;
@@ -136,7 +138,11 @@ function tintImage(image: HTMLImageElement, color: string): HTMLCanvasElement {
 }
 
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
-  const [sig1Image, sig2Image] = await Promise.all([loadImage(data.signatory1ImageUrl), loadImage(data.signatory2ImageUrl)]);
+  const [sig1Image, sig2Image, logoImage] = await Promise.all([
+    loadImage(data.signatory1ImageUrl),
+    loadImage(data.signatory2ImageUrl),
+    loadImage(data.logoUrl),
+  ]);
 
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -144,8 +150,21 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   if (!ctx) return;
 
   const p = PALETTES[template] ?? PALETTES.dark_elegant;
+  const logoPosition = data.logoPosition ?? "top_center";
 
   p.background(ctx);
+
+  // Watermark logo — drawn first, low opacity, so everything else sits on top of it.
+  if (logoImage && logoPosition === "watermark") {
+    const maxSize = 460;
+    const scale = Math.min(maxSize / logoImage.width, maxSize / logoImage.height);
+    const w = logoImage.width * scale;
+    const h = logoImage.height * scale;
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.drawImage(logoImage, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h);
+    ctx.restore();
+  }
 
   // Border frame
   ctx.strokeStyle = p.border;
@@ -153,6 +172,20 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   ctx.strokeRect(30, 30, WIDTH - 60, HEIGHT - 60);
   ctx.lineWidth = 1.5;
   ctx.strokeRect(45, 45, WIDTH - 90, HEIGHT - 90);
+
+  // Logo mark — kept at its own natural colors (unlike signatures, a brand
+  // logo shouldn't be recolored to the template palette).
+  if (logoImage && logoPosition !== "watermark") {
+    const drawLogo = (cx: number, boxW: number, boxH: number) => {
+      const scale = Math.min(boxW / logoImage.width, boxH / logoImage.height);
+      const w = logoImage.width * scale;
+      const h = logoImage.height * scale;
+      ctx.drawImage(logoImage, cx - w / 2, 95 - h / 2, w, h);
+    };
+    if (logoPosition === "top_center") drawLogo(WIDTH / 2, 150, 64);
+    else if (logoPosition === "top_left") drawLogo(140, 90, 80);
+    else if (logoPosition === "top_right") drawLogo(WIDTH - 140, 90, 80);
+  }
 
   ctx.textAlign = "center";
 

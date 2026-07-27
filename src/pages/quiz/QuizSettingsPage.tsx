@@ -44,6 +44,8 @@ export default function QuizSettingsPage() {
       certNumber: "CERT-PREVIEW01",
       issuedDate: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
       companyName: settings.cert_company_name || "Your Company",
+      logoUrl: settings.cert_logo_url,
+      logoPosition: settings.cert_logo_position,
       title: settings.cert_title,
       achievementLine: settings.cert_achievement_line,
       signatory1Name: settings.cert_signatory1_name,
@@ -60,6 +62,8 @@ export default function QuizSettingsPage() {
   }, [
     settings?.cert_template,
     settings?.cert_company_name,
+    settings?.cert_logo_url,
+    settings?.cert_logo_position,
     settings?.cert_title,
     settings?.cert_achievement_line,
     settings?.cert_signatory1_name,
@@ -134,6 +138,8 @@ export default function QuizSettingsPage() {
       await saveSettings(me.company_id, {
         cert_template: settings.cert_template,
         cert_company_name: settings.cert_company_name,
+        cert_logo_url: settings.cert_logo_url,
+        cert_logo_position: settings.cert_logo_position,
         cert_title: settings.cert_title,
         cert_achievement_line: settings.cert_achievement_line,
         cert_signatory1_name: settings.cert_signatory1_name,
@@ -465,6 +471,45 @@ export default function QuizSettingsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800 space-y-3">
+          <QuizBrandingImageField
+            label="Certificate Logo"
+            hint="Optional — your company logo or a seal/crest, shown on the certificate itself. Kept in its own colors (not recolored like signatures)."
+            value={settings.cert_logo_url}
+            kind="cert-logo"
+            companyId={me.company_id}
+            onChange={(url) => setSettings({ ...settings, cert_logo_url: url })}
+            previewClassName="h-16 w-32 object-contain rounded-lg bg-white border border-slate-700"
+          />
+          {settings.cert_logo_url && (
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Logo Placement</div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { value: "top_center", label: "Top Center" },
+                    { value: "top_left", label: "Top Left" },
+                    { value: "top_right", label: "Top Right" },
+                    { value: "watermark", label: "Watermark" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSettings({ ...settings, cert_logo_position: opt.value })}
+                    className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                      settings.cert_logo_position === opt.value
+                        ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
