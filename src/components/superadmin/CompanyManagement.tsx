@@ -60,6 +60,36 @@ function ImageUploadField({
   );
 }
 
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-2">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-10 cursor-pointer rounded-lg border p-0.5"
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-28 rounded-lg border px-2 py-1.5 text-sm font-mono"
+        />
+      </div>
+    </div>
+  );
+}
+
 function CompanyManagement() {
   const [company, setCompany] = useState<Company | null>(null);
 
@@ -392,6 +422,48 @@ function CompanyManagement() {
             uploading={uploadingField === "favicon"}
             onUpload={(f) => handleImageUpload("favicon", f)}
           />
+        </div>
+      </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="mb-1 text-base font-bold text-slate-800">Super Admin Console Colors</h3>
+        <p className="mb-5 text-sm text-slate-500">
+          Choose the background, button, and border colors for your own Super Admin Console — every other company keeps their own.
+        </p>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-2xl">
+          <ColorField
+            label="Card Background"
+            value={company.admin_console_bg_color}
+            onChange={(v) => setCompany({ ...company, admin_console_bg_color: v })}
+          />
+          <ColorField
+            label="Button Color"
+            value={company.admin_console_button_color}
+            onChange={(v) => setCompany({ ...company, admin_console_button_color: v })}
+          />
+          <ColorField
+            label="Border Color"
+            value={company.admin_console_border_color}
+            onChange={(v) => setCompany({ ...company, admin_console_border_color: v })}
+          />
+        </div>
+      </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="mb-1 text-base font-bold text-slate-800">Sidebar Logo Layout</h3>
+        <p className="mb-5 text-sm text-slate-500">
+          Your company name always sits below the logo and shrinks to fit on one line, however long it is — choose whether it's left-aligned or centered.
+        </p>
+        <div className="max-w-xs">
+          <label className="block text-sm font-medium mb-2">Company Name Position</label>
+          <select
+            value={company.sidebar_name_position}
+            onChange={(e) => setCompany({ ...company, sidebar_name_position: e.target.value as "left" | "center" })}
+            className="w-full border rounded-xl p-3"
+          >
+            <option value="left">Left-aligned</option>
+            <option value="center">Centered</option>
+          </select>
         </div>
       </div>
 

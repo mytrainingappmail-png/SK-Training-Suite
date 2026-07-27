@@ -105,6 +105,15 @@ function Admin() {
   // Management is already hidden for non-operator companies.
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
+  // Per-company Super Admin Console colors — every subscribing company
+  // picks its own via Company Management, defaulting to a blue/gold look
+  // until they do.
+  const [consoleColors, setConsoleColors] = useState({
+    bg: "#1e3a8a",
+    button: "#eab308",
+    border: "#facc15",
+  });
+
   // A tab whose module has been switched off for this company still renders
   // its button (cosmetic-only elsewhere), but never its real content below —
   // that's the part that actually exposes data/functionality.
@@ -119,20 +128,39 @@ function Admin() {
       if (c?.id) {
         loadCompanyModuleFlags(c.id).then(setModuleFlags).catch(() => setModuleFlags({}));
       }
+      if (c) {
+        setConsoleColors({
+          bg: c.admin_console_bg_color || "#1e3a8a",
+          button: c.admin_console_button_color || "#eab308",
+          border: c.admin_console_border_color || "#facc15",
+        });
+      }
     }).catch(() => {
       setIsPlatformOperator(false);
       setModuleFlags({});
     });
   }, []);
 
-  const getTabClass = (tab: string) =>
-    `px-4 py-2 rounded-xl font-semibold transition text-sm ${
-      activeTab === tab
-        ? "bg-yellow-600 text-white ring-2 ring-white shadow"
-        : "bg-yellow-500 text-black shadow hover:bg-yellow-400"
-    }`;
-  const GROUP_CARD_CLS = "rounded-2xl border-2 border-yellow-400 bg-blue-900 p-4";
-  const GROUP_LABEL_CLS = "mb-3 text-xs font-bold uppercase tracking-wider text-yellow-400";
+  // Picks readable black/white text against whatever color the company chose.
+  const contrastText = (hex: string) => {
+    const c = hex.replace("#", "");
+    if (c.length !== 6) return "#000000";
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? "#000000" : "#ffffff";
+  };
+
+  const getTabStyle = (tab: string): React.CSSProperties =>
+    activeTab === tab
+      ? { backgroundColor: consoleColors.button, color: contrastText(consoleColors.button), boxShadow: "0 0 0 2px #ffffff inset" }
+      : { backgroundColor: consoleColors.button, color: contrastText(consoleColors.button) };
+  const getTabClass = () => "px-4 py-2 rounded-xl font-semibold transition text-sm shadow hover:brightness-110";
+  const GROUP_CARD_CLS = "rounded-2xl p-4";
+  const GROUP_CARD_STYLE: React.CSSProperties = { backgroundColor: consoleColors.bg, border: `2px solid ${consoleColors.border}` };
+  const GROUP_LABEL_CLS = "mb-3 text-xs font-bold uppercase tracking-wider";
+  const GROUP_LABEL_STYLE: React.CSSProperties = { color: consoleColors.border };
 
   const kw = search.trim().toLowerCase();
   const matches = (label: string) => !kw || label.toLowerCase().includes(kw);
@@ -145,22 +173,28 @@ function Admin() {
         <></>
 
         <main className="p-8">
-          <h1 className="text-3xl font-bold text-slate-800">
-            Super Admin Console
-          </h1>
+          <div
+            className="rounded-2xl p-6"
+            style={{ backgroundColor: consoleColors.bg, border: `2px solid ${consoleColors.border}` }}
+          >
+            <h1 className="text-3xl font-bold" style={{ color: contrastText(consoleColors.bg) }}>
+              Super Admin Console
+            </h1>
 
-          <p className="mt-2 text-slate-500">
-            Configure and manage the complete Learning Management Platform.
-          </p>
+            <p className="mt-2" style={{ color: consoleColors.border }}>
+              Configure and manage the complete Learning Management Platform.
+            </p>
 
-          <div className="mt-6">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search modules…"
-              className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400/30"
-            />
+            <div className="mt-6">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search modules…"
+                className="w-full max-w-md rounded-xl px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none"
+                style={{ border: `2px solid ${consoleColors.border}` }}
+              />
+            </div>
           </div>
 
           <div className="mt-8 space-y-5">
@@ -169,26 +203,26 @@ function Admin() {
              (can(PERMISSIONS.VIEW_DEPARTMENT) && matches("Departments")) ||
              (can(PERMISSIONS.VIEW_DESIGNATION) && matches("Designations")) ||
              (can(PERMISSIONS.VIEW_EMPLOYEE) && (matches("Employees") || matches("Employee of the Month"))) ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Organization Setup</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Organization Setup</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_COMPANY) && matches("Company") && (
-                    <button onClick={() => setActiveTab("company")} className={getTabClass("company")}>Company</button>
+                    <button onClick={() => setActiveTab("company")} className={getTabClass()} style={getTabStyle("company")}>Company</button>
                   )}
                   {can(PERMISSIONS.VIEW_BRANCH) && matches("Branches") && (
-                    <button onClick={() => setActiveTab("branch")} className={getTabClass("branch")}>Branches</button>
+                    <button onClick={() => setActiveTab("branch")} className={getTabClass()} style={getTabStyle("branch")}>Branches</button>
                   )}
                   {can(PERMISSIONS.VIEW_DEPARTMENT) && matches("Departments") && (
-                    <button onClick={() => setActiveTab("department")} className={getTabClass("department")}>Departments</button>
+                    <button onClick={() => setActiveTab("department")} className={getTabClass()} style={getTabStyle("department")}>Departments</button>
                   )}
                   {can(PERMISSIONS.VIEW_DESIGNATION) && matches("Designations") && (
-                    <button onClick={() => setActiveTab("designation")} className={getTabClass("designation")}>Designations</button>
+                    <button onClick={() => setActiveTab("designation")} className={getTabClass()} style={getTabStyle("designation")}>Designations</button>
                   )}
                   {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employees") && (
-                    <button onClick={() => setActiveTab("employee")} className={getTabClass("employee")}>Employees</button>
+                    <button onClick={() => setActiveTab("employee")} className={getTabClass()} style={getTabStyle("employee")}>Employees</button>
                   )}
                   {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employee of the Month") && (
-                    <button onClick={() => setActiveTab("employee-of-the-month")} className={getTabClass("employee-of-the-month")}>Employee of the Month</button>
+                    <button onClick={() => setActiveTab("employee-of-the-month")} className={getTabClass()} style={getTabStyle("employee-of-the-month")}>Employee of the Month</button>
                   )}
                 </div>
               </div>
@@ -198,26 +232,26 @@ function Admin() {
              (can(PERMISSIONS.VIEW_COURSE) && (matches("Courses") || matches("Course Builder"))) ||
              (can(PERMISSIONS.VIEW_RESOURCE) && matches("Resources")) ||
              matches("Course Visibility") || matches("Video Library") ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Course Content</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Course Content</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_CATEGORY) && matches("Categories") && (
-                    <button onClick={() => setActiveTab("category")} className={getTabClass("category")}>Categories</button>
+                    <button onClick={() => setActiveTab("category")} className={getTabClass()} style={getTabStyle("category")}>Categories</button>
                   )}
                   {can(PERMISSIONS.VIEW_COURSE) && matches("Courses") && (
-                    <button onClick={() => setActiveTab("course")} className={getTabClass("course")}>Courses</button>
+                    <button onClick={() => setActiveTab("course")} className={getTabClass()} style={getTabStyle("course")}>Courses</button>
                   )}
                   {can(PERMISSIONS.VIEW_COURSE) && matches("Course Builder") && (
-                    <button onClick={() => setActiveTab("course-builder")} className={getTabClass("course-builder")}>Course Builder</button>
+                    <button onClick={() => setActiveTab("course-builder")} className={getTabClass()} style={getTabStyle("course-builder")}>Course Builder</button>
                   )}
                   {can(PERMISSIONS.VIEW_RESOURCE) && matches("Resources") && (
-                    <button onClick={() => setActiveTab("resource")} className={getTabClass("resource")}>Resources</button>
+                    <button onClick={() => setActiveTab("resource")} className={getTabClass()} style={getTabStyle("resource")}>Resources</button>
                   )}
                   {matches("Course Visibility") && (
-                    <button onClick={() => setActiveTab("course-visibility")} className={getTabClass("course-visibility")}>Course Visibility</button>
+                    <button onClick={() => setActiveTab("course-visibility")} className={getTabClass()} style={getTabStyle("course-visibility")}>Course Visibility</button>
                   )}
                   {matches("Video Library") && (
-                    <button onClick={() => setActiveTab("video-library-content")} className={getTabClass("video-library-content")}>Video Library</button>
+                    <button onClick={() => setActiveTab("video-library-content")} className={getTabClass()} style={getTabStyle("video-library-content")}>Video Library</button>
                   )}
                 </div>
               </div>
@@ -228,23 +262,23 @@ function Admin() {
              (can(PERMISSIONS.VIEW_ASSIGNMENT) && matches("Assignments")) ||
              (can(PERMISSIONS.VIEW_EVALUATION_RULE) && matches("Evaluation Rules")) ||
              (can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && matches("Results")) ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Assessment & Evaluation</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Assessment & Evaluation</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_ASSESSMENT) && matches("Assessment") && (
-                    <button onClick={() => setActiveTab("assessment")} className={getTabClass("assessment")}>Assessment</button>
+                    <button onClick={() => setActiveTab("assessment")} className={getTabClass()} style={getTabStyle("assessment")}>Assessment</button>
                   )}
                   {can(PERMISSIONS.VIEW_QUESTION_BANK) && matches("Question Bank") && (
-                    <button onClick={() => setActiveTab("question")} className={getTabClass("question")}>Question Bank</button>
+                    <button onClick={() => setActiveTab("question")} className={getTabClass()} style={getTabStyle("question")}>Question Bank</button>
                   )}
                   {can(PERMISSIONS.VIEW_ASSIGNMENT) && matches("Assignments") && (
-                    <button onClick={() => setActiveTab("assignment")} className={getTabClass("assignment")}>Assignments</button>
+                    <button onClick={() => setActiveTab("assignment")} className={getTabClass()} style={getTabStyle("assignment")}>Assignments</button>
                   )}
                   {can(PERMISSIONS.VIEW_EVALUATION_RULE) && matches("Evaluation Rules") && (
-                    <button onClick={() => setActiveTab("evaluation")} className={getTabClass("evaluation")}>Evaluation Rules</button>
+                    <button onClick={() => setActiveTab("evaluation")} className={getTabClass()} style={getTabStyle("evaluation")}>Evaluation Rules</button>
                   )}
                   {can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && matches("Results") && (
-                    <button onClick={() => setActiveTab("results")} className={getTabClass("results")}>Results</button>
+                    <button onClick={() => setActiveTab("results")} className={getTabClass()} style={getTabStyle("results")}>Results</button>
                   )}
                 </div>
               </div>
@@ -255,23 +289,23 @@ function Admin() {
              (can(PERMISSIONS.VIEW_CERT_QUEUE) && matches("Certificate Queue")) ||
              (can(PERMISSIONS.VIEW_CERT_VERIFICATION) && matches("Certificate Verification")) ||
              matches("Bulk Certificate Issue") ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Certificates</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Certificates</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_CERTIFICATE) && matches("Certificates") && (
-                    <button onClick={() => setActiveTab("certificate")} className={getTabClass("certificate")}>Certificates</button>
+                    <button onClick={() => setActiveTab("certificate")} className={getTabClass()} style={getTabStyle("certificate")}>Certificates</button>
                   )}
                   {can(PERMISSIONS.VIEW_CERT_TEMPLATE) && matches("Certificate Templates") && (
-                    <button onClick={() => setActiveTab("certificate-template")} className={getTabClass("certificate-template")}>Certificate Templates</button>
+                    <button onClick={() => setActiveTab("certificate-template")} className={getTabClass()} style={getTabStyle("certificate-template")}>Certificate Templates</button>
                   )}
                   {can(PERMISSIONS.VIEW_CERT_QUEUE) && matches("Certificate Queue") && (
-                    <button onClick={() => setActiveTab("certificate-generation")} className={getTabClass("certificate-generation")}>Certificate Queue</button>
+                    <button onClick={() => setActiveTab("certificate-generation")} className={getTabClass()} style={getTabStyle("certificate-generation")}>Certificate Queue</button>
                   )}
                   {can(PERMISSIONS.VIEW_CERT_VERIFICATION) && matches("Certificate Verification") && (
-                    <button onClick={() => setActiveTab("certificate-verification")} className={getTabClass("certificate-verification")}>Certificate Verification</button>
+                    <button onClick={() => setActiveTab("certificate-verification")} className={getTabClass()} style={getTabStyle("certificate-verification")}>Certificate Verification</button>
                   )}
                   {matches("Bulk Certificate Issue") && (
-                    <button onClick={() => setActiveTab("bulk-certificate-issue")} className={getTabClass("bulk-certificate-issue")}>Bulk Certificate Issue</button>
+                    <button onClick={() => setActiveTab("bulk-certificate-issue")} className={getTabClass()} style={getTabStyle("bulk-certificate-issue")}>Bulk Certificate Issue</button>
                   )}
                 </div>
               </div>
@@ -282,23 +316,23 @@ function Admin() {
              (can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Learning Path Enrollments")) ||
              (can(PERMISSIONS.VIEW_LP_PROGRESS) && matches("Learning Path Progress")) ||
              (can(PERMISSIONS.VIEW_ENROLLMENT) && matches("Enrollments")) ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Learning Paths & Enrollment</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Learning Paths & Enrollment</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths") && (
-                    <button onClick={() => setActiveTab("learning-path")} className={getTabClass("learning-path")}>Learning Paths</button>
+                    <button onClick={() => setActiveTab("learning-path")} className={getTabClass()} style={getTabStyle("learning-path")}>Learning Paths</button>
                   )}
                   {can(PERMISSIONS.VIEW_LP_COURSE) && matches("Learning Path Courses") && (
-                    <button onClick={() => setActiveTab("learning-path-course")} className={getTabClass("learning-path-course")}>Learning Path Courses</button>
+                    <button onClick={() => setActiveTab("learning-path-course")} className={getTabClass()} style={getTabStyle("learning-path-course")}>Learning Path Courses</button>
                   )}
                   {can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Learning Path Enrollments") && (
-                    <button onClick={() => setActiveTab("learning-path-enrollment")} className={getTabClass("learning-path-enrollment")}>Learning Path Enrollments</button>
+                    <button onClick={() => setActiveTab("learning-path-enrollment")} className={getTabClass()} style={getTabStyle("learning-path-enrollment")}>Learning Path Enrollments</button>
                   )}
                   {can(PERMISSIONS.VIEW_LP_PROGRESS) && matches("Learning Path Progress") && (
-                    <button onClick={() => setActiveTab("learning-path-progress")} className={getTabClass("learning-path-progress")}>Learning Path Progress</button>
+                    <button onClick={() => setActiveTab("learning-path-progress")} className={getTabClass()} style={getTabStyle("learning-path-progress")}>Learning Path Progress</button>
                   )}
                   {can(PERMISSIONS.VIEW_ENROLLMENT) && matches("Enrollments") && (
-                    <button onClick={() => setActiveTab("enrollment")} className={getTabClass("enrollment")}>Enrollments</button>
+                    <button onClick={() => setActiveTab("enrollment")} className={getTabClass()} style={getTabStyle("enrollment")}>Enrollments</button>
                   )}
                 </div>
               </div>
@@ -307,20 +341,20 @@ function Admin() {
             {(can(PERMISSIONS.VIEW_TRAINING_BATCH) && matches("Training Batches")) ||
              (can(PERMISSIONS.VIEW_TRAINER_ASSIGNMENT) && matches("Trainer Assignments")) ||
              matches("Attendance") || matches("Attendance Geofencing") ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Training & Attendance</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Training & Attendance</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_TRAINING_BATCH) && matches("Training Batches") && (
-                    <button onClick={() => setActiveTab("training-batch")} className={getTabClass("training-batch")}>Training Batches</button>
+                    <button onClick={() => setActiveTab("training-batch")} className={getTabClass()} style={getTabStyle("training-batch")}>Training Batches</button>
                   )}
                   {can(PERMISSIONS.VIEW_TRAINER_ASSIGNMENT) && matches("Trainer Assignments") && (
-                    <button onClick={() => setActiveTab("trainer-assignment")} className={getTabClass("trainer-assignment")}>Trainer Assignments</button>
+                    <button onClick={() => setActiveTab("trainer-assignment")} className={getTabClass()} style={getTabStyle("trainer-assignment")}>Trainer Assignments</button>
                   )}
                   {matches("Attendance") && (
-                    <button onClick={() => setActiveTab("attendance")} className={getTabClass("attendance")}>Attendance</button>
+                    <button onClick={() => setActiveTab("attendance")} className={getTabClass()} style={getTabStyle("attendance")}>Attendance</button>
                   )}
                   {matches("Attendance Geofencing") && (
-                    <button onClick={() => setActiveTab("geofence")} className={getTabClass("geofence")}>Attendance Geofencing</button>
+                    <button onClick={() => setActiveTab("geofence")} className={getTabClass()} style={getTabStyle("geofence")}>Attendance Geofencing</button>
                   )}
                 </div>
               </div>
@@ -331,23 +365,23 @@ function Admin() {
              (isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions")) ||
              (can(PERMISSIONS.VIEW_PERMISSION) && matches("Permission Matrix")) ||
              matches("Secure Login Migration") ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Roles & Permissions</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Roles & Permissions</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_ROLE) && matches("Roles") && (
-                    <button onClick={() => setActiveTab("roles")} className={getTabClass("roles")}>Roles</button>
+                    <button onClick={() => setActiveTab("roles")} className={getTabClass()} style={getTabStyle("roles")}>Roles</button>
                   )}
                   {can(PERMISSIONS.VIEW_EMPLOYEE_ROLE) && matches("Employee Roles") && (
-                    <button onClick={() => setActiveTab("employee-role")} className={getTabClass("employee-role")}>Employee Roles</button>
+                    <button onClick={() => setActiveTab("employee-role")} className={getTabClass()} style={getTabStyle("employee-role")}>Employee Roles</button>
                   )}
                   {isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions") && (
-                    <button onClick={() => setActiveTab("permissions")} className={getTabClass("permissions")}>Permissions</button>
+                    <button onClick={() => setActiveTab("permissions")} className={getTabClass()} style={getTabStyle("permissions")}>Permissions</button>
                   )}
                   {can(PERMISSIONS.VIEW_PERMISSION) && matches("Permission Matrix") && (
-                    <button onClick={() => setActiveTab("role-permission")} className={getTabClass("role-permission")}>Permission Matrix</button>
+                    <button onClick={() => setActiveTab("role-permission")} className={getTabClass()} style={getTabStyle("role-permission")}>Permission Matrix</button>
                   )}
                   {matches("Secure Login Migration") && (
-                    <button onClick={() => setActiveTab("security-migration")} className={getTabClass("security-migration")}>Secure Login Migration</button>
+                    <button onClick={() => setActiveTab("security-migration")} className={getTabClass()} style={getTabStyle("security-migration")}>Secure Login Migration</button>
                   )}
                 </div>
               </div>
@@ -357,20 +391,20 @@ function Admin() {
              (isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings")) ||
              (isPlatformOperator && matches("Legal Documents")) ||
              (isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu")) ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Platform Configuration</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Platform Configuration</p>
                 <div className="flex flex-wrap gap-3">
                   {isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && matches("Theme") && (
-                    <button onClick={() => setActiveTab("theme")} className={getTabClass("theme")}>Theme</button>
+                    <button onClick={() => setActiveTab("theme")} className={getTabClass()} style={getTabStyle("theme")}>Theme</button>
                   )}
                   {isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings") && (
-                    <button onClick={() => setActiveTab("settings")} className={getTabClass("settings")}>Settings</button>
+                    <button onClick={() => setActiveTab("settings")} className={getTabClass()} style={getTabStyle("settings")}>Settings</button>
                   )}
                   {isPlatformOperator && matches("Legal Documents") && (
-                    <button onClick={() => setActiveTab("legal-documents")} className={getTabClass("legal-documents")}>Legal Documents</button>
+                    <button onClick={() => setActiveTab("legal-documents")} className={getTabClass()} style={getTabStyle("legal-documents")}>Legal Documents</button>
                   )}
                   {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
-                    <button onClick={() => setActiveTab("menu")} className={getTabClass("menu")}>Menu</button>
+                    <button onClick={() => setActiveTab("menu")} className={getTabClass()} style={getTabStyle("menu")}>Menu</button>
                   )}
                 </div>
               </div>
@@ -381,23 +415,23 @@ function Admin() {
              (can(PERMISSIONS.VIEW_SUPPORT_TICKET) && matches("Ticket Management")) ||
              (can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && matches("Email Templates")) ||
              (can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log")) ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Communication & Reports</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Communication & Reports</p>
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_REPORTS) && matches("Reports") && (
-                    <button onClick={() => setActiveTab("reports")} className={getTabClass("reports")}>Reports</button>
+                    <button onClick={() => setActiveTab("reports")} className={getTabClass()} style={getTabStyle("reports")}>Reports</button>
                   )}
                   {matches("Notifications") && (
-                    <button onClick={() => setActiveTab("notifications")} className={getTabClass("notifications")}>Notifications</button>
+                    <button onClick={() => setActiveTab("notifications")} className={getTabClass()} style={getTabStyle("notifications")}>Notifications</button>
                   )}
                   {can(PERMISSIONS.VIEW_SUPPORT_TICKET) && matches("Ticket Management") && (
-                    <button onClick={() => setActiveTab("support-tickets")} className={getTabClass("support-tickets")}>Ticket Management</button>
+                    <button onClick={() => setActiveTab("support-tickets")} className={getTabClass()} style={getTabStyle("support-tickets")}>Ticket Management</button>
                   )}
                   {can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && matches("Email Templates") && (
-                    <button onClick={() => setActiveTab("email-templates")} className={getTabClass("email-templates")}>Email Templates</button>
+                    <button onClick={() => setActiveTab("email-templates")} className={getTabClass()} style={getTabStyle("email-templates")}>Email Templates</button>
                   )}
                   {can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log") && (
-                    <button onClick={() => setActiveTab("audit-log")} className={getTabClass("audit-log")}>Audit Log</button>
+                    <button onClick={() => setActiveTab("audit-log")} className={getTabClass()} style={getTabStyle("audit-log")}>Audit Log</button>
                   )}
                 </div>
               </div>
@@ -407,20 +441,20 @@ function Admin() {
              (moduleFlags.live_quiz && matches("Live Quiz")) ||
              (isPlatformOperator && matches("Brainstorming")) ||
              matches("Projects") ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Premium Add-ons</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Premium Add-ons</p>
                 <div className="flex flex-wrap gap-3">
                   {moduleFlags.market_analytics && matches("Market Analytics") && (
-                    <button onClick={() => setActiveTab("market-analytics")} className={getTabClass("market-analytics")}>Market Analytics</button>
+                    <button onClick={() => setActiveTab("market-analytics")} className={getTabClass()} style={getTabStyle("market-analytics")}>Market Analytics</button>
                   )}
                   {moduleFlags.live_quiz && matches("Live Quiz") && (
-                    <button onClick={() => setActiveTab("live-quiz")} className={getTabClass("live-quiz")}>Live Quiz</button>
+                    <button onClick={() => setActiveTab("live-quiz")} className={getTabClass()} style={getTabStyle("live-quiz")}>Live Quiz</button>
                   )}
                   {isPlatformOperator && matches("Brainstorming") && (
-                    <button onClick={() => setActiveTab("brainstorming")} className={getTabClass("brainstorming")}>Brainstorming</button>
+                    <button onClick={() => setActiveTab("brainstorming")} className={getTabClass()} style={getTabStyle("brainstorming")}>Brainstorming</button>
                   )}
                   {matches("Projects") && (
-                    <button onClick={() => setActiveTab("real-estate-projects")} className={getTabClass("real-estate-projects")}>Projects</button>
+                    <button onClick={() => setActiveTab("real-estate-projects")} className={getTabClass()} style={getTabStyle("real-estate-projects")}>Projects</button>
                   )}
                 </div>
               </div>
@@ -433,29 +467,29 @@ function Admin() {
              matches("License Notifications") ||
              (isPlatformOperator && matches("Payment Settings")) ||
              (isPlatformOperator && matches("Company Modules")) ? (
-              <div className={GROUP_CARD_CLS}>
-                <p className={GROUP_LABEL_CLS}>Billing & Licensing</p>
+              <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
+                <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Billing & Licensing</p>
                 <div className="flex flex-wrap gap-3">
                   {isPlatformOperator && matches("Plans") && (
-                    <button onClick={() => setActiveTab("plans")} className={getTabClass("plans")}>Plans</button>
+                    <button onClick={() => setActiveTab("plans")} className={getTabClass()} style={getTabStyle("plans")}>Plans</button>
                   )}
                   {isPlatformOperator && matches("Add Company") && (
-                    <button onClick={() => setActiveTab("add-company")} className={getTabClass("add-company")}>Add Company</button>
+                    <button onClick={() => setActiveTab("add-company")} className={getTabClass()} style={getTabStyle("add-company")}>Add Company</button>
                   )}
                   {matches("Company Licenses") && (
-                    <button onClick={() => setActiveTab("company-license")} className={getTabClass("company-license")}>Company Licenses</button>
+                    <button onClick={() => setActiveTab("company-license")} className={getTabClass()} style={getTabStyle("company-license")}>Company Licenses</button>
                   )}
                   {isPlatformOperator && matches("Discount Codes") && (
-                    <button onClick={() => setActiveTab("discount-codes")} className={getTabClass("discount-codes")}>Discount Codes</button>
+                    <button onClick={() => setActiveTab("discount-codes")} className={getTabClass()} style={getTabStyle("discount-codes")}>Discount Codes</button>
                   )}
                   {matches("License Notifications") && (
-                    <button onClick={() => setActiveTab("license-notifications")} className={getTabClass("license-notifications")}>License Notifications</button>
+                    <button onClick={() => setActiveTab("license-notifications")} className={getTabClass()} style={getTabStyle("license-notifications")}>License Notifications</button>
                   )}
                   {isPlatformOperator && matches("Payment Settings") && (
-                    <button onClick={() => setActiveTab("payment-settings")} className={getTabClass("payment-settings")}>Payment Settings</button>
+                    <button onClick={() => setActiveTab("payment-settings")} className={getTabClass()} style={getTabStyle("payment-settings")}>Payment Settings</button>
                   )}
                   {isPlatformOperator && matches("Company Modules") && (
-                    <button onClick={() => setActiveTab("company-modules")} className={getTabClass("company-modules")}>Company Modules</button>
+                    <button onClick={() => setActiveTab("company-modules")} className={getTabClass()} style={getTabStyle("company-modules")}>Company Modules</button>
                   )}
                 </div>
               </div>

@@ -66,6 +66,20 @@ export interface Company {
   // before a "Next" button appears.
   cards_per_page: number;
 
+  // Per-company Super Admin Console appearance -- each subscribing
+  // company picks its own card background/button/border colors instead
+  // of one fixed look for everyone.
+  admin_console_bg_color: string;
+
+  admin_console_button_color: string;
+
+  admin_console_border_color: string;
+
+  // Where the company name sits under the sidebar logo — left-aligned or
+  // centered. The name itself always auto-shrinks to stay on one line
+  // regardless of how long it is (see Sidebar.tsx's FitText).
+  sidebar_name_position: "left" | "center";
+
   created_at: string;
 
   updated_at: string;

@@ -12,6 +12,42 @@ import { loadCompany } from "../../services/company/companyService";
 import { loadCompanyModuleFlags } from "../../services/company/appModuleService";
 import type { PermissionCode } from "../../types/authorization";
 
+// Shrinks text to fit its container on a single line, however long the
+// company name is — never wraps, never overflows. Measures the rendered
+// text's width against the available space and reduces font-size in 1px
+// steps until it fits (or hits the floor, at which point it ellipsizes
+// as a last resort for absurdly long names).
+function FitText({ text, className, align = "left", maxFontSize = 15, minFontSize = 10 }: { text: string; className?: string; align?: "left" | "center"; maxFontSize?: number; minFontSize?: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const textEl = textRef.current;
+    if (!container || !textEl) return;
+    let size = maxFontSize;
+    textEl.style.fontSize = `${size}px`;
+    while (textEl.scrollWidth > container.clientWidth && size > minFontSize) {
+      size -= 1;
+      textEl.style.fontSize = `${size}px`;
+    }
+    setFontSize(size);
+  }, [text, maxFontSize, minFontSize]);
+
+  return (
+    <div ref={containerRef} className="w-full overflow-hidden" style={{ textAlign: align }}>
+      <p
+        ref={textRef}
+        className={className}
+        style={{ fontSize, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "inline-block", maxWidth: "100%" }}
+      >
+        {text}
+      </p>
+    </div>
+  );
+}
+
 // Maps a MENU item id to the app_modules key that must be enabled for the
 // company before the item shows at all — on top of whatever permission
 // gate already applies. Items not listed here are core/structural (running
@@ -193,6 +229,7 @@ function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
   const [logoUrl, setLogoUrl] = useState('');
+  const [namePosition, setNamePosition] = useState<"left" | "center">("left");
   const [adminSectionsOpen, setAdminSectionsOpen] = useState(false);
   const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(new Set());
   // From the active Theme (Admin → Theme) — falls back to the static
@@ -231,6 +268,7 @@ function Sidebar() {
   useEffect(() => {
     loadCompany().then((c) => {
       setIsPlatformOperator(c?.is_platform_operator ?? false);
+      setNamePosition(c?.sidebar_name_position ?? "left");
       if (c?.id) {
         loadCompanyModuleFlags(c.id).then(setModuleFlags).catch(() => setModuleFlags({}));
       }
@@ -307,28 +345,27 @@ function Sidebar() {
         }`}
       >
 
-        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+        <div className="p-6 border-b border-slate-800 flex items-start gap-3">
 
-          <img
-            src={logoUrl || logo}
-            alt="logo"
-            className="w-12 h-12 rounded-xl object-contain bg-white"
-          />
+          <div className="flex-1 flex flex-col items-center gap-2 min-w-0">
+            <img
+              src={logoUrl || logo}
+              alt="logo"
+              className="w-12 h-12 rounded-xl object-contain bg-white flex-shrink-0"
+            />
 
-          <div>
-            <h2 className="text-white font-semibold">
-              {companyName}
-            </h2>
-
-            <p className="text-slate-400 text-xs">
-              Training Suite
-            </p>
+            <div className="w-full min-w-0">
+              <FitText text={companyName} align={namePosition} className="text-white font-semibold" />
+              <p className={`text-slate-400 text-xs mt-0.5 ${namePosition === "center" ? "text-center" : "text-left"}`}>
+                Training Suite
+              </p>
+            </div>
           </div>
 
           <button
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
-            className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />

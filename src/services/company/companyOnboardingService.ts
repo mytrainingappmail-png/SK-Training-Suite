@@ -94,6 +94,10 @@ export async function onboardCompany(input: CompanyOnboardingInput): Promise<Com
     market_analytics_enabled: false,
     live_quiz_enabled: false,
     cards_per_page: 12,
+    admin_console_bg_color: "#1e3a8a",
+    admin_console_button_color: "#eab308",
+    admin_console_border_color: "#facc15",
+    sidebar_name_position: "left",
   }).catch((err) => {
     throw new Error(`Company create failed: ${err instanceof Error ? err.message : String(err)}`);
   });
