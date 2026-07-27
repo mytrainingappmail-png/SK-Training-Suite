@@ -27,9 +27,11 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         signatory1Name: cert.signatory1_name,
         signatory1Title: cert.signatory1_title,
         signatory1ImageUrl: cert.signatory1_image_url,
+        signatory1Scale: cert.signatory1_scale,
         signatory2Name: cert.signatory2_name,
         signatory2Title: cert.signatory2_title,
         signatory2ImageUrl: cert.signatory2_image_url,
+        signatory2Scale: cert.signatory2_scale,
       });
 
       downloadCanvasAsPng(canvas, `certificate-${cert.cert_number}.png`);

@@ -204,9 +204,11 @@ export interface QuizSettings {
   cert_signatory1_name: string | null;
   cert_signatory1_title: string | null;
   cert_signatory1_image_url: string | null;
+  cert_signatory1_scale: number;
   cert_signatory2_name: string | null;
   cert_signatory2_title: string | null;
   cert_signatory2_image_url: string | null;
+  cert_signatory2_scale: number;
   champ_music: ChampMusic;
   champ_music_url: string | null;
   champ_music_volume: number;
@@ -271,9 +273,11 @@ export interface QuizCertificate {
   signatory1_name: string | null;
   signatory1_title: string | null;
   signatory1_image_url: string | null;
+  signatory1_scale: number;
   signatory2_name: string | null;
   signatory2_title: string | null;
   signatory2_image_url: string | null;
+  signatory2_scale: number;
 }
 
 export interface AnswerDistributionOption {

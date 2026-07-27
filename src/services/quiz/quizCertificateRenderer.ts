@@ -16,9 +16,11 @@ export interface CertificateData {
   signatory1Name?: string | null;
   signatory1Title?: string | null;
   signatory1ImageUrl?: string | null;
+  signatory1Scale?: number | null;
   signatory2Name?: string | null;
   signatory2Title?: string | null;
   signatory2ImageUrl?: string | null;
+  signatory2Scale?: number | null;
 }
 
 const WIDTH = 1200;
@@ -200,12 +202,22 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
 
   // Signatures
   const sigY = 720;
-  const drawSignature = (x: number, name?: string | null, title?: string | null, image?: HTMLImageElement | null) => {
+  const BASE_SIG_BOX_W = 280;
+  const BASE_SIG_BOX_H = 90;
+  const drawSignature = (
+    x: number,
+    name?: string | null,
+    title?: string | null,
+    image?: HTMLImageElement | null,
+    scalePercent?: number | null
+  ) => {
     if (!name) return;
     if (image) {
-      // Fit the signature image into a fixed box, preserving its aspect ratio, sitting just above the line.
-      const boxW = 200;
-      const boxH = 64;
+      // Fit the signature image into a box (sized by scalePercent, default
+      // 100%), preserving its aspect ratio, sitting just above the line.
+      const pct = (scalePercent ?? 100) / 100;
+      const boxW = BASE_SIG_BOX_W * pct;
+      const boxH = BASE_SIG_BOX_H * pct;
       const scale = Math.min(boxW / image.width, boxH / image.height);
       const w = image.width * scale;
       const h = image.height * scale;
@@ -231,8 +243,8 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   };
 
   if (data.signatory1Name || data.signatory2Name) {
-    drawSignature(WIDTH / 2 - 250, data.signatory1Name, data.signatory1Title, sig1Image);
-    drawSignature(WIDTH / 2 + 250, data.signatory2Name, data.signatory2Title, sig2Image);
+    drawSignature(WIDTH / 2 - 250, data.signatory1Name, data.signatory1Title, sig1Image, data.signatory1Scale);
+    drawSignature(WIDTH / 2 + 250, data.signatory2Name, data.signatory2Title, sig2Image, data.signatory2Scale);
   }
 
   // Cert number, bottom-right, small
