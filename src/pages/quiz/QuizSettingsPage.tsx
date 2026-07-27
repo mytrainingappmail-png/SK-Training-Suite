@@ -528,12 +528,12 @@ export default function QuizSettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
           <QuizBrandingImageField
             label="Signatory 1 Signature"
-            hint="Upload a scanned/transparent signature image — shown above the name on the certificate"
+            hint="Upload a scanned/transparent signature image — shown above the name on the certificate. Preview below is on a white card since most scanned signatures are dark ink; on the certificate itself it's auto-recolored to match the template."
             value={settings.cert_signatory1_image_url}
             kind="signatory-1"
             companyId={me.company_id}
             onChange={(url) => setSettings({ ...settings, cert_signatory1_image_url: url })}
-            previewClassName="h-16 w-40 object-contain rounded-lg bg-slate-800 border border-slate-700"
+            previewClassName="h-16 w-40 object-contain rounded-lg bg-white border border-slate-700"
           />
           <QuizBrandingImageField
             label="Signatory 2 Signature"
@@ -542,7 +542,7 @@ export default function QuizSettingsPage() {
             kind="signatory-2"
             companyId={me.company_id}
             onChange={(url) => setSettings({ ...settings, cert_signatory2_image_url: url })}
-            previewClassName="h-16 w-40 object-contain rounded-lg bg-slate-800 border border-slate-700"
+            previewClassName="h-16 w-40 object-contain rounded-lg bg-white border border-slate-700"
           />
         </div>
 

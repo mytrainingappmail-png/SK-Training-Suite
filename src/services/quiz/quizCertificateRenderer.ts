@@ -119,6 +119,20 @@ function loadImage(url: string | null | undefined): Promise<HTMLImageElement | n
   });
 }
 
+/** Recolors every non-transparent pixel of an image to a solid color while keeping its original alpha/shape — turns a scanned signature (almost always dark ink) into whatever color the certificate template needs it to be, instead of assuming it's always light-on-dark or dark-on-light. */
+function tintImage(image: HTMLImageElement, color: string): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = image.width;
+  c.height = image.height;
+  const ctx = c.getContext("2d");
+  if (!ctx) return c;
+  ctx.drawImage(image, 0, 0);
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
   const [sig1Image, sig2Image] = await Promise.all([loadImage(data.signatory1ImageUrl), loadImage(data.signatory2ImageUrl)]);
 
@@ -195,7 +209,12 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
       const scale = Math.min(boxW / image.width, boxH / image.height);
       const w = image.width * scale;
       const h = image.height * scale;
-      ctx.drawImage(image, x - w / 2, sigY - 10 - h, w, h);
+      // Real signature scans are almost always dark ink — recolor the shape
+      // to the template's own heading color (light on a dark template, dark
+      // on a light one) instead of drawing it as-is, so it's never a dark
+      // signature invisible against a dark background.
+      const tinted = tintImage(image, p.heading);
+      ctx.drawImage(tinted, x - w / 2, sigY - 10 - h, w, h);
     }
     ctx.strokeStyle = p.muted;
     ctx.lineWidth = 1;
