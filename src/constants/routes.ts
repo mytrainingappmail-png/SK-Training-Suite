@@ -6,6 +6,8 @@ export const ROUTES = {
 
   CONTACT_US: "/contact",
 
+  PAY_LICENSE: "/pay/:licenseId",
+
   DASHBOARD: "/dashboard",
 
   TRAINING: "/training",

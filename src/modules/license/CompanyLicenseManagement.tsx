@@ -18,6 +18,7 @@ import {
   daysUntilExpiry,
 } from '../../services/license/licenseService';
 import { loadCompanies } from '../../services/company/companyService';
+import { sendEmail } from '../../repositories/email/emailRepository';
 import { defaultCompanyLicenseForm } from '../../types/license';
 import type { SubscriptionPlan, CompanyLicense, CompanyLicenseForm } from '../../types/license';
 import type { LicenseUsage } from '../../services/license/licenseService';
@@ -104,6 +105,7 @@ function CompanyLicenseManagement() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CompanyLicense | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sendingLinkId, setSendingLinkId] = useState<string | null>(null);
 
   function showToast(message: string) {
     setToast(message);
@@ -198,6 +200,39 @@ function CompanyLicenseManagement() {
     }
   }
 
+  async function handleSendPaymentLink(lic: CompanyLicense) {
+    const company = companyById.get(lic.company_id);
+    const plan = planById.get(lic.plan_id);
+    const amount = plan ? (lic.billing_cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : 0;
+    const payUrl = `${window.location.origin}/pay/${lic.id}`;
+
+    setSendingLinkId(lic.id);
+    try {
+      await navigator.clipboard.writeText(payUrl);
+    } catch {
+      // clipboard access can fail (permissions/insecure context) — the link is still emailed/shown below.
+    }
+
+    if (company?.email) {
+      const html = `
+        <p>Hi ${company.company_name},</p>
+        <p>Here's your payment link for the <strong>${plan?.plan_name ?? 'subscription'}</strong> plan (₹${amount.toLocaleString()}, ${lic.billing_cycle}):</p>
+        <p><a href="${payUrl}">${payUrl}</a></p>
+        <p>Your subscription will be renewed automatically once payment is confirmed.</p>
+      `;
+      const result = await sendEmail(company.email, 'Your Payment Link', html);
+      setSendingLinkId(null);
+      if (result.success) {
+        showToast(`Payment link copied and emailed to ${company.email}`);
+      } else {
+        showToast(`Link copied to clipboard (email failed: ${result.error})`);
+      }
+    } else {
+      setSendingLinkId(null);
+      showToast('Link copied to clipboard — no email on file for this company');
+    }
+  }
+
   async function handleDeleteConfirm() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -259,6 +294,11 @@ function CompanyLicenseManagement() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <SecondaryButton onClick={() => openEdit(lic)}>Edit</SecondaryButton>
+                    {!lic.is_complimentary && (
+                      <SecondaryButton onClick={() => handleSendPaymentLink(lic)} disabled={sendingLinkId === lic.id}>
+                        {sendingLinkId === lic.id ? <IconSpinner className="h-3.5 w-3.5" /> : null} Send Payment Link
+                      </SecondaryButton>
+                    )}
                     {lic.status === 'suspended' ? (
                       <SecondaryButton onClick={() => handleReactivate(lic)}>Reactivate</SecondaryButton>
                     ) : (
