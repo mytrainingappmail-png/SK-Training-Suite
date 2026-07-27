@@ -126,11 +126,13 @@ function Admin() {
   }, []);
 
   const getTabClass = (tab: string) =>
-    `px-5 py-2 rounded-xl font-semibold transition ${
+    `px-4 py-2 rounded-xl font-semibold transition text-sm ${
       activeTab === tab
-        ? "bg-yellow-500 text-black shadow"
-        : "bg-white text-slate-700 shadow hover:bg-slate-100"
+        ? "bg-yellow-600 text-white ring-2 ring-white shadow"
+        : "bg-yellow-500 text-black shadow hover:bg-yellow-400"
     }`;
+  const GROUP_CARD_CLS = "rounded-2xl border-2 border-yellow-400 bg-blue-900 p-4";
+  const GROUP_LABEL_CLS = "mb-3 text-xs font-bold uppercase tracking-wider text-yellow-400";
 
   const kw = search.trim().toLowerCase();
   const matches = (label: string) => !kw || label.toLowerCase().includes(kw);
@@ -161,510 +163,303 @@ function Admin() {
             />
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            {can(PERMISSIONS.VIEW_COMPANY) && matches("Company") && (
-              <button
-                onClick={() => setActiveTab("company")}
-                className={getTabClass("company")}
-              >
-                Company
-              </button>
-            )}
+          <div className="mt-8 space-y-5">
+            {(can(PERMISSIONS.VIEW_COMPANY) && matches("Company")) ||
+             (can(PERMISSIONS.VIEW_BRANCH) && matches("Branches")) ||
+             (can(PERMISSIONS.VIEW_DEPARTMENT) && matches("Departments")) ||
+             (can(PERMISSIONS.VIEW_DESIGNATION) && matches("Designations")) ||
+             (can(PERMISSIONS.VIEW_EMPLOYEE) && (matches("Employees") || matches("Employee of the Month"))) ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Organization Setup</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_COMPANY) && matches("Company") && (
+                    <button onClick={() => setActiveTab("company")} className={getTabClass("company")}>Company</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_BRANCH) && matches("Branches") && (
+                    <button onClick={() => setActiveTab("branch")} className={getTabClass("branch")}>Branches</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_DEPARTMENT) && matches("Departments") && (
+                    <button onClick={() => setActiveTab("department")} className={getTabClass("department")}>Departments</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_DESIGNATION) && matches("Designations") && (
+                    <button onClick={() => setActiveTab("designation")} className={getTabClass("designation")}>Designations</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employees") && (
+                    <button onClick={() => setActiveTab("employee")} className={getTabClass("employee")}>Employees</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employee of the Month") && (
+                    <button onClick={() => setActiveTab("employee-of-the-month")} className={getTabClass("employee-of-the-month")}>Employee of the Month</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_BRANCH) && matches("Branches") && (
-              <button
-                onClick={() => setActiveTab("branch")}
-                className={getTabClass("branch")}
-              >
-                Branches
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_CATEGORY) && matches("Categories")) ||
+             (can(PERMISSIONS.VIEW_COURSE) && (matches("Courses") || matches("Course Builder"))) ||
+             (can(PERMISSIONS.VIEW_RESOURCE) && matches("Resources")) ||
+             matches("Course Visibility") || matches("Video Library") ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Course Content</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_CATEGORY) && matches("Categories") && (
+                    <button onClick={() => setActiveTab("category")} className={getTabClass("category")}>Categories</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_COURSE) && matches("Courses") && (
+                    <button onClick={() => setActiveTab("course")} className={getTabClass("course")}>Courses</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_COURSE) && matches("Course Builder") && (
+                    <button onClick={() => setActiveTab("course-builder")} className={getTabClass("course-builder")}>Course Builder</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_RESOURCE) && matches("Resources") && (
+                    <button onClick={() => setActiveTab("resource")} className={getTabClass("resource")}>Resources</button>
+                  )}
+                  {matches("Course Visibility") && (
+                    <button onClick={() => setActiveTab("course-visibility")} className={getTabClass("course-visibility")}>Course Visibility</button>
+                  )}
+                  {matches("Video Library") && (
+                    <button onClick={() => setActiveTab("video-library-content")} className={getTabClass("video-library-content")}>Video Library</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_DEPARTMENT) && matches("Departments") && (
-              <button
-                onClick={() => setActiveTab("department")}
-                className={getTabClass("department")}
-              >
-                Departments
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_ASSESSMENT) && matches("Assessment")) ||
+             (can(PERMISSIONS.VIEW_QUESTION_BANK) && matches("Question Bank")) ||
+             (can(PERMISSIONS.VIEW_ASSIGNMENT) && matches("Assignments")) ||
+             (can(PERMISSIONS.VIEW_EVALUATION_RULE) && matches("Evaluation Rules")) ||
+             (can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && matches("Results")) ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Assessment & Evaluation</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_ASSESSMENT) && matches("Assessment") && (
+                    <button onClick={() => setActiveTab("assessment")} className={getTabClass("assessment")}>Assessment</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_QUESTION_BANK) && matches("Question Bank") && (
+                    <button onClick={() => setActiveTab("question")} className={getTabClass("question")}>Question Bank</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_ASSIGNMENT) && matches("Assignments") && (
+                    <button onClick={() => setActiveTab("assignment")} className={getTabClass("assignment")}>Assignments</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_EVALUATION_RULE) && matches("Evaluation Rules") && (
+                    <button onClick={() => setActiveTab("evaluation")} className={getTabClass("evaluation")}>Evaluation Rules</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && matches("Results") && (
+                    <button onClick={() => setActiveTab("results")} className={getTabClass("results")}>Results</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_DESIGNATION) && matches("Designations") && (
-              <button
-                onClick={() => setActiveTab("designation")}
-                className={getTabClass("designation")}
-              >
-                Designations
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_CERTIFICATE) && matches("Certificates")) ||
+             (can(PERMISSIONS.VIEW_CERT_TEMPLATE) && matches("Certificate Templates")) ||
+             (can(PERMISSIONS.VIEW_CERT_QUEUE) && matches("Certificate Queue")) ||
+             (can(PERMISSIONS.VIEW_CERT_VERIFICATION) && matches("Certificate Verification")) ||
+             matches("Bulk Certificate Issue") ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Certificates</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_CERTIFICATE) && matches("Certificates") && (
+                    <button onClick={() => setActiveTab("certificate")} className={getTabClass("certificate")}>Certificates</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_CERT_TEMPLATE) && matches("Certificate Templates") && (
+                    <button onClick={() => setActiveTab("certificate-template")} className={getTabClass("certificate-template")}>Certificate Templates</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_CERT_QUEUE) && matches("Certificate Queue") && (
+                    <button onClick={() => setActiveTab("certificate-generation")} className={getTabClass("certificate-generation")}>Certificate Queue</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_CERT_VERIFICATION) && matches("Certificate Verification") && (
+                    <button onClick={() => setActiveTab("certificate-verification")} className={getTabClass("certificate-verification")}>Certificate Verification</button>
+                  )}
+                  {matches("Bulk Certificate Issue") && (
+                    <button onClick={() => setActiveTab("bulk-certificate-issue")} className={getTabClass("bulk-certificate-issue")}>Bulk Certificate Issue</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employees") && (
-              <button
-                onClick={() => setActiveTab("employee")}
-                className={getTabClass("employee")}
-              >
-                Employees
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths")) ||
+             (can(PERMISSIONS.VIEW_LP_COURSE) && matches("Learning Path Courses")) ||
+             (can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Learning Path Enrollments")) ||
+             (can(PERMISSIONS.VIEW_LP_PROGRESS) && matches("Learning Path Progress")) ||
+             (can(PERMISSIONS.VIEW_ENROLLMENT) && matches("Enrollments")) ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Learning Paths & Enrollment</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths") && (
+                    <button onClick={() => setActiveTab("learning-path")} className={getTabClass("learning-path")}>Learning Paths</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_LP_COURSE) && matches("Learning Path Courses") && (
+                    <button onClick={() => setActiveTab("learning-path-course")} className={getTabClass("learning-path-course")}>Learning Path Courses</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Learning Path Enrollments") && (
+                    <button onClick={() => setActiveTab("learning-path-enrollment")} className={getTabClass("learning-path-enrollment")}>Learning Path Enrollments</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_LP_PROGRESS) && matches("Learning Path Progress") && (
+                    <button onClick={() => setActiveTab("learning-path-progress")} className={getTabClass("learning-path-progress")}>Learning Path Progress</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_ENROLLMENT) && matches("Enrollments") && (
+                    <button onClick={() => setActiveTab("enrollment")} className={getTabClass("enrollment")}>Enrollments</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_EMPLOYEE) && matches("Employee of the Month") && (
-              <button
-                onClick={() => setActiveTab("employee-of-the-month")}
-                className={getTabClass("employee-of-the-month")}
-              >
-                Employee of the Month
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_TRAINING_BATCH) && matches("Training Batches")) ||
+             (can(PERMISSIONS.VIEW_TRAINER_ASSIGNMENT) && matches("Trainer Assignments")) ||
+             matches("Attendance") || matches("Attendance Geofencing") ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Training & Attendance</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_TRAINING_BATCH) && matches("Training Batches") && (
+                    <button onClick={() => setActiveTab("training-batch")} className={getTabClass("training-batch")}>Training Batches</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_TRAINER_ASSIGNMENT) && matches("Trainer Assignments") && (
+                    <button onClick={() => setActiveTab("trainer-assignment")} className={getTabClass("trainer-assignment")}>Trainer Assignments</button>
+                  )}
+                  {matches("Attendance") && (
+                    <button onClick={() => setActiveTab("attendance")} className={getTabClass("attendance")}>Attendance</button>
+                  )}
+                  {matches("Attendance Geofencing") && (
+                    <button onClick={() => setActiveTab("geofence")} className={getTabClass("geofence")}>Attendance Geofencing</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_CATEGORY) && matches("Categories") && (
-              <button
-                onClick={() => setActiveTab("category")}
-                className={getTabClass("category")}
-              >
-                Categories
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_ROLE) && matches("Roles")) ||
+             (can(PERMISSIONS.VIEW_EMPLOYEE_ROLE) && matches("Employee Roles")) ||
+             (isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions")) ||
+             (can(PERMISSIONS.VIEW_PERMISSION) && matches("Permission Matrix")) ||
+             matches("Secure Login Migration") ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Roles & Permissions</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_ROLE) && matches("Roles") && (
+                    <button onClick={() => setActiveTab("roles")} className={getTabClass("roles")}>Roles</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_EMPLOYEE_ROLE) && matches("Employee Roles") && (
+                    <button onClick={() => setActiveTab("employee-role")} className={getTabClass("employee-role")}>Employee Roles</button>
+                  )}
+                  {isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions") && (
+                    <button onClick={() => setActiveTab("permissions")} className={getTabClass("permissions")}>Permissions</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_PERMISSION) && matches("Permission Matrix") && (
+                    <button onClick={() => setActiveTab("role-permission")} className={getTabClass("role-permission")}>Permission Matrix</button>
+                  )}
+                  {matches("Secure Login Migration") && (
+                    <button onClick={() => setActiveTab("security-migration")} className={getTabClass("security-migration")}>Secure Login Migration</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_COURSE) && matches("Courses") && (
-              <button
-                onClick={() => setActiveTab("course")}
-                className={getTabClass("course")}
-              >
-                Courses
-              </button>
-            )}
+            {(isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && matches("Theme")) ||
+             (isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings")) ||
+             (isPlatformOperator && matches("Legal Documents")) ||
+             (isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu")) ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Platform Configuration</p>
+                <div className="flex flex-wrap gap-3">
+                  {isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && matches("Theme") && (
+                    <button onClick={() => setActiveTab("theme")} className={getTabClass("theme")}>Theme</button>
+                  )}
+                  {isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings") && (
+                    <button onClick={() => setActiveTab("settings")} className={getTabClass("settings")}>Settings</button>
+                  )}
+                  {isPlatformOperator && matches("Legal Documents") && (
+                    <button onClick={() => setActiveTab("legal-documents")} className={getTabClass("legal-documents")}>Legal Documents</button>
+                  )}
+                  {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
+                    <button onClick={() => setActiveTab("menu")} className={getTabClass("menu")}>Menu</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_COURSE) && matches("Course Builder") && (
-              <button
-                onClick={() => setActiveTab("course-builder")}
-                className={getTabClass("course-builder")}
-              >
-                Course Builder
-              </button>
-            )}
+            {(can(PERMISSIONS.VIEW_REPORTS) && matches("Reports")) ||
+             matches("Notifications") ||
+             (can(PERMISSIONS.VIEW_SUPPORT_TICKET) && matches("Ticket Management")) ||
+             (can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && matches("Email Templates")) ||
+             (can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log")) ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Communication & Reports</p>
+                <div className="flex flex-wrap gap-3">
+                  {can(PERMISSIONS.VIEW_REPORTS) && matches("Reports") && (
+                    <button onClick={() => setActiveTab("reports")} className={getTabClass("reports")}>Reports</button>
+                  )}
+                  {matches("Notifications") && (
+                    <button onClick={() => setActiveTab("notifications")} className={getTabClass("notifications")}>Notifications</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_SUPPORT_TICKET) && matches("Ticket Management") && (
+                    <button onClick={() => setActiveTab("support-tickets")} className={getTabClass("support-tickets")}>Ticket Management</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && matches("Email Templates") && (
+                    <button onClick={() => setActiveTab("email-templates")} className={getTabClass("email-templates")}>Email Templates</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log") && (
+                    <button onClick={() => setActiveTab("audit-log")} className={getTabClass("audit-log")}>Audit Log</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_RESOURCE) && matches("Resources") && (
-              <button
-                onClick={() => setActiveTab("resource")}
-                className={getTabClass("resource")}
-              >
-                Resources
-              </button>
-            )}
+            {(moduleFlags.market_analytics && matches("Market Analytics")) ||
+             (moduleFlags.live_quiz && matches("Live Quiz")) ||
+             (isPlatformOperator && matches("Brainstorming")) ||
+             matches("Projects") ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Premium Add-ons</p>
+                <div className="flex flex-wrap gap-3">
+                  {moduleFlags.market_analytics && matches("Market Analytics") && (
+                    <button onClick={() => setActiveTab("market-analytics")} className={getTabClass("market-analytics")}>Market Analytics</button>
+                  )}
+                  {moduleFlags.live_quiz && matches("Live Quiz") && (
+                    <button onClick={() => setActiveTab("live-quiz")} className={getTabClass("live-quiz")}>Live Quiz</button>
+                  )}
+                  {isPlatformOperator && matches("Brainstorming") && (
+                    <button onClick={() => setActiveTab("brainstorming")} className={getTabClass("brainstorming")}>Brainstorming</button>
+                  )}
+                  {matches("Projects") && (
+                    <button onClick={() => setActiveTab("real-estate-projects")} className={getTabClass("real-estate-projects")}>Projects</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-            {can(PERMISSIONS.VIEW_ASSESSMENT) && matches("Assessment") && (
-              <button
-                onClick={() => setActiveTab("assessment")}
-                className={getTabClass("assessment")}
-              >
-                Assessment
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_QUESTION_BANK) && matches("Question Bank") && (
-              <button
-                onClick={() => setActiveTab("question")}
-                className={getTabClass("question")}
-              >
-                Question Bank
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_ASSIGNMENT) && matches("Assignments") && (
-              <button
-                onClick={() => setActiveTab("assignment")}
-                className={getTabClass("assignment")}
-              >
-                Assignments
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_EVALUATION_RULE) && matches("Evaluation Rules") && (
-              <button
-                onClick={() => setActiveTab("evaluation")}
-                className={getTabClass("evaluation")}
-              >
-                Evaluation Rules
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_ASSESSMENT_RESULT) && matches("Results") && (
-              <button
-                onClick={() => setActiveTab("results")}
-                className={getTabClass("results")}
-              >
-                Results
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_CERTIFICATE) && matches("Certificates") && (
-              <button
-                onClick={() => setActiveTab("certificate")}
-                className={getTabClass("certificate")}
-              >
-                Certificates
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_CERT_TEMPLATE) && matches("Certificate Templates") && (
-              <button
-                onClick={() => setActiveTab("certificate-template")}
-                className={getTabClass("certificate-template")}
-              >
-                Certificate Templates
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_CERT_QUEUE) && matches("Certificate Queue") && (
-              <button
-                onClick={() => setActiveTab("certificate-generation")}
-                className={getTabClass("certificate-generation")}
-              >
-                Certificate Queue
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_CERT_VERIFICATION) && matches("Certificate Verification") && (
-              <button
-                onClick={() => setActiveTab("certificate-verification")}
-                className={getTabClass("certificate-verification")}
-              >
-                Certificate Verification
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths") && (
-              <button
-                onClick={() => setActiveTab("learning-path")}
-                className={getTabClass("learning-path")}
-              >
-                Learning Paths
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_LP_COURSE) && matches("Learning Path Courses") && (
-              <button
-                onClick={() => setActiveTab("learning-path-course")}
-                className={getTabClass("learning-path-course")}
-              >
-                Learning Path Courses
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Learning Path Enrollments") && (
-              <button
-                onClick={() => setActiveTab("learning-path-enrollment")}
-                className={getTabClass("learning-path-enrollment")}
-              >
-                Learning Path Enrollments
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_LP_PROGRESS) && matches("Learning Path Progress") && (
-              <button
-                onClick={() => setActiveTab("learning-path-progress")}
-                className={getTabClass("learning-path-progress")}
-              >
-                Learning Path Progress
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_ENROLLMENT) && matches("Enrollments") && (
-              <button
-                onClick={() => setActiveTab("enrollment")}
-                className={getTabClass("enrollment")}
-              >
-                Enrollments
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_TRAINING_BATCH) && matches("Training Batches") && (
-              <button
-                onClick={() => setActiveTab("training-batch")}
-                className={getTabClass("training-batch")}
-              >
-                Training Batches
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_TRAINER_ASSIGNMENT) && matches("Trainer Assignments") && (
-              <button
-                onClick={() => setActiveTab("trainer-assignment")}
-                className={getTabClass("trainer-assignment")}
-              >
-                Trainer Assignments
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_ROLE) && matches("Roles") && (
-              <button
-                onClick={() => setActiveTab("roles")}
-                className={getTabClass("roles")}
-              >
-                Roles
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_EMPLOYEE_ROLE) && matches("Employee Roles") && (
-              <button
-                onClick={() => setActiveTab("employee-role")}
-                className={getTabClass("employee-role")}
-              >
-                Employee Roles
-              </button>
-            )}
-
-            {isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && matches("Permissions") && (
-              <button
-                onClick={() => setActiveTab("permissions")}
-                className={getTabClass("permissions")}
-              >
-                Permissions
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_PERMISSION) && matches("Permission Matrix") && (
-              <button
-                onClick={() => setActiveTab("role-permission")}
-                className={getTabClass("role-permission")}
-              >
-                Permission Matrix
-              </button>
-            )}
-
-            {isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && matches("Theme") && (
-              <button
-                onClick={() => setActiveTab("theme")}
-                className={getTabClass("theme")}
-              >
-                Theme
-              </button>
-            )}
-
-            {isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings") && (
-              <button
-                onClick={() => setActiveTab("settings")}
-                className={getTabClass("settings")}
-              >
-                Settings
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Legal Documents") && (
-              <button
-                onClick={() => setActiveTab("legal-documents")}
-                className={getTabClass("legal-documents")}
-              >
-                Legal Documents
-              </button>
-            )}
-
-            {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
-              <button
-                onClick={() => setActiveTab("menu")}
-                className={getTabClass("menu")}
-              >
-                Menu
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_REPORTS) && matches("Reports") && (
-              <button
-                onClick={() => setActiveTab("reports")}
-                className={getTabClass("reports")}
-              >
-                Reports
-              </button>
-            )}
-
-            {matches("Notifications") && (
-              <button
-                onClick={() => setActiveTab("notifications")}
-                className={getTabClass("notifications")}
-              >
-                Notifications
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_SUPPORT_TICKET) && matches("Ticket Management") && (
-              <button
-                onClick={() => setActiveTab("support-tickets")}
-                className={getTabClass("support-tickets")}
-              >
-                Ticket Management
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_EMAIL_TEMPLATE) && matches("Email Templates") && (
-              <button
-                onClick={() => setActiveTab("email-templates")}
-                className={getTabClass("email-templates")}
-              >
-                Email Templates
-              </button>
-            )}
-
-            {moduleFlags.market_analytics && matches("Market Analytics") && (
-              <button
-                onClick={() => setActiveTab("market-analytics")}
-                className={getTabClass("market-analytics")}
-              >
-                Market Analytics
-              </button>
-            )}
-
-            {moduleFlags.live_quiz && matches("Live Quiz") && (
-              <button
-                onClick={() => setActiveTab("live-quiz")}
-                className={getTabClass("live-quiz")}
-              >
-                Live Quiz
-              </button>
-            )}
-
-            {can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log") && (
-              <button
-                onClick={() => setActiveTab("audit-log")}
-                className={getTabClass("audit-log")}
-              >
-                Audit Log
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Plans") && (
-              <button
-                onClick={() => setActiveTab("plans")}
-                className={getTabClass("plans")}
-              >
-                Plans
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Add Company") && (
-              <button
-                onClick={() => setActiveTab("add-company")}
-                className={getTabClass("add-company")}
-              >
-                Add Company
-              </button>
-            )}
-
-            {matches("Company Licenses") && (
-              <button
-                onClick={() => setActiveTab("company-license")}
-                className={getTabClass("company-license")}
-              >
-                Company Licenses
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Discount Codes") && (
-              <button
-                onClick={() => setActiveTab("discount-codes")}
-                className={getTabClass("discount-codes")}
-              >
-                Discount Codes
-              </button>
-            )}
-
-            {matches("License Notifications") && (
-              <button
-                onClick={() => setActiveTab("license-notifications")}
-                className={getTabClass("license-notifications")}
-              >
-                License Notifications
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Payment Settings") && (
-              <button
-                onClick={() => setActiveTab("payment-settings")}
-                className={getTabClass("payment-settings")}
-              >
-                Payment Settings
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Company Modules") && (
-              <button
-                onClick={() => setActiveTab("company-modules")}
-                className={getTabClass("company-modules")}
-              >
-                Company Modules
-              </button>
-            )}
-
-            {matches("Course Visibility") && (
-              <button
-                onClick={() => setActiveTab("course-visibility")}
-                className={getTabClass("course-visibility")}
-              >
-                Course Visibility
-              </button>
-            )}
-
-            {matches("Projects") && (
-              <button
-                onClick={() => setActiveTab("real-estate-projects")}
-                className={getTabClass("real-estate-projects")}
-              >
-                Projects
-              </button>
-            )}
-
-            {isPlatformOperator && matches("Brainstorming") && (
-              <button
-                onClick={() => setActiveTab("brainstorming")}
-                className={getTabClass("brainstorming")}
-              >
-                Brainstorming
-              </button>
-            )}
-
-            {matches("Video Library") && (
-              <button
-                onClick={() => setActiveTab("video-library-content")}
-                className={getTabClass("video-library-content")}
-              >
-                Video Library
-              </button>
-            )}
-
-            {matches("Bulk Certificate Issue") && (
-              <button
-                onClick={() => setActiveTab("bulk-certificate-issue")}
-                className={getTabClass("bulk-certificate-issue")}
-              >
-                Bulk Certificate Issue
-              </button>
-            )}
-
-            {matches("Attendance") && (
-              <button
-                onClick={() => setActiveTab("attendance")}
-                className={getTabClass("attendance")}
-              >
-                Attendance
-              </button>
-            )}
-
-            {matches("Secure Login Migration") && (
-              <button
-                onClick={() => setActiveTab("security-migration")}
-                className={getTabClass("security-migration")}
-              >
-                Secure Login Migration
-              </button>
-            )}
-
-            {matches("Attendance Geofencing") && (
-              <button
-                onClick={() => setActiveTab("geofence")}
-                className={getTabClass("geofence")}
-              >
-                Attendance Geofencing
-              </button>
-            )}
+            {(isPlatformOperator && matches("Plans")) ||
+             (isPlatformOperator && matches("Add Company")) ||
+             matches("Company Licenses") ||
+             (isPlatformOperator && matches("Discount Codes")) ||
+             matches("License Notifications") ||
+             (isPlatformOperator && matches("Payment Settings")) ||
+             (isPlatformOperator && matches("Company Modules")) ? (
+              <div className={GROUP_CARD_CLS}>
+                <p className={GROUP_LABEL_CLS}>Billing & Licensing</p>
+                <div className="flex flex-wrap gap-3">
+                  {isPlatformOperator && matches("Plans") && (
+                    <button onClick={() => setActiveTab("plans")} className={getTabClass("plans")}>Plans</button>
+                  )}
+                  {isPlatformOperator && matches("Add Company") && (
+                    <button onClick={() => setActiveTab("add-company")} className={getTabClass("add-company")}>Add Company</button>
+                  )}
+                  {matches("Company Licenses") && (
+                    <button onClick={() => setActiveTab("company-license")} className={getTabClass("company-license")}>Company Licenses</button>
+                  )}
+                  {isPlatformOperator && matches("Discount Codes") && (
+                    <button onClick={() => setActiveTab("discount-codes")} className={getTabClass("discount-codes")}>Discount Codes</button>
+                  )}
+                  {matches("License Notifications") && (
+                    <button onClick={() => setActiveTab("license-notifications")} className={getTabClass("license-notifications")}>License Notifications</button>
+                  )}
+                  {isPlatformOperator && matches("Payment Settings") && (
+                    <button onClick={() => setActiveTab("payment-settings")} className={getTabClass("payment-settings")}>Payment Settings</button>
+                  )}
+                  {isPlatformOperator && matches("Company Modules") && (
+                    <button onClick={() => setActiveTab("company-modules")} className={getTabClass("company-modules")}>Company Modules</button>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-8">
