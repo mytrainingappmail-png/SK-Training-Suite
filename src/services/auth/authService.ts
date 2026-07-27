@@ -146,6 +146,9 @@ export async function logout(): Promise<void> {
 
   const { logout: clearSession } = await import("./session");
   clearSession();
+
+  const { invalidateMyCompanyId } = await import("../company/currentCompanyContext");
+  invalidateMyCompanyId();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

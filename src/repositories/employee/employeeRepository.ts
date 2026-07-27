@@ -1,10 +1,16 @@
 import { supabase } from "../../lib/supabase";
 import type { Employee } from "../../types/employee";
+import { getMyCompanyId } from "../../services/company/currentCompanyContext";
 
+// Explicitly filtered by the caller's own company_id — see branchRepository.ts.
+// Especially important here: this table holds employee PII (names, phone,
+// email) across every company.
 export async function getEmployees(): Promise<Employee[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("employees")
     .select("*")
+    .eq("company_id", companyId)
     .order("first_name", { ascending: true });
 
   if (error) {
@@ -17,9 +23,11 @@ export async function getEmployees(): Promise<Employee[]> {
 export async function searchEmployees(
   keyword: string
 ): Promise<Employee[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("employees")
     .select("*")
+    .eq("company_id", companyId)
     .or(
       `employee_code.ilike.%${keyword}%,first_name.ilike.%${keyword}%,last_name.ilike.%${keyword}%,mobile.ilike.%${keyword}%,email.ilike.%${keyword}%`
     )

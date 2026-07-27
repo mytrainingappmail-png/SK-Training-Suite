@@ -1,11 +1,20 @@
 import { supabase } from "../../lib/supabase";
 import type { EmployeeRole } from "../../types/employeeRole";
 import type { EmployeeRoleForm } from "../../types/employeeRole";
+import { getEmployees } from "../employee/employeeRepository";
 
+// employee_roles has no company_id column of its own (it joins through
+// employee_id) -- scoped by first resolving the caller's own employees,
+// then filtering to just those. See branchRepository.ts for why this
+// can't be left to RLS alone.
 export async function getEmployeeRoles(): Promise<EmployeeRole[]> {
+  const myEmployees = await getEmployees();
+  const employeeIds = myEmployees.map((e) => e.id);
+  if (employeeIds.length === 0) return [];
   const { data, error } = await supabase
     .from("employee_roles")
     .select("*")
+    .in("employee_id", employeeIds)
     .order("created_at", { ascending: false });
 
   if (error) {

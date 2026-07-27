@@ -1,12 +1,13 @@
 import { supabase } from "../../lib/supabase";
 import type { Company, CompanyForm } from "../../types/company";
 
+// Resolves via get_my_company() (SECURITY DEFINER, keyed off
+// current_employee_company_id()) rather than a bare table select — a
+// platform operator can see every company's row under RLS, so a plain
+// `.limit(1)` with no filter would return an arbitrary one instead of
+// reliably "my own company".
 export async function getCompany(): Promise<Company | null> {
-  const { data, error } = await supabase
-    .from("companies")
-    .select("*")
-    .limit(1)
-    .single();
+  const { data, error } = await supabase.rpc("get_my_company");
 
   if (error) {
     console.error(error);

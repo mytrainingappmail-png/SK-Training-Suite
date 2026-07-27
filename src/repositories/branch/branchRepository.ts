@@ -1,10 +1,17 @@
 import { supabase } from "../../lib/supabase";
 import type { Branch } from "../../types/branch";
+import { getMyCompanyId } from "../../services/company/currentCompanyContext";
 
+// Explicitly filtered by the caller's own company_id rather than relying
+// on RLS alone — a platform operator can see every company's branches
+// under RLS (needed for onboarding), so this would otherwise return
+// every company's branches mixed together for that operator.
 export async function getBranches(): Promise<Branch[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("branches")
     .select("*")
+    .eq("company_id", companyId)
     .order("branch_name", { ascending: true });
 
   if (error) {
@@ -17,9 +24,11 @@ export async function getBranches(): Promise<Branch[]> {
 export async function searchBranches(
   keyword: string
 ): Promise<Branch[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("branches")
     .select("*")
+    .eq("company_id", companyId)
     .or(
       `branch_name.ilike.%${keyword}%,branch_code.ilike.%${keyword}%,city.ilike.%${keyword}%`
     )

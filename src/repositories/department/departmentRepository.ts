@@ -1,10 +1,14 @@
 import { supabase } from "../../lib/supabase";
 import type { Department } from "../../types/department";
+import { getMyCompanyId } from "../../services/company/currentCompanyContext";
 
+// Explicitly filtered by the caller's own company_id — see branchRepository.ts.
 export async function getDepartments(): Promise<Department[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("departments")
     .select("*")
+    .eq("company_id", companyId)
     .order("department_name", { ascending: true });
 
   if (error) {
@@ -17,9 +21,11 @@ export async function getDepartments(): Promise<Department[]> {
 export async function searchDepartments(
   keyword: string
 ): Promise<Department[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("departments")
     .select("*")
+    .eq("company_id", companyId)
     .or(
       `department_name.ilike.%${keyword}%,department_code.ilike.%${keyword}%,description.ilike.%${keyword}%`
     )

@@ -13,11 +13,14 @@ import type {
   RolePermission, RolePermissionForm,
   EmployeeRole,
 } from '../../types/permission';
+import { getMyCompanyId } from '../../services/company/currentCompanyContext';
 
 // ── Roles ──────────────────────────────────────────────────────────────────
 
+// Explicitly filtered by the caller's own company_id — see branchRepository.ts.
 export async function getRoles(): Promise<Role[]> {
-  const { data, error } = await supabase.from('roles').select('*').order('role_name', { ascending: true });
+  const companyId = await getMyCompanyId();
+  const { data, error } = await supabase.from('roles').select('*').eq('company_id', companyId).order('role_name', { ascending: true });
   if (error) throw new Error(error.message);
   return data ?? [];
 }
@@ -66,8 +69,15 @@ export async function deletePermission(id: string): Promise<void> {
 
 // ── Role ↔ Permission matrix ─────────────────────────────────────────────────
 
+// role_permissions has no company_id column of its own (it joins through
+// role_id) -- scoped by first resolving the caller's own roles, then
+// filtering to just those. See branchRepository.ts for why this can't be
+// left to RLS alone.
 export async function getRolePermissions(): Promise<RolePermission[]> {
-  const { data, error } = await supabase.from('role_permissions').select('*');
+  const myRoles = await getRoles();
+  const roleIds = myRoles.map((r) => r.id);
+  if (roleIds.length === 0) return [];
+  const { data, error } = await supabase.from('role_permissions').select('*').in('role_id', roleIds);
   if (error) throw new Error(error.message);
   return data ?? [];
 }

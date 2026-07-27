@@ -1,11 +1,15 @@
 import { supabase } from "../../lib/supabase";
 import type { Role } from "../../types/role";
 import type { RoleForm } from "../../types/role";
+import { getMyCompanyId } from "../../services/company/currentCompanyContext";
 
+// Explicitly filtered by the caller's own company_id — see branchRepository.ts.
 export async function getRoles(): Promise<Role[]> {
+  const companyId = await getMyCompanyId();
   const { data, error } = await supabase
     .from("roles")
     .select("*")
+    .eq("company_id", companyId)
     .order("hierarchy_level", { ascending: true });
 
   if (error) {

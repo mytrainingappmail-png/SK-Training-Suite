@@ -1,11 +1,20 @@
 import { supabase } from "../../lib/supabase";
 import type { MenuPermission } from "../../types/menuPermission";
 import type { MenuPermissionForm } from "../../types/menuPermission";
+import { getRoles } from "../role/roleRepository";
 
+// menu_permissions has no company_id column of its own (it joins through
+// role_id) -- scoped by first resolving the caller's own roles, then
+// filtering to just those. See branchRepository.ts for why this can't be
+// left to RLS alone.
 export async function getMenuPermissions(): Promise<MenuPermission[]> {
+  const myRoles = await getRoles();
+  const roleIds = myRoles.map((r) => r.id);
+  if (roleIds.length === 0) return [];
   const { data, error } = await supabase
     .from("menu_permissions")
     .select("*")
+    .in("role_id", roleIds)
     .order("created_at", { ascending: true });
 
   if (error) {
