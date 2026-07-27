@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import type { Company } from "../../types/company";
+import type { Company, CompanyForm } from "../../types/company";
 
 export async function getCompany(): Promise<Company | null> {
   const { data, error } = await supabase
@@ -28,6 +28,21 @@ export async function getCompanies(): Promise<Company[]> {
   }
 
   return data ?? [];
+}
+
+export async function createCompany(company: CompanyForm): Promise<Company> {
+  const { data, error } = await supabase
+    .from("companies")
+    .insert(company)
+    .select()
+    .single();
+
+  if (error) {
+    console.error(error);
+    throw error;
+  }
+
+  return data;
 }
 
 export async function updateCompany(

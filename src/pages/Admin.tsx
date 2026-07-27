@@ -39,6 +39,7 @@ import ReportManagement from "../components/superadmin/ReportManagement";
 import TrainerAssignmentManagement from "../components/superadmin/TrainerAssignmentManagement";
 
 import PlanManagement from "../modules/license/PlanManagement";
+import CompanyOnboardingWizard from "../components/superadmin/CompanyOnboardingWizard";
 import CompanyLicenseManagement from "../modules/license/CompanyLicenseManagement";
 import DiscountCodeManagement from "../modules/license/DiscountCodeManagement";
 import NotificationLog from "../modules/license/NotificationLog";
@@ -539,6 +540,15 @@ function Admin() {
               </button>
             )}
 
+            {isPlatformOperator && matches("Add Company") && (
+              <button
+                onClick={() => setActiveTab("add-company")}
+                className={getTabClass("add-company")}
+              >
+                Add Company
+              </button>
+            )}
+
             {matches("Company Licenses") && (
               <button
                 onClick={() => setActiveTab("company-license")}
@@ -746,6 +756,8 @@ function Admin() {
             {activeTab === "menu" && isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
 
             {activeTab === "plans" && isPlatformOperator && <PlanManagement />}
+
+            {activeTab === "add-company" && isPlatformOperator && <CompanyOnboardingWizard />}
 
             {activeTab === "company-license" && <CompanyLicenseManagement />}
 

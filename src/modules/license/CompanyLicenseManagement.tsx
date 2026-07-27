@@ -155,6 +155,7 @@ function CompanyLicenseManagement() {
       billing_cycle: lic.billing_cycle,
       grace_period_days: lic.grace_period_days,
       auto_renew: lic.auto_renew,
+      is_complimentary: lic.is_complimentary,
     });
     setCreatingOpen(true);
   }
@@ -245,6 +246,9 @@ function CompanyLicenseManagement() {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[lic.status] ?? ''}`}>
                         {STATUS_LABELS[lic.status] ?? lic.status}
                       </span>
+                      {lic.is_complimentary && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Free</span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400">
                       {plan?.plan_name ?? 'Unknown Plan'} · {lic.billing_cycle} · Ends {new Date(lic.end_date).toLocaleDateString()}
@@ -326,6 +330,10 @@ function CompanyLicenseManagement() {
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.auto_renew} onChange={(e) => setForm((f) => ({ ...f, auto_renew: e.target.checked }))} className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-400" />
                 Auto-renew
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={form.is_complimentary} onChange={(e) => setForm((f) => ({ ...f, is_complimentary: e.target.checked }))} className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-400" />
+                Free / Complimentary — no payment expected
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">

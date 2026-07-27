@@ -90,6 +90,14 @@ export async function assignRolePermission(form: RolePermissionForm): Promise<Ro
   return data;
 }
 
+/** Grants every given permission to a role in one statement — used when provisioning a brand-new Super Admin role, instead of one assignRolePermission round trip per permission. */
+export async function assignAllPermissionsToRole(roleId: string, permissionIds: string[]): Promise<void> {
+  if (permissionIds.length === 0) return;
+  const rows = permissionIds.map((permission_id) => ({ role_id: roleId, permission_id }));
+  const { error } = await supabase.from('role_permissions').insert(rows);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteRolePermission(roleId: string, permissionId: string): Promise<void> {
   const { error } = await supabase
     .from('role_permissions')

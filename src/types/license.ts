@@ -64,6 +64,8 @@ export interface CompanyLicense {
   status: LicenseStatus;
   grace_period_days: number;
   auto_renew: boolean;
+  /** No payment expected for this license (e.g. an internal/demo company) — record-keeping only, matches no functional gate since issuance never required payment. */
+  is_complimentary: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -78,6 +80,7 @@ export const defaultCompanyLicenseForm: CompanyLicenseForm = {
   billing_cycle: 'monthly',
   grace_period_days: 7,
   auto_renew: false,
+  is_complimentary: false,
 };
 
 export type DiscountType = 'percentage' | 'flat';
