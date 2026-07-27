@@ -4,6 +4,8 @@ export const ROUTES = {
 
   LEGAL_DOCUMENT: "/legal/:slug",
 
+  CONTACT_US: "/contact",
+
   DASHBOARD: "/dashboard",
 
   TRAINING: "/training",

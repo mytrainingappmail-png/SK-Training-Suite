@@ -42,6 +42,15 @@ function Footer() {
               {company.website}
             </a>
           )}
+          <p className="mt-1.5 space-x-2">
+            <a href="/legal/terms-of-service" className="hover:underline">Terms &amp; Conditions</a>
+            <span>·</span>
+            <a href="/legal/privacy-policy" className="hover:underline">Privacy Policy</a>
+            <span>·</span>
+            <a href="/legal/refund-and-cancellation" className="hover:underline">Refund &amp; Cancellation</a>
+            <span>·</span>
+            <a href="/contact" className="hover:underline">Contact Us</a>
+          </p>
         </div>
       </div>
     </footer>

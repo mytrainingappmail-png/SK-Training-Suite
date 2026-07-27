@@ -24,6 +24,7 @@ import Videos from "./pages/Videos";
 import ProjectsPage from "./pages/Projects";
 import BrainstormingPage from "./pages/Brainstorming";
 import LegalDocumentPage from "./pages/LegalDocumentPage";
+import ContactUsPage from "./pages/ContactUsPage";
 import CertificateViewPage from "./components/certificate/CertificateViewPage";
 import AttendancePage from "./pages/AttendancePage";
 import MyTicketsPage from "./pages/MyTicketsPage";
@@ -75,6 +76,7 @@ function App() {
       {/* Public Route */}
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.LEGAL_DOCUMENT} element={<LegalDocumentPage />} />
+      <Route path={ROUTES.CONTACT_US} element={<ContactUsPage />} />
 
       {/* Live Quiz (premium add-on) — standalone, no LMS sidebar/header,
           own auth (quiz_admins), own feature flag. Opens in a new browser

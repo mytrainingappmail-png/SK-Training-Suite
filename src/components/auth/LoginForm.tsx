@@ -385,6 +385,10 @@ navigate('/dashboard', { replace: true });
         <a href="/legal/terms-of-service" className="hover:text-white hover:underline">Terms &amp; Conditions</a>
         <span className="mx-2">·</span>
         <a href="/legal/privacy-policy" className="hover:text-white hover:underline">Privacy Policy</a>
+        <span className="mx-2">·</span>
+        <a href="/legal/refund-and-cancellation" className="hover:text-white hover:underline">Refund &amp; Cancellation</a>
+        <span className="mx-2">·</span>
+        <a href="/contact" className="hover:text-white hover:underline">Contact Us</a>
       </p>
 
       {showForgotPassword && (
