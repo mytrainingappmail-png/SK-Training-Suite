@@ -191,7 +191,7 @@ function Admin() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search modules…"
-                className="w-full max-w-md rounded-xl px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none"
+                className="w-full max-w-md rounded-xl bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none"
                 style={{ border: `2px solid ${consoleColors.border}` }}
               />
             </div>
