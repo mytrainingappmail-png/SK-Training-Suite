@@ -68,8 +68,10 @@ export interface RawCertificateRow {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Private Supabase-shaped interfaces
-// Supabase JS returns relations as Array | null even for FK → single row.
-// Typed here so TypeScript accepts the query result without "as any".
+// PostgREST returns a to-one FK embed (the many side selecting the one side,
+// as here) as a plain object, not an array — but typed as object | array |
+// null since that's genuinely what toSingle() must handle regardless of
+// postgrest-js version.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SupabaseCourseRow {
@@ -79,7 +81,11 @@ interface SupabaseCourseRow {
   completion_percentage: number;
   due_date:              string;
   completed_at:          string | null;
-  courses: Array<{
+  courses: {
+    course_code: string;
+    course_name: string;
+    thumbnail:   string;
+  } | Array<{
     course_code: string;
     course_name: string;
     thumbnail:   string;
@@ -92,7 +98,12 @@ interface SupabasePathRow {
   progress_percentage: number;
   status:              string;
   completed_at:        string | null;
-  learning_paths: Array<{
+  learning_paths: {
+    path_code:          string;
+    path_name:          string;
+    difficulty_level:   string;
+    estimated_duration: number;
+  } | Array<{
     path_code:          string;
     path_name:          string;
     difficulty_level:   string;
@@ -105,7 +116,10 @@ interface SupabaseAssessmentRow {
   assessment_id:     string;
   assignment_status: string;
   end_date:          string;
-  assessments: Array<{
+  assessments: {
+    assessment_code:  string;
+    assessment_title: string;
+  } | Array<{
     assessment_code:  string;
     assessment_title: string;
   }> | null;
@@ -113,10 +127,17 @@ interface SupabaseAssessmentRow {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalisation helpers
-// Convert the array-shaped relation to the single-object shape the service
-// expects.  Takes index [0] — Supabase always returns at most one row for a
-// FK-to-PK join.
+// Convert the relation to the single-object shape the service expects.
+// PostgREST returns a to-one FK embed (many rows here -> one row there) as a
+// plain object, not an array — toSingle handles that shape (and tolerates an
+// array too, in case a future postgrest-js version changes this) instead of
+// assuming one over the other and silently discarding real data.
 // ─────────────────────────────────────────────────────────────────────────────
+
+function toSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
 
 function normaliseCourse(row: SupabaseCourseRow): RawCourseRow {
   return {
@@ -126,7 +147,7 @@ function normaliseCourse(row: SupabaseCourseRow): RawCourseRow {
     completion_percentage: row.completion_percentage,
     due_date:              row.due_date,
     completed_at:          row.completed_at,
-    courses:               row.courses?.[0] ?? null,
+    courses:               toSingle(row.courses),
   };
 }
 
@@ -137,7 +158,7 @@ function normalisePath(row: SupabasePathRow): RawPathRow {
     progress_percentage: row.progress_percentage,
     status:              row.status,
     completed_at:        row.completed_at,
-    learning_paths:      row.learning_paths?.[0] ?? null,
+    learning_paths:      toSingle(row.learning_paths),
   };
 }
 
@@ -147,7 +168,7 @@ function normaliseAssessment(row: SupabaseAssessmentRow): RawAssessmentRow {
     assessment_id:     row.assessment_id,
     assignment_status: row.assignment_status,
     end_date:          row.end_date,
-    assessments:       row.assessments?.[0] ?? null,
+    assessments:       toSingle(row.assessments),
   };
 }
 
