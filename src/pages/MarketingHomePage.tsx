@@ -7,10 +7,109 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { loadMarketingSettings, loadMarketingFeatures } from "../services/platformMarketing/platformMarketingService";
+import {
+  loadMarketingSettings,
+  loadMarketingFeatures,
+  loadMarketingTestimonials,
+  loadPublicPricing,
+  submitInquiry,
+} from "../services/platformMarketing/platformMarketingService";
 import { ROUTES } from "../constants/routes";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
-import type { PlatformMarketingSettings, PlatformMarketingFeature } from "../types/platformMarketing";
+import type {
+  PlatformMarketingSettings,
+  PlatformMarketingFeature,
+  PlatformMarketingTestimonial,
+  PublicSubscriptionPlan,
+  InquirySource,
+} from "../types/platformMarketing";
+
+function QueryForm({ whatsappHref }: { whatsappHref: string | null }) {
+  const [source, setSource] = useState<InquirySource>("trial");
+  const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+
+  const INPUT_CLS =
+    "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await submitInquiry({ source, name, company_name: companyName, phone, email, message });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit — please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (submitted) {
+    return (
+      <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-8 text-center">
+        <div className="text-3xl">✅</div>
+        <p className="mt-2 text-base font-semibold text-emerald-800">Thank you — we've received your request.</p>
+        <p className="mt-1 text-sm text-emerald-700">We'll get back to you shortly.</p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+      <div className="flex gap-2">
+        {(
+          [
+            { value: "trial", label: "Start a Free Trial" },
+            { value: "query", label: "Ask a Question" },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setSource(opt.value)}
+            className={`flex-1 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition ${
+              source === opt.value ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name *" required className={INPUT_CLS} />
+      <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company Name" className={INPUT_CLS} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className={INPUT_CLS} />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className={INPUT_CLS} />
+      </div>
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Anything else you'd like us to know?" rows={3} className={INPUT_CLS} />
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50"
+      >
+        {submitting ? "Sending…" : source === "trial" ? "Request Free Trial →" : "Send Message →"}
+      </button>
+
+      {whatsappHref && (
+        <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className="block text-center text-sm font-semibold text-emerald-600 hover:underline">
+          or chat with us on WhatsApp →
+        </a>
+      )}
+    </form>
+  );
+}
 
 function WhatsAppIcon({ className = "h-7 w-7" }: { className?: string }) {
   return (
@@ -23,13 +122,18 @@ function WhatsAppIcon({ className = "h-7 w-7" }: { className?: string }) {
 export default function MarketingHomePage() {
   const [settings, setSettings] = useState<PlatformMarketingSettings | null>(null);
   const [features, setFeatures] = useState<PlatformMarketingFeature[]>([]);
+  const [testimonials, setTestimonials] = useState<PlatformMarketingTestimonial[]>([]);
+  const [plans, setPlans] = useState<PublicSubscriptionPlan[]>([]);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([loadMarketingSettings(), loadMarketingFeatures()])
-      .then(([s, f]) => {
+    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadPublicPricing()])
+      .then(([s, f, t, p]) => {
         setSettings(s);
         setFeatures(f);
+        setTestimonials(t);
+        setPlans(p);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -79,23 +183,12 @@ export default function MarketingHomePage() {
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg text-slate-300">{settings?.hero_subtitle}</p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-            {whatsappHref ? (
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-violet-400"
-              >
-                {settings?.hero_cta_label} →
-              </a>
-            ) : (
-              <Link
-                to={ROUTES.LOGIN}
-                className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-violet-400"
-              >
-                {settings?.hero_cta_label} →
-              </Link>
-            )}
+            <a
+              href="#get-started"
+              className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-violet-400"
+            >
+              {settings?.hero_cta_label} →
+            </a>
             <Link to={ROUTES.LOGIN} className="text-sm font-semibold text-slate-300 hover:text-white">
               Already a customer? Sign in →
             </Link>
@@ -133,6 +226,92 @@ export default function MarketingHomePage() {
           </div>
         </section>
       )}
+
+      {/* Testimonials */}
+      {testimonials.length > 0 && (
+        <section className="px-6 py-20">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight">What Our Customers Say</h2>
+            <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {testimonials.map((t) => (
+                <div key={t.id} className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50 p-6">
+                  <div className="text-amber-400">{"★".repeat(t.rating)}{"☆".repeat(5 - t.rating)}</div>
+                  <p className="mt-3 flex-1 text-sm italic text-slate-700">“{t.quote}”</p>
+                  <div className="mt-4 flex items-center gap-3">
+                    {t.photo_url && <img src={t.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />}
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">{t.name}</div>
+                      {t.role_or_company && <div className="text-xs text-slate-500">{t.role_or_company}</div>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Pricing */}
+      {plans.length > 0 && (
+        <section className="bg-slate-50 px-6 py-20">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight">Simple, Transparent Pricing</h2>
+            <div className="mt-6 flex justify-center">
+              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+                {(["monthly", "yearly"] as const).map((cycle) => (
+                  <button
+                    key={cycle}
+                    onClick={() => setBillingCycle(cycle)}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${
+                      billingCycle === cycle ? "bg-slate-900 text-white" : "text-slate-500"
+                    }`}
+                  >
+                    {cycle}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+              {plans.map((p) => (
+                <div key={p.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900">{p.plan_name}</h3>
+                  {p.description && <p className="mt-1 text-sm text-slate-500">{p.description}</p>}
+                  <div className="mt-5">
+                    <span className="text-3xl font-extrabold text-slate-900">
+                      ₹{(billingCycle === "monthly" ? p.price_monthly : p.price_yearly).toLocaleString()}
+                    </span>
+                    <span className="text-sm text-slate-500">/{billingCycle === "monthly" ? "mo" : "yr"}</span>
+                  </div>
+                  <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-600">
+                    <li>👥 Up to {p.max_employees.toLocaleString()} employees</li>
+                    <li>📚 Up to {p.max_courses.toLocaleString()} courses</li>
+                    {p.features.split(",").filter(Boolean).map((f) => (
+                      <li key={f}>✓ {f.trim()}</li>
+                    ))}
+                  </ul>
+                  <a
+                    href="#get-started"
+                    className="mt-6 rounded-xl bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Get Started
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Get Started / Query Form */}
+      <section id="get-started" className="px-6 py-20">
+        <div className="mx-auto max-w-md">
+          <h2 className="text-center text-3xl font-bold tracking-tight">Get Started</h2>
+          <p className="mt-3 text-center text-sm text-slate-500">Tell us a bit about you and we'll be in touch.</p>
+          <div className="mt-8">
+            <QueryForm whatsappHref={whatsappHref} />
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-slate-950 px-6 py-12 text-slate-400">

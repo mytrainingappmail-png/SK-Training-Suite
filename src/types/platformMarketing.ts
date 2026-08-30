@@ -40,3 +40,64 @@ export const defaultPlatformMarketingFeatureForm: PlatformMarketingFeatureForm =
   description: "",
   display_order: 0,
 };
+
+export interface PlatformMarketingTestimonial {
+  id: string;
+  name: string;
+  role_or_company: string | null;
+  quote: string;
+  photo_url: string | null;
+  rating: number;
+  display_order: number;
+  created_at: string;
+}
+
+export type PlatformMarketingTestimonialForm = Omit<PlatformMarketingTestimonial, "id" | "created_at">;
+
+export const defaultPlatformMarketingTestimonialForm: PlatformMarketingTestimonialForm = {
+  name: "",
+  role_or_company: null,
+  quote: "",
+  photo_url: null,
+  rating: 5,
+  display_order: 0,
+};
+
+/** Public-safe subset of subscription_plans, via get_public_subscription_plans(). */
+export interface PublicSubscriptionPlan {
+  id: string;
+  plan_name: string;
+  plan_code: string;
+  description: string;
+  max_employees: number;
+  max_courses: number;
+  max_storage_gb: number;
+  max_certificates_per_month: number;
+  price_monthly: number;
+  price_yearly: number;
+  features: string;
+}
+
+export type InquirySource = "trial" | "query";
+export type InquiryStatus = "new" | "contacted" | "converted" | "dismissed";
+
+export interface PlatformMarketingInquiry {
+  id: string;
+  source: InquirySource;
+  name: string;
+  company_name: string | null;
+  phone: string | null;
+  email: string | null;
+  message: string | null;
+  status: InquiryStatus;
+  created_at: string;
+}
+
+export interface PlatformMarketingInquiryForm {
+  source: InquirySource;
+  name: string;
+  company_name?: string;
+  phone?: string;
+  email?: string;
+  message?: string;
+}

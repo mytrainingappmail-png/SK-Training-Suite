@@ -344,6 +344,36 @@ function CompanyLicenseManagement() {
                   {plans.map((p) => (<option key={p.id} value={p.id}>{p.plan_name}</option>))}
                 </select>
               </div>
+              {!editingId && (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">Quick Trial</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[15, 30, 45].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => {
+                          const start = new Date();
+                          const end = new Date();
+                          end.setDate(end.getDate() + days);
+                          const iso = (d: Date) => d.toISOString().slice(0, 10);
+                          setForm((f) => ({
+                            ...f,
+                            start_date: iso(start),
+                            end_date: iso(end),
+                            grace_period_days: 0,
+                            is_complimentary: true,
+                          }));
+                        }}
+                        className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                      >
+                        {days}-Day Trial
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">Fills in the dates below, no grace period, marked complimentary — access locks automatically when the trial ends.</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-500">Start Date</label>
