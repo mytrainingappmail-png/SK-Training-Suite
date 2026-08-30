@@ -1,0 +1,19 @@
+-- The per-question timer override feature (added in
+-- 20260727570000_cert_signature_layout_and_name_size.sql's companion
+-- QuizBuilderPage change) relies on quiz_questions.timer_seconds being
+-- NULL to mean "follow the quiz's default_timer_seconds". But every
+-- question row that existed before this feature shipped was created
+-- when timer_seconds was a mandatory concrete value, not an optional
+-- override — so all 493 existing rows had a non-null value, which made
+-- the builder UI treat every single question as manually overridden and
+-- never follow changes to the top-level default.
+--
+-- No question was ever a deliberate override through the new UI before
+-- today (the feature didn't exist yet), so it's safe to reset every
+-- existing question back to NULL — this makes them all immediately
+-- start following default_timer_seconds again, matching the intended
+-- "change the top default, everything not explicitly touched updates"
+-- behaviour. Anyone who genuinely wants a different timer on a specific
+-- question can set that again through the per-question field, which now
+-- correctly stays a real override.
+update quiz_questions set timer_seconds = null;
