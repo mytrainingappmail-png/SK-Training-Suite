@@ -17,6 +17,7 @@ export default function SurveyLiveHostPage() {
   const [results, setResults] = useState<SurveyResults | null>(null);
   const [loading, setLoading] = useState(true);
   const [ending, setEnding] = useState(false);
+  const [copied, setCopied] = useState<"link" | "pin" | "both" | null>(null);
 
   async function refresh() {
     if (!sessionId) return;
@@ -63,6 +64,13 @@ export default function SurveyLiveHostPage() {
   const joinUrl = `${window.location.origin}${ROUTES.SURVEY_LIVE_JOIN}`;
   const submittedCount = participants.filter((p) => p.submitted_at).length;
 
+  function copyText(text: string, which: "link" | "pin" | "both") {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
+
   if (loading || !survey || !session) return <div className="text-slate-500 text-sm">Loading…</div>;
 
   return (
@@ -79,10 +87,33 @@ export default function SurveyLiveHostPage() {
 
       {session.status === "active" ? (
         <div className="bg-gradient-to-br from-violet-900/40 to-slate-900 border border-violet-700/40 rounded-2xl p-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-2">Go to</p>
-          <p className="text-lg font-semibold text-white mb-4 break-all">{joinUrl}</p>
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-2">Enter PIN</p>
-          <p className="text-5xl font-mono font-black tracking-[0.2em] text-amber-400">{session.pin}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-2">Share this — not your browser's address bar</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-1">Go to</p>
+          <p className="text-lg font-semibold text-white mb-2 break-all">{joinUrl}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-1">Enter PIN</p>
+          <p className="text-5xl font-mono font-black tracking-[0.2em] text-amber-400 mb-4">{session.pin}</p>
+
+          <div className="flex flex-wrap justify-center gap-2">
+            <button
+              onClick={() => copyText(joinUrl, "link")}
+              className="text-xs font-semibold text-violet-200 border border-violet-500/40 hover:bg-violet-500/10 rounded-lg px-3 py-1.5"
+            >
+              {copied === "link" ? "✓ Link Copied" : "📋 Copy Link"}
+            </button>
+            <button
+              onClick={() => copyText(session.pin, "pin")}
+              className="text-xs font-semibold text-violet-200 border border-violet-500/40 hover:bg-violet-500/10 rounded-lg px-3 py-1.5"
+            >
+              {copied === "pin" ? "✓ PIN Copied" : "📋 Copy PIN"}
+            </button>
+            <button
+              onClick={() => copyText(`Join the survey: ${joinUrl}\nPIN: ${session.pin}`, "both")}
+              className="text-xs font-semibold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg px-3 py-1.5"
+            >
+              {copied === "both" ? "✓ Copied" : "📋 Copy Both (WhatsApp-ready)"}
+            </button>
+          </div>
+
           <button
             onClick={handleEnd}
             disabled={ending}
