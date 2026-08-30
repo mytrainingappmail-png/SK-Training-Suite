@@ -61,6 +61,7 @@ import TicketManagement from "../components/admin/support/TicketManagement";
 import EmailTemplateBuilder from "../components/admin/email/EmailTemplateBuilder";
 import MarketDataManagement from "../components/admin/marketData/MarketDataManagement";
 import QuizAdminSetupPanel from "../components/quiz/QuizAdminSetupPanel";
+import CallingAppAdminSetupPanel from "../components/callingApp/CallingAppAdminSetupPanel";
 import AuditLogCenter from "../components/admin/audit/AuditLogCenter";
 
 import { useAuthorization } from "../hooks/useAuthorization";
@@ -444,6 +445,7 @@ function Admin() {
 
             {(moduleFlags.market_analytics && matches("Market Analytics")) ||
              (moduleFlags.live_quiz && matches("Live Quiz")) ||
+             (moduleFlags.calling_app && matches("Calling App")) ||
              (isPlatformOperator && matches("Brainstorming")) ||
              matches("Projects") ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
@@ -454,6 +456,9 @@ function Admin() {
                   )}
                   {moduleFlags.live_quiz && matches("Live Quiz") && (
                     <button onClick={() => setActiveTab("live-quiz")} className={getTabClass()} style={getTabStyle("live-quiz")}>Live Quiz</button>
+                  )}
+                  {moduleFlags.calling_app && matches("Calling App") && (
+                    <button onClick={() => setActiveTab("calling-app")} className={getTabClass()} style={getTabStyle("calling-app")}>Calling App</button>
                   )}
                   {isPlatformOperator && matches("Brainstorming") && (
                     <button onClick={() => setActiveTab("brainstorming")} className={getTabClass()} style={getTabStyle("brainstorming")}>Brainstorming</button>
@@ -573,6 +578,8 @@ function Admin() {
             {activeTab === "market-analytics" && moduleFlags.market_analytics && <MarketDataManagement />}
 
             {activeTab === "live-quiz" && moduleFlags.live_quiz && <QuizAdminSetupPanel />}
+
+            {activeTab === "calling-app" && moduleFlags.calling_app && <CallingAppAdminSetupPanel />}
 
             {activeTab === "audit-log" && can(PERMISSIONS.VIEW_AUDIT_LOG) && <AuditLogCenter />}
 

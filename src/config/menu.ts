@@ -25,6 +25,19 @@ export const MENU: MenuItem[] = [
     group: "Overview",
     external: true,
   },
+  // Calling App via an existing LMS login — opens WITHIN the normal app
+  // shell (not external), since this entry point uses the person's own
+  // employee session directly. Only shown once Sidebar.tsx confirms they
+  // actually have a calling_app_admins grant (see hasCallingAppGrant) —
+  // company module flag alone isn't enough, unlike every other item here.
+  {
+    id: "calling-app",
+    title: "Calling App",
+    route: ROUTES.CALLING_APP,
+    icon: "phone-call",
+    visible: true,
+    group: "Overview",
+  },
   {
     id: "dashboard",
     title: "Dashboard",

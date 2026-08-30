@@ -58,6 +58,11 @@ import QuizPlayPage from "./pages/quiz/QuizPlayPage";
 import QuizUsersPage from "./pages/quiz/QuizUsersPage";
 import QuizSettingsPage from "./pages/quiz/QuizSettingsPage";
 
+import CallingAppGuard from "./components/callingApp/CallingAppGuard";
+import CallingAppLoginPage from "./pages/callingApp/CallingAppLoginPage";
+import CallingAppStandalonePage from "./pages/callingApp/CallingAppStandalonePage";
+import CallingAppEmbeddedPage from "./pages/callingApp/CallingAppEmbeddedPage";
+
 function App() {
   useEffect(() => {
     // Live Quiz is a separate app that opens in its own tab with its own favicon
@@ -102,6 +107,14 @@ function App() {
       </Route>
       <Route path={ROUTES.QUIZ_JOIN} element={<QuizJoinPage />} />
       <Route path={ROUTES.QUIZ_PLAY} element={<QuizPlayPage />} />
+
+      {/* Calling App (premium add-on) — dedicated-login entry, standalone,
+          no LMS chrome. Same "separate app in the same SPA bundle"
+          pattern as Live Quiz/Aptitude Test above. */}
+      <Route path={ROUTES.CALLING_APP_LOGIN} element={<CallingAppLoginPage />} />
+      <Route element={<CallingAppGuard><Outlet /></CallingAppGuard>}>
+        <Route path={ROUTES.CALLING_APP_DASHBOARD} element={<CallingAppStandalonePage />} />
+      </Route>
 
       {/* Protected Application — outer guard only checks "is logged in" */}
       <Route
@@ -228,6 +241,7 @@ function App() {
           }
         />
         <Route path={ROUTES.MARKET_ANALYTICS} element={<MarketAnalyticsPage />} />
+        <Route path={ROUTES.CALLING_APP} element={<CallingAppEmbeddedPage />} />
         <Route path={ROUTES.TRAINER_STUDENTS} element={<TrainerStudentsPage />} />
         <Route path={ROUTES.TRAINER_GRADING_QUEUE} element={<TrainerGradingQueuePage />} />
         <Route path={ROUTES.TRAINER_COURSES} element={<TrainerCoursesPage />} />

@@ -10,6 +10,7 @@ import { loadRoles } from "../../services/role/roleService";
 import { loadBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/brandingService";
 import { loadCompany } from "../../services/company/companyService";
 import { loadCompanyModuleFlags } from "../../services/company/appModuleService";
+import { getMyEmployeeLinkedGrant } from "../../repositories/callingApp/callingAppAdminRepository";
 import type { PermissionCode } from "../../types/authorization";
 
 // Shrinks text to fit its container on a single line, however long the
@@ -55,6 +56,7 @@ function FitText({ text, className, align = "left", maxFontSize = 15, minFontSiz
 const MENU_MODULE_MAP: Record<string, string> = {
   "market-analytics": "market_analytics",
   "live-quiz": "live_quiz",
+  "calling-app": "calling_app",
   projects: "projects",
   brainstorming: "brainstorming",
   "help-center": "help_center",
@@ -226,6 +228,10 @@ function Sidebar() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
+  // Whether the CURRENT employee personally has a Calling App grant —
+  // separate from moduleFlags.calling_app (company-level purchase), since
+  // Calling App access is also gated per-person (Admin → Calling App).
+  const [hasCallingAppGrant, setHasCallingAppGrant] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
@@ -280,6 +286,12 @@ function Sidebar() {
   }, []);
 
   useEffect(() => {
+    getMyEmployeeLinkedGrant()
+      .then((grant) => setHasCallingAppGrant(!!grant && grant.status === "active"))
+      .catch(() => setHasCallingAppGrant(false));
+  }, []);
+
+  useEffect(() => {
     if (!user?.roleId) return;
     loadRoles()
       .then((roles) => {
@@ -302,6 +314,11 @@ function Sidebar() {
     // AND only once the company has purchased the add-on. Employees,
     // Trainers, and Managers must never see it, per spec.
     if (item.id === "live-quiz" && !can(PERMISSIONS.VIEW_COMPANY)) return false;
+    // Calling App: company must have the add-on (MENU_MODULE_MAP below)
+    // AND this specific employee must have been personally granted
+    // access (Admin → Calling App) — unlike every other item here, that's
+    // a per-person check, not a role/permission one.
+    if (item.id === "calling-app" && !hasCallingAppGrant) return false;
     const requiredModule = MENU_MODULE_MAP[item.id];
     if (requiredModule && moduleFlags[requiredModule] === false) return false;
 

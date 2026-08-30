@@ -110,4 +110,17 @@ export const ROUTES = {
   // own real Supabase Auth session to call the provisioning edge function.
   QUIZ_ADMIN_SETUP: "/settings/live-quiz-setup",
 
+  // ===========================
+  // Calling App (premium add-on) — dual entry:
+  //   - CALLING_APP (embedded, inside AppLayout): for someone using
+  //     their existing LMS login, gated by a calling_app_admins grant.
+  //   - CALLING_APP_LOGIN/DASHBOARD (standalone, no LMS chrome): a
+  //     genuinely separate calling-only credential, same pattern as
+  //     Live Quiz/Aptitude Test.
+  // ===========================
+
+  CALLING_APP: "/calling-app",
+  CALLING_APP_LOGIN: "/calling-app/login",
+  CALLING_APP_DASHBOARD: "/calling-app/dashboard",
+
 } as const;
