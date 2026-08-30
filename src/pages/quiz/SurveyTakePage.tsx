@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { getSurveyByCode, submitSurveyResponse } from "../../repositories/survey/surveyPublicRepository";
-import type { PublicSurvey, SurveyAnswerInput } from "../../types/survey";
+import { getSurveyByCode, getSurveyPublicSettings, submitSurveyResponse } from "../../repositories/survey/surveyPublicRepository";
+import type { PublicSurvey, SurveyAnswerInput, SurveySettings } from "../../types/survey";
 
 type AnswerState = Record<string, SurveyAnswerInput>;
+
+const DEFAULT_COLORS: SurveySettings["option_colors"] = [
+  { box: "#7C3AED", font: "#FFFFFF" },
+  { box: "#2563EB", font: "#FFFFFF" },
+];
 
 export default function SurveyTakePage() {
   const { accessCode } = useParams<{ accessCode: string }>();
   const [survey, setSurvey] = useState<PublicSurvey | null>(null);
+  const [settings, setSettings] = useState<Pick<SurveySettings, "option_font_size" | "option_colors">>({ option_font_size: 16, option_colors: DEFAULT_COLORS });
   const [answers, setAnswers] = useState<AnswerState>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -17,13 +23,14 @@ export default function SurveyTakePage() {
 
   useEffect(() => {
     if (!accessCode) return;
-    getSurveyByCode(accessCode)
-      .then((s) => {
+    Promise.all([getSurveyByCode(accessCode), getSurveyPublicSettings(accessCode)])
+      .then(([s, settingsResult]) => {
         if (!s) {
           setError("This survey link isn't available — it may have been closed.");
           return;
         }
         setSurvey(s);
+        if (settingsResult && settingsResult.option_colors.length > 0) setSettings(settingsResult);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this survey."))
       .finally(() => setLoading(false));
@@ -121,32 +128,51 @@ export default function SurveyTakePage() {
 
               {q.type === "single_choice" && (
                 <div className="space-y-2">
-                  {q.options.map((opt) => (
-                    <label key={opt.option_id} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                      <input
-                        type="radio"
-                        name={q.question_id}
-                        checked={answers[q.question_id]?.selected_option_ids?.[0] === opt.option_id}
-                        onChange={() => setSingleChoice(q.question_id, opt.option_id)}
-                      />
-                      {opt.option_text}
-                    </label>
-                  ))}
+                  {q.options.map((opt, oi) => {
+                    const color = settings.option_colors[oi % settings.option_colors.length];
+                    const selected = answers[q.question_id]?.selected_option_ids?.[0] === opt.option_id;
+                    return (
+                      <button
+                        key={opt.option_id}
+                        type="button"
+                        onClick={() => setSingleChoice(q.question_id, opt.option_id)}
+                        className="w-full text-left rounded-xl px-4 py-2.5 font-semibold transition-all border-2"
+                        style={{
+                          backgroundColor: selected ? color.box : `${color.box}22`,
+                          color: selected ? color.font : color.box,
+                          borderColor: color.box,
+                          fontSize: settings.option_font_size,
+                        }}
+                      >
+                        {selected ? "● " : "○ "}{opt.option_text}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
               {q.type === "multi_choice" && (
                 <div className="space-y-2">
-                  {q.options.map((opt) => (
-                    <label key={opt.option_id} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={(answers[q.question_id]?.selected_option_ids ?? []).includes(opt.option_id)}
-                        onChange={() => toggleMultiChoice(q.question_id, opt.option_id)}
-                      />
-                      {opt.option_text}
-                    </label>
-                  ))}
+                  {q.options.map((opt, oi) => {
+                    const color = settings.option_colors[oi % settings.option_colors.length];
+                    const selected = (answers[q.question_id]?.selected_option_ids ?? []).includes(opt.option_id);
+                    return (
+                      <button
+                        key={opt.option_id}
+                        type="button"
+                        onClick={() => toggleMultiChoice(q.question_id, opt.option_id)}
+                        className="w-full text-left rounded-xl px-4 py-2.5 font-semibold transition-all border-2"
+                        style={{
+                          backgroundColor: selected ? color.box : `${color.box}22`,
+                          color: selected ? color.font : color.box,
+                          borderColor: color.box,
+                          fontSize: settings.option_font_size,
+                        }}
+                      >
+                        {selected ? "☑ " : "☐ "}{opt.option_text}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 

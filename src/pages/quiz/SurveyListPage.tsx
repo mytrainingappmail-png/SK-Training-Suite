@@ -67,14 +67,22 @@ export default function SurveyListPage() {
           <h1 className="text-xl font-bold text-white">Surveys</h1>
           <p className="text-sm text-slate-400 mt-0.5">Anonymous opinion-gathering — no score, no right/wrong, nothing shown back to the respondent.</p>
         </div>
-        {canEdit && (
+        <div className="flex gap-2">
           <Link
-            to={ROUTES.QUIZ_ADMIN_SURVEY_BUILDER_NEW}
-            className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+            to={ROUTES.QUIZ_ADMIN_SURVEY_SETTINGS}
+            className="text-sm font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-4 py-2"
           >
-            + New Survey
+            ⚙️ Settings
           </Link>
-        )}
+          {canEdit && (
+            <Link
+              to={ROUTES.QUIZ_ADMIN_SURVEY_BUILDER_NEW}
+              className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+            >
+              + New Survey
+            </Link>
+          )}
+        </div>
       </div>
 
       <input

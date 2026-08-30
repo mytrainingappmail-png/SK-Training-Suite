@@ -5,6 +5,7 @@
 
 export type SurveyStatus = "draft" | "published";
 export type SurveyQuestionType = "single_choice" | "multi_choice" | "scale" | "open_text";
+export type SurveySentiment = "positive" | "neutral" | "negative";
 
 export interface Survey {
   id: string;
@@ -14,7 +15,16 @@ export interface Survey {
   description: string;
   access_code: string;
   status: SurveyStatus;
+  /** After this, the survey stops accepting responses and the public link shows "not available" — null means it never closes on its own. */
+  closes_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface SurveySettings {
+  company_id: string;
+  option_font_size: number;
+  option_colors: { box: string; font: string }[];
   updated_at: string;
 }
 
@@ -33,6 +43,8 @@ export interface SurveyQuestionOption {
   id: string;
   question_id: string;
   option_text: string;
+  /** Only meaningful for single_choice/multi_choice — drives the overall positivity score, same idea as calling_app_dispositions' outcome_type. */
+  sentiment: SurveySentiment;
   display_order: number;
 }
 
@@ -98,6 +110,7 @@ export interface SurveyAnswerInput {
 export interface SurveyChoiceResult {
   option_id: string;
   option_text: string;
+  sentiment: SurveySentiment;
   count: number;
 }
 
@@ -111,9 +124,15 @@ export interface SurveyQuestionResult {
   scaleDistribution?: { value: number; count: number }[];
   /** Populated for open_text — every free-text answer, newest first. */
   textAnswers?: string[];
+  /** 0-100 — how "positive" this question's answers were, or undefined for open_text (nothing numeric to score). Scale: normalized min→max. Choice: share of answers on a "positive" option. */
+  positivityScore?: number;
 }
 
 export interface SurveyResults {
   totalResponses: number;
+  /** From get_company_active_employee_count — null if it couldn't be resolved. */
+  eligibleCount: number | null;
   questions: SurveyQuestionResult[];
+  /** Mean of every question's positivityScore that has one — undefined if no question contributed a score. */
+  overallPositivityScore?: number;
 }

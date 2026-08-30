@@ -109,6 +109,7 @@ export const ROUTES = {
   // shell. Taking a survey is public/anonymous, no join/sign-in step.
   QUIZ_ADMIN_SURVEYS: "/quiz-admin/surveys",
   QUIZ_ADMIN_SURVEY_BUILDER_NEW: "/quiz-admin/surveys/new",
+  QUIZ_ADMIN_SURVEY_SETTINGS: "/quiz-admin/surveys/settings",
   QUIZ_ADMIN_SURVEY_BUILDER_EDIT: "/quiz-admin/surveys/:surveyId",
   QUIZ_ADMIN_SURVEY_RESULTS: "/quiz-admin/surveys/:surveyId/results",
   SURVEY_TAKE: "/survey/:accessCode",

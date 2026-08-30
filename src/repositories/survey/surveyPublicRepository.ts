@@ -5,7 +5,7 @@
 // gated server-side.
 
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { PublicSurvey, PublicSurveyRow, SurveyAnswerInput } from "../../types/survey";
+import type { PublicSurvey, PublicSurveyRow, SurveyAnswerInput, SurveySettings } from "../../types/survey";
 
 function groupSurveyRows(rows: PublicSurveyRow[]): PublicSurvey | null {
   if (rows.length === 0) return null;
@@ -46,6 +46,16 @@ export async function getSurveyByCode(accessCode: string): Promise<PublicSurvey 
     throw new Error(error.message);
   }
   return groupSurveyRows((data as PublicSurveyRow[] | null) ?? []);
+}
+
+export async function getSurveyPublicSettings(accessCode: string): Promise<Pick<SurveySettings, "option_font_size" | "option_colors"> | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_survey_public_settings", { p_access_code: accessCode });
+  if (error) {
+    console.error("[surveyPublicRepository] getSurveyPublicSettings:", error);
+    return null;
+  }
+  const row = (data as { option_font_size: number; option_colors: SurveySettings["option_colors"] }[] | null)?.[0];
+  return row ? { option_font_size: row.option_font_size, option_colors: row.option_colors } : null;
 }
 
 export async function submitSurveyResponse(accessCode: string, answers: SurveyAnswerInput[]): Promise<void> {

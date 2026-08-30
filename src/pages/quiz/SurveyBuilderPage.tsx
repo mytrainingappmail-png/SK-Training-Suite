@@ -11,7 +11,7 @@ import {
   setSurveyStatus,
 } from "../../repositories/survey/surveyRepository";
 import type { SurveyForm, SurveyQuestionForm } from "../../repositories/survey/surveyRepository";
-import type { SurveyQuestionType } from "../../types/survey";
+import type { SurveyQuestionType, SurveySentiment } from "../../types/survey";
 
 let localIdCounter = 0;
 function nextLocalId() {
@@ -31,17 +31,21 @@ function blankQuestion(): EditableSurveyQuestion {
     required: true,
     scale_min: 1,
     scale_max: 5,
-    options: [{ option_text: "" }, { option_text: "" }],
+    options: [
+      { option_text: "", sentiment: "positive" },
+      { option_text: "", sentiment: "negative" },
+    ],
   };
 }
 
-const DEFAULT_FORM: SurveyForm = { title: "", description: "" };
+const DEFAULT_FORM: SurveyForm = { title: "", description: "", closes_at: null };
 const TYPE_LABELS: Record<SurveyQuestionType, string> = {
   single_choice: "Single Choice",
   multi_choice: "Multiple Choice",
   scale: "Rating Scale",
   open_text: "Open Text (free response)",
 };
+const SENTIMENT_LABELS: Record<SurveySentiment, string> = { positive: "🙂 Positive", neutral: "😐 Neutral", negative: "🙁 Negative" };
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 8;
 
@@ -72,7 +76,7 @@ export default function SurveyBuilderPage() {
           setError("Survey not found.");
           return;
         }
-        setForm({ title: survey.title, description: survey.description });
+        setForm({ title: survey.title, description: survey.description, closes_at: survey.closes_at });
         setQuestions(
           survey.questions.length > 0
             ? survey.questions.map((q) => ({
@@ -82,7 +86,7 @@ export default function SurveyBuilderPage() {
                 required: q.required,
                 scale_min: q.scale_min ?? 1,
                 scale_max: q.scale_max ?? 5,
-                options: q.options.map((o) => ({ option_text: o.option_text })),
+                options: q.options.map((o) => ({ option_text: o.option_text, sentiment: o.sentiment })),
               }))
             : [blankQuestion()]
         );
@@ -99,20 +103,30 @@ export default function SurveyBuilderPage() {
       prev.map((q) => {
         if (q.localId !== localId) return q;
         const needsOptions = type === "single_choice" || type === "multi_choice";
-        return { ...q, type, options: needsOptions && q.options.length >= MIN_OPTIONS ? q.options : [{ option_text: "" }, { option_text: "" }] };
+        return {
+          ...q,
+          type,
+          options: needsOptions && q.options.length >= MIN_OPTIONS ? q.options : [{ option_text: "", sentiment: "positive" as const }, { option_text: "", sentiment: "negative" as const }],
+        };
       })
     );
   }
 
   function updateOption(localId: string, optionIndex: number, text: string) {
     setQuestions((prev) =>
-      prev.map((q) => (q.localId === localId ? { ...q, options: q.options.map((o, i) => (i === optionIndex ? { option_text: text } : o)) } : q))
+      prev.map((q) => (q.localId === localId ? { ...q, options: q.options.map((o, i) => (i === optionIndex ? { ...o, option_text: text } : o)) } : q))
+    );
+  }
+
+  function updateOptionSentiment(localId: string, optionIndex: number, sentiment: SurveySentiment) {
+    setQuestions((prev) =>
+      prev.map((q) => (q.localId === localId ? { ...q, options: q.options.map((o, i) => (i === optionIndex ? { ...o, sentiment } : o)) } : q))
     );
   }
 
   function addOption(localId: string) {
     setQuestions((prev) =>
-      prev.map((q) => (q.localId === localId && q.options.length < MAX_OPTIONS ? { ...q, options: [...q.options, { option_text: "" }] } : q))
+      prev.map((q) => (q.localId === localId && q.options.length < MAX_OPTIONS ? { ...q, options: [...q.options, { option_text: "", sentiment: "neutral" as const }] } : q))
     );
   }
 
@@ -228,6 +242,16 @@ export default function SurveyBuilderPage() {
             placeholder="Shown to the respondent before the questions"
           />
         </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Closes On (optional)</label>
+          <input
+            type="datetime-local"
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+            value={form.closes_at ? form.closes_at.slice(0, 16) : ""}
+            onChange={(e) => setForm({ ...form, closes_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+          />
+          <p className="text-[11px] text-slate-500 mt-1">After this, the link stops accepting responses. Leave blank to keep it open indefinitely.</p>
+        </div>
       </fieldset>
 
       <fieldset disabled={!canEdit} className="space-y-4">
@@ -277,6 +301,16 @@ export default function SurveyBuilderPage() {
                       onChange={(e) => updateOption(q.localId, oi, e.target.value)}
                       placeholder={`Option ${oi + 1}`}
                     />
+                    <select
+                      className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1.5 text-slate-200"
+                      value={opt.sentiment}
+                      onChange={(e) => updateOptionSentiment(q.localId, oi, e.target.value as SurveySentiment)}
+                      title="Drives the overall positivity score"
+                    >
+                      {(Object.keys(SENTIMENT_LABELS) as SurveySentiment[]).map((s) => (
+                        <option key={s} value={s}>{SENTIMENT_LABELS[s]}</option>
+                      ))}
+                    </select>
                     <button
                       onClick={() => removeOption(q.localId, oi)}
                       disabled={q.options.length <= MIN_OPTIONS}
@@ -293,6 +327,7 @@ export default function SurveyBuilderPage() {
                 >
                   + Add Option
                 </button>
+                <p className="text-[11px] text-slate-500">🙂/🙁 tag each option as Positive/Neutral/Negative so results can show one overall score.</p>
               </div>
             )}
 
