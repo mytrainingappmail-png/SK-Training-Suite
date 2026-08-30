@@ -3,9 +3,112 @@ import { useEffect, useRef, useState } from "react";
 import * as dataRepo from "../../repositories/callingApp/callingAppDataRepository";
 import { parseContactsCsv, downloadCsvFile, buildSampleCsv } from "../../services/callingApp/callingAppCsvService";
 import type { CallingAppIdentity } from "./CallingAppShell";
-import type { CallingAppCallList, CallingAppContact, CallingAppCustomFieldDef, CallingAppAdmin, MasterSheetListSummary } from "../../types/callingApp";
+import type { CallingAppCallList, CallingAppContact, CallingAppCustomFieldDef, CallingAppAdmin, MasterSheetListSummary, DuplicateContactGroup } from "../../types/callingApp";
 
 const INPUT_CLS = "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30";
+
+function DuplicatesPanel({
+  identity,
+  teamAdmins,
+  onDone,
+  showToast,
+}: {
+  identity: CallingAppIdentity;
+  teamAdmins: CallingAppAdmin[];
+  onDone: () => void;
+  showToast: (msg: string, ok?: boolean) => void;
+}) {
+  const [groups, setGroups] = useState<DuplicateContactGroup[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const adminById = new Map(teamAdmins.map((a) => [a.id, a]));
+
+  async function scan() {
+    setLoading(true);
+    try {
+      const found = await dataRepo.findDuplicateGroups(identity.client, identity.admin.company_id);
+      setGroups(found);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRemoveOne(contactId: string) {
+    await dataRepo.deleteContact(identity.client, contactId);
+    await scan();
+    onDone();
+  }
+
+  async function handleCleanAll() {
+    if (!groups || groups.length === 0) return;
+    const extraCount = groups.reduce((sum, g) => sum + g.entries.length - 1, 0);
+    if (!window.confirm(`Remove ${extraCount} duplicate contact(s)? The oldest entry in each group is always kept.`)) return;
+    setCleaning(true);
+    try {
+      const removed = await dataRepo.removeDuplicateContacts(identity.client, groups);
+      showToast(`Removed ${removed} duplicate contact(s).`);
+      await scan();
+      onDone();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not remove duplicates.", false);
+    } finally {
+      setCleaning(false);
+    }
+  }
+
+  const extraCount = groups ? groups.reduce((sum, g) => sum + g.entries.length - 1, 0) : 0;
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Find & Remove Duplicates</h3>
+          <p className="mt-1 text-xs text-slate-400">Same mobile number uploaded more than once — review before removing, or clean them all in one go.</p>
+        </div>
+        <button onClick={scan} disabled={loading} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+          {loading ? "Scanning…" : groups === null ? "Scan for Duplicates" : "Rescan"}
+        </button>
+      </div>
+
+      {groups !== null && (
+        <div className="mt-4">
+          {groups.length === 0 ? (
+            <p className="text-sm text-emerald-600">✅ No duplicate mobile numbers found.</p>
+          ) : (
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm text-amber-700">{groups.length} number(s) duplicated, {extraCount} extra row(s) total.</p>
+                <button onClick={handleCleanAll} disabled={cleaning} className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
+                  {cleaning ? "Cleaning…" : `Remove All ${extraCount} Extras (keep oldest)`}
+                </button>
+              </div>
+              <div className="max-h-80 space-y-3 overflow-y-auto">
+                {groups.map((g) => (
+                  <div key={g.mobile_no} className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                    <p className="text-xs font-semibold text-amber-800">{g.mobile_no} — {g.entries.length} entries</p>
+                    <div className="mt-2 space-y-1">
+                      {g.entries.map((c, i) => (
+                        <div key={c.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-1.5 text-xs">
+                          <span>
+                            {c.name} {i === 0 && <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Keep (oldest)</span>}
+                            {c.assigned_to && <span className="ml-1 text-slate-400">· assigned to {adminById.get(c.assigned_to)?.display_name ?? "someone"}</span>}
+                          </span>
+                          {i > 0 && (
+                            <button onClick={() => handleRemoveOne(c.id)} className="font-semibold text-red-500 hover:underline">Remove</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function UploadToMasterSheet({
   identity,
@@ -276,6 +379,8 @@ export function CallingAppMasterSheetTab({
       </div>
 
       <DistributePanel identity={identity} lists={lists} teamAdmins={teamAdmins} onDone={refresh} showToast={showToast} />
+
+      <DuplicatesPanel identity={identity} teamAdmins={teamAdmins} onDone={refresh} showToast={showToast} />
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <h3 className="mb-1 text-sm font-bold text-slate-900">Who Has Been Given How Much</h3>

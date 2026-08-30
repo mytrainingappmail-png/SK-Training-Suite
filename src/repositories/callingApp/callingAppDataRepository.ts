@@ -21,6 +21,7 @@ import type {
   MasterSheetListSummary,
   EmployeeDistributionSummary,
   DuplicateMobileMatch,
+  DuplicateContactGroup,
 } from "../../types/callingApp";
 
 export async function listDispositions(client: SupabaseClient, companyId: string): Promise<CallingAppDisposition[]> {
@@ -244,6 +245,43 @@ export function buildMasterSheetSummary(lists: CallingAppCallList[], contacts: C
     const assigned = inList.filter((c) => c.assigned_to !== null).length;
     return { list, total: inList.length, assigned, unassigned: inList.length - assigned };
   });
+}
+
+/** Finds every mobile number that already has more than one contact row
+ * for this company — a maintenance/cleanup view, separate from the
+ * upload-time skip-duplicates check (that one stops NEW duplicates;
+ * this one finds ones that got in some other way, e.g. two different
+ * lists uploaded before this feature existed). Oldest entry first in
+ * each group. */
+export async function findDuplicateGroups(client: SupabaseClient, companyId: string): Promise<DuplicateContactGroup[]> {
+  const { data, error } = await client
+    .from("calling_app_contacts")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const byMobile = new Map<string, CallingAppContact[]>();
+  (data ?? []).forEach((c) => {
+    const list = byMobile.get(c.mobile_no) ?? [];
+    list.push(c);
+    byMobile.set(c.mobile_no, list);
+  });
+
+  return Array.from(byMobile.entries())
+    .filter(([, entries]) => entries.length > 1)
+    .map(([mobile_no, entries]) => ({ mobile_no, entries }));
+}
+
+/** Removes every duplicate EXCEPT the oldest entry in each group — the
+ * admin sees the groups first (findDuplicateGroups) and explicitly
+ * confirms before this runs; never automatic. */
+export async function removeDuplicateContacts(client: SupabaseClient, groups: DuplicateContactGroup[]): Promise<number> {
+  const idsToDelete = groups.flatMap((g) => g.entries.slice(1).map((c) => c.id));
+  if (idsToDelete.length === 0) return 0;
+  const { error } = await client.from("calling_app_contacts").delete().in("id", idsToDelete);
+  if (error) throw new Error(error.message);
+  return idsToDelete.length;
 }
 
 export function buildEmployeeDistributionSummary(admins: CallingAppAdmin[], contacts: CallingAppContact[]): EmployeeDistributionSummary[] {

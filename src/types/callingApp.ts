@@ -108,6 +108,14 @@ export interface DuplicateMobileMatch {
   assignedToAdminId: string | null;
 }
 
+/** A mobile number that appears on more than one contact row — every
+ * entry (oldest first) so the admin can see exactly what's duplicated
+ * before deciding what to keep. */
+export interface DuplicateContactGroup {
+  mobile_no: string;
+  entries: CallingAppContact[];
+}
+
 export interface CallingAppCallLog {
   id: string;
   company_id: string;
