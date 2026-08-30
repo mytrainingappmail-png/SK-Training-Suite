@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadResources,
   createResource,
@@ -383,6 +384,26 @@ function ResourceModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [fileUploadError, setFileUploadError] = useState("");
+
+  async function handleResourceFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingFile(true);
+    setFileUploadError("");
+    try {
+      const url = await uploadToCourseContent(file, "files/resources", editing?.id ?? "new");
+      field("file_url", url);
+    } catch (err) {
+      setFileUploadError(err instanceof Error ? err.message : "Failed to upload file.");
+    } finally {
+      setUploadingFile(false);
+    }
+  }
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -510,16 +531,24 @@ function ResourceModal({
               </FL>
             </div>
 
-            {/* File URL */}
-            <FL label="File URL" required error={errs.file_url}>
-              <input
-                type="url"
-                value={form.file_url}
-                onChange={(e) => field("file_url", e.target.value)}
-                placeholder="https://example.com/resource.pdf"
-                disabled={saving}
-                className={CLS_INPUT}
-              />
+            {/* File — either a link or an uploaded file */}
+            <FL label="File" required error={errs.file_url || fileUploadError}>
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={form.file_url}
+                  onChange={(e) => field("file_url", e.target.value)}
+                  placeholder="https://example.com/resource.pdf, or upload below"
+                  disabled={saving}
+                  className={CLS_INPUT}
+                />
+                <input ref={fileInputRef} type="file" onChange={handleResourceFileChange} className="hidden" />
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  disabled={saving || uploadingFile}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {uploadingFile ? "Uploading…" : "Upload File"}
+                </button>
+              </div>
             </FL>
 
             {/* Description */}

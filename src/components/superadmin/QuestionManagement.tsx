@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadQuestions,
   loadOptionsByQuestion,
@@ -484,6 +485,43 @@ function QuestionModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState("");
+
+  async function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingField("image_url");
+    setUploadError("");
+    try {
+      const url = await uploadToCourseContent(file, "images/questions", editing?.id ?? "new");
+      field("image_url", url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to upload image.");
+    } finally {
+      setUploadingField(null);
+    }
+  }
+
+  async function handleAttachmentFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingField("attachment_url");
+    setUploadError("");
+    try {
+      const url = await uploadToCourseContent(file, "files/questions", editing?.id ?? "new");
+      field("attachment_url", url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to upload attachment.");
+    } finally {
+      setUploadingField(null);
+    }
+  }
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -679,19 +717,33 @@ function QuestionModal({
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Media &amp; Hints</p>
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <FL label="Image URL">
-                <input type="url" value={form.image_url}
-                  onChange={(e) => field("image_url", e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Image">
+                <div className="flex items-center gap-3">
+                  {form.image_url && <img src={form.image_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" />}
+                  <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+                  <button type="button" onClick={() => imageInputRef.current?.click()}
+                    disabled={saving || uploadingField === "image_url"}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingField === "image_url" ? "Uploading…" : form.image_url ? "Replace Image" : "Upload Image"}
+                  </button>
+                </div>
               </FL>
-              <FL label="Attachment URL">
-                <input type="url" value={form.attachment_url}
-                  onChange={(e) => field("attachment_url", e.target.value)}
-                  placeholder="https://example.com/file.pdf"
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Attachment (file or link)">
+                <div className="space-y-2">
+                  <input type="url" value={form.attachment_url}
+                    onChange={(e) => field("attachment_url", e.target.value)}
+                    placeholder="https://example.com/file.pdf, or upload below"
+                    disabled={saving} className={CLS_INPUT} />
+                  <input ref={attachmentInputRef} type="file" onChange={handleAttachmentFileChange} className="hidden" />
+                  <button type="button" onClick={() => attachmentInputRef.current?.click()}
+                    disabled={saving || uploadingField === "attachment_url"}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingField === "attachment_url" ? "Uploading…" : "Upload File"}
+                  </button>
+                </div>
               </FL>
             </div>
+            {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
 
             <FL label="Explanation">
               <textarea value={form.explanation}

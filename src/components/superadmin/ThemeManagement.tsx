@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadThemes,
   createTheme,
@@ -379,6 +380,32 @@ function ThemeModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
+
+  function makeAssetUploadHandler<K extends "logo_url" | "favicon_url">(key: K, folder: string) {
+    return async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setUploadingField(key);
+      setUploadError("");
+      try {
+        const url = await uploadToCourseContent(file, `images/themes/${folder}`, editing?.id ?? "new");
+        field(key, url);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Failed to upload image.");
+      } finally {
+        setUploadingField(null);
+      }
+    };
+  }
+
+  const handleLogoUpload = makeAssetUploadHandler("logo_url", "logo");
+  const handleFaviconUpload = makeAssetUploadHandler("favicon_url", "favicon");
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -478,19 +505,30 @@ function ThemeModal({
 
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Assets</p>
 
-              <FL label="Logo URL">
-                <input type="url" value={form.logo_url}
-                  onChange={(e) => field("logo_url", e.target.value)}
-                  placeholder="https://example.com/logo.png"
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Logo">
+                <div className="flex items-center gap-3">
+                  {form.logo_url && <img src={form.logo_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" />}
+                  <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                  <button type="button" onClick={() => logoInputRef.current?.click()}
+                    disabled={saving || uploadingField === "logo_url"}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingField === "logo_url" ? "Uploading…" : form.logo_url ? "Replace Image" : "Upload Image"}
+                  </button>
+                </div>
               </FL>
 
-              <FL label="Favicon URL">
-                <input type="url" value={form.favicon_url}
-                  onChange={(e) => field("favicon_url", e.target.value)}
-                  placeholder="https://example.com/favicon.ico"
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Favicon">
+                <div className="flex items-center gap-3">
+                  {form.favicon_url && <img src={form.favicon_url} alt="" className="h-8 w-8 rounded object-cover ring-1 ring-slate-200" />}
+                  <input ref={faviconInputRef} type="file" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml" onChange={handleFaviconUpload} className="hidden" />
+                  <button type="button" onClick={() => faviconInputRef.current?.click()}
+                    disabled={saving || uploadingField === "favicon_url"}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingField === "favicon_url" ? "Uploading…" : form.favicon_url ? "Replace Image" : "Upload Image"}
+                  </button>
+                </div>
               </FL>
+              {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
 
               <div className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <ToggleRow

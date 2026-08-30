@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadModules,
   createModule,
@@ -374,6 +375,26 @@ function ModuleModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [thumbError, setThumbError] = useState("");
+
+  async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingThumb(true);
+    setThumbError("");
+    try {
+      const url = await uploadToCourseContent(file, "images/modules", editing?.id ?? "new");
+      field("thumbnail", url);
+    } catch (err) {
+      setThumbError(err instanceof Error ? err.message : "Failed to upload thumbnail.");
+    } finally {
+      setUploadingThumb(false);
+    }
+  }
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -502,21 +523,17 @@ function ModuleModal({
               />
             </FL>
 
-            {/* Thumbnail URL + preview */}
-            <FL label="Thumbnail URL">
-              <input
-                type="url"
-                value={form.thumbnail}
-                onChange={(e) => field("thumbnail", e.target.value)}
-                placeholder="https://example.com/image.jpg"
-                disabled={saving}
-                className={CLS_INPUT}
-              />
-              {form.thumbnail && (
-                <div className="mt-2">
-                  <Thumbnail src={form.thumbnail} alt="Thumbnail preview" />
-                </div>
-              )}
+            {/* Thumbnail — uploaded image */}
+            <FL label="Thumbnail" error={thumbError}>
+              <div className="flex items-center gap-3">
+                {form.thumbnail && <Thumbnail src={form.thumbnail} alt="Thumbnail preview" />}
+                <input ref={thumbInputRef} type="file" accept="image/*" onChange={handleThumbnailFileChange} className="hidden" />
+                <button type="button" onClick={() => thumbInputRef.current?.click()}
+                  disabled={saving || uploadingThumb}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {uploadingThumb ? "Uploading…" : form.thumbnail ? "Replace Image" : "Upload Image"}
+                </button>
+              </div>
             </FL>
 
             {/* Order + Minutes */}

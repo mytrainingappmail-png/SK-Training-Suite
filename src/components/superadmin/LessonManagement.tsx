@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadLessons,
   createLesson,
@@ -378,6 +379,26 @@ function LessonModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadError, setVideoUploadError] = useState("");
+
+  async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingVideo(true);
+    setVideoUploadError("");
+    try {
+      const url = await uploadToCourseContent(file, "videos/lessons", editing?.id ?? "new");
+      field("video_url", url);
+    } catch (err) {
+      setVideoUploadError(err instanceof Error ? err.message : "Failed to upload video.");
+    } finally {
+      setUploadingVideo(false);
+    }
+  }
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -530,17 +551,25 @@ function LessonModal({
               />
             </FL>
 
-            {/* Video URL — shown only when type is video */}
+            {/* Video — either a link (e.g. YouTube) or an uploaded file — shown only when type is video */}
             {showVideoUrl && (
-              <FL label="Video URL">
-                <input
-                  type="url"
-                  value={form.video_url}
-                  onChange={(e) => field("video_url", e.target.value)}
-                  placeholder="https://example.com/video.mp4"
-                  disabled={saving}
-                  className={CLS_INPUT}
-                />
+              <FL label="Video" error={videoUploadError}>
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    value={form.video_url}
+                    onChange={(e) => field("video_url", e.target.value)}
+                    placeholder="https://youtube.com/watch?v=..., or upload below"
+                    disabled={saving}
+                    className={CLS_INPUT}
+                  />
+                  <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoFileChange} className="hidden" />
+                  <button type="button" onClick={() => videoInputRef.current?.click()}
+                    disabled={saving || uploadingVideo}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingVideo ? "Uploading…" : "Upload Video File"}
+                  </button>
+                </div>
               </FL>
             )}
 

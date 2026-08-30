@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadLearningPaths,
   createLearningPath,
@@ -316,6 +317,26 @@ function LearningPathModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [thumbError, setThumbError] = useState("");
+
+  async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingThumb(true);
+    setThumbError("");
+    try {
+      const url = await uploadToCourseContent(file, "images/learning-paths", editing?.id ?? "new");
+      field("thumbnail_url", url);
+    } catch (err) {
+      setThumbError(err instanceof Error ? err.message : "Failed to upload thumbnail.");
+    } finally {
+      setUploadingThumb(false);
+    }
+  }
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -412,11 +433,18 @@ function LearningPathModal({
                 rows={3} disabled={saving} className={CLS_TEXTAREA} />
             </FL>
 
-            <FL label="Thumbnail URL">
-              <input type="url" value={form.thumbnail_url}
-                onChange={(e) => field("thumbnail_url", e.target.value)}
-                placeholder="https://example.com/thumbnail.jpg"
-                disabled={saving} className={CLS_INPUT} />
+            <FL label="Thumbnail" error={thumbError}>
+              <div className="flex items-center gap-3">
+                {form.thumbnail_url && (
+                  <img src={form.thumbnail_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" />
+                )}
+                <input ref={thumbInputRef} type="file" accept="image/*" onChange={handleThumbnailFileChange} className="hidden" />
+                <button type="button" onClick={() => thumbInputRef.current?.click()}
+                  disabled={saving || uploadingThumb}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {uploadingThumb ? "Uploading…" : form.thumbnail_url ? "Replace Image" : "Upload Image"}
+                </button>
+              </div>
             </FL>
 
             {/* ── Settings ── */}

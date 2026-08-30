@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 import {
   loadTemplates,
   createTemplate,
@@ -336,6 +337,39 @@ function TemplateModal({
     setErrs((p) => ({ ...p, [key]: undefined }));
   }
 
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState("");
+
+  function makeImageUploadHandler<K extends "background_image_url" | "logo_url" | "signature_url" | "signature_2_url">(
+    key: K,
+    folder: string
+  ) {
+    return async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setUploadingField(key);
+      setUploadError("");
+      try {
+        const url = await uploadToCourseContent(file, `images/certificate-templates/${folder}`, editing?.id ?? "new");
+        field(key, url);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Failed to upload image.");
+      } finally {
+        setUploadingField(null);
+      }
+    };
+  }
+
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const signature1InputRef = useRef<HTMLInputElement>(null);
+  const signature2InputRef = useRef<HTMLInputElement>(null);
+  const handleBackgroundUpload = makeImageUploadHandler("background_image_url", "background");
+  const handleLogoUpload = makeImageUploadHandler("logo_url", "logo");
+  const handleSignature1Upload = makeImageUploadHandler("signature_url", "signature-1");
+  const handleSignature2Upload = makeImageUploadHandler("signature_2_url", "signature-2");
+
   function validate(): boolean {
     const e: FormErrs = {};
 
@@ -579,19 +613,35 @@ function TemplateModal({
               {/* ── Assets ── */}
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Logo & Background</p>
 
-              <FL label="Background Image URL">
-                <input type="url" value={form.background_image_url}
-                  onChange={(e) => field("background_image_url", e.target.value)}
-                  placeholder="https://example.com/bg.png"
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Background Image">
+                <div className="flex items-center gap-3">
+                  {form.background_image_url && (
+                    <img src={form.background_image_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" />
+                  )}
+                  <input ref={backgroundInputRef} type="file" accept="image/*" onChange={handleBackgroundUpload} className="hidden" />
+                  <button type="button" onClick={() => backgroundInputRef.current?.click()}
+                    disabled={saving || uploadingField === "background_image_url"}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingField === "background_image_url" ? "Uploading…" : form.background_image_url ? "Replace Image" : "Upload Image"}
+                  </button>
+                </div>
               </FL>
 
-              <FL label="Logo URL">
-                <input type="url" value={form.logo_url}
-                  onChange={(e) => field("logo_url", e.target.value)}
-                  placeholder="https://example.com/logo.png"
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Logo">
+                <div className="flex items-center gap-3">
+                  {form.logo_url && (
+                    <img src={form.logo_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" />
+                  )}
+                  <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                  <button type="button" onClick={() => logoInputRef.current?.click()}
+                    disabled={saving || uploadingField === "logo_url"}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {uploadingField === "logo_url" ? "Uploading…" : form.logo_url ? "Replace Image" : "Upload Image"}
+                  </button>
+                </div>
               </FL>
+
+              {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
 
               {/* ── Signatures ── */}
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Signatures</p>
@@ -599,11 +649,18 @@ function TemplateModal({
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <p className="text-xs font-semibold text-slate-500">Signature 1</p>
-                  <FL label="Signature Image URL">
-                    <input type="url" value={form.signature_url}
-                      onChange={(e) => field("signature_url", e.target.value)}
-                      placeholder="https://example.com/signature1.png"
-                      disabled={saving} className={CLS_INPUT} />
+                  <FL label="Signature Image">
+                    <div className="flex items-center gap-3">
+                      {form.signature_url && (
+                        <img src={form.signature_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200 bg-white" />
+                      )}
+                      <input ref={signature1InputRef} type="file" accept="image/*" onChange={handleSignature1Upload} className="hidden" />
+                      <button type="button" onClick={() => signature1InputRef.current?.click()}
+                        disabled={saving || uploadingField === "signature_url"}
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        {uploadingField === "signature_url" ? "Uploading…" : form.signature_url ? "Replace" : "Upload"}
+                      </button>
+                    </div>
                   </FL>
                   <FL label="Signatory Name">
                     <input type="text" value={form.signatory_1_name}
@@ -621,11 +678,18 @@ function TemplateModal({
 
                 <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <p className="text-xs font-semibold text-slate-500">Signature 2</p>
-                  <FL label="Signature Image URL">
-                    <input type="url" value={form.signature_2_url}
-                      onChange={(e) => field("signature_2_url", e.target.value)}
-                      placeholder="https://example.com/signature2.png"
-                      disabled={saving} className={CLS_INPUT} />
+                  <FL label="Signature Image">
+                    <div className="flex items-center gap-3">
+                      {form.signature_2_url && (
+                        <img src={form.signature_2_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200 bg-white" />
+                      )}
+                      <input ref={signature2InputRef} type="file" accept="image/*" onChange={handleSignature2Upload} className="hidden" />
+                      <button type="button" onClick={() => signature2InputRef.current?.click()}
+                        disabled={saving || uploadingField === "signature_2_url"}
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        {uploadingField === "signature_2_url" ? "Uploading…" : form.signature_2_url ? "Replace" : "Upload"}
+                      </button>
+                    </div>
                   </FL>
                   <FL label="Signatory Name">
                     <input type="text" value={form.signatory_2_name}
