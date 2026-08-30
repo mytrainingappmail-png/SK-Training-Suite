@@ -11,6 +11,7 @@ export interface QuizForm {
   improve_threshold_pct: number;
   shuffle_options: boolean;
   shuffle_questions: boolean;
+  issue_certificate: boolean;
 }
 
 export interface QuestionOptionForm {

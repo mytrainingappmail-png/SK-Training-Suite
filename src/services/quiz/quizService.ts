@@ -90,6 +90,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     improve_threshold_pct: source.improve_threshold_pct,
     shuffle_options: source.shuffle_options,
     shuffle_questions: source.shuffle_questions,
+    issue_certificate: source.issue_certificate,
   });
 
   if (source.questions.length > 0) {
@@ -138,6 +139,7 @@ export async function mergeQuizzes(
     improve_threshold_pct: Math.round(found.reduce((sum, q) => sum + q.improve_threshold_pct, 0) / found.length),
     shuffle_options: found.some((q) => q.shuffle_options),
     shuffle_questions: found.some((q) => q.shuffle_questions),
+    issue_certificate: found.every((q) => q.issue_certificate),
   });
 
   const mergedQuestions = found.flatMap((q) =>

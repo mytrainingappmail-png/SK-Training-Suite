@@ -2,10 +2,17 @@ import { useEffect, useRef, useState } from "react";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
+import {
+  listCertTemplateDrafts,
+  createCertTemplateDraft,
+  updateCertTemplateDraft,
+  deleteCertTemplateDraft,
+  setActiveCertTemplateDraft,
+} from "../../repositories/quiz/quizCertTemplatesRepository";
 import { renderCertificateToCanvas, CERT_TEMPLATE_LABELS } from "../../services/quiz/quizCertificateRenderer";
 import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from "../../services/quiz/quizBackupService";
 import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
-import type { QuizSettings, OptionColor, CertTemplate } from "../../types/quiz";
+import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 const CERT_TEMPLATES = Object.keys(CERT_TEMPLATE_LABELS) as CertTemplate[];
@@ -18,8 +25,14 @@ export default function QuizSettingsPage() {
   const [appearanceMessage, setAppearanceMessage] = useState("");
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingMessage, setBrandingMessage] = useState("");
-  const [certSaving, setCertSaving] = useState(false);
-  const [certMessage, setCertMessage] = useState("");
+  const [eligibilitySaving, setEligibilitySaving] = useState(false);
+  const [eligibilityMessage, setEligibilityMessage] = useState("");
+  const [drafts, setDrafts] = useState<CertTemplateDraft[]>([]);
+  const [editingDraft, setEditingDraft] = useState<CertTemplateDraft | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [newDraftName, setNewDraftName] = useState("");
+  const [creatingDraft, setCreatingDraft] = useState(false);
   const [messagesSaving, setMessagesSaving] = useState(false);
   const [messagesSavedMessage, setMessagesSavedMessage] = useState("");
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,56 +46,52 @@ export default function QuizSettingsPage() {
   useEffect(() => {
     if (!me) return;
     getSettings(me.company_id).then(setSettings).finally(() => setLoading(false));
+    refreshDrafts();
   }, [me]);
 
+  function refreshDrafts() {
+    if (!me) return;
+    listCertTemplateDrafts(me.company_id).then((rows) => {
+      setDrafts(rows);
+      setEditingDraft((current) => {
+        if (current) {
+          const stillThere = rows.find((r) => r.id === current.id);
+          if (stillThere) return stillThere;
+        }
+        return rows.find((r) => r.is_active) ?? rows[0] ?? null;
+      });
+    });
+  }
+
   useEffect(() => {
-    if (!settings || !previewCanvasRef.current) return;
-    renderCertificateToCanvas(previewCanvasRef.current, settings.cert_template, {
+    if (!editingDraft || !previewCanvasRef.current) return;
+    renderCertificateToCanvas(previewCanvasRef.current, editingDraft.template, {
       candidateName: "Jane Trainee",
       quizTitle: "Sample Quiz Title",
       scoreLine: "92% — PASS",
       certNumber: "CERT-PREVIEW01",
       issuedDate: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
-      companyName: settings.cert_company_name || "Your Company",
-      logoUrl: settings.cert_logo_url,
-      logoPosition: settings.cert_logo_position,
-      title: settings.cert_title,
-      achievementLine: settings.cert_achievement_line,
-      signatory1Name: settings.cert_signatory1_name,
-      signatory1Title: settings.cert_signatory1_title,
-      signatory1ImageUrl: settings.cert_signatory1_image_url,
-      signatory1Scale: settings.cert_signatory1_scale,
-      signatory1NameScale: settings.cert_signatory1_name_scale,
-      signatory2Name: settings.cert_signatory2_name,
-      signatory2Title: settings.cert_signatory2_title,
-      signatory2ImageUrl: settings.cert_signatory2_image_url,
-      signatory2Scale: settings.cert_signatory2_scale,
-      signatory2NameScale: settings.cert_signatory2_name_scale,
-      signatureMode: settings.cert_signature_mode,
-      signatureAlign: settings.cert_signature_align,
+      companyName: editingDraft.company_name || "Your Company",
+      logoUrl: editingDraft.logo_url,
+      logoPosition: editingDraft.logo_position,
+      title: editingDraft.title,
+      achievementLine: editingDraft.achievement_line,
+      signatory1Name: editingDraft.signatory1_name,
+      signatory1Title: editingDraft.signatory1_title,
+      signatory1ImageUrl: editingDraft.signatory1_image_url,
+      signatory1Scale: editingDraft.signatory1_scale,
+      signatory1NameScale: editingDraft.signatory1_name_scale,
+      signatory2Name: editingDraft.signatory2_name,
+      signatory2Title: editingDraft.signatory2_title,
+      signatory2ImageUrl: editingDraft.signatory2_image_url,
+      signatory2Scale: editingDraft.signatory2_scale,
+      signatory2NameScale: editingDraft.signatory2_name_scale,
+      signatureMode: editingDraft.signature_mode,
+      signatureAlign: editingDraft.signature_align,
     }).catch(() => {
       // preview only — a failed render just leaves the canvas as-is
     });
-  }, [
-    settings?.cert_template,
-    settings?.cert_company_name,
-    settings?.cert_logo_url,
-    settings?.cert_logo_position,
-    settings?.cert_title,
-    settings?.cert_achievement_line,
-    settings?.cert_signatory1_name,
-    settings?.cert_signatory1_title,
-    settings?.cert_signatory1_image_url,
-    settings?.cert_signatory1_scale,
-    settings?.cert_signatory1_name_scale,
-    settings?.cert_signatory2_name,
-    settings?.cert_signatory2_title,
-    settings?.cert_signatory2_image_url,
-    settings?.cert_signatory2_scale,
-    settings?.cert_signatory2_name_scale,
-    settings?.cert_signature_mode,
-    settings?.cert_signature_align,
-  ]);
+  }, [editingDraft]);
 
   function updateOptionColor(index: number, field: "box" | "font", value: string) {
     if (!settings) return;
@@ -138,36 +147,78 @@ export default function QuizSettingsPage() {
     }
   }
 
-  async function handleSaveCert() {
+  async function handleSaveEligibility() {
     if (!me || !settings) return;
-    setCertSaving(true);
-    setCertMessage("");
+    setEligibilitySaving(true);
+    setEligibilityMessage("");
     try {
-      await saveSettings(me.company_id, {
-        cert_template: settings.cert_template,
-        cert_company_name: settings.cert_company_name,
-        cert_logo_url: settings.cert_logo_url,
-        cert_logo_position: settings.cert_logo_position,
-        cert_title: settings.cert_title,
-        cert_achievement_line: settings.cert_achievement_line,
-        cert_signatory1_name: settings.cert_signatory1_name,
-        cert_signatory1_title: settings.cert_signatory1_title,
-        cert_signatory1_image_url: settings.cert_signatory1_image_url,
-        cert_signatory1_scale: settings.cert_signatory1_scale,
-        cert_signatory1_name_scale: settings.cert_signatory1_name_scale,
-        cert_signatory2_name: settings.cert_signatory2_name,
-        cert_signatory2_title: settings.cert_signatory2_title,
-        cert_signatory2_image_url: settings.cert_signatory2_image_url,
-        cert_signatory2_scale: settings.cert_signatory2_scale,
-        cert_signatory2_name_scale: settings.cert_signatory2_name_scale,
-        cert_signature_mode: settings.cert_signature_mode,
-        cert_signature_align: settings.cert_signature_align,
-        cert_eligibility: settings.cert_eligibility,
-      });
-      setCertMessage("Certificate settings saved.");
+      await saveSettings(me.company_id, { cert_eligibility: settings.cert_eligibility });
+      setEligibilityMessage("Saved.");
     } finally {
-      setCertSaving(false);
+      setEligibilitySaving(false);
     }
+  }
+
+  async function handleSaveDraft() {
+    if (!editingDraft) return;
+    setDraftSaving(true);
+    setDraftMessage("");
+    try {
+      const saved = await updateCertTemplateDraft(editingDraft.id, {
+        name: editingDraft.name,
+        template: editingDraft.template,
+        company_name: editingDraft.company_name,
+        logo_url: editingDraft.logo_url,
+        logo_position: editingDraft.logo_position,
+        title: editingDraft.title,
+        achievement_line: editingDraft.achievement_line,
+        signatory1_name: editingDraft.signatory1_name,
+        signatory1_title: editingDraft.signatory1_title,
+        signatory1_image_url: editingDraft.signatory1_image_url,
+        signatory1_scale: editingDraft.signatory1_scale,
+        signatory1_name_scale: editingDraft.signatory1_name_scale,
+        signatory2_name: editingDraft.signatory2_name,
+        signatory2_title: editingDraft.signatory2_title,
+        signatory2_image_url: editingDraft.signatory2_image_url,
+        signatory2_scale: editingDraft.signatory2_scale,
+        signatory2_name_scale: editingDraft.signatory2_name_scale,
+        signature_mode: editingDraft.signature_mode,
+        signature_align: editingDraft.signature_align,
+      });
+      setEditingDraft(saved);
+      setDrafts((prev) => prev.map((d) => (d.id === saved.id ? saved : d)));
+      setDraftMessage("Draft saved.");
+    } finally {
+      setDraftSaving(false);
+    }
+  }
+
+  async function handleCreateDraft() {
+    if (!me || !newDraftName.trim()) return;
+    setCreatingDraft(true);
+    try {
+      const created = await createCertTemplateDraft(me.company_id, newDraftName.trim(), editingDraft ?? undefined);
+      if (drafts.length === 0) {
+        await setActiveCertTemplateDraft(created.id);
+      }
+      setNewDraftName("");
+      refreshDrafts();
+      setEditingDraft(created);
+    } finally {
+      setCreatingDraft(false);
+    }
+  }
+
+  async function handleSetActiveDraft(id: string) {
+    await setActiveCertTemplateDraft(id);
+    refreshDrafts();
+  }
+
+  async function handleDeleteDraft(draft: CertTemplateDraft) {
+    if (draft.is_active) return;
+    if (!window.confirm(`Delete the certificate draft "${draft.name}"? This can't be undone.`)) return;
+    await deleteCertTemplateDraft(draft.id);
+    refreshDrafts();
   }
 
   async function handleSaveMessages() {
@@ -443,7 +494,7 @@ export default function QuizSettingsPage() {
         <div>
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Who gets a certificate</div>
           <p className="text-xs text-slate-500 mb-2">Make it a competition, or hand one to everyone who passes.</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {(
               [
                 { value: "all_pass", label: "Everyone who passes" },
@@ -463,309 +514,393 @@ export default function QuizSettingsPage() {
                 {opt.label}
               </button>
             ))}
+            <button
+              onClick={handleSaveEligibility}
+              disabled={eligibilitySaving}
+              className="text-xs font-semibold text-slate-300 border border-slate-700 hover:bg-slate-800 disabled:opacity-50 rounded-lg px-3 py-2"
+            >
+              💾 {eligibilitySaving ? "Saving…" : "Save"}
+            </button>
+            {eligibilityMessage && <span className="text-xs text-emerald-300">{eligibilityMessage}</span>}
           </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            To turn certificates off entirely for a specific quiz (e.g. a practice quiz), use that quiz's own "Issue certificate" toggle in the Quiz Builder.
+          </p>
         </div>
 
-        <div>
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Template</div>
+        <div className="pt-2 border-t border-slate-800">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Certificate Designs</div>
+          <p className="text-xs text-slate-500 mb-3">Keep a few saved designs — only the one marked Active is what trainees actually get.</p>
+
           <div className="flex flex-wrap gap-2">
-            {CERT_TEMPLATES.map((t) => (
+            {drafts.map((d) => (
               <button
-                key={t}
-                onClick={() => setSettings({ ...settings, cert_template: t })}
+                key={d.id}
+                onClick={() => setEditingDraft(d)}
                 className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
-                  settings.cert_template === t
-                    ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                  editingDraft?.id === d.id
+                    ? "border-violet-500 bg-violet-500/10 text-violet-200"
                     : "border-slate-700 text-slate-300 hover:border-slate-600"
                 }`}
               >
-                {CERT_TEMPLATE_LABELS[t]}
+                {d.name}
+                {d.is_active && <span className="ml-1.5 text-emerald-400">● Active</span>}
               </button>
             ))}
           </div>
-        </div>
 
-        <div className="pt-2 border-t border-slate-800 space-y-3">
-          <QuizBrandingImageField
-            label="Certificate Logo"
-            hint="Optional — your company logo or a seal/crest, shown on the certificate itself. Kept in its own colors (not recolored like signatures)."
-            value={settings.cert_logo_url}
-            kind="cert-logo"
-            companyId={me.company_id}
-            onChange={(url) => setSettings({ ...settings, cert_logo_url: url })}
-            previewClassName="h-16 w-32 object-contain rounded-lg bg-white border border-slate-700"
-          />
-          {settings.cert_logo_url && (
-            <div>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Logo Placement</div>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    { value: "top_center", label: "Top Center" },
-                    { value: "top_left", label: "Top Left" },
-                    { value: "top_right", label: "Top Right" },
-                    { value: "watermark", label: "Watermark" },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setSettings({ ...settings, cert_logo_position: opt.value })}
-                    className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
-                      settings.cert_logo_position === opt.value
-                        ? "border-amber-400 bg-amber-400/10 text-amber-300"
-                        : "border-slate-700 text-slate-300 hover:border-slate-600"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+          {canEdit && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                value={newDraftName}
+                onChange={(e) => setNewDraftName(e.target.value)}
+                placeholder={drafts.length === 0 ? "e.g. Draft 1" : "e.g. Draft 2 — Gold Seal"}
+                className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 flex-1 min-w-[180px]"
+              />
+              <button
+                onClick={handleCreateDraft}
+                disabled={creatingDraft || !newDraftName.trim()}
+                className="text-sm font-semibold text-slate-200 border border-slate-700 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-lg px-4 py-2"
+              >
+                + New Draft{drafts.length > 0 ? " (copies the one you're viewing)" : ""}
+              </button>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Company Name on Certificate</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_company_name ?? ""}
-              onChange={(e) => setSettings({ ...settings, cert_company_name: e.target.value })}
-              placeholder="Uses your LMS company name if blank"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Certificate Title</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_title}
-              onChange={(e) => setSettings({ ...settings, cert_title: e.target.value })}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Achievement Line</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_achievement_line}
-              onChange={(e) => setSettings({ ...settings, cert_achievement_line: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 1 Name</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_signatory1_name ?? ""}
-              onChange={(e) => setSettings({ ...settings, cert_signatory1_name: e.target.value })}
-              placeholder="e.g. Siddharth Sharma"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 1 Title</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_signatory1_title ?? ""}
-              onChange={(e) => setSettings({ ...settings, cert_signatory1_title: e.target.value })}
-              placeholder="e.g. Founder & CEO"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 2 Name</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_signatory2_name ?? ""}
-              onChange={(e) => setSettings({ ...settings, cert_signatory2_name: e.target.value })}
-              placeholder="Optional"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 2 Title</label>
-            <input
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={settings.cert_signatory2_title ?? ""}
-              onChange={(e) => setSettings({ ...settings, cert_signatory2_title: e.target.value })}
-              placeholder="Optional"
-            />
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-slate-800 space-y-3">
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Signature Layout</div>
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { value: "both", label: "Both Signatures" },
-                  { value: "single", label: "Single Signature Only" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signature_mode: opt.value })}
-                  className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
-                    settings.cert_signature_mode === opt.value
-                      ? "border-amber-400 bg-amber-400/10 text-amber-300"
-                      : "border-slate-700 text-slate-300 hover:border-slate-600"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              {settings.cert_signature_mode === "single"
-                ? "Only Signatory 1 is shown on the certificate — Signatory 2's details below are ignored."
-                : "Both signatories are shown side by side, as before."}
-            </p>
-          </div>
-
-          {settings.cert_signature_mode === "single" && (
-            <div>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Signature Alignment</div>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    { value: "left", label: "Left" },
-                    { value: "center", label: "Center" },
-                    { value: "right", label: "Right" },
-                  ] as const
-                ).map((opt) => (
+        {!editingDraft ? (
+          <p className="text-sm text-slate-400 pt-2 border-t border-slate-800">No certificate design yet — create your first draft above.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+              <input
+                value={editingDraft.name}
+                onChange={(e) => setEditingDraft({ ...editingDraft, name: e.target.value })}
+                className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-violet-500"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                {editingDraft.is_active ? (
+                  <span className="text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+                    ● Currently Active — this is what downloads
+                  </span>
+                ) : (
                   <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, cert_signature_align: opt.value })}
+                    onClick={() => handleSetActiveDraft(editingDraft.id)}
+                    className="text-xs font-semibold text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/10 rounded-lg px-3 py-2"
+                  >
+                    ✓ Set as Active
+                  </button>
+                )}
+                {!editingDraft.is_active && drafts.length > 1 && (
+                  <button onClick={() => handleDeleteDraft(editingDraft)} className="text-xs font-semibold text-red-300 hover:underline px-2">
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Template</div>
+              <div className="flex flex-wrap gap-2">
+                {CERT_TEMPLATES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setEditingDraft({ ...editingDraft, template: t })}
                     className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
-                      settings.cert_signature_align === opt.value
+                      editingDraft.template === t
                         ? "border-amber-400 bg-amber-400/10 text-amber-300"
                         : "border-slate-700 text-slate-300 hover:border-slate-600"
                     }`}
                   >
-                    {opt.label}
+                    {CERT_TEMPLATE_LABELS[t]}
                   </button>
                 ))}
               </div>
             </div>
-          )}
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
-          <div>
-            <QuizBrandingImageField
-              label="Signatory 1 Signature"
-              hint="Upload a scanned/transparent signature image — shown above the name on the certificate. Preview below is on a white card since most scanned signatures are dark ink; on the certificate itself it's auto-recolored to match the template."
-              value={settings.cert_signatory1_image_url}
-              kind="signatory-1"
-              companyId={me.company_id}
-              onChange={(url) => setSettings({ ...settings, cert_signatory1_image_url: url })}
-              previewClassName="h-20 w-48 object-contain rounded-lg bg-white border border-slate-700"
-            />
-            {settings.cert_signatory1_image_url && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Signature image size:</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory1_scale: Math.max(50, settings.cert_signatory1_scale - 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  −
-                </button>
-                <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.cert_signatory1_scale}%</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory1_scale: Math.min(150, settings.cert_signatory1_scale + 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  +
-                </button>
-              </div>
-            )}
-            {settings.cert_signatory1_name && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Name text size:</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory1_name_scale: Math.max(50, settings.cert_signatory1_name_scale - 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  −
-                </button>
-                <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.cert_signatory1_name_scale}%</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory1_name_scale: Math.min(150, settings.cert_signatory1_name_scale + 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  +
-                </button>
-              </div>
-            )}
-          </div>
-          <div>
-            <QuizBrandingImageField
-              label="Signatory 2 Signature"
-              hint="Optional — same as above, for the second signatory"
-              value={settings.cert_signatory2_image_url}
-              kind="signatory-2"
-              companyId={me.company_id}
-              onChange={(url) => setSettings({ ...settings, cert_signatory2_image_url: url })}
-              previewClassName="h-20 w-48 object-contain rounded-lg bg-white border border-slate-700"
-            />
-            {settings.cert_signatory2_image_url && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Signature image size:</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory2_scale: Math.max(50, settings.cert_signatory2_scale - 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  −
-                </button>
-                <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.cert_signatory2_scale}%</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory2_scale: Math.min(150, settings.cert_signatory2_scale + 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  +
-                </button>
-              </div>
-            )}
-            {settings.cert_signatory2_name && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Name text size:</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory2_name_scale: Math.max(50, settings.cert_signatory2_name_scale - 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  −
-                </button>
-                <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.cert_signatory2_name_scale}%</span>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, cert_signatory2_name_scale: Math.min(150, settings.cert_signatory2_name_scale + 10) })}
-                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
-                >
-                  +
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+            <div className="pt-2 border-t border-slate-800 space-y-3">
+              <QuizBrandingImageField
+                label="Certificate Logo"
+                hint="Optional — your company logo or a seal/crest, shown on the certificate itself. Kept in its own colors (not recolored like signatures)."
+                value={editingDraft.logo_url}
+                kind="cert-logo"
+                companyId={me.company_id}
+                onChange={(url) => setEditingDraft({ ...editingDraft, logo_url: url })}
+                previewClassName="h-16 w-32 object-contain rounded-lg bg-white border border-slate-700"
+              />
+              {editingDraft.logo_url && (
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Logo Placement</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: "top_center", label: "Top Center" },
+                        { value: "top_left", label: "Top Left" },
+                        { value: "top_right", label: "Top Right" },
+                        { value: "watermark", label: "Watermark" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setEditingDraft({ ...editingDraft, logo_position: opt.value })}
+                        className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                          editingDraft.logo_position === opt.value
+                            ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                            : "border-slate-700 text-slate-300 hover:border-slate-600"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-        <div>
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Live Preview</div>
-          <canvas ref={previewCanvasRef} className="w-full max-w-xl rounded-lg border border-slate-700" />
-        </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Company Name on Certificate</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.company_name ?? ""}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, company_name: e.target.value })}
+                  placeholder="Uses your LMS company name if blank"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Certificate Title</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.title}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, title: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Achievement Line</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.achievement_line}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, achievement_line: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 1 Name</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.signatory1_name ?? ""}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, signatory1_name: e.target.value })}
+                  placeholder="e.g. Siddharth Sharma"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 1 Title</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.signatory1_title ?? ""}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, signatory1_title: e.target.value })}
+                  placeholder="e.g. Founder & CEO"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 2 Name</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.signatory2_name ?? ""}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, signatory2_name: e.target.value })}
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Signatory 2 Title</label>
+                <input
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                  value={editingDraft.signatory2_title ?? ""}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, signatory2_title: e.target.value })}
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
 
-        {certMessage && <div className="text-sm text-emerald-300">{certMessage}</div>}
-        <button
-          onClick={handleSaveCert}
-          disabled={certSaving}
-          className="rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold text-sm px-4 py-2"
-        >
-          💾 {certSaving ? "Saving…" : "Save Certificate Settings"}
-        </button>
+            <div className="pt-2 border-t border-slate-800 space-y-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Signature Layout</div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { value: "both", label: "Both Signatures" },
+                      { value: "single", label: "Single Signature Only" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signature_mode: opt.value })}
+                      className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                        editingDraft.signature_mode === opt.value
+                          ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                          : "border-slate-700 text-slate-300 hover:border-slate-600"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {editingDraft.signature_mode === "single"
+                    ? "Only Signatory 1 is shown on the certificate — Signatory 2's details below are ignored."
+                    : "Both signatories are shown side by side, as before."}
+                </p>
+              </div>
+
+              {editingDraft.signature_mode === "single" && (
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Signature Alignment</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: "left", label: "Left" },
+                        { value: "center", label: "Center" },
+                        { value: "right", label: "Right" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setEditingDraft({ ...editingDraft, signature_align: opt.value })}
+                        className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                          editingDraft.signature_align === opt.value
+                            ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                            : "border-slate-700 text-slate-300 hover:border-slate-600"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+              <div>
+                <QuizBrandingImageField
+                  label="Signatory 1 Signature"
+                  hint="Upload a scanned/transparent signature image — shown above the name on the certificate. Preview below is on a white card since most scanned signatures are dark ink; on the certificate itself it's auto-recolored to match the template."
+                  value={editingDraft.signatory1_image_url}
+                  kind="signatory-1"
+                  companyId={me.company_id}
+                  onChange={(url) => setEditingDraft({ ...editingDraft, signatory1_image_url: url })}
+                  previewClassName="h-20 w-48 object-contain rounded-lg bg-white border border-slate-700"
+                />
+                {editingDraft.signatory1_image_url && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Signature image size:</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory1_scale: Math.max(50, editingDraft.signatory1_scale - 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      −
+                    </button>
+                    <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{editingDraft.signatory1_scale}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory1_scale: Math.min(150, editingDraft.signatory1_scale + 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+                {editingDraft.signatory1_name && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Name text size:</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory1_name_scale: Math.max(50, editingDraft.signatory1_name_scale - 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      −
+                    </button>
+                    <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{editingDraft.signatory1_name_scale}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory1_name_scale: Math.min(150, editingDraft.signatory1_name_scale + 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div>
+                <QuizBrandingImageField
+                  label="Signatory 2 Signature"
+                  hint="Optional — same as above, for the second signatory"
+                  value={editingDraft.signatory2_image_url}
+                  kind="signatory-2"
+                  companyId={me.company_id}
+                  onChange={(url) => setEditingDraft({ ...editingDraft, signatory2_image_url: url })}
+                  previewClassName="h-20 w-48 object-contain rounded-lg bg-white border border-slate-700"
+                />
+                {editingDraft.signatory2_image_url && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Signature image size:</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory2_scale: Math.max(50, editingDraft.signatory2_scale - 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      −
+                    </button>
+                    <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{editingDraft.signatory2_scale}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory2_scale: Math.min(150, editingDraft.signatory2_scale + 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+                {editingDraft.signatory2_name && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Name text size:</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory2_name_scale: Math.max(50, editingDraft.signatory2_name_scale - 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      −
+                    </button>
+                    <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{editingDraft.signatory2_name_scale}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDraft({ ...editingDraft, signatory2_name_scale: Math.min(150, editingDraft.signatory2_name_scale + 10) })}
+                      className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Live Preview</div>
+              <canvas ref={previewCanvasRef} className="w-full max-w-xl rounded-lg border border-slate-700" />
+            </div>
+
+            {draftMessage && <div className="text-sm text-emerald-300">{draftMessage}</div>}
+            <button
+              onClick={handleSaveDraft}
+              disabled={draftSaving}
+              className="rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold text-sm px-4 py-2"
+            >
+              💾 {draftSaving ? "Saving…" : "Save This Draft"}
+            </button>
+          </>
+        )}
       </fieldset>
 
       {/* Result Messages */}

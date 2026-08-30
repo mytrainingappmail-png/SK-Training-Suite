@@ -44,6 +44,8 @@ export interface Quiz {
   improve_threshold_pct: number;
   shuffle_options: boolean;
   shuffle_questions: boolean;
+  /** Off for practice/ungraded quizzes — no certificate is offered regardless of score. */
+  issue_certificate: boolean;
   status: QuizStatus;
   created_at: string;
   updated_at: string;
@@ -202,24 +204,6 @@ export interface QuizSettings {
   option_colors: OptionColor[];
   sound_enabled: boolean;
   default_join_mode: QuizJoinMode;
-  cert_template: CertTemplate;
-  cert_company_name: string | null;
-  cert_logo_url: string | null;
-  cert_logo_position: CertLogoPosition;
-  cert_title: string;
-  cert_achievement_line: string;
-  cert_signatory1_name: string | null;
-  cert_signatory1_title: string | null;
-  cert_signatory1_image_url: string | null;
-  cert_signatory1_scale: number;
-  cert_signatory1_name_scale: number;
-  cert_signatory2_name: string | null;
-  cert_signatory2_title: string | null;
-  cert_signatory2_image_url: string | null;
-  cert_signatory2_scale: number;
-  cert_signatory2_name_scale: number;
-  cert_signature_mode: CertSignatureMode;
-  cert_signature_align: CertSignatureAlign;
   champ_music: ChampMusic;
   champ_music_url: string | null;
   champ_music_volume: number;
@@ -232,6 +216,38 @@ export interface QuizSettings {
   cert_eligibility: CertEligibility;
   updated_at: string;
 }
+
+/** One saved certificate design. A company can keep several (e.g. a
+ * "gold seal" version and a plain one) and switch which is_active one
+ * actually gets used at issuance without losing the others. */
+export interface CertTemplateDraft {
+  id: string;
+  company_id: string;
+  name: string;
+  is_active: boolean;
+  template: CertTemplate;
+  company_name: string | null;
+  logo_url: string | null;
+  logo_position: CertLogoPosition;
+  title: string;
+  achievement_line: string;
+  signatory1_name: string | null;
+  signatory1_title: string | null;
+  signatory1_image_url: string | null;
+  signatory1_scale: number;
+  signatory1_name_scale: number;
+  signatory2_name: string | null;
+  signatory2_title: string | null;
+  signatory2_image_url: string | null;
+  signatory2_scale: number;
+  signatory2_name_scale: number;
+  signature_mode: CertSignatureMode;
+  signature_align: CertSignatureAlign;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CertTemplateDraftForm = Omit<CertTemplateDraft, "id" | "company_id" | "is_active" | "created_at" | "updated_at">;
 
 /** Correctness-free subset a participant's browser can see, via get_quiz_player_settings RPC. */
 export interface QuizPlayerSettings {

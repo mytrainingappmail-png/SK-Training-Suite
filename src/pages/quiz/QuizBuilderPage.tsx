@@ -45,6 +45,7 @@ const DEFAULT_FORM: QuizForm = {
   improve_threshold_pct: 40,
   shuffle_options: false,
   shuffle_questions: false,
+  issue_certificate: true,
 };
 
 export default function QuizBuilderPage() {
@@ -86,6 +87,7 @@ export default function QuizBuilderPage() {
           improve_threshold_pct: quiz.improve_threshold_pct,
           shuffle_options: quiz.shuffle_options,
           shuffle_questions: quiz.shuffle_questions,
+          issue_certificate: quiz.issue_certificate,
         });
         setQuestions(
           quiz.questions.length > 0
@@ -383,6 +385,17 @@ export default function QuizBuilderPage() {
           />
           Shuffle question order for each session
         </label>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={form.issue_certificate}
+            onChange={(e) => setForm({ ...form, issue_certificate: e.target.checked })}
+          />
+          🏆 Issue certificate for passing this quiz
+        </label>
+        {!form.issue_certificate && (
+          <p className="text-xs text-slate-500 -mt-2">No certificate will be offered for this quiz, regardless of score — useful for practice/ungraded quizzes.</p>
+        )}
       </fieldset>
 
       {/* Bulk import */}
