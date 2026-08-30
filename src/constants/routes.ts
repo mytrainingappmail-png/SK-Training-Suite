@@ -112,7 +112,9 @@ export const ROUTES = {
   QUIZ_ADMIN_SURVEY_SETTINGS: "/quiz-admin/surveys/settings",
   QUIZ_ADMIN_SURVEY_BUILDER_EDIT: "/quiz-admin/surveys/:surveyId",
   QUIZ_ADMIN_SURVEY_RESULTS: "/quiz-admin/surveys/:surveyId/results",
+  QUIZ_ADMIN_SURVEY_LIVE_HOST: "/quiz-admin/surveys/:surveyId/live/:sessionId",
   SURVEY_TAKE: "/survey/:accessCode",
+  SURVEY_LIVE_JOIN: "/survey-live",
 
   // In-LMS bootstrap for a company's first Live Quiz admin account —
   // SuperAdmin only, rendered inside AppLayout since it needs the LMS's

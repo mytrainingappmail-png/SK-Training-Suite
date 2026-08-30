@@ -57,6 +57,33 @@ export interface SurveyWithQuestions extends Survey {
   questions: SurveyQuestionWithOptions[];
 }
 
+// ── Live sessions ("short time", PIN-join, named) ──────────────────
+// A second, separate delivery mode for the exact same survey/questions
+// — see the migration's header note. survey_responses.session_participant_id
+// is what links a response to one of these when present; it's null for
+// every Phase 1 anonymous-link response.
+
+export type SurveySessionStatus = "active" | "ended";
+
+export interface SurveySession {
+  id: string;
+  survey_id: string;
+  company_id: string;
+  host_admin_id: string | null;
+  pin: string;
+  status: SurveySessionStatus;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export interface SurveySessionParticipant {
+  id: string;
+  session_id: string;
+  display_name: string;
+  joined_at: string;
+  submitted_at: string | null;
+}
+
 // ── Public taking flow ──────────────────────────────────────────────
 // Flattened row shape returned by get_survey_by_code — one row per
 // (question, option) pair, grouped client-side into
@@ -78,6 +105,11 @@ export interface PublicSurveyRow {
   option_order: number | null;
 }
 
+/** Same shape as PublicSurveyRow, plus the participant_id join_survey_session hands back — needed on every subsequent submit call. */
+export interface JoinSurveySessionRow extends PublicSurveyRow {
+  participant_id: string;
+}
+
 export interface PublicSurveyQuestion {
   question_id: string;
   question_text: string;
@@ -93,6 +125,10 @@ export interface PublicSurvey {
   title: string;
   description: string;
   questions: PublicSurveyQuestion[];
+}
+
+export interface JoinedSurveySession extends PublicSurvey {
+  participant_id: string;
 }
 
 /** One entry per question the respondent answered — only the field(s) relevant to that question's type need to be set. */

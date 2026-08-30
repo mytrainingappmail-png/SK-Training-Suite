@@ -204,6 +204,38 @@ export async function fetchSurveyResults(surveyId: string, questions: SurveyQues
   return buildSurveyResults(questions, answers, responseIds.length, eligibleCount);
 }
 
+/** Same as fetchSurveyResults, but scoped to one live session — eligibleCount here is "how many joined" (not the company headcount), since a live session's own attendee list is already visible to the host anyway. */
+export async function fetchSessionResults(sessionId: string, questions: SurveyQuestionWithOptions[]): Promise<SurveyResults> {
+  const { data: participants, error: pError } = await supabaseQuiz.from("survey_session_participants").select("id").eq("session_id", sessionId);
+  if (pError) {
+    console.error("[surveyRepository] fetchSessionResults (participants):", pError);
+    throw new Error(pError.message);
+  }
+  const participantIds = (participants ?? []).map((p) => p.id);
+
+  let responseIds: string[] = [];
+  if (participantIds.length > 0) {
+    const { data, error } = await supabaseQuiz.from("survey_responses").select("id").in("session_participant_id", participantIds);
+    if (error) {
+      console.error("[surveyRepository] fetchSessionResults (responses):", error);
+      throw new Error(error.message);
+    }
+    responseIds = (data ?? []).map((r) => r.id);
+  }
+
+  let answers: RawSurveyAnswer[] = [];
+  if (responseIds.length > 0) {
+    const { data, error } = await supabaseQuiz.from("survey_answers").select("*").in("response_id", responseIds);
+    if (error) {
+      console.error("[surveyRepository] fetchSessionResults (answers):", error);
+      throw new Error(error.message);
+    }
+    answers = data ?? [];
+  }
+
+  return buildSurveyResults(questions, answers, responseIds.length, participantIds.length);
+}
+
 /** Positivity is only meaningful for choice/scale questions — open_text
  * has nothing numeric to score, so it's simply excluded from the
  * overall average rather than forced into one. */

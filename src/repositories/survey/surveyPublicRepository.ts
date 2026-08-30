@@ -5,7 +5,7 @@
 // gated server-side.
 
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { PublicSurvey, PublicSurveyRow, SurveyAnswerInput, SurveySettings } from "../../types/survey";
+import type { PublicSurvey, PublicSurveyRow, JoinSurveySessionRow, JoinedSurveySession, SurveyAnswerInput, SurveySettings } from "../../types/survey";
 
 function groupSurveyRows(rows: PublicSurveyRow[]): PublicSurvey | null {
   if (rows.length === 0) return null;
@@ -62,6 +62,28 @@ export async function submitSurveyResponse(accessCode: string, answers: SurveyAn
   const { error } = await supabaseQuizPlayer.rpc("submit_survey_response", { p_access_code: accessCode, p_answers: answers });
   if (error) {
     console.error("[surveyPublicRepository] submitSurveyResponse:", error);
+    throw new Error(error.message);
+  }
+}
+
+// ── Live sessions ("short time", PIN-join, named) ──────────────────
+
+export async function joinSurveySession(pin: string, displayName: string): Promise<JoinedSurveySession | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("join_survey_session", { p_pin: pin, p_display_name: displayName });
+  if (error) {
+    console.error("[surveyPublicRepository] joinSurveySession:", error);
+    throw new Error(error.message);
+  }
+  const rows = (data as JoinSurveySessionRow[] | null) ?? [];
+  const grouped = groupSurveyRows(rows);
+  if (!grouped) return null;
+  return { ...grouped, participant_id: rows[0].participant_id };
+}
+
+export async function submitSurveySessionResponse(participantId: string, answers: SurveyAnswerInput[]): Promise<void> {
+  const { error } = await supabaseQuizPlayer.rpc("submit_survey_session_response", { p_participant_id: participantId, p_answers: answers });
+  if (error) {
+    console.error("[surveyPublicRepository] submitSurveySessionResponse:", error);
     throw new Error(error.message);
   }
 }

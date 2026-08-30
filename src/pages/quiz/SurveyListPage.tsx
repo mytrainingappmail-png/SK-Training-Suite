@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listSurveys, setSurveyStatus, deleteSurvey } from "../../repositories/survey/surveyRepository";
+import { createSurveySession } from "../../repositories/survey/surveyLiveRepository";
 import type { Survey } from "../../types/survey";
 
 export default function SurveyListPage() {
   const admin = getCurrentQuizAdmin();
   const canEdit = canEditQuizContent();
+  const navigate = useNavigate();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,20 @@ export default function SurveyListPage() {
       setCopiedId(s.id);
       setTimeout(() => setCopiedId(null), 2000);
     });
+  }
+
+  async function handleLaunchLive(s: Survey) {
+    if (!admin) return;
+    setBusyId(s.id);
+    setError("");
+    try {
+      const session = await createSurveySession(s.id, admin.company_id, admin.id);
+      navigate(ROUTES.QUIZ_ADMIN_SURVEY_LIVE_HOST.replace(":surveyId", s.id).replace(":sessionId", session.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start a live session.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -144,6 +160,16 @@ export default function SurveyListPage() {
                     className="text-xs font-semibold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg px-2.5 py-1.5"
                   >
                     {copiedId === s.id ? "✓ Copied" : "🔗 Copy Link"}
+                  </button>
+                )}
+                {s.status === "published" && canEdit && (
+                  <button
+                    disabled={busyId === s.id}
+                    onClick={() => handleLaunchLive(s)}
+                    className="text-xs font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg px-2.5 py-1.5"
+                    title="Short-time mode — PIN join, names visible to the host"
+                  >
+                    🔴 Go Live
                   </button>
                 )}
                 {canEdit && (

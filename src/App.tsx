@@ -61,6 +61,8 @@ import SurveyListPage from "./pages/quiz/SurveyListPage";
 import SurveyBuilderPage from "./pages/quiz/SurveyBuilderPage";
 import SurveyResultsPage from "./pages/quiz/SurveyResultsPage";
 import SurveySettingsPage from "./pages/quiz/SurveySettingsPage";
+import SurveyLiveHostPage from "./pages/quiz/SurveyLiveHostPage";
+import SurveyLiveJoinPage from "./pages/quiz/SurveyLiveJoinPage";
 import SurveyTakePage from "./pages/quiz/SurveyTakePage";
 
 import CallingAppGuard from "./components/callingApp/CallingAppGuard";
@@ -107,6 +109,7 @@ function App() {
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_BUILDER_EDIT} element={<SurveyBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_RESULTS} element={<SurveyResultsPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_SETTINGS} element={<SurveySettingsPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_SURVEY_LIVE_HOST} element={<SurveyLiveHostPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_RESULTS} element={<QuizResultsPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_USERS} element={<QuizUsersPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SETTINGS} element={<QuizSettingsPage />} />
@@ -118,6 +121,7 @@ function App() {
       <Route path={ROUTES.QUIZ_JOIN} element={<QuizJoinPage />} />
       <Route path={ROUTES.QUIZ_PLAY} element={<QuizPlayPage />} />
       <Route path={ROUTES.SURVEY_TAKE} element={<SurveyTakePage />} />
+      <Route path={ROUTES.SURVEY_LIVE_JOIN} element={<SurveyLiveJoinPage />} />
 
       {/* Calling App (premium add-on) — dedicated-login entry, standalone,
           no LMS chrome. Same "separate app in the same SPA bundle"
