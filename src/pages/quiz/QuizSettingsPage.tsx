@@ -9,10 +9,12 @@ import {
   deleteCertTemplateDraft,
   setActiveCertTemplateDraft,
 } from "../../repositories/quiz/quizCertTemplatesRepository";
+import { listQuizzes } from "../../repositories/quiz/quizRepository";
+import { updateQuizMeta } from "../../services/quiz/quizService";
 import { renderCertificateToCanvas, CERT_TEMPLATE_LABELS } from "../../services/quiz/quizCertificateRenderer";
 import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from "../../services/quiz/quizBackupService";
 import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
-import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft } from "../../types/quiz";
+import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 const CERT_TEMPLATES = Object.keys(CERT_TEMPLATE_LABELS) as CertTemplate[];
@@ -33,6 +35,8 @@ export default function QuizSettingsPage() {
   const [draftMessage, setDraftMessage] = useState("");
   const [newDraftName, setNewDraftName] = useState("");
   const [creatingDraft, setCreatingDraft] = useState(false);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [togglingQuizId, setTogglingQuizId] = useState<string | null>(null);
   const [messagesSaving, setMessagesSaving] = useState(false);
   const [messagesSavedMessage, setMessagesSavedMessage] = useState("");
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,7 +51,18 @@ export default function QuizSettingsPage() {
     if (!me) return;
     getSettings(me.company_id).then(setSettings).finally(() => setLoading(false));
     refreshDrafts();
+    listQuizzes(me.company_id).then(setQuizzes);
   }, [me]);
+
+  async function handleToggleQuizCertificate(quiz: Quiz, next: boolean) {
+    setTogglingQuizId(quiz.id);
+    try {
+      const updated = await updateQuizMeta(quiz.id, { issue_certificate: next });
+      setQuizzes((prev) => prev.map((q) => (q.id === quiz.id ? updated : q)));
+    } finally {
+      setTogglingQuizId(null);
+    }
+  }
 
   function refreshDrafts() {
     if (!me) return;
@@ -523,29 +538,70 @@ export default function QuizSettingsPage() {
             </button>
             {eligibilityMessage && <span className="text-xs text-emerald-300">{eligibilityMessage}</span>}
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
-            To turn certificates off entirely for a specific quiz (e.g. a practice quiz), use that quiz's own "Issue certificate" toggle in the Quiz Builder.
-          </p>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Certificate On/Off Per Quiz</div>
+          <p className="text-xs text-slate-500 mb-3">Uncheck a quiz here to stop offering a certificate for it entirely — e.g. a practice quiz — regardless of score.</p>
+          {quizzes.length === 0 ? (
+            <p className="text-xs text-slate-500">No quizzes yet.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
+              {quizzes.map((q) => (
+                <label key={q.id} className="flex items-center gap-3 rounded-lg border border-slate-800 px-3 py-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={q.issue_certificate}
+                    disabled={togglingQuizId === q.id}
+                    onChange={(e) => handleToggleQuizCertificate(q, e.target.checked)}
+                    className="h-4 w-4 accent-violet-500"
+                  />
+                  <span className="flex-1 truncate">{q.title}</span>
+                  <span className={`text-[11px] font-semibold ${q.issue_certificate ? "text-emerald-400" : "text-slate-500"}`}>
+                    {q.issue_certificate ? "Issues certificate" : "No certificate"}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="pt-2 border-t border-slate-800">
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Certificate Designs</div>
-          <p className="text-xs text-slate-500 mb-3">Keep a few saved designs — only the one marked Active is what trainees actually get.</p>
+          <p className="text-xs text-slate-500 mb-3">Tick the box next to a design to make it the one that downloads — logo, names, company name and everything else can differ per design.</p>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-1.5">
             {drafts.map((d) => (
-              <button
+              <div
                 key={d.id}
-                onClick={() => setEditingDraft(d)}
-                className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
-                  editingDraft?.id === d.id
-                    ? "border-violet-500 bg-violet-500/10 text-violet-200"
-                    : "border-slate-700 text-slate-300 hover:border-slate-600"
+                className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${
+                  editingDraft?.id === d.id ? "border-violet-500 bg-violet-500/10" : "border-slate-700"
                 }`}
               >
-                {d.name}
-                {d.is_active && <span className="ml-1.5 text-emerald-400">● Active</span>}
-              </button>
+                <input
+                  type="checkbox"
+                  checked={d.is_active}
+                  disabled={d.is_active}
+                  onChange={() => handleSetActiveDraft(d.id)}
+                  title={d.is_active ? "This design is active" : "Make this the active design"}
+                  className="h-4 w-4 accent-emerald-500"
+                />
+                <button onClick={() => setEditingDraft(d)} className="flex-1 text-left text-sm font-semibold text-white">
+                  {d.name}
+                </button>
+                {d.is_active && <span className="text-xs font-semibold text-emerald-400">● Active — this is what downloads</span>}
+                <button onClick={() => setEditingDraft(d)} className="text-xs font-semibold text-slate-300 hover:underline">
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteDraft(d)}
+                  disabled={d.is_active || drafts.length <= 1}
+                  title={d.is_active ? "Make another design active first" : drafts.length <= 1 ? "You need at least one design" : "Delete this design"}
+                  className="text-xs font-semibold text-red-300 hover:underline disabled:text-slate-600 disabled:no-underline disabled:cursor-not-allowed"
+                >
+                  Delete
+                </button>
+              </div>
             ))}
           </div>
 
@@ -562,7 +618,7 @@ export default function QuizSettingsPage() {
                 disabled={creatingDraft || !newDraftName.trim()}
                 className="text-sm font-semibold text-slate-200 border border-slate-700 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-lg px-4 py-2"
               >
-                + New Draft{drafts.length > 0 ? " (copies the one you're viewing)" : ""}
+                + Add Draft{drafts.length > 0 ? " (copies the one you're viewing)" : ""}
               </button>
             </div>
           )}
@@ -578,25 +634,15 @@ export default function QuizSettingsPage() {
                 onChange={(e) => setEditingDraft({ ...editingDraft, name: e.target.value })}
                 className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-violet-500"
               />
-              <div className="flex flex-wrap items-center gap-2">
-                {editingDraft.is_active ? (
-                  <span className="text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
-                    ● Currently Active — this is what downloads
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => handleSetActiveDraft(editingDraft.id)}
-                    className="text-xs font-semibold text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/10 rounded-lg px-3 py-2"
-                  >
-                    ✓ Set as Active
-                  </button>
-                )}
-                {!editingDraft.is_active && drafts.length > 1 && (
-                  <button onClick={() => handleDeleteDraft(editingDraft)} className="text-xs font-semibold text-red-300 hover:underline px-2">
-                    Delete
-                  </button>
-                )}
-              </div>
+              {editingDraft.is_active ? (
+                <span className="text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+                  ● Currently Active — this is what downloads
+                </span>
+              ) : (
+                <span className="text-xs font-semibold text-slate-400 border border-slate-700 rounded-lg px-3 py-2">
+                  Tick this design's checkbox above to make it active
+                </span>
+              )}
             </div>
 
             <div>
@@ -834,6 +880,11 @@ export default function QuizSettingsPage() {
                 )}
               </div>
               <div>
+                {editingDraft.signature_mode === "single" && editingDraft.signatory1_name && (
+                  <p className="mb-2 text-[11px] text-amber-400">
+                    ⚠ Signature Layout is set to "Single Signature Only" and Signatory 1 has a name, so Signatory 2 is not drawn on the certificate — none of these fields (including size) will visibly change anything until you either switch to "Both Signatures" or clear Signatory 1's name.
+                  </p>
+                )}
                 <QuizBrandingImageField
                   label="Signatory 2 Signature"
                   hint="Optional — same as above, for the second signatory"

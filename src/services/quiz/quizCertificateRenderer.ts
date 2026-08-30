@@ -133,8 +133,60 @@ function loadImage(url: string | null | undefined): Promise<HTMLImageElement | n
   });
 }
 
+/** Crops away transparent padding around a signature scan, keeping only
+ * the actual ink (+ a small margin) — exported signature images almost
+ * always have generous whitespace around the strokes, which otherwise
+ * makes the signature look tiny/far from the line no matter how the box
+ * is sized, and makes the size slider barely change anything visible
+ * (most of what it's resizing is invisible padding). Falls back to the
+ * untrimmed image if pixels can't be read (e.g. a CORS-blocked URL) or
+ * the image turns out to be fully transparent. */
+function trimTransparentEdges(image: HTMLImageElement): HTMLImageElement | HTMLCanvasElement {
+  const full = document.createElement("canvas");
+  full.width = image.width;
+  full.height = image.height;
+  const fullCtx = full.getContext("2d");
+  if (!fullCtx) return image;
+  fullCtx.drawImage(image, 0, 0);
+
+  let data: Uint8ClampedArray;
+  try {
+    data = fullCtx.getImageData(0, 0, full.width, full.height).data;
+  } catch {
+    return image;
+  }
+
+  const ALPHA_THRESHOLD = 10;
+  let minX = full.width, minY = full.height, maxX = 0, maxY = 0;
+  for (let y = 0; y < full.height; y++) {
+    for (let x = 0; x < full.width; x++) {
+      if (data[(y * full.width + x) * 4 + 3] > ALPHA_THRESHOLD) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX <= minX || maxY <= minY) return image;
+
+  const pad = 6;
+  const x0 = Math.max(0, minX - pad);
+  const y0 = Math.max(0, minY - pad);
+  const x1 = Math.min(full.width, maxX + pad);
+  const y1 = Math.min(full.height, maxY + pad);
+
+  const trimmed = document.createElement("canvas");
+  trimmed.width = x1 - x0;
+  trimmed.height = y1 - y0;
+  const tctx = trimmed.getContext("2d");
+  if (!tctx) return image;
+  tctx.drawImage(full, x0, y0, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+  return trimmed;
+}
+
 /** Recolors every non-transparent pixel of an image to a solid color while keeping its original alpha/shape — turns a scanned signature (almost always dark ink) into whatever color the certificate template needs it to be, instead of assuming it's always light-on-dark or dark-on-light. */
-function tintImage(image: HTMLImageElement, color: string): HTMLCanvasElement {
+function tintImage(image: HTMLImageElement | HTMLCanvasElement, color: string): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = image.width;
   c.height = image.height;
@@ -148,11 +200,13 @@ function tintImage(image: HTMLImageElement, color: string): HTMLCanvasElement {
 }
 
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
-  const [sig1Image, sig2Image, logoImage] = await Promise.all([
+  const [sig1ImageRaw, sig2ImageRaw, logoImage] = await Promise.all([
     loadImage(data.signatory1ImageUrl),
     loadImage(data.signatory2ImageUrl),
     loadImage(data.logoUrl),
   ]);
+  const sig1Image = sig1ImageRaw ? trimTransparentEdges(sig1ImageRaw) : null;
+  const sig2Image = sig2ImageRaw ? trimTransparentEdges(sig2ImageRaw) : null;
 
   canvas.width = WIDTH * RENDER_SCALE;
   canvas.height = HEIGHT * RENDER_SCALE;
@@ -256,14 +310,15 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
     x: number,
     name?: string | null,
     title?: string | null,
-    image?: HTMLImageElement | null,
+    image?: HTMLImageElement | HTMLCanvasElement | null,
     scalePercent?: number | null,
     nameScalePercent?: number | null
   ) => {
     if (!name) return;
     if (image) {
-      // Fit the signature image into a box (sized by scalePercent, default
-      // 100%), preserving its aspect ratio, sitting just above the line.
+      // Fit the (already whitespace-trimmed) signature image into a box
+      // sized by scalePercent (default 100%), preserving its aspect ratio,
+      // sitting just above the line.
       const pct = (scalePercent ?? 100) / 100;
       const boxW = BASE_SIG_BOX_W * pct;
       const boxH = BASE_SIG_BOX_H * pct;
@@ -275,7 +330,7 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
       // on a light one) instead of drawing it as-is, so it's never a dark
       // signature invisible against a dark background.
       const tinted = tintImage(image, p.heading);
-      ctx.drawImage(tinted, x - w / 2, sigY - 10 - h, w, h);
+      ctx.drawImage(tinted, x - w / 2, sigY - 6 - h, w, h);
     }
     ctx.strokeStyle = p.muted;
     ctx.lineWidth = 1;
