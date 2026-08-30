@@ -8,6 +8,7 @@ import { loadBranding, applyDynamicIcon, BRANDING_CHANGED_EVENT } from "./servic
 import AppLayout from "./layouts/AppLayout";
 
 import LoginPage from "./pages/LoginPage";
+import MarketingHomePage from "./pages/MarketingHomePage";
 import DashboardRouter from "./pages/DashboardRouter";
 import Employees from "./pages/Employees";
 import Training from "./pages/Training";
@@ -75,6 +76,7 @@ function App() {
   return (
     <Routes>
       {/* Public Route */}
+      <Route path={ROUTES.HOME} element={<MarketingHomePage />} />
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.LEGAL_DOCUMENT} element={<LegalDocumentPage />} />
       <Route path={ROUTES.CONTACT_US} element={<ContactUsPage />} />
@@ -232,6 +234,11 @@ function App() {
         <Route path={ROUTES.TRAINER_BATCHES} element={<TrainerBatchesPage />} />
         <Route path={ROUTES.TRAINER_RESULTS} element={<TrainerResultsPage />} />
       </Route>
+
+      {/* Branded per-company login link, e.g. /hero-realty — must be the
+          very last route so it never shadows a more specific path
+          declared above it. */}
+      <Route path={ROUTES.COMPANY_LOGIN} element={<LoginPage />} />
 
       {/* Fallback */}
       <Route

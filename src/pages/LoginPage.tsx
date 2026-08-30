@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { BRAND } from '../config/branding';
 import logo from '../assets/logo.png';
 import LoginForm from '../components/auth/LoginForm';
@@ -58,6 +59,9 @@ const FeatureCard: React.FC<{ title: string; description: string; index: number;
 );
 
 export const LoginPage: React.FC = () => {
+  // Present only when reached via the /:companyCode branded login link
+  // (see ROUTES.COMPANY_LOGIN) — undefined on the plain /login route.
+  const { companyCode: routeCompanyCode } = useParams<{ companyCode?: string }>();
   const [companyName, setCompanyName] = useState(BRAND.companyName);
   const [loginLogoUrl, setLoginLogoUrl] = useState('');
   // From the active Theme (Admin → Theme) — fall back to the static
@@ -75,8 +79,8 @@ export const LoginPage: React.FC = () => {
   }
 
   useEffect(() => {
-    loadBranding().then(applyBranding);
-  }, []);
+    loadBranding(routeCompanyCode).then(applyBranding);
+  }, [routeCompanyCode]);
 
   // Refetches branding for the SPECIFIC company being typed in, debounced
   // so it doesn't fire on every keystroke — this is what makes an
@@ -175,7 +179,7 @@ export const LoginPage: React.FC = () => {
         />
 
         <div className="relative z-10 w-full max-w-md">
-          <LoginForm onCompanyCodeChange={handleCompanyCodeChange} />
+          <LoginForm onCompanyCodeChange={handleCompanyCodeChange} initialCompanyCode={routeCompanyCode} />
         </div>
       </div>
     </div>

@@ -186,12 +186,16 @@ interface LoginFormProps {
   // Fired as the user types the Company Code — lets LoginPage refetch that
   // specific company's branding (logo, colors) before login even completes.
   onCompanyCodeChange?: (code: string) => void;
+  // Pre-fills the Company Code field — used by the /:companyCode branded
+  // login link so a company's own URL opens straight to their login,
+  // field already filled in (still editable, in case of a typo'd link).
+  initialCompanyCode?: string;
 }
 
-const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange }) => {
+const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, initialCompanyCode }) => {
   const navigate = useNavigate();
   const { refresh } = useAuthorization();
-  const [companyCode, setCompanyCode] = useState('');
+  const [companyCode, setCompanyCode] = useState(initialCompanyCode ?? '');
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

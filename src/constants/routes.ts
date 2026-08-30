@@ -1,6 +1,18 @@
 export const ROUTES = {
 
-  LOGIN: "/",
+  // Public marketing homepage — was the login screen, now a proper
+  // logged-out landing page (Admin > Platform Configuration > Marketing
+  // Website controls everything shown here).
+  HOME: "/",
+
+  LOGIN: "/login",
+
+  // A branded per-company login link (e.g. /hero-realty) — same login
+  // screen as LOGIN, just with the company code pre-filled. Handed to a
+  // company after they're onboarded so they have their own memorable URL.
+  // Must stay registered AFTER every other literal top-level route so it
+  // never shadows them.
+  COMPANY_LOGIN: "/:companyCode",
 
   LEGAL_DOCUMENT: "/legal/:slug",
 

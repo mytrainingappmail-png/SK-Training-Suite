@@ -14,6 +14,7 @@ import CourseManagement from "../components/superadmin/CourseManagement";
 import CourseBuilder from "../components/admin/coursebuilder/CourseBuilder";
 import RoleManagement from "../components/superadmin/RoleManagement";
 import ThemeManagement from "../components/superadmin/ThemeManagement";
+import PlatformMarketingManagement from "../components/superadmin/PlatformMarketingManagement";
 import MenuManagement from "../components/superadmin/MenuManagement";
 import SettingsManagement from "../components/settings/SettingsManagement";
 import PermissionManagement from "../modules/permissions/PermissionManagement";
@@ -390,6 +391,7 @@ function Admin() {
             {(isPlatformOperator && can(PERMISSIONS.VIEW_THEME) && matches("Theme")) ||
              (isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings")) ||
              (isPlatformOperator && matches("Legal Documents")) ||
+             (isPlatformOperator && matches("Marketing Website")) ||
              (isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu")) ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Platform Configuration</p>
@@ -402,6 +404,9 @@ function Admin() {
                   )}
                   {isPlatformOperator && matches("Legal Documents") && (
                     <button onClick={() => setActiveTab("legal-documents")} className={getTabClass()} style={getTabStyle("legal-documents")}>Legal Documents</button>
+                  )}
+                  {isPlatformOperator && matches("Marketing Website") && (
+                    <button onClick={() => setActiveTab("marketing-website")} className={getTabClass()} style={getTabStyle("marketing-website")}>Marketing Website</button>
                   )}
                   {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
                     <button onClick={() => setActiveTab("menu")} className={getTabClass()} style={getTabStyle("menu")}>Menu</button>
@@ -581,6 +586,8 @@ function Admin() {
             {activeTab === "settings" && isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && <SettingsManagement />}
 
             {activeTab === "legal-documents" && isPlatformOperator && <LegalDocumentManagement />}
+
+            {activeTab === "marketing-website" && isPlatformOperator && <PlatformMarketingManagement />}
 
             {activeTab === "menu" && isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
 
