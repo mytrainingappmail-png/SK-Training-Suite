@@ -144,6 +144,7 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
       timer_seconds: Number.isFinite(timer) && timer > 0 ? timer : null,
       marks: Number.isFinite(marks) && marks > 0 ? marks : 1,
       explanation: idx.explanation >= 0 ? (r[idx.explanation] ?? "").trim() : "",
+      is_hidden: false,
       options: optionTexts.map((option_text, oi) => ({ option_text, is_correct: oi === correctIndex })),
     });
   });

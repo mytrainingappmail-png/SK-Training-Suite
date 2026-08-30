@@ -63,6 +63,7 @@ export async function publishQuiz(quizId: string): Promise<void> {
       timer_seconds: q.timer_seconds,
       marks: q.marks,
       explanation: q.explanation,
+      is_hidden: q.is_hidden,
       options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
     }))
   );
@@ -102,6 +103,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
         timer_seconds: q.timer_seconds,
         marks: q.marks,
         explanation: q.explanation,
+        is_hidden: q.is_hidden,
         options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
       }))
     );
@@ -149,6 +151,7 @@ export async function mergeQuizzes(
       timer_seconds: question.timer_seconds,
       marks: question.marks,
       explanation: question.explanation,
+      is_hidden: question.is_hidden,
       options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
     }))
   );

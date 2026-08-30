@@ -25,6 +25,7 @@ interface BackupQuestion {
   timer_seconds: number | null;
   marks: number;
   explanation: string;
+  is_hidden: boolean;
   options: BackupOption[];
 }
 
@@ -83,6 +84,7 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
           timer_seconds: question.timer_seconds,
           marks: question.marks,
           explanation: question.explanation,
+          is_hidden: question.is_hidden,
           options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
         })),
       };
@@ -194,7 +196,10 @@ export async function importBackup(
     });
 
     if (quiz.questions.length > 0) {
-      await quizRepo.replaceQuestions(created.id, quiz.questions);
+      await quizRepo.replaceQuestions(
+        created.id,
+        quiz.questions.map((q) => ({ ...q, is_hidden: q.is_hidden ?? false }))
+      );
     }
     quizzesAdded += 1;
   }

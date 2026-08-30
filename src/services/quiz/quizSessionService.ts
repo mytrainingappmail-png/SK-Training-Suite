@@ -22,9 +22,14 @@ export async function launchSession(
   if (quiz.status !== "published") throw new Error("Only a published quiz can be launched live.");
   if (quiz.questions.length === 0) throw new Error("This quiz has no questions yet.");
 
+  const visibleIds = quiz.questions.filter((q) => !q.is_hidden).map((q) => q.id);
+  if (visibleIds.length === 0) throw new Error("Every question in this quiz is hidden — unhide at least one before launching.");
+
   // Decided once at launch, not per-participant — current_question_index is a
   // single value broadcast to everyone, so every player must see the same order.
-  const questionOrder = quiz.shuffle_questions ? shuffleArray(quiz.questions.map((q) => q.id)) : null;
+  // Always pre-filtered to visible questions, whether or not shuffle is on —
+  // this is what keeps a hidden question from ever being served live.
+  const questionOrder = quiz.shuffle_questions ? shuffleArray(visibleIds) : visibleIds;
 
   return sessionRepo.createSession(quizId, companyId, hostAdminId, joinMode, questionOrder);
 }

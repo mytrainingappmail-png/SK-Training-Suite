@@ -70,6 +70,8 @@ export interface QuizQuestion {
   marks: number;
   explanation: string;
   display_order: number;
+  /** Skipped entirely when the quiz is launched live, and excluded from every total-question/percentage/pass-fail calculation — reversible, unlike deleting the question. */
+  is_hidden: boolean;
   options: QuizQuestionOption[];
 }
 

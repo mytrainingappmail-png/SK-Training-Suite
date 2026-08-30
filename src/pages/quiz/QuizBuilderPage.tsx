@@ -26,6 +26,7 @@ function blankQuestion(): EditableQuestion {
     timer_seconds: null,
     marks: 1,
     explanation: "",
+    is_hidden: false,
     options: [
       { option_text: "", is_correct: true },
       { option_text: "", is_correct: false },
@@ -98,6 +99,7 @@ export default function QuizBuilderPage() {
                 timer_seconds: q.timer_seconds,
                 marks: q.marks,
                 explanation: q.explanation,
+                is_hidden: q.is_hidden,
                 options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
               }))
             : [blankQuestion()]
@@ -202,6 +204,10 @@ export default function QuizBuilderPage() {
 
   function resetQuestionTimer(localId: string) {
     updateQuestion(localId, { timer_seconds: null });
+  }
+
+  function toggleHidden(localId: string) {
+    setQuestions((prev) => prev.map((q) => (q.localId === localId ? { ...q, is_hidden: !q.is_hidden } : q)));
   }
 
   function isBlankQuestion(q: EditableQuestion): boolean {
@@ -449,9 +455,20 @@ export default function QuizBuilderPage() {
         </div>
 
         {questions.map((q, qi) => (
-          <div key={q.localId} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <div key={q.localId} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
+                <button
+                  onClick={() => toggleHidden(q.localId)}
+                  title={q.is_hidden ? "Hidden — not asked live, doesn't count toward results. Click to unhide." : "Click to hide this question from play"}
+                  className={`text-xs font-semibold rounded-lg px-2 py-1 border ${
+                    q.is_hidden ? "border-amber-600 bg-amber-500/10 text-amber-300" : "border-slate-700 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {q.is_hidden ? "🙈 Hidden" : "👁 Visible"}
+                </button>
+              </div>
               <div className="flex items-center gap-2">
                 <select
                   className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"

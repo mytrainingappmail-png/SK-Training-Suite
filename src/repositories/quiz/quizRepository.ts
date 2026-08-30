@@ -25,6 +25,7 @@ export interface QuestionForm {
   timer_seconds: number | null;
   marks: number;
   explanation: string;
+  is_hidden: boolean;
   options: QuestionOptionForm[];
 }
 
@@ -147,6 +148,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
         timer_seconds: q.timer_seconds,
         marks: q.marks,
         explanation: q.explanation,
+        is_hidden: q.is_hidden,
         display_order: i,
       }))
     )
