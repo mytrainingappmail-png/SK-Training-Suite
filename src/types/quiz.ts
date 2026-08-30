@@ -229,6 +229,7 @@ export interface CertTemplateDraft {
   company_name: string | null;
   logo_url: string | null;
   logo_position: CertLogoPosition;
+  logo_scale: number;
   title: string;
   achievement_line: string;
   signatory1_name: string | null;
@@ -297,6 +298,7 @@ export interface QuizCertificate {
   company_name: string;
   cert_logo_url: string | null;
   cert_logo_position: CertLogoPosition;
+  cert_logo_scale: number;
   cert_title: string;
   achievement_line: string;
   signatory1_name: string | null;

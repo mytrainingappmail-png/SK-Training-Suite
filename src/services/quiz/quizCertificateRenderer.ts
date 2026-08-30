@@ -13,6 +13,7 @@ export interface CertificateData {
   companyName: string;
   logoUrl?: string | null;
   logoPosition?: CertLogoPosition | null;
+  logoScale?: number | null;
   title: string;
   achievementLine: string;
   signatory1Name?: string | null;
@@ -223,9 +224,11 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
 
   p.background(ctx);
 
+  const logoPct = (data.logoScale ?? 100) / 100;
+
   // Watermark logo — drawn first, low opacity, so everything else sits on top of it.
   if (logoImage && logoPosition === "watermark") {
-    const maxSize = 460;
+    const maxSize = 460 * logoPct;
     const scale = Math.min(maxSize / logoImage.width, maxSize / logoImage.height);
     const w = logoImage.width * scale;
     const h = logoImage.height * scale;
@@ -243,13 +246,16 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   ctx.strokeRect(45, 45, WIDTH - 90, HEIGHT - 90);
 
   // Logo mark — kept at its own natural colors (unlike signatures, a brand
-  // logo shouldn't be recolored to the template palette).
+  // logo shouldn't be recolored to the template palette). Anchored by its
+  // BOTTOM edge (not center) so making it bigger grows it upward into the
+  // top margin instead of down into the company name/title text below.
   if (logoImage && logoPosition !== "watermark") {
+    const LOGO_BOTTOM_Y = 127;
     const drawLogo = (cx: number, boxW: number, boxH: number) => {
-      const scale = Math.min(boxW / logoImage.width, boxH / logoImage.height);
+      const scale = Math.min((boxW * logoPct) / logoImage.width, (boxH * logoPct) / logoImage.height);
       const w = logoImage.width * scale;
       const h = logoImage.height * scale;
-      ctx.drawImage(logoImage, cx - w / 2, 95 - h / 2, w, h);
+      ctx.drawImage(logoImage, cx - w / 2, LOGO_BOTTOM_Y - h, w, h);
     };
     if (logoPosition === "top_center") drawLogo(WIDTH / 2, 150, 64);
     else if (logoPosition === "top_left") drawLogo(140, 90, 80);

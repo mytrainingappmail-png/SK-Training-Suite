@@ -24,6 +24,7 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         companyName: cert.company_name,
         logoUrl: cert.cert_logo_url,
         logoPosition: cert.cert_logo_position,
+        logoScale: cert.cert_logo_scale,
         title: cert.cert_title,
         achievementLine: cert.achievement_line,
         signatory1Name: cert.signatory1_name,

@@ -89,6 +89,7 @@ export default function QuizSettingsPage() {
       companyName: editingDraft.company_name || "Your Company",
       logoUrl: editingDraft.logo_url,
       logoPosition: editingDraft.logo_position,
+      logoScale: editingDraft.logo_scale,
       title: editingDraft.title,
       achievementLine: editingDraft.achievement_line,
       signatory1Name: editingDraft.signatory1_name,
@@ -185,6 +186,7 @@ export default function QuizSettingsPage() {
         company_name: editingDraft.company_name,
         logo_url: editingDraft.logo_url,
         logo_position: editingDraft.logo_position,
+        logo_scale: editingDraft.logo_scale,
         title: editingDraft.title,
         achievement_line: editingDraft.achievement_line,
         signatory1_name: editingDraft.signatory1_name,
@@ -699,6 +701,26 @@ export default function QuizSettingsPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+              {editingDraft.logo_url && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Logo size:</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingDraft({ ...editingDraft, logo_scale: Math.max(50, editingDraft.logo_scale - 10) })}
+                    className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                  >
+                    −
+                  </button>
+                  <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{editingDraft.logo_scale}%</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingDraft({ ...editingDraft, logo_scale: Math.min(200, editingDraft.logo_scale + 10) })}
+                    className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                  >
+                    +
+                  </button>
                 </div>
               )}
             </div>

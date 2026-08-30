@@ -23,6 +23,7 @@ export async function createCertTemplateDraft(companyId: string, name: string, c
         company_name: copyFrom.company_name,
         logo_url: copyFrom.logo_url,
         logo_position: copyFrom.logo_position,
+        logo_scale: copyFrom.logo_scale,
         title: copyFrom.title,
         achievement_line: copyFrom.achievement_line,
         signatory1_name: copyFrom.signatory1_name,
