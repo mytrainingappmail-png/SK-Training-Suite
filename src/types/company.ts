@@ -62,6 +62,13 @@ export interface Company {
   // pattern as market_analytics_enabled.
   live_quiz_enabled: boolean;
 
+  // Free-text attribution shown in the Market Analytics dashboard footer
+  // (e.g. "Data compiled from RERA filings and internal broker network").
+  // White-label — fully editable by the tenant's own admin (unlike
+  // market_analytics_enabled above, which only the platform operator can
+  // flip), null/blank shows no footer at all.
+  market_analytics_source_note: string | null;
+
   // How many cards show per page in the Courses/Modules/Lessons grids
   // before a "Next" button appears.
   cards_per_page: number;

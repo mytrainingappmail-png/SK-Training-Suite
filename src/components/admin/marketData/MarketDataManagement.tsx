@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getCurrentUser } from '../../../services/auth/session';
-import { loadCompany } from '../../../services/company/companyService';
-import { loadEntries, saveEntry, deleteEntry, groupByCity, computeMetricsForCity } from '../../../services/marketData/marketDataService';
+import { loadCompany, saveCompany } from '../../../services/company/companyService';
+import { loadEntries, saveEntry, deleteEntry, groupByCity, computeLatestSnapshot } from '../../../services/marketData/marketDataService';
 import type { MarketDataEntry, MarketDataEntryForm } from '../../../types/marketData';
 
 const CARD_BG = '#1E293B';
@@ -134,12 +134,20 @@ function MarketDataManagement() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<MarketDataEntryForm | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MarketDataEntry | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [sourceNote, setSourceNote] = useState('');
+  const [sourceNoteSaving, setSourceNoteSaving] = useState(false);
+  const [sourceNoteSaved, setSourceNoteSaved] = useState(false);
 
   function fetchAll() {
     setLoading(true);
     setError('');
     loadCompany()
-      .then((company) => (company ? loadEntries(company.id) : []))
+      .then((company) => {
+        setCompanyId(company?.id ?? null);
+        setSourceNote(company?.market_analytics_source_note ?? '');
+        return company ? loadEntries(company.id) : [];
+      })
       .then(setEntries)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load market data.'))
       .finally(() => setLoading(false));
@@ -148,6 +156,19 @@ function MarketDataManagement() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  async function handleSaveSourceNote() {
+    if (!companyId) return;
+    setSourceNoteSaving(true);
+    setSourceNoteSaved(false);
+    try {
+      await saveCompany(companyId, { market_analytics_source_note: sourceNote.trim() || null });
+      setSourceNoteSaved(true);
+      setTimeout(() => setSourceNoteSaved(false), 2000);
+    } finally {
+      setSourceNoteSaving(false);
+    }
+  }
 
   const grouped = useMemo(() => groupByCity(entries), [entries]);
 
@@ -173,13 +194,33 @@ function MarketDataManagement() {
         </button>
       </div>
 
+      <div className="rounded-2xl p-4 shadow-lg ring-1 ring-white/5" style={{ backgroundColor: CARD_BG }}>
+        <label className={LABEL_CLS}>Data Source / Attribution Note</label>
+        <p className="mb-2 text-xs text-slate-500">Shown in the footer of the employee-facing dashboard — e.g. "Data compiled from RERA filings and internal broker network." Leave blank to show nothing.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={sourceNote}
+            onChange={(e) => setSourceNote(e.target.value)}
+            className={`${INPUT_CLS} flex-1 min-w-[240px]`}
+            placeholder="e.g. Data compiled from RERA filings and internal broker network"
+          />
+          <button
+            onClick={handleSaveSourceNote}
+            disabled={sourceNoteSaving}
+            className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/20 disabled:opacity-50"
+          >
+            {sourceNoteSaving ? 'Saving…' : sourceNoteSaved ? 'Saved ✓' : 'Save'}
+          </button>
+        </div>
+      </div>
+
       {grouped.size === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 py-16 text-center text-slate-500">
           <p className="font-medium">No market data yet — add your first city's quarterly numbers.</p>
         </div>
       ) : (
         Array.from(grouped.entries()).map(([city, cityEntries]) => {
-          const metrics = computeMetricsForCity(cityEntries);
+          const metrics = computeLatestSnapshot(cityEntries);
           return (
             <div key={city} className="rounded-2xl p-5 shadow-lg ring-1 ring-white/5" style={{ backgroundColor: CARD_BG }}>
               <div className="mb-3 flex items-center justify-between">

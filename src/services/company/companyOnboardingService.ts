@@ -92,6 +92,7 @@ export async function onboardCompany(input: CompanyOnboardingInput): Promise<Com
     active: true,
     is_platform_operator: false,
     market_analytics_enabled: false,
+    market_analytics_source_note: null,
     live_quiz_enabled: false,
     cards_per_page: 12,
     admin_console_bg_color: "#1e3a8a",
