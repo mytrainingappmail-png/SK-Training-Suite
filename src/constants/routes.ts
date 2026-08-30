@@ -105,6 +105,14 @@ export const ROUTES = {
   QUIZ_JOIN: "/quiz/join",
   QUIZ_PLAY: "/quiz/play/:sessionId",
 
+  // Survey — opinion-gathering, no score, inside the same quiz-admin
+  // shell. Taking a survey is public/anonymous, no join/sign-in step.
+  QUIZ_ADMIN_SURVEYS: "/quiz-admin/surveys",
+  QUIZ_ADMIN_SURVEY_BUILDER_NEW: "/quiz-admin/surveys/new",
+  QUIZ_ADMIN_SURVEY_BUILDER_EDIT: "/quiz-admin/surveys/:surveyId",
+  QUIZ_ADMIN_SURVEY_RESULTS: "/quiz-admin/surveys/:surveyId/results",
+  SURVEY_TAKE: "/survey/:accessCode",
+
   // In-LMS bootstrap for a company's first Live Quiz admin account —
   // SuperAdmin only, rendered inside AppLayout since it needs the LMS's
   // own real Supabase Auth session to call the provisioning edge function.

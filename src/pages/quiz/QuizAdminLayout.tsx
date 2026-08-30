@@ -11,6 +11,7 @@ import QuizAccountModal from "../../components/quiz/QuizAccountModal";
 const navItems = [
   { to: ROUTES.QUIZ_ADMIN_DASHBOARD, label: "Dashboard" },
   { to: ROUTES.QUIZ_ADMIN_QUIZZES, label: "Quizzes" },
+  { to: ROUTES.QUIZ_ADMIN_SURVEYS, label: "Surveys" },
   { to: ROUTES.QUIZ_ADMIN_RESULTS, label: "Results" },
   { to: ROUTES.QUIZ_ADMIN_USERS, label: "Users" },
   { to: ROUTES.QUIZ_ADMIN_SETTINGS, label: "Settings" },
