@@ -108,6 +108,8 @@ function UploadModal({
   const [fileName, setFileName] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [rows, setRows] = useState<ReturnType<typeof parseContactsCsv>["rows"]>([]);
+  const [duplicates, setDuplicates] = useState<Map<string, string>>(new Map());
+  const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [listName, setListName] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -115,25 +117,30 @@ function UploadModal({
   function onFile(file: File) {
     setFileName(file.name);
     setListName(file.name.replace(/\.csv$/i, ""));
-    file.text().then((text) => {
+    file.text().then(async (text) => {
       const result = parseContactsCsv(text, fieldDefs);
       setRows(result.rows);
       setErrors(result.errors);
+
+      const matches = await dataRepo.findDuplicateMobiles(identity.client, identity.admin.company_id, result.rows.map((r) => r.form.mobile_no));
+      setDuplicates(new Map(matches.map((m) => [m.mobile_no, m.existingName])));
     });
   }
 
+  const rowsToImport = skipDuplicates ? rows.filter((r) => !duplicates.has(r.form.mobile_no)) : rows;
+
   async function handleUpload() {
-    if (rows.length === 0) return;
+    if (rowsToImport.length === 0) return;
     setUploading(true);
     try {
-      const list = await dataRepo.createCallList(identity.client, identity.admin.company_id, listName || fileName, rows.length, identity.admin.id);
-      for (const r of rows) {
+      const list = await dataRepo.createCallList(identity.client, identity.admin.company_id, listName || fileName, rowsToImport.length, identity.admin.id);
+      for (const r of rowsToImport) {
         const contact = await dataRepo.createContact(identity.client, identity.admin.company_id, list.id, r.form);
         for (const cfv of r.customFieldValues) {
           await dataRepo.upsertCustomFieldValue(identity.client, contact.id, cfv.field_def_id, cfv.value_text);
         }
       }
-      showToast(`Uploaded ${rows.length} contacts.`);
+      showToast(`Uploaded ${rowsToImport.length} contacts.`);
       onDone();
       onClose();
     } catch (e) {
@@ -165,13 +172,24 @@ function UploadModal({
                 {errors.slice(0, 10).map((e, i) => <p key={i}>{e}</p>)}
               </div>
             )}
+            {duplicates.size > 0 && (
+              <div className="mt-2 rounded-lg bg-amber-50 p-3">
+                <p className="text-xs font-semibold text-amber-800">⚠ {duplicates.size} number(s) already exist in your Calling App — this is a repeat lead.</p>
+                <div className="mt-1 max-h-20 overflow-y-auto text-xs text-amber-700">
+                  {Array.from(duplicates.entries()).slice(0, 8).map(([mobile, name]) => <p key={mobile}>{mobile} — already have "{name}"</p>)}
+                </div>
+                <label className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-800">
+                  <input type="checkbox" checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} /> Skip duplicates (recommended)
+                </label>
+              </div>
+            )}
           </div>
         )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleUpload} disabled={uploading || rows.length === 0} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
-            {uploading ? "Uploading…" : `Upload ${rows.length} Contacts`}
+          <button onClick={handleUpload} disabled={uploading || rowsToImport.length === 0} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+            {uploading ? "Uploading…" : `Upload ${rowsToImport.length} Contacts`}
           </button>
         </div>
       </div>

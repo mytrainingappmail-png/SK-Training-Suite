@@ -18,6 +18,7 @@ import type {
 
 import { CallingAppDashboardTab } from "./CallingAppDashboardTab";
 import { CallingAppSheetTab } from "./CallingAppSheetTab";
+import { CallingAppMasterSheetTab } from "./CallingAppMasterSheetTab";
 import { CallingAppReportsTab } from "./CallingAppReportsTab";
 import { CallingAppSettingsTab } from "./CallingAppSettingsTab";
 
@@ -26,11 +27,12 @@ export interface CallingAppIdentity {
   client: SupabaseClient;
 }
 
-type TabKey = "dashboard" | "sheet" | "reports" | "settings";
+type TabKey = "dashboard" | "sheet" | "master-sheet" | "reports" | "settings";
 
 const TABS: { key: TabKey; label: string; icon: string; adminOnly?: boolean }[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "sheet", label: "Calling Sheet", icon: "📞" },
+  { key: "master-sheet", label: "Master Sheet", icon: "🗂️", adminOnly: true },
   { key: "reports", label: "Reports", icon: "📈" },
   { key: "settings", label: "Settings", icon: "⚙️", adminOnly: true },
 ];
@@ -115,6 +117,9 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
       )}
       {tab === "sheet" && (
         <CallingAppSheetTab identity={identity} contacts={contacts} dispositions={dispositions} fieldDefs={fieldDefs} teamAdmins={teamAdmins} onChanged={load} showToast={showToast} />
+      )}
+      {tab === "master-sheet" && admin.is_admin && (
+        <CallingAppMasterSheetTab identity={identity} contacts={contacts} fieldDefs={fieldDefs} teamAdmins={teamAdmins} onChanged={load} showToast={showToast} />
       )}
       {tab === "reports" && (
         <CallingAppReportsTab admin={admin} contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} />

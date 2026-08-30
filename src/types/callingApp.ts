@@ -64,6 +64,8 @@ export interface CallingAppContact {
   email: string | null;
   project_name: string | null;
   assigned_to: string | null;
+  assigned_by: string | null;
+  assigned_at: string | null;
   disposition_id: string | null;
   remarks: string | null;
   attempt_count: number;
@@ -82,6 +84,28 @@ export interface CallingAppCustomFieldValue {
   contact_id: string;
   field_def_id: string;
   value_text: string | null;
+}
+
+export interface MasterSheetListSummary {
+  list: CallingAppCallList;
+  total: number;
+  assigned: number;
+  unassigned: number;
+}
+
+export interface EmployeeDistributionSummary {
+  admin: CallingAppAdmin;
+  totalAssigned: number;
+  pending: number; // attempt_count = 0, i.e. not yet worked
+  firstAssignedAt: string | null;
+  lastAssignedAt: string | null;
+}
+
+export interface DuplicateMobileMatch {
+  mobile_no: string;
+  existingContactId: string;
+  existingName: string;
+  assignedToAdminId: string | null;
 }
 
 export interface CallingAppCallLog {
