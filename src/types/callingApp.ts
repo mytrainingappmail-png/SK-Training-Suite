@@ -6,6 +6,12 @@
 export type CallingAppAdminStatus = "active" | "disabled";
 export type DispositionOutcome = "positive" | "neutral" | "negative";
 export type CustomFieldType = "text" | "number" | "date" | "dropdown";
+/** Report-visibility tier — independent of is_admin, which is about
+ * operational control (Settings/Master Sheet/access), not who can see
+ * whose numbers. agent -> only self; team_leader -> self + direct
+ * reports; sales_head -> self + their team leaders + those leaders'
+ * agents. */
+export type CallingAppAdminRole = "agent" | "team_leader" | "sales_head";
 
 export interface CallingAppAdmin {
   id: string;
@@ -20,6 +26,8 @@ export interface CallingAppAdmin {
   can_download: boolean;
   daily_target: number;
   status: CallingAppAdminStatus;
+  role: CallingAppAdminRole;
+  reports_to: string | null;
   created_at: string;
 }
 
@@ -70,6 +78,7 @@ export interface CallingAppContact {
   remarks: string | null;
   attempt_count: number;
   next_call_at: string | null;
+  is_prospect: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -124,4 +133,33 @@ export interface CallingAppCallLog {
   disposition_id: string | null;
   remarks: string | null;
   called_at: string;
+}
+
+// ── Prospects & handoff (Phase 2) ──────────────────────────────────────
+
+export type HandoffStatus = "pending" | "accepted" | "declined";
+
+export interface CallingAppHandoff {
+  id: string;
+  company_id: string;
+  contact_id: string;
+  from_admin_id: string;
+  to_admin_id: string;
+  note: string | null;
+  status: HandoffStatus;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+// ── Break tracking (Phase 2) ────────────────────────────────────────────
+
+export type BreakType = "coffee" | "lunch" | "other";
+
+export interface CallingAppBreak {
+  id: string;
+  company_id: string;
+  admin_id: string;
+  break_type: BreakType;
+  started_at: string;
+  ended_at: string | null;
 }

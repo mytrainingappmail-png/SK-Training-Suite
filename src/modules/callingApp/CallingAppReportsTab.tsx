@@ -2,21 +2,21 @@ import { useMemo } from "react";
 import type { CallingAppAdmin, CallingAppContact, CallingAppCallLog, CallingAppDisposition } from "../../types/callingApp";
 
 export function CallingAppReportsTab({
-  admin,
   contacts,
   callLogs,
   dispositions,
   teamAdmins,
+  scopeAdminIds,
 }: {
-  admin: CallingAppAdmin;
   contacts: CallingAppContact[];
   callLogs: CallingAppCallLog[];
   dispositions: CallingAppDisposition[];
   teamAdmins: CallingAppAdmin[];
+  scopeAdminIds: Set<string>;
 }) {
   const dispositionById = useMemo(() => new Map(dispositions.map((d) => [d.id, d])), [dispositions]);
 
-  const scope = admin.is_admin ? teamAdmins : teamAdmins.filter((a) => a.id === admin.id);
+  const scope = teamAdmins.filter((a) => scopeAdminIds.has(a.id));
 
   const rows = useMemo(() => {
     return scope.map((a) => {
@@ -31,7 +31,7 @@ export function CallingAppReportsTab({
   }, [scope, callLogs, contacts, dispositionById]);
 
   const dispositionBreakdown = useMemo(() => {
-    const relevantLogs = admin.is_admin ? callLogs : callLogs.filter((l) => l.admin_id === admin.id);
+    const relevantLogs = callLogs.filter((l) => scopeAdminIds.has(l.admin_id));
     const counts = new Map<string, number>();
     relevantLogs.forEach((l) => {
       const key = l.disposition_id ?? "none";
@@ -40,7 +40,7 @@ export function CallingAppReportsTab({
     return Array.from(counts.entries())
       .map(([id, count]) => ({ label: id === "none" ? "No outcome" : dispositionById.get(id)?.label ?? "Unknown", color: id === "none" ? "#94a3b8" : dispositionById.get(id)?.color ?? "#64748b", count }))
       .sort((a, b) => b.count - a.count);
-  }, [admin.id, admin.is_admin, callLogs, dispositionById]);
+  }, [scopeAdminIds, callLogs, dispositionById]);
 
   const maxBreakdown = Math.max(...dispositionBreakdown.map((d) => d.count), 1);
 

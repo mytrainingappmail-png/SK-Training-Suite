@@ -5,7 +5,9 @@ import { loadCompany } from "../../services/company/companyService";
 import { employeeService } from "../../services/employee/employeeService";
 import { listCallingAppAdmins, grantEmployeeAccess, updateCallingAppAdmin, removeCallingAppAdmin } from "../../repositories/callingApp/callingAppAdminRepository";
 import type { Employee } from "../../types/employee";
-import type { CallingAppAdmin } from "../../types/callingApp";
+import type { CallingAppAdmin, CallingAppAdminRole } from "../../types/callingApp";
+
+const ROLE_LABELS: Record<CallingAppAdminRole, string> = { agent: "Agent", team_leader: "Team Leader", sales_head: "Sales Head" };
 
 const INPUT_CLS = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500";
 
@@ -25,6 +27,8 @@ export default function CallingAppAdminSetupPanel() {
   const [canUpload, setCanUpload] = useState(true);
   const [canDownload, setCanDownload] = useState(true);
   const [dailyTarget, setDailyTarget] = useState(0);
+  const [role, setRole] = useState<CallingAppAdminRole>("agent");
+  const [reportsTo, setReportsTo] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -44,6 +48,20 @@ export default function CallingAppAdminSetupPanel() {
 
   function refresh() {
     if (companyId) listCallingAppAdmins(companyId).then(setAdmins);
+  }
+
+  /** An agent reports to a Team Leader or Sales Head; a Team Leader
+   * reports only to a Sales Head; a Sales Head has no one to report to
+   * within the Calling App hierarchy. */
+  function reportsToOptionsFor(forRole: CallingAppAdminRole, excludeId?: string): CallingAppAdmin[] {
+    if (forRole === "sales_head") return [];
+    if (forRole === "team_leader") return admins.filter((a) => a.role === "sales_head" && a.id !== excludeId);
+    return admins.filter((a) => (a.role === "team_leader" || a.role === "sales_head") && a.id !== excludeId);
+  }
+
+  function handleRoleChange(next: CallingAppAdminRole) {
+    setRole(next);
+    if (reportsToOptionsFor(next).every((a) => a.id !== reportsTo)) setReportsTo("");
   }
 
   function handlePickEmployee(id: string) {
@@ -75,7 +93,7 @@ export default function CallingAppAdminSetupPanel() {
           setSaving(false);
           return;
         }
-        await grantEmployeeAccess(companyId, employeeId, displayName.trim(), email.trim() || null, { isAdmin, canUpload, canDownload, dailyTarget });
+        await grantEmployeeAccess(companyId, employeeId, displayName.trim(), email.trim() || null, { isAdmin, canUpload, canDownload, dailyTarget, role, reportsTo: reportsTo || null });
         setCreated(`Access granted to ${displayName.trim()} — they'll see "Calling App" in their own dashboard.`);
       } else {
         if (!username.trim() || !password) {
@@ -100,6 +118,8 @@ export default function CallingAppAdminSetupPanel() {
             canUpload,
             canDownload,
             dailyTarget,
+            role,
+            reportsTo: reportsTo || undefined,
           },
         });
         if (fnError) throw new Error(fnError.message);
@@ -116,6 +136,8 @@ export default function CallingAppAdminSetupPanel() {
       setCanUpload(true);
       setCanDownload(true);
       setDailyTarget(0);
+      setRole("agent");
+      setReportsTo("");
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -131,6 +153,17 @@ export default function CallingAppAdminSetupPanel() {
 
   async function toggleStatus(admin: CallingAppAdmin) {
     await updateCallingAppAdmin(admin.id, { status: admin.status === "active" ? "disabled" : "active" });
+    refresh();
+  }
+
+  async function changeRole(admin: CallingAppAdmin, nextRole: CallingAppAdminRole) {
+    const validReportsTo = reportsToOptionsFor(nextRole, admin.id).some((a) => a.id === admin.reports_to);
+    await updateCallingAppAdmin(admin.id, { role: nextRole, reports_to: validReportsTo ? admin.reports_to : null });
+    refresh();
+  }
+
+  async function changeReportsTo(admin: CallingAppAdmin, nextReportsTo: string) {
+    await updateCallingAppAdmin(admin.id, { reports_to: nextReportsTo || null });
     refresh();
   }
 
@@ -212,6 +245,25 @@ export default function CallingAppAdminSetupPanel() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Report Role</label>
+            <select value={role} onChange={(e) => handleRoleChange(e.target.value as CallingAppAdminRole)} className={INPUT_CLS}>
+              {(Object.keys(ROLE_LABELS) as CallingAppAdminRole[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-400">Controls whose numbers they can see in Dashboard/Reports — separate from Admin above.</p>
+          </div>
+          {reportsToOptionsFor(role).length > 0 && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reports To (optional)</label>
+              <select value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} className={INPUT_CLS}>
+                <option value="">— None —</option>
+                {reportsToOptionsFor(role).map((a) => <option key={a.id} value={a.id}>{a.display_name} ({ROLE_LABELS[a.role]})</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
         <button type="submit" disabled={saving} className="w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
           {saving ? "Saving…" : accessType === "lms" ? "Grant Access" : "Create Login"}
         </button>
@@ -228,10 +280,19 @@ export default function CallingAppAdminSetupPanel() {
                 {a.employee_id ? "LMS login" : "Dedicated login"} · {a.status}
               </p>
             </div>
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
               <label className="flex items-center gap-1"><input type="checkbox" checked={a.is_admin} onChange={(e) => toggleAdminField(a, "is_admin", e.target.checked)} /> Admin</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={a.can_upload} onChange={(e) => toggleAdminField(a, "can_upload", e.target.checked)} /> Upload</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={a.can_download} onChange={(e) => toggleAdminField(a, "can_download", e.target.checked)} /> Download</label>
+              <select value={a.role} onChange={(e) => changeRole(a, e.target.value as CallingAppAdminRole)} className="rounded-lg border border-slate-200 px-1.5 py-1">
+                {(Object.keys(ROLE_LABELS) as CallingAppAdminRole[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
+              {reportsToOptionsFor(a.role, a.id).length > 0 && (
+                <select value={a.reports_to ?? ""} onChange={(e) => changeReportsTo(a, e.target.value)} className="rounded-lg border border-slate-200 px-1.5 py-1">
+                  <option value="">Reports to: none</option>
+                  {reportsToOptionsFor(a.role, a.id).map((opt) => <option key={opt.id} value={opt.id}>Reports to: {opt.display_name}</option>)}
+                </select>
+              )}
               <button onClick={() => toggleStatus(a)} className="font-semibold text-amber-600 hover:underline">{a.status === "active" ? "Disable" : "Enable"}</button>
               <button onClick={() => handleRemove(a.id)} className="font-semibold text-red-500 hover:underline">Remove</button>
             </div>

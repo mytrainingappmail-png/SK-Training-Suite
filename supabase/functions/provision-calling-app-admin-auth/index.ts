@@ -35,6 +35,8 @@ interface ProvisionRequest {
   canUpload?: boolean;
   canDownload?: boolean;
   dailyTarget?: number;
+  role?: "agent" | "team_leader" | "sales_head";
+  reportsTo?: string;
 }
 
 serve(async (req) => {
@@ -111,7 +113,7 @@ serve(async (req) => {
       if (existing) {
         const { data, error } = await supabaseAdmin
           .from("calling_app_admins")
-          .update(authFields)
+          .update({ ...authFields, role: payload.role ?? "agent", reports_to: payload.reportsTo || null })
           .eq("id", existing.id)
           .select()
           .single();
@@ -130,6 +132,8 @@ serve(async (req) => {
           can_upload: payload.canUpload ?? true,
           can_download: payload.canDownload ?? true,
           daily_target: payload.dailyTarget ?? 0,
+          role: payload.role ?? "agent",
+          reports_to: payload.reportsTo || null,
           ...authFields,
         })
         .select()

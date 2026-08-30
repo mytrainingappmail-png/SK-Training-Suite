@@ -22,6 +22,9 @@ import type {
   EmployeeDistributionSummary,
   DuplicateMobileMatch,
   DuplicateContactGroup,
+  CallingAppHandoff,
+  CallingAppBreak,
+  BreakType,
 } from "../../types/callingApp";
 
 export async function listDispositions(client: SupabaseClient, companyId: string): Promise<CallingAppDisposition[]> {
@@ -282,6 +285,105 @@ export async function removeDuplicateContacts(client: SupabaseClient, groups: Du
   const { error } = await client.from("calling_app_contacts").delete().in("id", idsToDelete);
   if (error) throw new Error(error.message);
   return idsToDelete.length;
+}
+
+// ── Prospects & handoff ──────────────────────────────────────────────
+
+export async function markProspect(client: SupabaseClient, contactId: string, isProspect: boolean): Promise<void> {
+  const { error } = await client.from("calling_app_contacts").update({ is_prospect: isProspect, updated_at: new Date().toISOString() }).eq("id", contactId);
+  if (error) throw new Error(error.message);
+}
+
+export async function listHandoffs(client: SupabaseClient, companyId: string): Promise<CallingAppHandoff[]> {
+  const { data, error } = await client
+    .from("calling_app_handoffs")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/** Requests a handoff — the recipient must accept before ownership
+ * actually transfers (see acceptHandoff). RLS only allows this when the
+ * caller currently owns the contact being handed off. */
+export async function createHandoff(client: SupabaseClient, companyId: string, contactId: string, fromAdminId: string, toAdminId: string, note: string): Promise<CallingAppHandoff> {
+  const { data, error } = await client
+    .from("calling_app_handoffs")
+    .insert({ company_id: companyId, contact_id: contactId, from_admin_id: fromAdminId, to_admin_id: toAdminId, note: note.trim() || null })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Resolves the handoff AND moves the contact's assigned_to to the
+ * recipient, atomically, via a security-definer RPC — a plain client
+ * UPDATE of the contact can't do this because the recipient doesn't own
+ * it until this exact moment. */
+export async function acceptHandoff(client: SupabaseClient, handoffId: string): Promise<void> {
+  const { error } = await client.rpc("accept_calling_app_handoff", { p_handoff_id: handoffId });
+  if (error) throw new Error(error.message);
+}
+
+export async function declineHandoff(client: SupabaseClient, handoffId: string, reason: string): Promise<void> {
+  const { error } = await client.rpc("decline_calling_app_handoff", { p_handoff_id: handoffId, p_reason: reason.trim() || null });
+  if (error) throw new Error(error.message);
+}
+
+// ── Break tracking ───────────────────────────────────────────────────
+
+export async function listBreaks(client: SupabaseClient, companyId: string): Promise<CallingAppBreak[]> {
+  const { data, error } = await client
+    .from("calling_app_breaks")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("started_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/** The one-active-break-per-admin rule is enforced by a partial unique
+ * index in the database — this insert will fail with a clear conflict
+ * error if a break is already open. */
+export async function startBreak(client: SupabaseClient, companyId: string, adminId: string, breakType: BreakType): Promise<CallingAppBreak> {
+  const { data, error } = await client
+    .from("calling_app_breaks")
+    .insert({ company_id: companyId, admin_id: adminId, break_type: breakType })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function endBreak(client: SupabaseClient, breakId: string): Promise<void> {
+  const { error } = await client.from("calling_app_breaks").update({ ended_at: new Date().toISOString() }).eq("id", breakId);
+  if (error) throw new Error(error.message);
+}
+
+// ── Delegated report scope (Team Leader / Sales Head) ──────────────────
+
+/** Mirrors current_calling_app_report_scope_admin_ids() client-side, so
+ * the Dashboard/Reports/Sheet show exactly the set of people the DB
+ * would actually let this admin see — the SQL function is the real
+ * security boundary (RLS); this is purely for consistent UI filtering. */
+export function computeReportScopeAdminIds(me: CallingAppAdmin, allAdmins: CallingAppAdmin[]): Set<string> {
+  if (me.is_admin) return new Set(allAdmins.map((a) => a.id));
+
+  if (me.role === "sales_head") {
+    const teamLeaderIds = new Set(allAdmins.filter((a) => a.reports_to === me.id).map((a) => a.id));
+    const ids = new Set<string>([me.id, ...teamLeaderIds]);
+    allAdmins.forEach((a) => {
+      if (a.reports_to && teamLeaderIds.has(a.reports_to)) ids.add(a.id);
+    });
+    return ids;
+  }
+
+  if (me.role === "team_leader") {
+    return new Set([me.id, ...allAdmins.filter((a) => a.reports_to === me.id).map((a) => a.id)]);
+  }
+
+  return new Set([me.id]);
 }
 
 export function buildEmployeeDistributionSummary(admins: CallingAppAdmin[], contacts: CallingAppContact[]): EmployeeDistributionSummary[] {

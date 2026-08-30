@@ -22,15 +22,18 @@ export function CallingAppDashboardTab({
   callLogs,
   dispositions,
   teamAdmins,
+  scopeAdminIds,
 }: {
   admin: CallingAppAdmin;
   contacts: CallingAppContact[];
   callLogs: CallingAppCallLog[];
   dispositions: CallingAppDisposition[];
   teamAdmins: CallingAppAdmin[];
+  scopeAdminIds: Set<string>;
 }) {
+  const isTeamView = scopeAdminIds.size > 1;
   const myLogsToday = useMemo(() => callLogs.filter((l) => l.admin_id === admin.id && isToday(l.called_at)), [callLogs, admin.id]);
-  const myContacts = admin.is_admin ? contacts : contacts.filter((c) => c.assigned_to === admin.id);
+  const myContacts = admin.is_admin ? contacts : contacts.filter((c) => c.assigned_to && scopeAdminIds.has(c.assigned_to));
 
   const dispositionById = useMemo(() => new Map(dispositions.map((d) => [d.id, d])), [dispositions]);
   const myPositiveToday = myLogsToday.filter((l) => l.disposition_id && dispositionById.get(l.disposition_id)?.outcome_type === "positive").length;
@@ -39,22 +42,23 @@ export function CallingAppDashboardTab({
   const progressPct = target > 0 ? Math.min(100, Math.round((myLogsToday.length / target) * 100)) : 0;
 
   const leaderboard = useMemo(() => {
-    if (!admin.is_admin) return [];
+    if (!isTeamView) return [];
     const countByAdmin = new Map<string, number>();
     callLogs.filter((l) => isToday(l.called_at)).forEach((l) => countByAdmin.set(l.admin_id, (countByAdmin.get(l.admin_id) ?? 0) + 1));
     return teamAdmins
+      .filter((a) => scopeAdminIds.has(a.id))
       .map((a) => ({ admin: a, calls: countByAdmin.get(a.id) ?? 0 }))
       .filter((r) => r.calls > 0)
       .sort((a, b) => b.calls - a.calls)
       .slice(0, 10);
-  }, [admin.is_admin, callLogs, teamAdmins]);
+  }, [isTeamView, callLogs, teamAdmins, scopeAdminIds]);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Calls Today" value={myLogsToday.length} accent="#6366f1" />
         <StatCard label="Positive Outcomes" value={myPositiveToday} accent="#10b981" />
-        <StatCard label={admin.is_admin ? "Total Contacts" : "My Contacts"} value={myContacts.length} accent="#a855f7" />
+        <StatCard label={isTeamView ? "Team Contacts" : "My Contacts"} value={myContacts.length} accent="#a855f7" />
         <StatCard label="Pending Follow-ups" value={myContacts.filter((c) => c.next_call_at && new Date(c.next_call_at) <= new Date()).length} accent="#f59e0b" />
       </div>
 
@@ -70,7 +74,7 @@ export function CallingAppDashboardTab({
         </div>
       )}
 
-      {admin.is_admin && (
+      {isTeamView && (
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-900">🏆 Today's Leaderboard</p>
           {leaderboard.length === 0 ? (

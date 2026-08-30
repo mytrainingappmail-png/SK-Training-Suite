@@ -5,7 +5,7 @@
 // philosophy as aptitude_admins/quiz_admins provisioning).
 
 import { supabase } from "../../lib/supabase";
-import type { CallingAppAdmin } from "../../types/callingApp";
+import type { CallingAppAdmin, CallingAppAdminRole } from "../../types/callingApp";
 
 export async function listCallingAppAdmins(companyId: string): Promise<CallingAppAdmin[]> {
   const { data, error } = await supabase
@@ -28,7 +28,7 @@ export async function grantEmployeeAccess(
   employeeId: string,
   displayName: string,
   email: string | null,
-  opts: { isAdmin: boolean; canUpload: boolean; canDownload: boolean; dailyTarget: number }
+  opts: { isAdmin: boolean; canUpload: boolean; canDownload: boolean; dailyTarget: number; role?: CallingAppAdminRole; reportsTo?: string | null }
 ): Promise<CallingAppAdmin> {
   const { data, error } = await supabase
     .from("calling_app_admins")
@@ -41,6 +41,8 @@ export async function grantEmployeeAccess(
       can_upload: opts.canUpload,
       can_download: opts.canDownload,
       daily_target: opts.dailyTarget,
+      role: opts.role ?? "agent",
+      reports_to: opts.reportsTo ?? null,
     })
     .select()
     .single();
@@ -52,7 +54,7 @@ export async function grantEmployeeAccess(
   return data;
 }
 
-export async function updateCallingAppAdmin(id: string, patch: Partial<Pick<CallingAppAdmin, "is_admin" | "can_upload" | "can_download" | "daily_target" | "status">>): Promise<CallingAppAdmin> {
+export async function updateCallingAppAdmin(id: string, patch: Partial<Pick<CallingAppAdmin, "is_admin" | "can_upload" | "can_download" | "daily_target" | "status" | "role" | "reports_to">>): Promise<CallingAppAdmin> {
   const { data, error } = await supabase
     .from("calling_app_admins")
     .update(patch)

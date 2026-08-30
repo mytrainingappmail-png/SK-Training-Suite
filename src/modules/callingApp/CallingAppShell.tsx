@@ -4,7 +4,7 @@
 // existing employee login). Which `client` is passed in is the only
 // thing that differs between the two; everything else here is identical.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import * as dataRepo from "../../repositories/callingApp/callingAppDataRepository";
@@ -14,11 +14,15 @@ import type {
   CallingAppCustomFieldDef,
   CallingAppContact,
   CallingAppCallLog,
+  CallingAppHandoff,
+  CallingAppBreak,
 } from "../../types/callingApp";
 
 import { CallingAppDashboardTab } from "./CallingAppDashboardTab";
 import { CallingAppSheetTab } from "./CallingAppSheetTab";
 import { CallingAppMasterSheetTab } from "./CallingAppMasterSheetTab";
+import { CallingAppProspectsTab } from "./CallingAppProspectsTab";
+import { CallingAppBreaksTab } from "./CallingAppBreaksTab";
 import { CallingAppReportsTab } from "./CallingAppReportsTab";
 import { CallingAppSettingsTab } from "./CallingAppSettingsTab";
 
@@ -27,12 +31,14 @@ export interface CallingAppIdentity {
   client: SupabaseClient;
 }
 
-type TabKey = "dashboard" | "sheet" | "master-sheet" | "reports" | "settings";
+type TabKey = "dashboard" | "sheet" | "master-sheet" | "prospects" | "breaks" | "reports" | "settings";
 
 const TABS: { key: TabKey; label: string; icon: string; adminOnly?: boolean }[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "sheet", label: "Calling Sheet", icon: "📞" },
   { key: "master-sheet", label: "Master Sheet", icon: "🗂️", adminOnly: true },
+  { key: "prospects", label: "Prospects", icon: "🎯" },
+  { key: "breaks", label: "Breaks", icon: "☕" },
   { key: "reports", label: "Reports", icon: "📈" },
   { key: "settings", label: "Settings", icon: "⚙️", adminOnly: true },
 ];
@@ -48,6 +54,8 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
   const [contacts, setContacts] = useState<CallingAppContact[]>([]);
   const [callLogs, setCallLogs] = useState<CallingAppCallLog[]>([]);
   const [teamAdmins, setTeamAdmins] = useState<CallingAppAdmin[]>([]);
+  const [handoffs, setHandoffs] = useState<CallingAppHandoff[]>([]);
+  const [breaks, setBreaks] = useState<CallingAppBreak[]>([]);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -57,16 +65,20 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [disps, defs, cts, logs] = await Promise.all([
+      const [disps, defs, cts, logs, hos, brks] = await Promise.all([
         dataRepo.listDispositions(client, admin.company_id),
         dataRepo.listCustomFieldDefs(client, admin.company_id),
         dataRepo.listContacts(client, admin.company_id),
         dataRepo.listCallLogs(client, admin.company_id),
+        dataRepo.listHandoffs(client, admin.company_id),
+        dataRepo.listBreaks(client, admin.company_id),
       ]);
       setDispositions(disps);
       setFieldDefs(defs);
       setContacts(cts);
       setCallLogs(logs);
+      setHandoffs(hos);
+      setBreaks(brks);
 
       // Agent names for the leaderboard/assignment — client-side visible
       // list is already scoped by calling_app_admins_select RLS (any
@@ -83,6 +95,12 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Team Leaders/Sales Heads see their reports' numbers, not just their
+  // own — RLS already enforces this at the DB level (see
+  // current_calling_app_report_scope_admin_ids); this mirrors the same
+  // logic so the UI narrows consistently for Dashboard/Reports/Sheet.
+  const scopeAdminIds = useMemo(() => dataRepo.computeReportScopeAdminIds(admin, teamAdmins), [admin, teamAdmins]);
 
   if (loading) {
     return <div className="flex h-40 items-center justify-center text-sm text-slate-400">Loading Calling App…</div>;
@@ -113,7 +131,7 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
       )}
 
       {tab === "dashboard" && (
-        <CallingAppDashboardTab admin={admin} contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} />
+        <CallingAppDashboardTab admin={admin} contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} scopeAdminIds={scopeAdminIds} />
       )}
       {tab === "sheet" && (
         <CallingAppSheetTab identity={identity} contacts={contacts} dispositions={dispositions} fieldDefs={fieldDefs} teamAdmins={teamAdmins} onChanged={load} showToast={showToast} />
@@ -121,8 +139,14 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
       {tab === "master-sheet" && admin.is_admin && (
         <CallingAppMasterSheetTab identity={identity} contacts={contacts} fieldDefs={fieldDefs} teamAdmins={teamAdmins} onChanged={load} showToast={showToast} />
       )}
+      {tab === "prospects" && (
+        <CallingAppProspectsTab identity={identity} contacts={contacts} handoffs={handoffs} teamAdmins={teamAdmins} scopeAdminIds={scopeAdminIds} onChanged={load} showToast={showToast} />
+      )}
+      {tab === "breaks" && (
+        <CallingAppBreaksTab identity={identity} breaks={breaks} teamAdmins={teamAdmins} scopeAdminIds={scopeAdminIds} onChanged={load} showToast={showToast} />
+      )}
       {tab === "reports" && (
-        <CallingAppReportsTab admin={admin} contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} />
+        <CallingAppReportsTab contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} scopeAdminIds={scopeAdminIds} />
       )}
       {tab === "settings" && admin.is_admin && (
         <CallingAppSettingsTab identity={identity} dispositions={dispositions} fieldDefs={fieldDefs} onChanged={load} showToast={showToast} />

@@ -11,19 +11,30 @@ function CallDialog({
   identity,
   contact,
   dispositions,
+  teamAdmins,
   onClose,
   onDone,
+  showToast,
 }: {
   identity: CallingAppIdentity;
   contact: CallingAppContact;
   dispositions: CallingAppDisposition[];
+  teamAdmins: CallingAppAdmin[];
   onClose: () => void;
   onDone: () => void;
+  showToast: (msg: string, ok?: boolean) => void;
 }) {
   const [dispositionId, setDispositionId] = useState(contact.disposition_id ?? "");
   const [remarks, setRemarks] = useState(contact.remarks ?? "");
   const [nextCallAt, setNextCallAt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [isProspect, setIsProspect] = useState(contact.is_prospect);
+  const [savingProspect, setSavingProspect] = useState(false);
+  const [handoffTo, setHandoffTo] = useState("");
+  const [handoffNote, setHandoffNote] = useState("");
+  const [sendingHandoff, setSendingHandoff] = useState(false);
+
+  const iOwnThisContact = contact.assigned_to === identity.admin.id;
 
   async function handleSave() {
     setSaving(true);
@@ -41,6 +52,36 @@ function CallDialog({
       onClose();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleToggleProspect(next: boolean) {
+    setIsProspect(next);
+    setSavingProspect(true);
+    try {
+      await dataRepo.markProspect(identity.client, contact.id, next);
+      onDone();
+    } catch (e) {
+      setIsProspect(!next);
+      showToast(e instanceof Error ? e.message : "Could not update prospect status.", false);
+    } finally {
+      setSavingProspect(false);
+    }
+  }
+
+  async function handleRequestHandoff() {
+    if (!handoffTo) return;
+    setSendingHandoff(true);
+    try {
+      await dataRepo.createHandoff(identity.client, identity.admin.company_id, contact.id, identity.admin.id, handoffTo, handoffNote);
+      showToast("Handoff request sent — check the Prospects tab for its status.");
+      setHandoffTo("");
+      setHandoffNote("");
+      onDone();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not send the handoff request.", false);
+    } finally {
+      setSendingHandoff(false);
     }
   }
 
@@ -80,6 +121,27 @@ function CallDialog({
             <input type="datetime-local" value={nextCallAt} onChange={(e) => setNextCallAt(e.target.value)} className={`${INPUT_CLS} w-full`} />
           </div>
         </div>
+
+        <label className="mt-4 flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+          <input type="checkbox" checked={isProspect} disabled={savingProspect} onChange={(e) => handleToggleProspect(e.target.checked)} />
+          🎯 Mark as Prospect
+        </label>
+
+        {iOwnThisContact && teamAdmins.length > 1 && (
+          <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs font-semibold text-slate-600">Hand off this contact</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <select value={handoffTo} onChange={(e) => setHandoffTo(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[140px]`}>
+                <option value="">— Select recipient —</option>
+                {teamAdmins.filter((a) => a.id !== identity.admin.id).map((a) => <option key={a.id} value={a.id}>{a.display_name}</option>)}
+              </select>
+            </div>
+            <input value={handoffNote} onChange={(e) => setHandoffNote(e.target.value)} placeholder="Note (optional)" className={`${INPUT_CLS} mt-2 w-full`} />
+            <button onClick={handleRequestHandoff} disabled={!handoffTo || sendingHandoff} className="mt-2 w-full rounded-lg bg-slate-700 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+              {sendingHandoff ? "Sending…" : "Request Handoff"}
+            </button>
+          </div>
+        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
@@ -296,7 +358,7 @@ export function CallingAppSheetTab({
             <div key={c.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-semibold text-slate-800">{c.name}</p>
+                  <p className="font-semibold text-slate-800">{c.name} {c.is_prospect && <span title="Prospect">🎯</span>}</p>
                   <p className="text-sm text-slate-500">{c.mobile_no}</p>
                   {c.project_name && <p className="text-xs text-slate-400">{c.project_name}</p>}
                 </div>
@@ -344,7 +406,7 @@ export function CallingAppSheetTab({
               const disp = c.disposition_id ? dispositionById.get(c.disposition_id) : null;
               return (
                 <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{c.name}{c.project_name && <div className="text-xs text-slate-400">{c.project_name}</div>}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{c.name} {c.is_prospect && <span title="Prospect">🎯</span>}{c.project_name && <div className="text-xs text-slate-400">{c.project_name}</div>}</td>
                   <td className="px-4 py-3 text-slate-600">{c.mobile_no}</td>
                   <td className="px-4 py-3">
                     {disp ? (
@@ -372,7 +434,7 @@ export function CallingAppSheetTab({
       </div>
 
       {callTarget && (
-        <CallDialog identity={identity} contact={callTarget} dispositions={dispositions} onClose={() => setCallTarget(null)} onDone={onChanged} />
+        <CallDialog identity={identity} contact={callTarget} dispositions={dispositions} teamAdmins={teamAdmins} onClose={() => setCallTarget(null)} onDone={onChanged} showToast={showToast} />
       )}
       {uploadOpen && (
         <UploadModal identity={identity} fieldDefs={fieldDefs} onClose={() => setUploadOpen(false)} onDone={onChanged} showToast={showToast} />
