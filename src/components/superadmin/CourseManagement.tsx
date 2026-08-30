@@ -25,6 +25,7 @@ import {
   toggleCourseStatus,
   reorderCourses,
   convertCourseToModule,
+  uploadCourseThumbnail,
 } from "../../services/course/courseService";
 import { loadCompanies } from "../../services/company/companyService";
 import { loadCategories } from "../../services/category/categoryService";
@@ -469,10 +470,29 @@ function CourseModal({
 
   const [errs, setErrs] = useState<FormErrs>({});
   const firstRef = useRef<HTMLSelectElement>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [thumbError, setThumbError] = useState("");
 
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
+
+  async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setUploadingThumb(true);
+    setThumbError("");
+    try {
+      const url = await uploadCourseThumbnail(file, editing?.id ?? "new");
+      field("thumbnail", url);
+    } catch (err) {
+      setThumbError(err instanceof Error ? err.message : "Failed to upload thumbnail.");
+    } finally {
+      setUploadingThumb(false);
+    }
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -647,21 +667,26 @@ function CourseModal({
               />
             </FL>
 
-            {/* Thumbnail URL + inline preview */}
-            <FL label="Thumbnail URL" required error={errs.thumbnail}>
-              <input
-                type="url"
-                value={form.thumbnail}
-                onChange={(e) => field("thumbnail", e.target.value)}
-                placeholder="https://example.com/image.jpg"
-                disabled={saving}
-                className={CLS_INPUT}
-              />
-              {form.thumbnail && (
-                <div className="mt-2">
-                  <Thumbnail src={form.thumbnail} alt="Thumbnail preview" />
-                </div>
-              )}
+            {/* Thumbnail — uploaded image, not a pasted URL */}
+            <FL label="Thumbnail" required error={errs.thumbnail || thumbError}>
+              <div className="flex items-center gap-3">
+                {form.thumbnail && <Thumbnail src={form.thumbnail} alt="Thumbnail preview" />}
+                <input
+                  ref={thumbInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => thumbInputRef.current?.click()}
+                  disabled={saving || uploadingThumb}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {uploadingThumb ? "Uploading…" : form.thumbnail ? "Replace Image" : "Upload Image"}
+                </button>
+              </div>
             </FL>
 
             {/* Level */}

@@ -121,3 +121,21 @@ export async function setCourseStatus(
 
   return data;
 }
+
+// Reuses the existing "course-content" public storage bucket (same one
+// Real Estate Projects/Video Library already upload thumbnails into) —
+// no new bucket to configure. `courseId` is "new" while the course hasn't
+// been saved yet, same pattern as RealEstateProjectManagement.
+export async function uploadCourseThumbnail(file: File, courseId: string): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `images/courses/${courseId}-${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage.from("course-content").upload(path, file, { upsert: true });
+  if (error) {
+    console.error("[courseRepository] uploadCourseThumbnail:", error);
+    throw new Error(error.message);
+  }
+
+  const { data } = supabase.storage.from("course-content").getPublicUrl(path);
+  return data.publicUrl;
+}

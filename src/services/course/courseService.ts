@@ -9,6 +9,7 @@ import {
   deleteCourse,
   setCourseStatus,
   convertCourseToModule as repositoryConvertCourseToModule,
+  uploadCourseThumbnail as repositoryUploadCourseThumbnail,
 } from "../../repositories/course/courseRepository";
 
 function toCourseForm(course: Course): CourseForm {
@@ -109,6 +110,10 @@ export async function toggleCourseStatus(
   }
 
   return await setCourseStatus(id, active);
+}
+
+export async function uploadCourseThumbnail(file: File, courseId: string): Promise<string> {
+  return await repositoryUploadCourseThumbnail(file, courseId);
 }
 
 function validateCourseForm(data: Partial<CourseForm>): void {
