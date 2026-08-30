@@ -2,6 +2,17 @@ import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import type { QuizCertificate } from "../../types/quiz";
 
+/** Admin-only — the candidate never uploads their own photo. RLS
+ * (quiz_certificates_admin_update) is the real gate; this just writes
+ * the URL onto the already-issued certificate row. */
+export async function updateCertificatePhoto(certificateId: string, photoUrl: string | null): Promise<void> {
+  const { error } = await supabaseQuiz.from("quiz_certificates").update({ candidate_photo_url: photoUrl }).eq("id", certificateId);
+  if (error) {
+    console.error("[quizCertificateRepository] updateCertificatePhoto:", error);
+    throw new Error(error.message);
+  }
+}
+
 /** Issues (or returns the already-issued) certificate for the calling participant — correctness/passing is verified server-side. */
 export async function issueMyCertificate(sessionId: string): Promise<QuizCertificate> {
   const { data, error } = await supabaseQuizPlayer.rpc("issue_my_certificate", { p_session_id: sessionId });

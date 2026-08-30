@@ -515,8 +515,8 @@ export default function QuizResultsPage() {
                             <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
                               {r.grade.replace("_", " ")}
                             </span>
-                            {isCertEligible(r.rank, r.grade, certEligibility) && (
-                              <QuizAdminCertificateButton participantId={r.participant_id} />
+                            {isCertEligible(r.rank, r.grade, certEligibility) && admin && (
+                              <QuizAdminCertificateButton participantId={r.participant_id} companyId={admin.company_id} />
                             )}
                           </div>
                         ))

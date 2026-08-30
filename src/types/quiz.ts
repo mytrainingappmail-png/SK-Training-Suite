@@ -184,7 +184,7 @@ export interface OptionColor {
   font: string;
 }
 
-export type CertTemplate = "classic_gold" | "royal_blue" | "modern_purple" | "minimal_white" | "dark_elegant";
+export type CertTemplate = "classic_gold" | "royal_blue" | "modern_purple" | "minimal_white" | "dark_elegant" | "premium_embossed" | "royal_seal";
 export type ChampMusic = "builtin" | "custom" | "off";
 /** Where the uploaded certificate logo is placed — a crest above the title, a corner mark, or a faint full-page watermark. */
 export type CertLogoPosition = "top_center" | "top_left" | "top_right" | "watermark";
@@ -246,6 +246,8 @@ export interface CertTemplateDraft {
   signatory2_name_scale: number;
   signature_mode: CertSignatureMode;
   signature_align: CertSignatureAlign;
+  /** Reserves a spot on the layout for the candidate's photo — the image itself is attached per-certificate by an admin after issuance, never self-uploaded. */
+  photo_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -315,6 +317,8 @@ export interface QuizCertificate {
   signatory2_name_scale: number;
   signature_mode: CertSignatureMode;
   signature_align: CertSignatureAlign;
+  photo_enabled: boolean;
+  candidate_photo_url: string | null;
 }
 
 export interface AnswerDistributionOption {

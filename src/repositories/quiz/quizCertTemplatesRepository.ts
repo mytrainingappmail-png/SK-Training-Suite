@@ -38,6 +38,7 @@ export async function createCertTemplateDraft(companyId: string, name: string, c
         signatory2_name_scale: copyFrom.signatory2_name_scale,
         signature_mode: copyFrom.signature_mode,
         signature_align: copyFrom.signature_align,
+        photo_enabled: copyFrom.photo_enabled,
       }
     : {};
 

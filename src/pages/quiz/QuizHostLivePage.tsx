@@ -26,6 +26,7 @@ export default function QuizHostLivePage() {
   const navigate = useNavigate();
   const { session, participants } = useQuizSessionRealtime(sessionId ?? null);
   const canEdit = canEditQuizContent();
+  const admin = getCurrentQuizAdmin();
 
   const [quiz, setQuiz] = useState<QuizWithQuestions | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -420,7 +421,7 @@ export default function QuizHostLivePage() {
                               <span className="flex-1 truncate">
                                 {p.display_name} <span className="text-slate-500">({Math.round((p.correct_count / quiz.questions.length) * 100)}%)</span>
                               </span>
-                              <QuizAdminCertificateButton participantId={p.id} />
+                              {admin && <QuizAdminCertificateButton participantId={p.id} companyId={admin.company_id} />}
                             </div>
                           ))}
                         </div>

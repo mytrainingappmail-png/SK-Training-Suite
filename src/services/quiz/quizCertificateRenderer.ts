@@ -30,6 +30,10 @@ export interface CertificateData {
   signatureMode?: CertSignatureMode | null;
   /** Only used when signatureMode is "single". */
   signatureAlign?: CertSignatureAlign | null;
+  /** Reserves the top-right corner for a circular candidate photo — the design's own toggle. */
+  photoEnabled?: boolean | null;
+  /** Admin-attached after issuance — drawn only when photoEnabled is also true. */
+  photoUrl?: string | null;
 }
 
 const WIDTH = 1200;
@@ -117,6 +121,33 @@ const PALETTES: Record<CertTemplate, Palette> = {
     headingFont: "Georgia, 'Times New Roman', serif",
     bodyFont: "Arial, sans-serif",
   },
+  // Deep black-on-black with a metallic gold title and a beveled double
+  // frame + corner brackets — the "premium/3D" look, all vector-drawn.
+  premium_embossed: {
+    background: gradientBg(["#0A0A0C", "#141419"], "vert"),
+    border: "#B8860B",
+    accent: "#D4AF37",
+    heading: "#F5EFDD",
+    body: "#C9C2AE",
+    muted: "#8A8370",
+    headingFont: "Georgia, 'Times New Roman', serif",
+    bodyFont: "Arial, sans-serif",
+  },
+  // Ivory/cream formal look built around a procedurally-drawn wax-seal
+  // medallion instead of an uploaded logo image.
+  royal_seal: {
+    background: (ctx) => {
+      ctx.fillStyle = "#FBF7ED";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    },
+    border: "#8B1E2E",
+    accent: "#8B1E2E",
+    heading: "#1E293B",
+    body: "#44403C",
+    muted: "#78716C",
+    headingFont: "Georgia, 'Times New Roman', serif",
+    bodyFont: "Georgia, 'Times New Roman', serif",
+  },
 };
 
 /** Resolves to null (rather than rejecting) on a broken/unreachable URL, so one bad signature image doesn't stop the whole certificate from rendering. */
@@ -200,11 +231,122 @@ function tintImage(image: HTMLImageElement | HTMLCanvasElement, color: string): 
   return c;
 }
 
+/** Fills text with a horizontal light→dark→light gold gradient instead of
+ * a flat color — reads as a metallic/embossed title rather than flat print. */
+function drawMetallicText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, font: string, halfWidth = 320): void {
+  ctx.font = font;
+  const g = ctx.createLinearGradient(x - halfWidth, 0, x + halfWidth, 0);
+  g.addColorStop(0, "#8A6A1F");
+  g.addColorStop(0.35, "#F5D580");
+  g.addColorStop(0.5, "#FFF6D9");
+  g.addColorStop(0.65, "#F5D580");
+  g.addColorStop(1, "#8A6A1F");
+  ctx.fillStyle = g;
+  ctx.fillText(text, x, y);
+}
+
+/** A beveled double-frame with small corner brackets, in place of the
+ * plain two-rect border — the light/dark rule pair either side of the
+ * mid line is what reads as "embossed" rather than flat. */
+function drawEmbossedFrame(ctx: CanvasRenderingContext2D, accent: string): void {
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(28, 28, WIDTH - 56, HEIGHT - 56);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(34, 34, WIDTH - 68, HEIGHT - 68);
+  ctx.strokeStyle = "#3A2E0F";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(46, 46, WIDTH - 92, HEIGHT - 92);
+
+  const corners: [number, number, number, number][] = [
+    [60, 60, 1, 1],
+    [WIDTH - 60, 60, -1, 1],
+    [60, HEIGHT - 60, 1, -1],
+    [WIDTH - 60, HEIGHT - 60, -1, -1],
+  ];
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  corners.forEach(([cx, cy, dx, dy]) => {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + dy * 26);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + dx * 26, cy);
+    ctx.stroke();
+  });
+}
+
+/** A procedurally-drawn wax-seal/medallion — a scalloped ring, an inner
+ * ring, and a 5-point star — no image asset, built entirely from arcs
+ * and a path so it scales cleanly at any resolution. */
+function drawSeal(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string): void {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const scallops = 18;
+  for (let i = 0; i <= scallops; i++) {
+    const a = (i / scallops) * Math.PI * 2;
+    const rr = r + (i % 2 === 0 ? 6 : 0);
+    const x = cx + Math.cos(a) * rr;
+    const y = cy + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "#FFFFFF44";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 10, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.beginPath();
+  const spikes = 5;
+  const outerR = r * 0.5;
+  const innerR = r * 0.2;
+  for (let i = 0; i < spikes * 2; i++) {
+    const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
+    const rr = i % 2 === 0 ? outerR : innerR;
+    const x = cx + Math.cos(a) * rr;
+    const y = cy + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** The candidate's own photo, admin-attached after issuance — a circular
+ * frame with a colored ring, fixed in the top-right corner so it never
+ * collides with the logo (which defaults to top-center). */
+function drawPhotoCircle(ctx: CanvasRenderingContext2D, image: HTMLImageElement, cx: number, cy: number, r: number, ringColor: string): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  const scale = Math.max((r * 2) / image.width, (r * 2) / image.height);
+  const w = image.width * scale;
+  const h = image.height * scale;
+  ctx.drawImage(image, cx - w / 2, cy - h / 2, w, h);
+  ctx.restore();
+
+  ctx.strokeStyle = ringColor;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
-  const [sig1ImageRaw, sig2ImageRaw, logoImage] = await Promise.all([
+  const [sig1ImageRaw, sig2ImageRaw, logoImage, photoImage] = await Promise.all([
     loadImage(data.signatory1ImageUrl),
     loadImage(data.signatory2ImageUrl),
     loadImage(data.logoUrl),
+    loadImage(data.photoEnabled ? data.photoUrl : null),
   ]);
   const sig1Image = sig1ImageRaw ? trimTransparentEdges(sig1ImageRaw) : null;
   const sig2Image = sig2ImageRaw ? trimTransparentEdges(sig2ImageRaw) : null;
@@ -239,11 +381,22 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   }
 
   // Border frame
-  ctx.strokeStyle = p.border;
-  ctx.lineWidth = 6;
-  ctx.strokeRect(30, 30, WIDTH - 60, HEIGHT - 60);
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(45, 45, WIDTH - 90, HEIGHT - 90);
+  if (template === "premium_embossed") {
+    drawEmbossedFrame(ctx, p.accent);
+  } else {
+    ctx.strokeStyle = p.border;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(30, 30, WIDTH - 60, HEIGHT - 60);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(45, 45, WIDTH - 90, HEIGHT - 90);
+  }
+
+  // Royal Seal's signature mark — a drawn medallion instead of relying
+  // on an uploaded logo. Sits above the company name; pick a non-center
+  // logo position for this template if you also want a logo, to avoid overlap.
+  if (template === "royal_seal") {
+    drawSeal(ctx, WIDTH / 2, 78, 38, p.accent);
+  }
 
   // Logo mark — kept at its own natural colors (unlike signatures, a brand
   // logo shouldn't be recolored to the template palette). Anchored by its
@@ -262,6 +415,26 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
     else if (logoPosition === "top_right") drawLogo(WIDTH - 140, 90, 80);
   }
 
+  // Candidate photo — always top-right, regardless of logo placement, so
+  // the two never compete for the same spot. When the design reserves
+  // the spot but no photo has been attached yet (e.g. the settings
+  // preview, or an issued certificate nobody's added a photo to), a
+  // dashed placeholder shows where it will go.
+  if (data.photoEnabled) {
+    if (photoImage) {
+      drawPhotoCircle(ctx, photoImage, WIDTH - 115, 115, 55, p.accent);
+    } else {
+      ctx.save();
+      ctx.strokeStyle = p.muted;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.arc(WIDTH - 115, 115, 55, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   ctx.textAlign = "center";
 
   // Company name
@@ -270,9 +443,13 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   ctx.fillText(data.companyName.toUpperCase(), WIDTH / 2, 130);
 
   // Title
-  ctx.fillStyle = p.accent;
-  ctx.font = `700 54px ${p.headingFont}`;
-  ctx.fillText(data.title, WIDTH / 2, 210);
+  if (template === "premium_embossed") {
+    drawMetallicText(ctx, data.title, WIDTH / 2, 210, `700 54px ${p.headingFont}`);
+  } else {
+    ctx.fillStyle = p.accent;
+    ctx.font = `700 54px ${p.headingFont}`;
+    ctx.fillText(data.title, WIDTH / 2, 210);
+  }
 
   // Achievement line
   ctx.fillStyle = p.body;
@@ -397,4 +574,6 @@ export const CERT_TEMPLATE_LABELS: Record<CertTemplate, string> = {
   modern_purple: "💜 Modern Purple",
   minimal_white: "◻ Minimal White",
   dark_elegant: "⬛ Dark Elegant",
+  premium_embossed: "✨ Premium Embossed",
+  royal_seal: "🏵️ Royal Seal",
 };

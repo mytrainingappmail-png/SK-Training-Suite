@@ -104,6 +104,7 @@ export default function QuizSettingsPage() {
       signatory2NameScale: editingDraft.signatory2_name_scale,
       signatureMode: editingDraft.signature_mode,
       signatureAlign: editingDraft.signature_align,
+      photoEnabled: editingDraft.photo_enabled,
     }).catch(() => {
       // preview only — a failed render just leaves the canvas as-is
     });
@@ -201,6 +202,7 @@ export default function QuizSettingsPage() {
         signatory2_name_scale: editingDraft.signatory2_name_scale,
         signature_mode: editingDraft.signature_mode,
         signature_align: editingDraft.signature_align,
+        photo_enabled: editingDraft.photo_enabled,
       });
       setEditingDraft(saved);
       setDrafts((prev) => prev.map((d) => (d.id === saved.id ? saved : d)));
@@ -664,6 +666,17 @@ export default function QuizSettingsPage() {
                   </button>
                 ))}
               </div>
+              <label className="mt-3 flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={editingDraft.photo_enabled}
+                  onChange={(e) => setEditingDraft({ ...editingDraft, photo_enabled: e.target.checked })}
+                />
+                📷 Show a candidate photo (top-right corner)
+              </label>
+              <p className="text-[11px] text-slate-500 mt-1">
+                The photo itself is attached per-candidate by an admin from the Results screen after a certificate is issued — nobody uploads their own.
+              </p>
             </div>
 
             <div className="pt-2 border-t border-slate-800 space-y-3">

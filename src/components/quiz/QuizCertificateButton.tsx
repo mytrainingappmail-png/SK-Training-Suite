@@ -39,6 +39,8 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         signatory2NameScale: cert.signatory2_name_scale,
         signatureMode: cert.signature_mode,
         signatureAlign: cert.signature_align,
+        photoEnabled: cert.photo_enabled,
+        photoUrl: cert.candidate_photo_url,
       });
 
       downloadCanvasAsPng(canvas, `certificate-${cert.cert_number}.png`);
