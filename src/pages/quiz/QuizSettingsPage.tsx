@@ -52,10 +52,14 @@ export default function QuizSettingsPage() {
       signatory1Title: settings.cert_signatory1_title,
       signatory1ImageUrl: settings.cert_signatory1_image_url,
       signatory1Scale: settings.cert_signatory1_scale,
+      signatory1NameScale: settings.cert_signatory1_name_scale,
       signatory2Name: settings.cert_signatory2_name,
       signatory2Title: settings.cert_signatory2_title,
       signatory2ImageUrl: settings.cert_signatory2_image_url,
       signatory2Scale: settings.cert_signatory2_scale,
+      signatory2NameScale: settings.cert_signatory2_name_scale,
+      signatureMode: settings.cert_signature_mode,
+      signatureAlign: settings.cert_signature_align,
     }).catch(() => {
       // preview only — a failed render just leaves the canvas as-is
     });
@@ -70,10 +74,14 @@ export default function QuizSettingsPage() {
     settings?.cert_signatory1_title,
     settings?.cert_signatory1_image_url,
     settings?.cert_signatory1_scale,
+    settings?.cert_signatory1_name_scale,
     settings?.cert_signatory2_name,
     settings?.cert_signatory2_title,
     settings?.cert_signatory2_image_url,
     settings?.cert_signatory2_scale,
+    settings?.cert_signatory2_name_scale,
+    settings?.cert_signature_mode,
+    settings?.cert_signature_align,
   ]);
 
   function updateOptionColor(index: number, field: "box" | "font", value: string) {
@@ -146,10 +154,14 @@ export default function QuizSettingsPage() {
         cert_signatory1_title: settings.cert_signatory1_title,
         cert_signatory1_image_url: settings.cert_signatory1_image_url,
         cert_signatory1_scale: settings.cert_signatory1_scale,
+        cert_signatory1_name_scale: settings.cert_signatory1_name_scale,
         cert_signatory2_name: settings.cert_signatory2_name,
         cert_signatory2_title: settings.cert_signatory2_title,
         cert_signatory2_image_url: settings.cert_signatory2_image_url,
         cert_signatory2_scale: settings.cert_signatory2_scale,
+        cert_signatory2_name_scale: settings.cert_signatory2_name_scale,
+        cert_signature_mode: settings.cert_signature_mode,
+        cert_signature_align: settings.cert_signature_align,
         cert_eligibility: settings.cert_eligibility,
       });
       setCertMessage("Certificate settings saved.");
@@ -576,6 +588,66 @@ export default function QuizSettingsPage() {
           </div>
         </div>
 
+        <div className="pt-2 border-t border-slate-800 space-y-3">
+          <div>
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Signature Layout</div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { value: "both", label: "Both Signatures" },
+                  { value: "single", label: "Single Signature Only" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSettings({ ...settings, cert_signature_mode: opt.value })}
+                  className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                    settings.cert_signature_mode === opt.value
+                      ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                      : "border-slate-700 text-slate-300 hover:border-slate-600"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              {settings.cert_signature_mode === "single"
+                ? "Only Signatory 1 is shown on the certificate — Signatory 2's details below are ignored."
+                : "Both signatories are shown side by side, as before."}
+            </p>
+          </div>
+
+          {settings.cert_signature_mode === "single" && (
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Signature Alignment</div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { value: "left", label: "Left" },
+                    { value: "center", label: "Center" },
+                    { value: "right", label: "Right" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, cert_signature_align: opt.value })}
+                    className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                      settings.cert_signature_align === opt.value
+                        ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
           <div>
             <QuizBrandingImageField
@@ -589,7 +661,7 @@ export default function QuizSettingsPage() {
             />
             {settings.cert_signatory1_image_url && (
               <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Size on certificate:</span>
+                <span className="text-xs text-slate-500">Signature image size:</span>
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, cert_signatory1_scale: Math.max(50, settings.cert_signatory1_scale - 10) })}
@@ -601,6 +673,26 @@ export default function QuizSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, cert_signatory1_scale: Math.min(150, settings.cert_signatory1_scale + 10) })}
+                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                >
+                  +
+                </button>
+              </div>
+            )}
+            {settings.cert_signatory1_name && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-slate-500">Name text size:</span>
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, cert_signatory1_name_scale: Math.max(50, settings.cert_signatory1_name_scale - 10) })}
+                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                >
+                  −
+                </button>
+                <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.cert_signatory1_name_scale}%</span>
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, cert_signatory1_name_scale: Math.min(150, settings.cert_signatory1_name_scale + 10) })}
                   className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
                 >
                   +
@@ -620,7 +712,7 @@ export default function QuizSettingsPage() {
             />
             {settings.cert_signatory2_image_url && (
               <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Size on certificate:</span>
+                <span className="text-xs text-slate-500">Signature image size:</span>
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, cert_signatory2_scale: Math.max(50, settings.cert_signatory2_scale - 10) })}
@@ -632,6 +724,26 @@ export default function QuizSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, cert_signatory2_scale: Math.min(150, settings.cert_signatory2_scale + 10) })}
+                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                >
+                  +
+                </button>
+              </div>
+            )}
+            {settings.cert_signatory2_name && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-slate-500">Name text size:</span>
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, cert_signatory2_name_scale: Math.max(50, settings.cert_signatory2_name_scale - 10) })}
+                  className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+                >
+                  −
+                </button>
+                <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.cert_signatory2_name_scale}%</span>
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, cert_signatory2_name_scale: Math.min(150, settings.cert_signatory2_name_scale + 10) })}
                   className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
                 >
                   +

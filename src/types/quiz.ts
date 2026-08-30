@@ -184,6 +184,10 @@ export type CertTemplate = "classic_gold" | "royal_blue" | "modern_purple" | "mi
 export type ChampMusic = "builtin" | "custom" | "off";
 /** Where the uploaded certificate logo is placed — a crest above the title, a corner mark, or a faint full-page watermark. */
 export type CertLogoPosition = "top_center" | "top_left" | "top_right" | "watermark";
+/** "both" draws the existing two-slot side-by-side layout unchanged; "single" draws only Signatory 1, positioned by cert_signature_align. */
+export type CertSignatureMode = "both" | "single";
+/** Only applies when cert_signature_mode is "single". */
+export type CertSignatureAlign = "left" | "center" | "right";
 
 export interface QuizSettings {
   company_id: string;
@@ -208,10 +212,14 @@ export interface QuizSettings {
   cert_signatory1_title: string | null;
   cert_signatory1_image_url: string | null;
   cert_signatory1_scale: number;
+  cert_signatory1_name_scale: number;
   cert_signatory2_name: string | null;
   cert_signatory2_title: string | null;
   cert_signatory2_image_url: string | null;
   cert_signatory2_scale: number;
+  cert_signatory2_name_scale: number;
+  cert_signature_mode: CertSignatureMode;
+  cert_signature_align: CertSignatureAlign;
   champ_music: ChampMusic;
   champ_music_url: string | null;
   champ_music_volume: number;
@@ -279,10 +287,14 @@ export interface QuizCertificate {
   signatory1_title: string | null;
   signatory1_image_url: string | null;
   signatory1_scale: number;
+  signatory1_name_scale: number;
   signatory2_name: string | null;
   signatory2_title: string | null;
   signatory2_image_url: string | null;
   signatory2_scale: number;
+  signatory2_name_scale: number;
+  signature_mode: CertSignatureMode;
+  signature_align: CertSignatureAlign;
 }
 
 export interface AnswerDistributionOption {

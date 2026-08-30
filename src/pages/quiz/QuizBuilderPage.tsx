@@ -158,6 +158,50 @@ export default function QuizBuilderPage() {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
   }
 
+  function duplicateQuestion(localId: string) {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.localId === localId);
+      if (index === -1) return prev;
+      const copy: EditableQuestion = {
+        ...prev[index],
+        localId: nextLocalId(),
+        options: prev[index].options.map((o) => ({ ...o })),
+      };
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
+    });
+  }
+
+  const MIN_OPTIONS = 2;
+  const MAX_OPTIONS = 6;
+
+  function addOption(localId: string) {
+    setQuestions((prev) =>
+      prev.map((q) =>
+        q.localId === localId && q.type !== "truefalse" && q.options.length < MAX_OPTIONS
+          ? { ...q, options: [...q.options, { option_text: "", is_correct: false }] }
+          : q
+      )
+    );
+  }
+
+  function removeOption(localId: string, optionIndex: number) {
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.localId !== localId || q.type === "truefalse" || q.options.length <= MIN_OPTIONS) return q;
+        const removingCorrect = q.options[optionIndex]?.is_correct;
+        const nextOptions = q.options.filter((_, i) => i !== optionIndex);
+        if (removingCorrect && !nextOptions.some((o) => o.is_correct) && nextOptions.length > 0) {
+          nextOptions[0] = { ...nextOptions[0], is_correct: true };
+        }
+        return { ...q, options: nextOptions };
+      })
+    );
+  }
+
+  function resetQuestionTimer(localId: string) {
+    updateQuestion(localId, { timer_seconds: null });
+  }
+
   function isBlankQuestion(q: EditableQuestion): boolean {
     return !q.question_text.trim() && q.options.every((o) => !o.option_text.trim());
   }
@@ -408,13 +452,31 @@ export default function QuizBuilderPage() {
                   type="number"
                   min={5}
                   max={300}
-                  placeholder="timer"
-                  className="w-20 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
-                  value={q.timer_seconds ?? ""}
+                  title={q.timer_seconds === null ? "Following the default timer above" : "Manually overridden for this question"}
+                  className={`w-20 text-xs bg-slate-800 border rounded-lg px-2 py-1 text-white ${
+                    q.timer_seconds === null ? "border-slate-700 text-slate-400" : "border-violet-500"
+                  }`}
+                  value={q.timer_seconds ?? form.default_timer_seconds}
                   onChange={(e) =>
                     updateQuestion(q.localId, { timer_seconds: e.target.value ? Number(e.target.value) : null })
                   }
                 />
+                {q.timer_seconds !== null && (
+                  <button
+                    onClick={() => resetQuestionTimer(q.localId)}
+                    title="Reset to the default timer above"
+                    className="text-xs text-violet-300 hover:text-violet-200 px-1"
+                  >
+                    ↺
+                  </button>
+                )}
+                <button
+                  onClick={() => duplicateQuestion(q.localId)}
+                  title="Duplicate this question"
+                  className="text-xs text-slate-300 hover:text-white px-2"
+                >
+                  ⧉
+                </button>
                 <button
                   onClick={() => removeQuestion(q.localId)}
                   className="text-xs text-red-300 hover:text-red-200 px-2"
@@ -450,8 +512,25 @@ export default function QuizBuilderPage() {
                     onChange={(e) => updateOption(q.localId, oi, e.target.value)}
                     placeholder={`Option ${oi + 1}`}
                   />
+                  {q.type !== "truefalse" && q.options.length > MIN_OPTIONS && (
+                    <button
+                      onClick={() => removeOption(q.localId, oi)}
+                      title="Remove this option"
+                      className="text-xs text-red-300 hover:text-red-200 px-1 shrink-0"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               ))}
+              {q.type !== "truefalse" && q.options.length < MAX_OPTIONS && (
+                <button
+                  onClick={() => addOption(q.localId)}
+                  className="text-xs font-semibold text-violet-300 hover:text-violet-200 px-1"
+                >
+                  + Add Option
+                </button>
+              )}
             </div>
 
             <input

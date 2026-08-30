@@ -2,7 +2,7 @@
 // No external fonts/images required, so it always renders identically
 // regardless of company branding being configured or not.
 
-import type { CertTemplate, CertLogoPosition } from "../../types/quiz";
+import type { CertTemplate, CertLogoPosition, CertSignatureMode, CertSignatureAlign } from "../../types/quiz";
 
 export interface CertificateData {
   candidateName: string;
@@ -19,14 +19,24 @@ export interface CertificateData {
   signatory1Title?: string | null;
   signatory1ImageUrl?: string | null;
   signatory1Scale?: number | null;
+  signatory1NameScale?: number | null;
   signatory2Name?: string | null;
   signatory2Title?: string | null;
   signatory2ImageUrl?: string | null;
   signatory2Scale?: number | null;
+  signatory2NameScale?: number | null;
+  /** "both" (default) keeps the original two-slot side-by-side layout; "single" draws only signatory 1, positioned by signatureAlign. */
+  signatureMode?: CertSignatureMode | null;
+  /** Only used when signatureMode is "single". */
+  signatureAlign?: CertSignatureAlign | null;
 }
 
 const WIDTH = 1200;
 const HEIGHT = 850;
+// Canvas is rasterized at 2x and downscaled by CSS/PNG export — sharpens
+// signature images and text (previously rendered at native 1200x850,
+// which looked soft/blurry once a signature photo was scaled up into its box).
+const RENDER_SCALE = 2;
 
 interface Palette {
   background: (ctx: CanvasRenderingContext2D) => void;
@@ -144,10 +154,15 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
     loadImage(data.logoUrl),
   ]);
 
-  canvas.width = WIDTH;
-  canvas.height = HEIGHT;
+  canvas.width = WIDTH * RENDER_SCALE;
+  canvas.height = HEIGHT * RENDER_SCALE;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  // Every draw call below still uses the original WIDTH/HEIGHT coordinate
+  // system — this scale makes them all land on the higher-resolution canvas.
+  ctx.scale(RENDER_SCALE, RENDER_SCALE);
 
   const p = PALETTES[template] ?? PALETTES.dark_elegant;
   const logoPosition = data.logoPosition ?? "top_center";
@@ -242,7 +257,8 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
     name?: string | null,
     title?: string | null,
     image?: HTMLImageElement | null,
-    scalePercent?: number | null
+    scalePercent?: number | null,
+    nameScalePercent?: number | null
   ) => {
     if (!name) return;
     if (image) {
@@ -267,17 +283,30 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
     ctx.moveTo(x - 130, sigY);
     ctx.lineTo(x + 130, sigY);
     ctx.stroke();
+    const namePct = (nameScalePercent ?? 100) / 100;
     ctx.fillStyle = p.heading;
-    ctx.font = `600 20px ${p.bodyFont}`;
+    ctx.font = `600 ${Math.round(20 * namePct)}px ${p.bodyFont}`;
     ctx.fillText(name, x, sigY + 28);
     ctx.fillStyle = p.muted;
-    ctx.font = `14px ${p.bodyFont}`;
+    ctx.font = `${Math.round(14 * namePct)}px ${p.bodyFont}`;
     ctx.fillText(title ?? "", x, sigY + 48);
   };
 
-  if (data.signatory1Name || data.signatory2Name) {
-    drawSignature(WIDTH / 2 - 250, data.signatory1Name, data.signatory1Title, sig1Image, data.signatory1Scale);
-    drawSignature(WIDTH / 2 + 250, data.signatory2Name, data.signatory2Title, sig2Image, data.signatory2Scale);
+  const signatureMode = data.signatureMode ?? "both";
+  if (signatureMode === "single") {
+    const align = data.signatureAlign ?? "center";
+    const x = align === "left" ? WIDTH / 2 - 250 : align === "right" ? WIDTH / 2 + 250 : WIDTH / 2;
+    // Whichever signatory actually has a name filled in wins — some admins
+    // have historically only filled in Signatory 2, so "single" shouldn't
+    // silently render nothing just because slot 1 is the empty one.
+    if (data.signatory1Name) {
+      drawSignature(x, data.signatory1Name, data.signatory1Title, sig1Image, data.signatory1Scale, data.signatory1NameScale);
+    } else {
+      drawSignature(x, data.signatory2Name, data.signatory2Title, sig2Image, data.signatory2Scale, data.signatory2NameScale);
+    }
+  } else if (data.signatory1Name || data.signatory2Name) {
+    drawSignature(WIDTH / 2 - 250, data.signatory1Name, data.signatory1Title, sig1Image, data.signatory1Scale, data.signatory1NameScale);
+    drawSignature(WIDTH / 2 + 250, data.signatory2Name, data.signatory2Title, sig2Image, data.signatory2Scale, data.signatory2NameScale);
   }
 
   // Cert number, bottom-right, small
