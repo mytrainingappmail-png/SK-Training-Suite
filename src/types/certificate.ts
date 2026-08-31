@@ -30,6 +30,9 @@ export interface Certificate {
 
   remarks: string;
 
+  /** Admin-attached after issuance, from the Certificates list — never self-uploaded. */
+  candidate_photo_url: string | null;
+
   created_at: string;
 
   updated_at: string;
@@ -38,7 +41,7 @@ export interface Certificate {
 
 export type CertificateForm = Omit<
   Certificate,
-  "id" | "created_at" | "updated_at"
+  "id" | "created_at" | "updated_at" | "candidate_photo_url"
 >;
 
 export const defaultCertificateForm: CertificateForm = {

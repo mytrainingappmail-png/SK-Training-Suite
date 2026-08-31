@@ -140,6 +140,7 @@ function CertificateCard({ certificate, employeeName, onOpen }: { certificate: M
                 courseName: preview.courseName || certificate.courseName,
                 issueDate: formatDate(certificate.issueDate),
                 certificateNo: certificate.certificateNumber,
+                photoUrl: preview.certificate.candidate_photo_url,
               }}
             />
           </div>
@@ -374,6 +375,7 @@ function CertificateDetails({
                 courseName: viewData.courseName || certificate.courseName,
                 issueDate: formatDate(certificate.issueDate),
                 certificateNo: certificate.certificateNumber,
+                photoUrl: viewData.certificate.candidate_photo_url,
               }}
             />
           </div>

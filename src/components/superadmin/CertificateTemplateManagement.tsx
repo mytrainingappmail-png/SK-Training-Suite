@@ -18,8 +18,10 @@ import type {
   PaperSize,
   DesignPreset,
   LogoPosition,
+  WatermarkType,
+  PhotoFrame,
 } from "../../types/certificateTemplate";
-import { defaultCertificateTemplateForm, DESIGN_PRESETS, LOGO_POSITIONS } from "../../types/certificateTemplate";
+import { defaultCertificateTemplateForm, DESIGN_PRESETS, LOGO_POSITIONS, WATERMARK_TYPES, PHOTO_FRAMES } from "../../types/certificateTemplate";
 import CertificateRenderer from "../certificate/CertificateRenderer";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -293,6 +295,10 @@ function TemplateModal({
           background_image_url: editing.background_image_url,
           logo_url:             editing.logo_url,
           logo_position:        editing.logo_position,
+          watermark_type:       editing.watermark_type,
+          watermark_text:       editing.watermark_text,
+          photo_enabled:        editing.photo_enabled,
+          photo_frame:          editing.photo_frame,
           signature_url:        editing.signature_url,
           signatory_1_name:     editing.signatory_1_name,
           signatory_1_title:    editing.signatory_1_title,
@@ -339,6 +345,26 @@ function TemplateModal({
 
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState("");
+
+  // Session-only preview of the employee photo slot — no upload, no server
+  // round-trip, gone on close. The real photo is always attached per-employee
+  // certificate from the Certificates list after issuance, never here.
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const [photoDragOver, setPhotoDragOver] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (previewPhotoUrl) URL.revokeObjectURL(previewPhotoUrl);
+    };
+  }, [previewPhotoUrl]);
+
+  function handlePreviewPhotoFile(file: File | undefined) {
+    if (!file || !file.type.startsWith("image/")) return;
+    setPreviewPhotoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
 
   function makeImageUploadHandler<K extends "background_image_url" | "logo_url" | "signature_url" | "signature_2_url">(
     key: K,
@@ -505,6 +531,97 @@ function TemplateModal({
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
                 </select>
+              </FL>
+
+              <FL label="Background Watermark">
+                <p className="mb-2 text-xs text-slate-400">Independent of the logo above — doesn't replace the small logo mark, sits behind it.</p>
+                <div className="flex flex-wrap gap-2">
+                  {WATERMARK_TYPES.map((w) => (
+                    <button
+                      key={w.value}
+                      type="button"
+                      onClick={() => field("watermark_type", w.value as WatermarkType)}
+                      disabled={saving}
+                      className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold transition ${
+                        form.watermark_type === w.value
+                          ? "border-yellow-400 bg-yellow-50 text-yellow-800"
+                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+                {form.watermark_type === "text" && (
+                  <input type="text" value={form.watermark_text}
+                    onChange={(e) => field("watermark_text", e.target.value)}
+                    placeholder="e.g. SAMPLE, CONFIDENTIAL, your company name…"
+                    disabled={saving} className={`${CLS_INPUT} mt-2`} />
+                )}
+              </FL>
+
+              <FL label="Employee Photo">
+                <ToggleRow
+                  label="Show an employee photo"
+                  sub="The photo itself is always attached per-certificate from the Certificates list after issuance — nobody uploads their own."
+                  on={form.photo_enabled}
+                  onChange={() => field("photo_enabled", !form.photo_enabled)}
+                  disabled={saving}
+                />
+                {form.photo_enabled && (
+                  <>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setPhotoDragOver(true); }}
+                      onDragLeave={() => setPhotoDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setPhotoDragOver(false);
+                        handlePreviewPhotoFile(e.dataTransfer.files?.[0]);
+                      }}
+                      className={`mt-3 flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${
+                        photoDragOver ? "border-yellow-400 bg-yellow-50" : "border-slate-200"
+                      }`}
+                    >
+                      {previewPhotoUrl ? (
+                        <img src={previewPhotoUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-1 ring-slate-200" />
+                      ) : (
+                        <div className="h-14 w-14 rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-[10px]">Preview</div>
+                      )}
+                      <div className="flex-1 text-xs text-slate-500">
+                        Drag a photo here to preview it on this design, or{" "}
+                        <label className="text-yellow-700 hover:text-yellow-800 cursor-pointer underline">
+                          browse
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePreviewPhotoFile(e.target.files?.[0])} />
+                        </label>
+                        {previewPhotoUrl && (
+                          <>
+                            {" · "}
+                            <button type="button" onClick={() => setPreviewPhotoUrl(null)} className="text-red-500 hover:text-red-600 underline">
+                              Clear
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {PHOTO_FRAMES.map((f) => (
+                        <button
+                          key={f.value}
+                          type="button"
+                          onClick={() => field("photo_frame", f.value as PhotoFrame)}
+                          disabled={saving}
+                          className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold transition ${
+                            form.photo_frame === f.value
+                              ? "border-yellow-400 bg-yellow-50 text-yellow-800"
+                              : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </FL>
 
               {/* ── Certificate Text ── */}
@@ -750,7 +867,7 @@ function TemplateModal({
         <div className="hidden rounded-2xl bg-white p-4 shadow-2xl lg:block">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Live Preview</p>
           <div className="overflow-hidden rounded-xl border border-slate-200">
-            <CertificateRenderer template={previewTemplate} data={PREVIEW_DATA} />
+            <CertificateRenderer template={previewTemplate} data={{ ...PREVIEW_DATA, photoUrl: previewPhotoUrl }} />
           </div>
         </div>
 

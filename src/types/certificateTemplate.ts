@@ -29,8 +29,13 @@ export type DesignPreset =
 export type LogoPosition =
   | "top_center"
   | "top_left"
-  | "top_right"
-  | "watermark_center";
+  | "top_right";
+
+/** Same "Picture watermark or Text watermark" choice Word's own watermark dialog offers — independent of logo_position, so a design can have both a positioned logo and a faded background mark at once. "none" draws neither. */
+export type WatermarkType = "none" | "logo" | "text";
+
+/** Purely cosmetic crop shape for the employee photo slot. */
+export type PhotoFrame = "circle" | "square" | "rounded_square" | "hexagon" | "oval" | "polaroid";
 
 export interface CertificateTemplate {
 
@@ -47,6 +52,18 @@ export interface CertificateTemplate {
   logo_url: string;
 
   logo_position: LogoPosition;
+
+  /** Independent of logo_position — an optional full-page background watermark, either the logo image faded out or custom diagonal text. */
+  watermark_type: WatermarkType;
+
+  /** Only used when watermark_type is "text". */
+  watermark_text: string;
+
+  /** Reserves a spot on the layout for the employee's photo — the image itself is attached per-certificate by an admin after issuance, never self-uploaded. */
+  photo_enabled: boolean;
+
+  /** Crop shape for that photo slot — cosmetic only. */
+  photo_frame: PhotoFrame;
 
   signature_url: string;
 
@@ -113,6 +130,10 @@ export const defaultCertificateTemplateForm: CertificateTemplateForm = {
   background_image_url: "",
   logo_url:             "",
   logo_position:        "top_center",
+  watermark_type:       "none",
+  watermark_text:       "",
+  photo_enabled:        false,
+  photo_frame:          "circle",
   signature_url:        "",
   signatory_1_name:     "",
   signatory_1_title:    "",
@@ -150,7 +171,21 @@ export const LOGO_POSITIONS: { value: LogoPosition; label: string }[] = [
   { value: "top_center",       label: "Top Center"      },
   { value: "top_left",         label: "Top Left"        },
   { value: "top_right",        label: "Top Right"       },
-  { value: "watermark_center", label: "Watermark (Center, Faded)" },
+];
+
+export const WATERMARK_TYPES: { value: WatermarkType; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "logo", label: "🖼 Logo as Watermark" },
+  { value: "text", label: "🔤 Custom Text" },
+];
+
+export const PHOTO_FRAMES: { value: PhotoFrame; label: string }[] = [
+  { value: "circle",         label: "◯ Circle"  },
+  { value: "square",         label: "◻ Square"  },
+  { value: "rounded_square", label: "▢ Rounded" },
+  { value: "hexagon",        label: "⬡ Hexagon" },
+  { value: "oval",           label: "⬭ Oval"    },
+  { value: "polaroid",       label: "🖼 Polaroid" },
 ];
 
 export function fillCertificateText(

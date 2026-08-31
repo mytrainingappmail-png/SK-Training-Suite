@@ -7,9 +7,11 @@ import {
   removeCertificate,
   togglePublished,
   toggleActive,
+  updateCertificatePhoto,
 } from "../../services/certificate/certificateService";
 import { loadAssessments } from "../../services/assessment/assessmentService";
 import { employeeService } from "../../services/employee/employeeService";
+import { uploadToCourseContent } from "../../lib/mediaUpload";
 
 import type { Certificate, CertificateForm } from "../../types/certificate";
 import type { Assessment } from "../../types/assessment";
@@ -645,6 +647,9 @@ export default function CertificateManagement() {
   const [deleting,        setDeleting]        = useState(false);
   const [togglingPubId,   setTogglingPubId]   = useState<string | null>(null);
   const [togglingActId,   setTogglingActId]   = useState<string | null>(null);
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+  const photoTargetId = useRef<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [search,           setSearch]           = useState("");
   const [assessmentFilter, setAssessmentFilter] = useState("");
@@ -797,9 +802,39 @@ export default function CertificateManagement() {
     }
   }
 
+  // ── Employee photo — admin-attached from here, after issuance. Never
+  // self-uploaded by the employee.
+  function requestPhotoUpload(cert: Certificate) {
+    photoTargetId.current = cert.id;
+    photoInputRef.current?.click();
+  }
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const certId = photoTargetId.current;
+    e.target.value = "";
+    photoTargetId.current = null;
+    if (!file || !certId) return;
+
+    setUploadingPhotoId(certId);
+    try {
+      const url = await uploadToCourseContent(file, "images/certificate-photos", certId);
+      await updateCertificatePhoto(certId, url);
+      setCertificates((prev) =>
+        prev.map((c) => (c.id === certId ? { ...c, candidate_photo_url: url } : c))
+      );
+    } catch (err) {
+      setBanner(err instanceof Error ? err.message : "Unable to attach the photo.");
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  }
+
   // ── Render
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelected} />
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
@@ -994,6 +1029,24 @@ export default function CertificateManagement() {
 
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => requestPhotoUpload(cert)}
+                            disabled={busy || uploadingPhotoId === cert.id}
+                            aria-label={cert.candidate_photo_url ? "Replace employee photo" : "Attach employee photo"}
+                            title={cert.candidate_photo_url ? "Replace the employee's photo" : "Attach the employee's photo"}
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {uploadingPhotoId === cert.id ? (
+                              <span className="block h-4 w-4 text-xs">…</span>
+                            ) : cert.candidate_photo_url ? (
+                              <img src={cert.candidate_photo_url} alt="" className="h-4 w-4 rounded-full object-cover ring-1 ring-slate-300" />
+                            ) : (
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                              </svg>
+                            )}
+                          </button>
                           <button
                             onClick={() => openModal({ type: "edit", cert })}
                             disabled={busy}

@@ -116,3 +116,22 @@ export async function toggleActive(
 
   return data;
 }
+
+export async function updateCertificatePhoto(
+  id: string,
+  photoUrl: string
+): Promise<Certificate> {
+  const { data, error } = await supabase
+    .from("certificates")
+    .update({ candidate_photo_url: photoUrl })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[certificateRepository] updateCertificatePhoto:", error);
+    throw new Error(error.message);
+  }
+
+  return data;
+}

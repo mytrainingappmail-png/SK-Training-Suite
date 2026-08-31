@@ -8,6 +8,7 @@ import {
   deleteCertificate,
   togglePublished as repositoryTogglePublished,
   toggleActive as repositoryToggleActive,
+  updateCertificatePhoto as repositoryUpdateCertificatePhoto,
 } from "../../repositories/certificate/certificateRepository";
 
 export async function loadCertificates(): Promise<Certificate[]> {
@@ -57,6 +58,14 @@ export async function toggleActive(
 ): Promise<Certificate> {
   if (!id) throw new Error("Invalid Certificate ID.");
   return await repositoryToggleActive(id, active);
+}
+
+export async function updateCertificatePhoto(
+  id: string,
+  photoUrl: string
+): Promise<Certificate> {
+  if (!id) throw new Error("Invalid Certificate ID.");
+  return await repositoryUpdateCertificatePhoto(id, photoUrl);
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────

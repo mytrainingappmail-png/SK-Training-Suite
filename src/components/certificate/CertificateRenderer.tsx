@@ -4,10 +4,11 @@
 // preview in the template editor and for the real certificate shown
 // to an employee. 9 structurally distinct, ready-made designs — every
 // text element (title, subtitle, description with its own bold/color),
-// logo position, and both signatures are driven by real template +
-// issuance data.
+// logo position, watermark, employee photo, and both signatures are
+// driven by real template + issuance data.
 
-import type { CertificateTemplate, DesignPreset } from '../../types/certificateTemplate';
+import { useId } from 'react';
+import type { CertificateTemplate, DesignPreset, PhotoFrame } from '../../types/certificateTemplate';
 import { fillCertificateText } from '../../types/certificateTemplate';
 
 export interface CertificateRenderData {
@@ -15,6 +16,8 @@ export interface CertificateRenderData {
   courseName: string;
   issueDate: string;
   certificateNo: string;
+  /** Admin-attached after issuance — drawn only when the template's own photo_enabled is also true. */
+  photoUrl?: string | null;
 }
 
 interface CertificateRendererProps {
@@ -22,10 +25,52 @@ interface CertificateRendererProps {
   data: CertificateRenderData;
 }
 
+/** 6-point polygon centered at cx/cy — used for the hexagon photo frame. */
+function hexPoints(cx: number, cy: number, rx: number, ry: number): string {
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = (Math.PI / 3) * i - Math.PI / 2;
+    return `${cx + rx * Math.cos(a)},${cy + ry * Math.sin(a)}`;
+  }).join(' ');
+}
+
+/** The clip region for a given frame shape — shared between the real photo's clip and the placeholder outline below. */
+function photoClipShape(frame: PhotoFrame, cx: number, cy: number, r: number) {
+  switch (frame) {
+    case 'circle':
+      return <circle cx={cx} cy={cy} r={r} />;
+    case 'rounded_square':
+      return <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} rx={r * 0.35} />;
+    case 'hexagon':
+      return <polygon points={hexPoints(cx, cy, r, r)} />;
+    case 'oval':
+      return <ellipse cx={cx} cy={cy} rx={r * 1.25} ry={r * 0.9} />;
+    default:
+      return <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} />;
+  }
+}
+
+/** The stroked outline matching photoClipShape — a solid ring around a real photo, or a dashed placeholder when none has been attached yet. */
+function photoOutline(frame: PhotoFrame, cx: number, cy: number, r: number, stroke: string, dashed: boolean) {
+  const common = { fill: 'none', stroke, strokeWidth: dashed ? 2 : 4, strokeDasharray: dashed ? '5 5' : undefined };
+  switch (frame) {
+    case 'circle':
+      return <circle cx={cx} cy={cy} r={r} {...common} />;
+    case 'rounded_square':
+      return <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} rx={r * 0.35} {...common} />;
+    case 'hexagon':
+      return <polygon points={hexPoints(cx, cy, r, r)} {...common} />;
+    case 'oval':
+      return <ellipse cx={cx} cy={cy} rx={r * 1.25} ry={r * 0.9} {...common} />;
+    default:
+      return <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} {...common} />;
+  }
+}
+
 function CertificateRenderer({ template, data }: CertificateRendererProps) {
   const isPortrait = template.orientation === 'portrait';
   const width = isPortrait ? 793 : 1122;
   const height = isPortrait ? 1122 : 793;
+  const uid = useId();
 
   const subtitle = fillCertificateText(template.subtitle_text, {
     employeeName: data.employeeName, courseName: data.courseName, issueDate: data.issueDate, certificateNo: data.certificateNo,
@@ -50,10 +95,12 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     </foreignObject>
   );
 
+  // Small, crisp logo mark — independent of the watermark below, so a
+  // design can have both a positioned logo and a faded background mark
+  // at the same time (previously "Watermark" was one of the logo_position
+  // choices, which meant picking it made the positioned logo disappear).
   const logoBlock = template.logo_url ? (
-    template.logo_position === 'watermark_center' ? (
-      <image href={template.logo_url} x={width / 2 - 160} y={height / 2 - 160} width="320" height="320" opacity={0.06} preserveAspectRatio="xMidYMid meet" />
-    ) : template.logo_position === 'top_left' ? (
+    template.logo_position === 'top_left' ? (
       <image href={template.logo_url} x="70" y="60" width="80" height="80" preserveAspectRatio="xMidYMid meet" />
     ) : template.logo_position === 'top_right' ? (
       <image href={template.logo_url} x={width - 150} y="60" width="80" height="80" preserveAspectRatio="xMidYMid meet" />
@@ -61,6 +108,78 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
       <image href={template.logo_url} x={width / 2 - 40} y="55" width="80" height="80" preserveAspectRatio="xMidYMid meet" />
     )
   ) : null;
+
+  // Background watermark — a "Picture watermark or Text watermark" choice
+  // (the same idea Word's own watermark dialog offers), independent of
+  // logo_position and drawn underneath everything else.
+  const wmFontSize = Math.min(100, width / 9);
+  const watermarkBlock =
+    template.watermark_type === 'logo' && template.logo_url ? (
+      <image href={template.logo_url} x={width / 2 - 160} y={height / 2 - 160} width="320" height="320" opacity={0.06} preserveAspectRatio="xMidYMid meet" />
+    ) : template.watermark_type === 'text' && template.watermark_text?.trim() ? (
+      <text
+        x={width / 2}
+        y={height / 2}
+        textAnchor="middle"
+        fontSize={wmFontSize}
+        fontWeight={800}
+        fill="#1E293B"
+        opacity={0.08}
+        transform={`rotate(-30 ${width / 2} ${height / 2})`}
+      >
+        {template.watermark_text.toUpperCase()}
+      </text>
+    ) : null;
+
+  // Employee photo — always the same top-right slot regardless of logo
+  // placement, admin-attached after issuance, shown as a dashed placeholder
+  // in previews/before attachment. Frame shape is the design's own choice.
+  const photoR = 55;
+  const photoCx = width - 100;
+  const photoCy = 110;
+  const photoFrame = template.photo_frame ?? 'circle';
+  const hasPhoto = !!(template.photo_enabled && data.photoUrl);
+  const photoClipId = `photo-clip-${uid}`;
+
+  const photoBlock = (accent: string) => {
+    if (!template.photo_enabled) return null;
+    if (photoFrame === 'polaroid') {
+      const pad = 8;
+      const stripH = 22;
+      const size = photoR * 2;
+      return (
+        <g>
+          <rect x={photoCx - photoR - pad} y={photoCy - photoR - pad} width={size + pad * 2} height={size + pad * 2 + stripH} fill="#FFFFFF" stroke="#00000022" strokeWidth={1} />
+          {hasPhoto ? (
+            <image href={data.photoUrl!} x={photoCx - photoR} y={photoCy - photoR} width={size} height={size} preserveAspectRatio="xMidYMid slice" />
+          ) : (
+            <rect x={photoCx - photoR} y={photoCy - photoR} width={size} height={size} fill="none" stroke="#9CA3AF" strokeWidth={2} strokeDasharray="5 5" />
+          )}
+        </g>
+      );
+    }
+    return (
+      <g>
+        {hasPhoto && (
+          <>
+            <defs>
+              <clipPath id={photoClipId}>{photoClipShape(photoFrame, photoCx, photoCy, photoR)}</clipPath>
+            </defs>
+            <image
+              href={data.photoUrl!}
+              x={photoCx - photoR * 1.25}
+              y={photoCy - photoR * 1.25}
+              width={photoR * 2.5}
+              height={photoR * 2.5}
+              preserveAspectRatio="xMidYMid slice"
+              clipPath={`url(#${photoClipId})`}
+            />
+          </>
+        )}
+        {photoOutline(photoFrame, photoCx, photoCy, photoR, hasPhoto ? accent : '#9CA3AF', !hasPhoto)}
+      </g>
+    );
+  };
 
   const signatures = (nameColor = '#1E293B') => (
     <>
@@ -94,7 +213,7 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     <text x={width / 2} y={height - 28} textAnchor="middle" fontSize="10" opacity={0.55} fill={color}>Certificate No: {data.certificateNo}</text>
   );
 
-  const contentTop = template.logo_url && template.logo_position !== 'watermark_center' ? 195 : 130;
+  const contentTop = template.logo_url ? 195 : 130;
 
   const preset: DesignPreset = template.design_preset;
 
@@ -102,12 +221,13 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ fontFamily: 'Helvetica, Arial, sans-serif', color: '#1E293B' }}>
         <rect width={width} height={height} fill="#FFFFFF" />
+        {watermarkBlock}
         <rect width={width} height="140" fill="#0F172A" />
         <polygon points={`${width - 140},0 ${width},0 ${width},140`} fill="#1E3A8A" opacity={0.5} />
-        {template.logo_position === 'watermark_center' && logoBlock}
-        {template.logo_url && template.logo_position !== 'watermark_center' && (
+        {template.logo_url && (
           <image href={template.logo_url} x={template.logo_position === 'top_left' ? 60 : template.logo_position === 'top_right' ? width - 140 : width / 2 - 35} y="30" width="70" height="70" preserveAspectRatio="xMidYMid meet" />
         )}
+        {photoBlock('#1E3A8A')}
         <text x={width / 2} y="105" textAnchor="middle" fontSize="30" fill="#FFFFFF" fontWeight="bold" letterSpacing="2">{template.certificate_title}</text>
         <text x={width / 2} y="200" textAnchor="middle" fontSize="15" fill="#475569">{subtitle}</text>
         <text x={width / 2} y="250" textAnchor="middle" fontSize="40" fill="#0F172A" fontWeight="bold">{data.employeeName}</text>
@@ -124,11 +244,13 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ fontFamily: 'Helvetica, Arial, sans-serif', color: '#334155' }}>
         <rect width={width} height={height} fill="#FFFFFF" />
+        {watermarkBlock}
         <path d={`M40,80 L40,40 L80,40`} fill="none" stroke="#94A3B8" strokeWidth="2" />
         <path d={`M${width - 80},40 L${width - 40},40 L${width - 40},80`} fill="none" stroke="#94A3B8" strokeWidth="2" />
         <path d={`M40,${height - 80} L40,${height - 40} L80,${height - 40}`} fill="none" stroke="#94A3B8" strokeWidth="2" />
         <path d={`M${width - 80},${height - 40} L${width - 40},${height - 40} L${width - 40},${height - 80}`} fill="none" stroke="#94A3B8" strokeWidth="2" />
         {logoBlock}
+        {photoBlock('#94A3B8')}
         <text x={width / 2} y={contentTop - 40} textAnchor="middle" fontSize="12" letterSpacing="5" fill="#94A3B8" fontWeight="600">{template.certificate_title}</text>
         <text x={width / 2} y={contentTop + 10} textAnchor="middle" fontSize="14" fill="#64748B">{subtitle}</text>
         <text x={width / 2} y={contentTop + 65} textAnchor="middle" fontSize="42" fill="#1E293B" fontWeight="300">{data.employeeName}</text>
@@ -145,6 +267,7 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ fontFamily: 'Georgia, serif', color: '#3F3F3F' }}>
         <rect width={width} height={height} fill="#FFFCFB" />
+        {watermarkBlock}
         <rect x="18" y="18" width={width - 36} height={height - 36} fill="none" stroke="#7F1D1D" strokeWidth="8" />
         <rect x="30" y="30" width={width - 60} height={height - 60} fill="none" stroke="#B45309" strokeWidth="2" />
         <rect x="38" y="38" width={width - 76} height={height - 76} fill="none" stroke="#7F1D1D" strokeWidth="1" />
@@ -152,6 +275,7 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
           <circle key={i} cx={cx} cy={cy} r="10" fill="#7F1D1D" />
         ))}
         {logoBlock}
+        {photoBlock('#7F1D1D')}
         <text x={width / 2} y={contentTop} textAnchor="middle" fontSize="30" fill="#7F1D1D" fontWeight="bold" letterSpacing="1">{template.certificate_title}</text>
         <text x={width / 2} y={contentTop + 40} textAnchor="middle" fontSize="14" fill="#5B5B5B" fontStyle="italic">{subtitle}</text>
         <text x={width / 2} y={contentTop + 95} textAnchor="middle" fontSize="36" fill="#3F3F3F" fontWeight="bold">{data.employeeName}</text>
@@ -176,9 +300,11 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
           </linearGradient>
         </defs>
         <rect width={width} height={height} fill="#FFFFFF" />
+        {watermarkBlock}
         <rect x="0" y="0" width={width} height="18" fill="url(#cbGrad)" />
         <rect x="0" y={height - 18} width={width} height="18" fill="url(#cbGrad)" />
         {logoBlock}
+        {photoBlock('#1D4ED8')}
         <text x={width / 2} y={contentTop} textAnchor="middle" fontSize="30" fill="#1D4ED8" fontWeight="bold">{template.certificate_title}</text>
         <rect x={width / 2 - 60} y={contentTop + 15} width="120" height="4" fill="url(#cbGrad)" />
         <text x={width / 2} y={contentTop + 55} textAnchor="middle" fontSize="14" fill="#64748B">{subtitle}</text>
@@ -196,11 +322,13 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ fontFamily: 'Georgia, serif', color: '#374151' }}>
         <rect width={width} height={height} fill="#FBFEFC" />
+        {watermarkBlock}
         <rect x="26" y="26" width={width - 52} height={height - 52} rx="18" fill="none" stroke="#10B981" strokeWidth="2" />
         <rect x="38" y="38" width={width - 76} height={height - 76} rx="12" fill="none" stroke="#065F46" strokeWidth="1" />
         <path d={`M${width / 2 - 180},${contentTop + 55} Q${width / 2 - 100},${contentTop + 20} ${width / 2 - 20},${contentTop + 55}`} fill="none" stroke="#10B981" strokeWidth="2" />
         <path d={`M${width / 2 + 180},${contentTop + 55} Q${width / 2 + 100},${contentTop + 20} ${width / 2 + 20},${contentTop + 55}`} fill="none" stroke="#10B981" strokeWidth="2" />
         {logoBlock}
+        {photoBlock('#10B981')}
         <text x={width / 2} y={contentTop} textAnchor="middle" fontSize="28" fill="#065F46" fontWeight="bold" letterSpacing="1">{template.certificate_title}</text>
         <text x={width / 2} y={contentTop + 35} textAnchor="middle" fontSize="14" fontStyle="italic" fill="#4B5563">{subtitle}</text>
         <text x={width / 2} y={contentTop + 95} textAnchor="middle" fontSize="38" fill="#065F46" fontWeight="bold">{data.employeeName}</text>
@@ -223,12 +351,14 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
           </linearGradient>
         </defs>
         <rect width={width} height={height} fill="#FFF7ED" />
+        {watermarkBlock}
         <rect width={width} height={height} fill="url(#sunsetGrad)" opacity={0.08} />
         <rect x="0" y="0" width={width} height="24" fill="url(#sunsetGrad)" />
         <rect x="0" y={height - 24} width={width} height="24" fill="url(#sunsetGrad)" />
         <circle cx={width - 90} cy="90" r="55" fill="url(#sunsetGrad)" opacity={0.25} />
         <circle cx="90" cy={height - 90} r="70" fill="url(#sunsetGrad)" opacity={0.18} />
         {logoBlock}
+        {photoBlock('#C2410C')}
         <text x={width / 2} y={contentTop} textAnchor="middle" fontSize="32" fill="#C2410C" fontWeight="bold" letterSpacing="1">{template.certificate_title}</text>
         <text x={width / 2} y={contentTop + 38} textAnchor="middle" fontSize="15" fill="#9D174D">{subtitle}</text>
         <text x={width / 2} y={contentTop + 95} textAnchor="middle" fontSize="40" fill="#831843" fontWeight="bold">{data.employeeName}</text>
@@ -251,9 +381,11 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
           </linearGradient>
         </defs>
         <rect width={width} height={height} fill="#F0FDFA" />
+        {watermarkBlock}
         <path d={`M0,${height} L0,${height - 90} Q${width * 0.25},${height - 150} ${width * 0.5},${height - 90} T${width},${height - 90} L${width},${height} Z`} fill="url(#tealGrad)" opacity={0.85} />
         <path d={`M0,0 L${width},0 L${width},70 Q${width * 0.75},110 ${width * 0.5},70 T0,70 Z`} fill="url(#tealGrad)" opacity={0.85} />
         {logoBlock}
+        {photoBlock('#0891B2')}
         <text x={width / 2} y={contentTop} textAnchor="middle" fontSize="30" fill="#0E7490" fontWeight="bold" letterSpacing="1">{template.certificate_title}</text>
         <text x={width / 2} y={contentTop + 38} textAnchor="middle" fontSize="14" fill="#155E75">{subtitle}</text>
         <text x={width / 2} y={contentTop + 95} textAnchor="middle" fontSize="38" fill="#083344" fontWeight="bold">{data.employeeName}</text>
@@ -275,12 +407,14 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
           </linearGradient>
         </defs>
         <rect width={width} height={height} fill="#FDF4FF" />
+        {watermarkBlock}
         <rect x="16" y="16" width={width - 32} height={height - 32} fill="none" stroke="url(#purpleGrad)" strokeWidth="6" />
         <rect x="30" y="30" width={width - 60} height={height - 60} fill="none" stroke="#D4AF37" strokeWidth="1.5" />
         {[[30, 30], [width - 30, 30], [30, height - 30], [width - 30, height - 30]].map(([cx, cy], i) => (
           <circle key={i} cx={cx} cy={cy} r="12" fill="url(#purpleGrad)" />
         ))}
         {logoBlock}
+        {photoBlock('#7C3AED')}
         <text x={width / 2} y={contentTop} textAnchor="middle" fontSize="30" fill="#7C3AED" fontWeight="bold" letterSpacing="1">{template.certificate_title}</text>
         <text x={width / 2} y={contentTop + 38} textAnchor="middle" fontSize="14" fill="#A21CAF" fontStyle="italic">{subtitle}</text>
         <text x={width / 2} y={contentTop + 95} textAnchor="middle" fontSize="38" fill="#581C87" fontWeight="bold">{data.employeeName}</text>
@@ -297,12 +431,14 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ fontFamily: 'Georgia, serif', color: '#3F3F3F' }}>
       <rect width={width} height={height} fill="#FFFDF7" />
+      {watermarkBlock}
       <rect x="20" y="20" width={width - 40} height={height - 40} fill="none" stroke="#B8860B" strokeWidth="5" />
       <rect x="32" y="32" width={width - 64} height={height - 64} fill="none" stroke="#D4AF37" strokeWidth="1.5" />
       {[[32, 32], [width - 32, 32], [32, height - 32], [width - 32, height - 32]].map(([cx, cy], i) => (
         <rect key={i} x={cx - 8} y={cy - 8} width="16" height="16" fill="#D4AF37" transform={`rotate(45 ${cx} ${cy})`} />
       ))}
       {logoBlock}
+      {photoBlock('#B8860B')}
       <text x={width / 2} y={contentTop - 20} textAnchor="middle" fontSize="13" letterSpacing="4" fill="#B8860B" fontWeight="600">{template.certificate_title}</text>
       <line x1={width / 2 - 100} y1={contentTop} x2={width / 2 + 100} y2={contentTop} stroke="#D4AF37" strokeWidth="1" />
       <text x={width / 2} y={contentTop + 35} textAnchor="middle" fontSize="14" fill="#5B5B5B">{subtitle}</text>

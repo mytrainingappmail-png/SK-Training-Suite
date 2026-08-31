@@ -130,6 +130,7 @@ function CertificateViewPage() {
             courseName: data.courseName,
             issueDate: new Date(data.certificate.issue_date).toLocaleDateString(),
             certificateNo: data.certificate.certificate_no,
+            photoUrl: data.certificate.candidate_photo_url,
           }}
         />
       </div>
