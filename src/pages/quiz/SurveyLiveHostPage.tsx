@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
@@ -7,6 +7,12 @@ import { getSurveySession, listSessionParticipants, endSurveySession } from "../
 import type { SurveyWithQuestions, SurveySession, SurveySessionParticipant, SurveyResults } from "../../types/survey";
 
 const POLL_MS = 4000;
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export default function SurveyLiveHostPage() {
   const { surveyId, sessionId } = useParams<{ surveyId: string; sessionId: string }>();
@@ -18,6 +24,8 @@ export default function SurveyLiveHostPage() {
   const [loading, setLoading] = useState(true);
   const [ending, setEnding] = useState(false);
   const [copied, setCopied] = useState<"link" | "pin" | "both" | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const autoEnded = useRef(false);
 
   async function refresh() {
     if (!sessionId) return;
@@ -37,6 +45,28 @@ export default function SurveyLiveHostPage() {
     const t = setInterval(refresh, POLL_MS);
     return () => clearInterval(t);
   }, [session?.status, sessionId]);
+
+  useEffect(() => {
+    if (session?.status !== "active" || !session.expires_at) {
+      setRemainingSeconds(null);
+      return;
+    }
+    const expiresAtMs = new Date(session.expires_at).getTime();
+
+    function tick() {
+      const secondsLeft = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+      setRemainingSeconds(secondsLeft);
+      if (secondsLeft === 0 && !autoEnded.current) {
+        autoEnded.current = true;
+        handleEnd();
+      }
+    }
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.status, session?.expires_at]);
 
   async function loadResults() {
     if (!sessionId || !survey) return;
@@ -92,6 +122,12 @@ export default function SurveyLiveHostPage() {
           <p className="text-lg font-semibold text-white mb-2 break-all">{joinUrl}</p>
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-1">Enter PIN</p>
           <p className="text-5xl font-mono font-black tracking-[0.2em] text-amber-400 mb-4">{session.pin}</p>
+
+          {remainingSeconds !== null && (
+            <p className={`text-sm font-mono font-bold mb-4 ${remainingSeconds <= 30 ? "text-red-400 animate-pulse" : "text-slate-300"}`}>
+              ⏱ {formatCountdown(remainingSeconds)} remaining
+            </p>
+          )}
 
           <div className="flex flex-wrap justify-center gap-2">
             <button

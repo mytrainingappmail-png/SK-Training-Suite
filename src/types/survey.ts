@@ -74,6 +74,10 @@ export interface SurveySession {
   status: SurveySessionStatus;
   started_at: string;
   ended_at: string | null;
+  /** Set once at launch, never changes for the life of the session — null means no time limit. */
+  time_limit_seconds: number | null;
+  /** started_at + time_limit_seconds, precomputed so the client never needs to redo that math. */
+  expires_at: string | null;
 }
 
 export interface SurveySessionParticipant {
@@ -108,6 +112,7 @@ export interface PublicSurveyRow {
 /** Same shape as PublicSurveyRow, plus the participant_id join_survey_session hands back — needed on every subsequent submit call. */
 export interface JoinSurveySessionRow extends PublicSurveyRow {
   participant_id: string;
+  expires_at: string | null;
 }
 
 export interface PublicSurveyQuestion {
@@ -129,6 +134,7 @@ export interface PublicSurvey {
 
 export interface JoinedSurveySession extends PublicSurvey {
   participant_id: string;
+  expires_at: string | null;
 }
 
 /** One entry per question the respondent answered — only the field(s) relevant to that question's type need to be set. */

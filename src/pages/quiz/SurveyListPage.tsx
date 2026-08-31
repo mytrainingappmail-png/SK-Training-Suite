@@ -17,6 +17,9 @@ export default function SurveyListPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [launchTarget, setLaunchTarget] = useState<Survey | null>(null);
+  const [selectedMinutes, setSelectedMinutes] = useState<number | null>(5);
+  const [launching, setLaunching] = useState(false);
 
   function refresh() {
     if (!admin) return;
@@ -62,17 +65,18 @@ export default function SurveyListPage() {
     });
   }
 
-  async function handleLaunchLive(s: Survey) {
-    if (!admin) return;
-    setBusyId(s.id);
+  async function handleConfirmLaunch() {
+    if (!admin || !launchTarget) return;
+    setLaunching(true);
     setError("");
     try {
-      const session = await createSurveySession(s.id, admin.company_id, admin.id);
-      navigate(ROUTES.QUIZ_ADMIN_SURVEY_LIVE_HOST.replace(":surveyId", s.id).replace(":sessionId", session.id));
+      const session = await createSurveySession(launchTarget.id, admin.company_id, admin.id, selectedMinutes ? selectedMinutes * 60 : null);
+      setLaunchTarget(null);
+      navigate(ROUTES.QUIZ_ADMIN_SURVEY_LIVE_HOST.replace(":surveyId", launchTarget.id).replace(":sessionId", session.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start a live session.");
     } finally {
-      setBusyId(null);
+      setLaunching(false);
     }
   }
 
@@ -164,8 +168,10 @@ export default function SurveyListPage() {
                 )}
                 {s.status === "published" && canEdit && (
                   <button
-                    disabled={busyId === s.id}
-                    onClick={() => handleLaunchLive(s)}
+                    onClick={() => {
+                      setLaunchTarget(s);
+                      setSelectedMinutes(5);
+                    }}
                     className="text-xs font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg px-2.5 py-1.5"
                     title="Short-time mode — PIN join, names visible to the host"
                   >
@@ -184,6 +190,51 @@ export default function SurveyListPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {launchTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <h3 className="text-sm font-bold text-white mb-1">Go Live: {launchTarget.title}</h3>
+            <p className="text-xs text-slate-400 mb-4">Set a time limit, or leave it open-ended — everyone gets a live countdown once they join.</p>
+
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: "No limit", value: null },
+                { label: "2 min", value: 2 },
+                { label: "5 min", value: 5 },
+                { label: "10 min", value: 10 },
+                { label: "15 min", value: 15 },
+                { label: "30 min", value: 30 },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => setSelectedMinutes(opt.value)}
+                  className={`text-xs font-semibold rounded-lg px-2 py-2 border-2 ${
+                    selectedMinutes === opt.value ? "border-red-500 bg-red-500/10 text-red-300" : "border-slate-700 text-slate-300 hover:border-slate-600"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {error && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3">{error}</div>}
+
+            <div className="flex gap-2">
+              <button onClick={() => setLaunchTarget(null)} className="flex-1 text-sm font-semibold text-slate-300 border border-slate-700 rounded-lg px-4 py-2.5">
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmLaunch}
+                disabled={launching}
+                className="flex-1 text-sm font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg px-4 py-2.5"
+              >
+                {launching ? "Starting…" : "🔴 Start Live Session"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

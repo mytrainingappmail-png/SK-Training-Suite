@@ -77,7 +77,7 @@ export async function joinSurveySession(pin: string, displayName: string): Promi
   const rows = (data as JoinSurveySessionRow[] | null) ?? [];
   const grouped = groupSurveyRows(rows);
   if (!grouped) return null;
-  return { ...grouped, participant_id: rows[0].participant_id };
+  return { ...grouped, participant_id: rows[0].participant_id, expires_at: rows[0].expires_at };
 }
 
 export async function submitSurveySessionResponse(participantId: string, answers: SurveyAnswerInput[]): Promise<void> {

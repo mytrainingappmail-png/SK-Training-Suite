@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { PublicSurveyQuestion, SurveyAnswerInput, SurveySettings } from "../../types/survey";
 
@@ -12,10 +12,13 @@ export default function SurveyQuestionsForm({
   questions,
   settings,
   onSubmit,
+  autoSubmitSignal,
 }: {
   questions: PublicSurveyQuestion[];
   settings: Pick<SurveySettings, "option_font_size" | "option_colors">;
   onSubmit: (answers: SurveyAnswerInput[]) => Promise<void>;
+  /** Bump this (e.g. a counter) to force-submit whatever's been answered so far, skipping the required-question check — used when a live session's timer hits zero so nobody gets stuck unable to submit. */
+  autoSubmitSignal?: number;
 }) {
   const [answers, setAnswers] = useState<AnswerState>({});
   const [submitting, setSubmitting] = useState(false);
@@ -49,10 +52,14 @@ export default function SurveyQuestionsForm({
     return false;
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(isTimeout = false) {
     const missing = questions.find((q) => q.required && !isAnswered(answers[q.question_id]));
     if (missing) {
-      setError(`Please answer: "${missing.question_text}"`);
+      // The server enforces the same required-question rule no matter
+      // what, so there's no point even attempting the call here — this
+      // just picks a message that matches why we're blocked: a normal
+      // manual click vs. the timer running out mid-way.
+      setError(isTimeout ? `Time's up! Please quickly answer "${missing.question_text}" and submit.` : `Please answer: "${missing.question_text}"`);
       return;
     }
 
@@ -66,6 +73,11 @@ export default function SurveyQuestionsForm({
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (autoSubmitSignal) handleSubmit(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmitSignal]);
 
   return (
     <div className="space-y-6">
@@ -161,7 +173,7 @@ export default function SurveyQuestionsForm({
       </div>
 
       <button
-        onClick={handleSubmit}
+        onClick={() => handleSubmit()}
         disabled={submitting}
         className="w-full text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg px-4 py-3"
       >

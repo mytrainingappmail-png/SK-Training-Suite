@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import SurveyQuestionsForm from "../../components/survey/SurveyQuestionsForm";
 import { joinSurveySession, submitSurveySessionResponse } from "../../repositories/survey/surveyPublicRepository";
 import type { JoinedSurveySession, SurveyAnswerInput } from "../../types/survey";
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 /** "Short time" live mode — PIN + name, right there, no link to hunt
  * for. Unlike the anonymous flow, the display name IS recorded (tied
@@ -16,6 +22,27 @@ export default function SurveyLiveJoinPage() {
   const [error, setError] = useState("");
   const [session, setSession] = useState<JoinedSurveySession | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [autoSubmitSignal, setAutoSubmitSignal] = useState(0);
+  const autoSubmitted = useRef(false);
+
+  useEffect(() => {
+    if (!session?.expires_at) return;
+    const expiresAtMs = new Date(session.expires_at).getTime();
+
+    function tick() {
+      const secondsLeft = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+      setRemainingSeconds(secondsLeft);
+      if (secondsLeft === 0 && !autoSubmitted.current) {
+        autoSubmitted.current = true;
+        setAutoSubmitSignal((n) => n + 1);
+      }
+    }
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [session?.expires_at]);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -55,15 +82,26 @@ export default function SurveyLiveJoinPage() {
   }
 
   if (session) {
+    const urgent = remainingSeconds !== null && remainingSeconds <= 30;
     return (
       <div className="min-h-screen bg-slate-950 px-4 py-10">
         <div className="max-w-lg mx-auto space-y-6">
+          {remainingSeconds !== null && (
+            <div className={`sticky top-2 z-10 mx-auto w-fit rounded-full px-4 py-1.5 text-sm font-mono font-bold ${urgent ? "bg-red-500/20 text-red-300 animate-pulse" : "bg-slate-800 text-slate-200"}`}>
+              ⏱ {formatCountdown(remainingSeconds)}
+            </div>
+          )}
           <div className="text-center">
             <h1 className="text-xl font-bold text-white">{session.title}</h1>
             {session.description && <p className="text-sm text-slate-400 mt-1">{session.description}</p>}
             <p className="text-[11px] text-slate-500 mt-2">Joined as <span className="font-semibold text-slate-300">{name}</span></p>
           </div>
-          <SurveyQuestionsForm questions={session.questions} settings={{ option_font_size: 16, option_colors: [{ box: "#7C3AED", font: "#FFFFFF" }, { box: "#0891B2", font: "#FFFFFF" }, { box: "#059669", font: "#FFFFFF" }] }} onSubmit={handleSubmit} />
+          <SurveyQuestionsForm
+            questions={session.questions}
+            settings={{ option_font_size: 16, option_colors: [{ box: "#7C3AED", font: "#FFFFFF" }, { box: "#0891B2", font: "#FFFFFF" }, { box: "#059669", font: "#FFFFFF" }] }}
+            onSubmit={handleSubmit}
+            autoSubmitSignal={autoSubmitSignal}
+          />
         </div>
       </div>
     );

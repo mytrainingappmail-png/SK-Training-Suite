@@ -8,13 +8,15 @@ function randomPin(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-/** Same "generate, insert, retry on collision" pattern as Quiz's own createSession — PINs only need to be unique among currently-active sessions. */
-export async function createSurveySession(surveyId: string, companyId: string, hostAdminId: string): Promise<SurveySession> {
+/** Same "generate, insert, retry on collision" pattern as Quiz's own createSession — PINs only need to be unique among currently-active sessions. `timeLimitSeconds` is optional — omit (or pass null) for no time limit. */
+export async function createSurveySession(surveyId: string, companyId: string, hostAdminId: string, timeLimitSeconds?: number | null): Promise<SurveySession> {
+  const expiresAt = timeLimitSeconds ? new Date(Date.now() + timeLimitSeconds * 1000).toISOString() : null;
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const pin = randomPin();
     const { data, error } = await supabaseQuiz
       .from("survey_sessions")
-      .insert({ survey_id: surveyId, company_id: companyId, host_admin_id: hostAdminId, pin })
+      .insert({ survey_id: surveyId, company_id: companyId, host_admin_id: hostAdminId, pin, time_limit_seconds: timeLimitSeconds ?? null, expires_at: expiresAt })
       .select()
       .single();
 
