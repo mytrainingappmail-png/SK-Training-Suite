@@ -511,7 +511,7 @@ function drawPhoto(ctx: CanvasRenderingContext2D, frame: CertPhotoFrame, image: 
 }
 
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
-  const [sig1ImageRaw, sig2ImageRaw, logoImage, photoImage] = await Promise.all([
+  const [sig1ImageRaw, sig2ImageRaw, logoImageRaw, photoImage] = await Promise.all([
     loadImage(data.signatory1ImageUrl),
     loadImage(data.signatory2ImageUrl),
     loadImage(data.logoUrl),
@@ -519,6 +519,11 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   ]);
   const sig1Image = sig1ImageRaw ? trimTransparentEdges(sig1ImageRaw) : null;
   const sig2Image = sig2ImageRaw ? trimTransparentEdges(sig2ImageRaw) : null;
+  // Trimmed the same way as signatures — an uploaded logo PNG almost always
+  // has whitespace padding around the mark, which otherwise makes it look
+  // smaller and off-center than the bounding box suggests, in both the
+  // small positioned mark and the background watermark.
+  const logoImage = logoImageRaw ? trimTransparentEdges(logoImageRaw) : null;
 
   canvas.width = WIDTH * RENDER_SCALE;
   canvas.height = HEIGHT * RENDER_SCALE;
@@ -543,19 +548,23 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   // A "Picture watermark or Text watermark" choice, the same idea Word's
   // own watermark dialog offers.
   if (logoImage && data.watermarkType === "logo") {
-    const maxSize = 460 * logoPct;
+    const maxSize = 480 * logoPct;
     const scale = Math.min(maxSize / logoImage.width, maxSize / logoImage.height);
     const w = logoImage.width * scale;
     const h = logoImage.height * scale;
     ctx.save();
-    ctx.globalAlpha = 0.07;
+    // 0.07 read as "not showing at all" in practice, especially for a
+    // multi-color logo — this is the same "washed out" strength Word's
+    // own picture-watermark preset uses, clearly visible without
+    // fighting the text on top of it.
+    ctx.globalAlpha = 0.16;
     ctx.drawImage(logoImage, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h);
     ctx.restore();
   } else if (data.watermarkType === "text" && data.watermarkText) {
     ctx.save();
     ctx.translate(WIDTH / 2, HEIGHT / 2);
     ctx.rotate(-Math.PI / 6);
-    ctx.globalAlpha = 0.08;
+    ctx.globalAlpha = 0.14;
     ctx.fillStyle = p.heading;
     ctx.textAlign = "center";
     // Shrinks long text to fit rather than spilling off the certificate.
