@@ -60,17 +60,3 @@ export async function uploadBrandingImage(
   const { data } = supabaseQuiz.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, path };
 }
-
-/** Best-effort — only cleans up files this app itself uploaded (path starts with the bucket's public URL); a plain pasted external URL is left alone. */
-export async function deleteBrandingImageIfOwned(url: string | null): Promise<void> {
-  if (!url) return;
-  const { data } = supabaseQuiz.storage.from(BUCKET).getPublicUrl("");
-  const prefix = data.publicUrl;
-  if (!url.startsWith(prefix)) return;
-
-  const path = url.slice(prefix.length).replace(/^\/+/, "");
-  const { error } = await supabaseQuiz.storage.from(BUCKET).remove([path]);
-  if (error) {
-    console.error("[quizBrandingUploadRepository] deleteBrandingImageIfOwned:", error);
-  }
-}

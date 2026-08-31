@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { uploadBrandingImage, deleteBrandingImageIfOwned } from "../../repositories/quiz/quizBrandingUploadRepository";
+import { uploadBrandingImage } from "../../repositories/quiz/quizBrandingUploadRepository";
 import type { BrandingImageKind } from "../../repositories/quiz/quizBrandingUploadRepository";
 
 interface Props {
@@ -26,10 +26,16 @@ export default function QuizBrandingImageField({ label, hint, value, kind, compa
     setUploading(true);
     setError("");
     try {
-      const previous = value;
+      // Deliberately doesn't delete the previous file from storage here —
+      // this only updates local form state, and the real URL isn't
+      // persisted until the parent's own Save button is clicked. Deleting
+      // eagerly on every replace left the database pointing at an
+      // already-gone file whenever a save didn't follow (closed tab,
+      // failed request, changed their mind) — the exact "logo used to
+      // show, now it's just gone" bug. A little storage bloat from
+      // unreferenced old images is a fine trade for never breaking a link.
       const { url } = await uploadBrandingImage(companyId, kind, file);
       onChange(url);
-      await deleteBrandingImageIfOwned(previous);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
@@ -37,10 +43,8 @@ export default function QuizBrandingImageField({ label, hint, value, kind, compa
     }
   }
 
-  async function handleDelete() {
-    const previous = value;
+  function handleDelete() {
     onChange(null);
-    await deleteBrandingImageIfOwned(previous);
   }
 
   return (

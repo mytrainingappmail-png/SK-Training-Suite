@@ -196,6 +196,8 @@ export type CertSignatureAlign = "left" | "center" | "right";
 export type CertWatermarkType = "none" | "logo" | "text";
 /** Purely cosmetic crop shape for the candidate photo slot — applies whether or not a photo has actually been attached yet. */
 export type CertPhotoFrame = "circle" | "square" | "rounded_square" | "hexagon" | "oval" | "polaroid";
+/** An optional award badge drawn above the signature line, independent of which base template is chosen — "seal" is a wax-seal medallion, "medal" is a gold medal with ribbon tails. */
+export type CertAwardSeal = "none" | "medal" | "seal";
 
 export interface QuizSettings {
   company_id: string;
@@ -259,6 +261,8 @@ export interface CertTemplateDraft {
   photo_enabled: boolean;
   /** Crop shape for that photo slot — cosmetic only. */
   photo_frame: CertPhotoFrame;
+  /** An optional award badge above the signature line — independent of the template's own built-in decorations. */
+  award_seal: CertAwardSeal;
   created_at: string;
   updated_at: string;
 }
@@ -333,6 +337,7 @@ export interface QuizCertificate {
   signature_align: CertSignatureAlign;
   photo_enabled: boolean;
   cert_photo_frame: CertPhotoFrame;
+  cert_award_seal: CertAwardSeal;
   candidate_photo_url: string | null;
 }
 

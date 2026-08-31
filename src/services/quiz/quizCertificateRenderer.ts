@@ -2,7 +2,7 @@
 // No external fonts/images required, so it always renders identically
 // regardless of company branding being configured or not.
 
-import type { CertTemplate, CertLogoPosition, CertSignatureMode, CertSignatureAlign, CertWatermarkType, CertPhotoFrame } from "../../types/quiz";
+import type { CertTemplate, CertLogoPosition, CertSignatureMode, CertSignatureAlign, CertWatermarkType, CertPhotoFrame, CertAwardSeal } from "../../types/quiz";
 
 export interface CertificateData {
   candidateName: string;
@@ -41,14 +41,16 @@ export interface CertificateData {
   photoUrl?: string | null;
   /** Crop shape for the photo slot — cosmetic only, defaults to "circle". */
   photoFrame?: CertPhotoFrame | null;
+  /** An optional award badge drawn above the signature line — independent of the template's own decorations (e.g. Royal Seal's built-in top medallion is unaffected). */
+  awardSeal?: CertAwardSeal | null;
 }
 
 const WIDTH = 1200;
 const HEIGHT = 850;
-// Canvas is rasterized at 2x and downscaled by CSS/PNG export — sharpens
-// signature images and text (previously rendered at native 1200x850,
-// which looked soft/blurry once a signature photo was scaled up into its box).
-const RENDER_SCALE = 2;
+// Canvas is rasterized at 3x and downscaled by CSS/PNG export. At 3x, a
+// 1200x850 certificate exports at 3600x2550 — comfortably over 300 DPI
+// for an A4/Letter-landscape print, not just crisp on screen.
+const RENDER_SCALE = 3;
 
 interface Palette {
   background: (ctx: CanvasRenderingContext2D) => void;
@@ -326,6 +328,71 @@ function drawSeal(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.restore();
 }
 
+/** Draws a 5-point star centered at cx/cy — shared by the seal medallion and the gold medal below. */
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, outerR: number, innerR: number, color: string): void {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const rr = i % 2 === 0 ? outerR : innerR;
+    const x = cx + Math.cos(a) * rr;
+    const y = cy + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** A classic gold award medal with two ribbon tails hanging below it — an
+ * optional badge independent of the chosen template, drawn above the
+ * signature line so it reads as "this is an award" at a glance. */
+function drawMedal(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  ctx.save();
+
+  // Ribbon tails, drawn first so the medal circle sits on top of them.
+  const tailFill = (color: string, dx: number) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * r * 0.5, cy + r * 0.15);
+    ctx.lineTo(cx + dx * r * 1.05, cy + r * 2.1);
+    ctx.lineTo(cx + dx * r * 0.35, cy + r * 1.7);
+    ctx.closePath();
+    ctx.fill();
+  };
+  tailFill("#7F1D1D", -1);
+  tailFill("#991B1B", 1);
+
+  // Medal disc — radial gold gradient for a slight metallic sheen.
+  const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.15, cx, cy, r);
+  g.addColorStop(0, "#FFF6D9");
+  g.addColorStop(0.55, "#F0C24B");
+  g.addColorStop(1, "#B8860B");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#8A6A1F";
+  ctx.lineWidth = Math.max(1.5, r * 0.05);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - r * 0.08, 0, Math.PI * 2);
+  ctx.stroke();
+
+  drawStar(ctx, cx, cy, r * 0.48, r * 0.2, "#FFFFFF");
+  ctx.restore();
+}
+
+/** Draws the design's chosen award badge (if any) centered at cx/cy — kept
+ * separate from any template-specific decoration (e.g. Royal Seal's own
+ * top medallion, drawn elsewhere and unaffected by this). */
+function drawAwardSeal(ctx: CanvasRenderingContext2D, seal: CertAwardSeal, cx: number, cy: number, accent: string): void {
+  if (seal === "medal") drawMedal(ctx, cx, cy, 34);
+  else if (seal === "seal") drawSeal(ctx, cx, cy, 34, accent);
+}
+
 /** Non-oval frames use a symmetric r for both axes; oval widens it — this
  * keeps the clip path and the "cover" image scaling using the same box. */
 function photoFrameExtents(frame: CertPhotoFrame, r: number): { rx: number; ry: number } {
@@ -524,17 +591,25 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   // logo shouldn't be recolored to the template palette). Anchored by its
   // BOTTOM edge (not center) so making it bigger grows it upward into the
   // top margin instead of down into the company name/title text below.
+  // Each position also gets a hard max width/height — without one, a large
+  // scale% could grow the logo past the border frame or off the top edge
+  // entirely; the cap keeps it inside the frame at any scale setting.
   if (logoImage) {
-    const LOGO_BOTTOM_Y = 127;
-    const drawLogo = (cx: number, boxW: number, boxH: number) => {
+    const LOGO_BOTTOM_Y = 106;
+    const clampToBox = (w: number, h: number, maxW: number, maxH: number): [number, number] => {
+      let cw = w, ch = h;
+      if (cw > maxW) { ch *= maxW / cw; cw = maxW; }
+      if (ch > maxH) { cw *= maxH / ch; ch = maxH; }
+      return [cw, ch];
+    };
+    const drawLogo = (cx: number, boxW: number, boxH: number, maxW: number, maxH: number) => {
       const scale = Math.min((boxW * logoPct) / logoImage.width, (boxH * logoPct) / logoImage.height);
-      const w = logoImage.width * scale;
-      const h = logoImage.height * scale;
+      const [w, h] = clampToBox(logoImage.width * scale, logoImage.height * scale, maxW, maxH);
       ctx.drawImage(logoImage, cx - w / 2, LOGO_BOTTOM_Y - h, w, h);
     };
-    if (logoPosition === "top_center") drawLogo(WIDTH / 2, 150, 64);
-    else if (logoPosition === "top_left") drawLogo(140, 90, 80);
-    else if (logoPosition === "top_right") drawLogo(WIDTH - 140, 90, 80);
+    if (logoPosition === "top_center") drawLogo(WIDTH / 2, 150, 64, 220, 56);
+    else if (logoPosition === "top_left") drawLogo(140, 90, 80, 170, 56);
+    else if (logoPosition === "top_right") drawLogo(WIDTH - 140, 90, 80, 170, 56);
   }
 
   // Candidate photo — always top-right, regardless of logo placement, so
@@ -549,13 +624,15 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   ctx.textAlign = "center";
 
   // Company name — the only element with its own alignment control;
-  // everything else below always stays centered.
+  // everything else below always stays centered. Sits comfortably below
+  // the logo's max-height footprint (bottom edge 106, capped at 56 tall,
+  // so its top never passes y=50) — no more collision at any logo scale.
   const nameAlign = data.companyNameAlign ?? "center";
   const nameX = nameAlign === "left" ? 70 : nameAlign === "right" ? WIDTH - 70 : WIDTH / 2;
   ctx.textAlign = nameAlign;
   ctx.fillStyle = p.muted;
   ctx.font = `600 22px ${p.bodyFont}`;
-  ctx.fillText(data.companyName.toUpperCase(), nameX, 130);
+  ctx.fillText(data.companyName.toUpperCase(), nameX, 138);
   ctx.textAlign = "center";
 
   // Title
@@ -600,6 +677,12 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   ctx.fillStyle = p.muted;
   ctx.font = `18px ${p.bodyFont}`;
   ctx.fillText(`Issued on ${data.issuedDate}`, WIDTH / 2, 555);
+
+  // Award badge — an optional medal/seal in the open space above the
+  // signature line, independent of the template's own decorations.
+  if (data.awardSeal && data.awardSeal !== "none") {
+    drawAwardSeal(ctx, data.awardSeal, WIDTH / 2, 635, p.accent);
+  }
 
   // Signatures
   const sigY = 720;

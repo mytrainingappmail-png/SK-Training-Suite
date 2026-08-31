@@ -48,6 +48,7 @@ export default function QuizAdminCertificateButton({ participantId, companyId }:
       photoEnabled: c.photo_enabled,
       photoUrl: c.candidate_photo_url,
       photoFrame: c.cert_photo_frame,
+      awardSeal: c.cert_award_seal,
     });
 
     downloadCanvasAsPng(canvas, `certificate-${c.cert_number}.png`);

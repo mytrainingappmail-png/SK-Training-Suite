@@ -120,6 +120,7 @@ export default function QuizSettingsPage() {
       photoEnabled: editingDraft.photo_enabled,
       photoUrl: previewPhotoUrl,
       photoFrame: editingDraft.photo_frame,
+      awardSeal: editingDraft.award_seal,
     }).catch(() => {
       // preview only — a failed render just leaves the canvas as-is
     });
@@ -240,6 +241,7 @@ export default function QuizSettingsPage() {
         signature_align: editingDraft.signature_align,
         photo_enabled: editingDraft.photo_enabled,
         photo_frame: editingDraft.photo_frame,
+        award_seal: editingDraft.award_seal,
       });
       setEditingDraft(saved);
       setDrafts((prev) => prev.map((d) => (d.id === saved.id ? saved : d)));
@@ -792,6 +794,33 @@ export default function QuizSettingsPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-800">
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Award Badge</div>
+              <p className="text-[11px] text-slate-500 mb-2">An optional medal/seal above the signature line — works with any design, on top of whatever that template already draws.</p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { value: "none", label: "None" },
+                    { value: "medal", label: "🥇 Gold Medal" },
+                    { value: "seal", label: "🔴 Wax Seal" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setEditingDraft({ ...editingDraft, award_seal: opt.value })}
+                    className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                      editingDraft.award_seal === opt.value
+                        ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="pt-2 border-t border-slate-800 space-y-3">

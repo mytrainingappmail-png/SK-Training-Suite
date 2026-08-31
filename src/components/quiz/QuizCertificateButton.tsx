@@ -45,6 +45,7 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         photoEnabled: cert.photo_enabled,
         photoUrl: cert.candidate_photo_url,
         photoFrame: cert.cert_photo_frame,
+        awardSeal: cert.cert_award_seal,
       });
 
       downloadCanvasAsPng(canvas, `certificate-${cert.cert_number}.png`);
