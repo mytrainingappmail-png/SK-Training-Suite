@@ -21,9 +21,12 @@ export async function createCertTemplateDraft(companyId: string, name: string, c
     ? {
         template: copyFrom.template,
         company_name: copyFrom.company_name,
+        company_name_align: copyFrom.company_name_align,
         logo_url: copyFrom.logo_url,
         logo_position: copyFrom.logo_position,
         logo_scale: copyFrom.logo_scale,
+        watermark_type: copyFrom.watermark_type,
+        watermark_text: copyFrom.watermark_text,
         title: copyFrom.title,
         achievement_line: copyFrom.achievement_line,
         signatory1_name: copyFrom.signatory1_name,
@@ -39,6 +42,7 @@ export async function createCertTemplateDraft(companyId: string, name: string, c
         signature_mode: copyFrom.signature_mode,
         signature_align: copyFrom.signature_align,
         photo_enabled: copyFrom.photo_enabled,
+        photo_frame: copyFrom.photo_frame,
       }
     : {};
 

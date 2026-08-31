@@ -186,12 +186,16 @@ export interface OptionColor {
 
 export type CertTemplate = "classic_gold" | "royal_blue" | "modern_purple" | "minimal_white" | "dark_elegant" | "premium_embossed" | "royal_seal";
 export type ChampMusic = "builtin" | "custom" | "off";
-/** Where the uploaded certificate logo is placed — a crest above the title, a corner mark, or a faint full-page watermark. */
-export type CertLogoPosition = "top_center" | "top_left" | "top_right" | "watermark";
+/** Where the small, crisp logo mark sits — independent of the watermark toggle below, so a design can have both at once. */
+export type CertLogoPosition = "top_center" | "top_left" | "top_right";
 /** "both" draws the existing two-slot side-by-side layout unchanged; "single" draws only Signatory 1, positioned by cert_signature_align. */
 export type CertSignatureMode = "both" | "single";
 /** Only applies when cert_signature_mode is "single". */
 export type CertSignatureAlign = "left" | "center" | "right";
+/** Same "Picture watermark or Text watermark" choice Word's own watermark dialog offers — "none" draws neither. */
+export type CertWatermarkType = "none" | "logo" | "text";
+/** Purely cosmetic crop shape for the candidate photo slot — applies whether or not a photo has actually been attached yet. */
+export type CertPhotoFrame = "circle" | "square" | "rounded_square" | "hexagon" | "oval" | "polaroid";
 
 export interface QuizSettings {
   company_id: string;
@@ -229,9 +233,14 @@ export interface CertTemplateDraft {
   is_active: boolean;
   template: CertTemplate;
   company_name: string | null;
+  company_name_align: CertSignatureAlign;
   logo_url: string | null;
   logo_position: CertLogoPosition;
   logo_scale: number;
+  /** Independent of logo_position — an optional full-page background watermark, either the logo image faded out or custom diagonal text (Word-style), on top of (not instead of) the small positioned logo mark. */
+  watermark_type: CertWatermarkType;
+  /** Only used when watermark_type is "text". */
+  watermark_text: string | null;
   title: string;
   achievement_line: string;
   signatory1_name: string | null;
@@ -248,6 +257,8 @@ export interface CertTemplateDraft {
   signature_align: CertSignatureAlign;
   /** Reserves a spot on the layout for the candidate's photo — the image itself is attached per-certificate by an admin after issuance, never self-uploaded. */
   photo_enabled: boolean;
+  /** Crop shape for that photo slot — cosmetic only. */
+  photo_frame: CertPhotoFrame;
   created_at: string;
   updated_at: string;
 }
@@ -300,9 +311,12 @@ export interface QuizCertificate {
   template: CertTemplate;
   issued_at: string;
   company_name: string;
+  company_name_align: CertSignatureAlign;
   cert_logo_url: string | null;
   cert_logo_position: CertLogoPosition;
   cert_logo_scale: number;
+  cert_watermark_type: CertWatermarkType;
+  cert_watermark_text: string | null;
   cert_title: string;
   achievement_line: string;
   signatory1_name: string | null;
@@ -318,6 +332,7 @@ export interface QuizCertificate {
   signature_mode: CertSignatureMode;
   signature_align: CertSignatureAlign;
   photo_enabled: boolean;
+  cert_photo_frame: CertPhotoFrame;
   candidate_photo_url: string | null;
 }
 

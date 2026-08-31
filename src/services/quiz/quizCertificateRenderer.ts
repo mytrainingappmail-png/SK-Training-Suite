@@ -2,7 +2,7 @@
 // No external fonts/images required, so it always renders identically
 // regardless of company branding being configured or not.
 
-import type { CertTemplate, CertLogoPosition, CertSignatureMode, CertSignatureAlign } from "../../types/quiz";
+import type { CertTemplate, CertLogoPosition, CertSignatureMode, CertSignatureAlign, CertWatermarkType, CertPhotoFrame } from "../../types/quiz";
 
 export interface CertificateData {
   candidateName: string;
@@ -11,9 +11,14 @@ export interface CertificateData {
   certNumber: string;
   issuedDate: string;
   companyName: string;
+  companyNameAlign?: CertSignatureAlign | null;
   logoUrl?: string | null;
   logoPosition?: CertLogoPosition | null;
   logoScale?: number | null;
+  /** Independent of logoPosition — "logo" fades the same logo image across the page, "text" draws custom diagonal text (Word-style), "none"/undefined draws nothing. Either way this is in addition to, not instead of, the small positioned logo mark. */
+  watermarkType?: CertWatermarkType | null;
+  /** Only used when watermarkType is "text". */
+  watermarkText?: string | null;
   title: string;
   achievementLine: string;
   signatory1Name?: string | null;
@@ -34,6 +39,8 @@ export interface CertificateData {
   photoEnabled?: boolean | null;
   /** Admin-attached after issuance — drawn only when photoEnabled is also true. */
   photoUrl?: string | null;
+  /** Crop shape for the photo slot — cosmetic only, defaults to "circle". */
+  photoFrame?: CertPhotoFrame | null;
 }
 
 const WIDTH = 1200;
@@ -319,26 +326,121 @@ function drawSeal(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.restore();
 }
 
-/** The candidate's own photo, admin-attached after issuance — a circular
- * frame with a colored ring, fixed in the top-right corner so it never
- * collides with the logo (which defaults to top-center). */
-function drawPhotoCircle(ctx: CanvasRenderingContext2D, image: HTMLImageElement, cx: number, cy: number, r: number, ringColor: string): void {
-  ctx.save();
+/** Non-oval frames use a symmetric r for both axes; oval widens it — this
+ * keeps the clip path and the "cover" image scaling using the same box. */
+function photoFrameExtents(frame: CertPhotoFrame, r: number): { rx: number; ry: number } {
+  return frame === "oval" ? { rx: r * 1.25, ry: r * 0.9 } : { rx: r, ry: r };
+}
+
+/** Traces (but doesn't fill/stroke) the outline for a given frame shape,
+ * centered at cx/cy — shared between the clip used to crop a real photo
+ * and the dashed outline drawn when no photo has been attached yet. */
+function photoFramePath(ctx: CanvasRenderingContext2D, frame: CertPhotoFrame, cx: number, cy: number, rx: number, ry: number): void {
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  if (frame === "square") {
+    ctx.rect(cx - rx, cy - ry, rx * 2, ry * 2);
+  } else if (frame === "rounded_square") {
+    const rad = Math.min(rx, ry) * 0.35;
+    const x = cx - rx, y = cy - ry, w = rx * 2, h = ry * 2;
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+  } else if (frame === "hexagon") {
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 2;
+      const x = cx + rx * Math.cos(a);
+      const y = cy + ry * Math.sin(a);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+  } else if (frame === "oval") {
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  } else {
+    ctx.arc(cx, cy, rx, 0, Math.PI * 2);
+  }
   ctx.closePath();
-  ctx.clip();
-  const scale = Math.max((r * 2) / image.width, (r * 2) / image.height);
-  const w = image.width * scale;
-  const h = image.height * scale;
-  ctx.drawImage(image, cx - w / 2, cy - h / 2, w, h);
+}
+
+/** A white polaroid-style card with a blank strip below the photo — the
+ * one frame that isn't just a clip shape, so it's handled on its own. */
+function drawPhotoPolaroid(ctx: CanvasRenderingContext2D, image: HTMLImageElement | null, cx: number, cy: number, r: number, placeholderColor: string): void {
+  const pad = 8;
+  const stripH = 22;
+  const photoSize = r * 2;
+  const boxW = photoSize + pad * 2;
+  const boxH = photoSize + pad * 2 + stripH;
+  const x = cx - boxW / 2;
+  const y = cy - r - pad;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(x, y, boxW, boxH);
   ctx.restore();
 
-  ctx.strokeStyle = ringColor;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
+  if (image) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x + pad, y + pad, photoSize, photoSize);
+    ctx.clip();
+    const scale = Math.max(photoSize / image.width, photoSize / image.height);
+    const w = image.width * scale;
+    const h = image.height * scale;
+    ctx.drawImage(image, x + pad + photoSize / 2 - w / 2, y + pad + photoSize / 2 - h / 2, w, h);
+    ctx.restore();
+    ctx.strokeStyle = "#00000022";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + pad, y + pad, photoSize, photoSize);
+  } else {
+    ctx.save();
+    ctx.strokeStyle = placeholderColor;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(x + pad, y + pad, photoSize, photoSize);
+    ctx.restore();
+  }
+}
+
+/** The candidate's own photo, admin-attached after issuance — cropped into
+ * whichever frame shape the design picked, with a colored ring, fixed in
+ * the top-right corner so it never collides with the logo (top-center by
+ * default). Falls back to a matching dashed placeholder when no photo has
+ * been attached yet, so the reserved spot is still visible in previews. */
+function drawPhoto(ctx: CanvasRenderingContext2D, frame: CertPhotoFrame, image: HTMLImageElement | null, cx: number, cy: number, r: number, ringColor: string, placeholderColor: string): void {
+  if (frame === "polaroid") {
+    drawPhotoPolaroid(ctx, image, cx, cy, r, placeholderColor);
+    return;
+  }
+
+  const { rx, ry } = photoFrameExtents(frame, r);
+
+  if (image) {
+    ctx.save();
+    photoFramePath(ctx, frame, cx, cy, rx, ry);
+    ctx.clip();
+    const scale = Math.max((rx * 2) / image.width, (ry * 2) / image.height);
+    const w = image.width * scale;
+    const h = image.height * scale;
+    ctx.drawImage(image, cx - w / 2, cy - h / 2, w, h);
+    ctx.restore();
+
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = 4;
+    photoFramePath(ctx, frame, cx, cy, rx, ry);
+    ctx.stroke();
+  } else {
+    ctx.save();
+    ctx.strokeStyle = placeholderColor;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    photoFramePath(ctx, frame, cx, cy, rx, ry);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
@@ -368,8 +470,12 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
 
   const logoPct = (data.logoScale ?? 100) / 100;
 
-  // Watermark logo — drawn first, low opacity, so everything else sits on top of it.
-  if (logoImage && logoPosition === "watermark") {
+  // Background watermark — independent of logoPosition now, so it can
+  // sit underneath the small positioned logo mark rather than replacing
+  // it. Drawn first, low opacity, so everything else sits on top of it.
+  // A "Picture watermark or Text watermark" choice, the same idea Word's
+  // own watermark dialog offers.
+  if (logoImage && data.watermarkType === "logo") {
     const maxSize = 460 * logoPct;
     const scale = Math.min(maxSize / logoImage.width, maxSize / logoImage.height);
     const w = logoImage.width * scale;
@@ -377,6 +483,22 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
     ctx.save();
     ctx.globalAlpha = 0.07;
     ctx.drawImage(logoImage, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h);
+    ctx.restore();
+  } else if (data.watermarkType === "text" && data.watermarkText) {
+    ctx.save();
+    ctx.translate(WIDTH / 2, HEIGHT / 2);
+    ctx.rotate(-Math.PI / 6);
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = p.heading;
+    ctx.textAlign = "center";
+    // Shrinks long text to fit rather than spilling off the certificate.
+    let fontSize = 100;
+    ctx.font = `800 ${fontSize}px ${p.headingFont}`;
+    while (ctx.measureText(data.watermarkText.toUpperCase()).width > WIDTH * 0.85 && fontSize > 30) {
+      fontSize -= 4;
+      ctx.font = `800 ${fontSize}px ${p.headingFont}`;
+    }
+    ctx.fillText(data.watermarkText.toUpperCase(), 0, 0);
     ctx.restore();
   }
 
@@ -402,7 +524,7 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   // logo shouldn't be recolored to the template palette). Anchored by its
   // BOTTOM edge (not center) so making it bigger grows it upward into the
   // top margin instead of down into the company name/title text below.
-  if (logoImage && logoPosition !== "watermark") {
+  if (logoImage) {
     const LOGO_BOTTOM_Y = 127;
     const drawLogo = (cx: number, boxW: number, boxH: number) => {
       const scale = Math.min((boxW * logoPct) / logoImage.width, (boxH * logoPct) / logoImage.height);
@@ -421,26 +543,20 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   // preview, or an issued certificate nobody's added a photo to), a
   // dashed placeholder shows where it will go.
   if (data.photoEnabled) {
-    if (photoImage) {
-      drawPhotoCircle(ctx, photoImage, WIDTH - 115, 115, 55, p.accent);
-    } else {
-      ctx.save();
-      ctx.strokeStyle = p.muted;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.arc(WIDTH - 115, 115, 55, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
+    drawPhoto(ctx, data.photoFrame ?? "circle", photoImage, WIDTH - 115, 115, 55, p.accent, p.muted);
   }
 
   ctx.textAlign = "center";
 
-  // Company name
+  // Company name — the only element with its own alignment control;
+  // everything else below always stays centered.
+  const nameAlign = data.companyNameAlign ?? "center";
+  const nameX = nameAlign === "left" ? 70 : nameAlign === "right" ? WIDTH - 70 : WIDTH / 2;
+  ctx.textAlign = nameAlign;
   ctx.fillStyle = p.muted;
   ctx.font = `600 22px ${p.bodyFont}`;
-  ctx.fillText(data.companyName.toUpperCase(), WIDTH / 2, 130);
+  ctx.fillText(data.companyName.toUpperCase(), nameX, 130);
+  ctx.textAlign = "center";
 
   // Title
   if (template === "premium_embossed") {

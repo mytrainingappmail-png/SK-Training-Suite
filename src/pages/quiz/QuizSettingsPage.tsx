@@ -14,10 +14,18 @@ import { updateQuizMeta } from "../../services/quiz/quizService";
 import { renderCertificateToCanvas, CERT_TEMPLATE_LABELS } from "../../services/quiz/quizCertificateRenderer";
 import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from "../../services/quiz/quizBackupService";
 import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
-import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, Quiz } from "../../types/quiz";
+import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, CertPhotoFrame, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 const CERT_TEMPLATES = Object.keys(CERT_TEMPLATE_LABELS) as CertTemplate[];
+const PHOTO_FRAME_THUMB_CLASS: Record<CertPhotoFrame, string> = {
+  circle: "rounded-full",
+  square: "rounded-none",
+  rounded_square: "rounded-lg",
+  hexagon: "rounded-none border-0",
+  oval: "rounded-full",
+  polaroid: "rounded-none bg-white p-0.5",
+};
 
 export default function QuizSettingsPage() {
   const me = getCurrentQuizAdmin();
@@ -46,6 +54,8 @@ export default function QuizSettingsPage() {
   const [restoreSettings, setRestoreSettings] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
   const [backupError, setBackupError] = useState("");
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const [photoDragOver, setPhotoDragOver] = useState(false);
 
   useEffect(() => {
     if (!me) return;
@@ -87,9 +97,12 @@ export default function QuizSettingsPage() {
       certNumber: "CERT-PREVIEW01",
       issuedDate: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
       companyName: editingDraft.company_name || "Your Company",
+      companyNameAlign: editingDraft.company_name_align,
       logoUrl: editingDraft.logo_url,
       logoPosition: editingDraft.logo_position,
       logoScale: editingDraft.logo_scale,
+      watermarkType: editingDraft.watermark_type,
+      watermarkText: editingDraft.watermark_text,
       title: editingDraft.title,
       achievementLine: editingDraft.achievement_line,
       signatory1Name: editingDraft.signatory1_name,
@@ -105,10 +118,30 @@ export default function QuizSettingsPage() {
       signatureMode: editingDraft.signature_mode,
       signatureAlign: editingDraft.signature_align,
       photoEnabled: editingDraft.photo_enabled,
+      photoUrl: previewPhotoUrl,
+      photoFrame: editingDraft.photo_frame,
     }).catch(() => {
       // preview only — a failed render just leaves the canvas as-is
     });
-  }, [editingDraft]);
+  }, [editingDraft, previewPhotoUrl]);
+
+  // Session-only preview — no upload, no server round-trip, gone on
+  // reload. The real per-candidate photo is always attached from the
+  // Results screen after a certificate is actually issued; this is
+  // purely "show me what a photo would look like on this design."
+  useEffect(() => {
+    return () => {
+      if (previewPhotoUrl) URL.revokeObjectURL(previewPhotoUrl);
+    };
+  }, [previewPhotoUrl]);
+
+  function handlePreviewPhotoFile(file: File | undefined) {
+    if (!file || !file.type.startsWith("image/")) return;
+    setPreviewPhotoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
 
   function updateOptionColor(index: number, field: "box" | "font", value: string) {
     if (!settings) return;
@@ -185,9 +218,12 @@ export default function QuizSettingsPage() {
         name: editingDraft.name,
         template: editingDraft.template,
         company_name: editingDraft.company_name,
+        company_name_align: editingDraft.company_name_align,
         logo_url: editingDraft.logo_url,
         logo_position: editingDraft.logo_position,
         logo_scale: editingDraft.logo_scale,
+        watermark_type: editingDraft.watermark_type,
+        watermark_text: editingDraft.watermark_text,
         title: editingDraft.title,
         achievement_line: editingDraft.achievement_line,
         signatory1_name: editingDraft.signatory1_name,
@@ -203,6 +239,7 @@ export default function QuizSettingsPage() {
         signature_mode: editingDraft.signature_mode,
         signature_align: editingDraft.signature_align,
         photo_enabled: editingDraft.photo_enabled,
+        photo_frame: editingDraft.photo_frame,
       });
       setEditingDraft(saved);
       setDrafts((prev) => prev.map((d) => (d.id === saved.id ? saved : d)));
@@ -675,8 +712,86 @@ export default function QuizSettingsPage() {
                 📷 Show a candidate photo (top-right corner)
               </label>
               <p className="text-[11px] text-slate-500 mt-1">
-                The photo itself is attached per-candidate by an admin from the Results screen after a certificate is issued — nobody uploads their own.
+                The real photo for an actual certificate is always attached per-candidate by an admin from the Results screen after issuance — never self-uploaded. Drop one below just to preview how it'll look on this design.
               </p>
+              {editingDraft.photo_enabled && (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setPhotoDragOver(true);
+                  }}
+                  onDragLeave={() => setPhotoDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setPhotoDragOver(false);
+                    handlePreviewPhotoFile(e.dataTransfer.files?.[0]);
+                  }}
+                  className={`mt-2 flex items-center gap-3 rounded-lg border-2 border-dashed px-4 py-3 transition-colors ${
+                    photoDragOver ? "border-amber-400 bg-amber-400/10" : "border-slate-700"
+                  }`}
+                >
+                  {previewPhotoUrl ? (
+                    <img
+                      src={previewPhotoUrl}
+                      alt=""
+                      className={`h-14 w-14 object-cover border border-slate-700 ${PHOTO_FRAME_THUMB_CLASS[editingDraft.photo_frame]}`}
+                      style={editingDraft.photo_frame === "hexagon" ? { clipPath: "polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%)" } : undefined}
+                    />
+                  ) : (
+                    <div
+                      className={`h-14 w-14 border border-dashed border-slate-600 flex items-center justify-center text-slate-600 text-[10px] ${PHOTO_FRAME_THUMB_CLASS[editingDraft.photo_frame]}`}
+                      style={editingDraft.photo_frame === "hexagon" ? { clipPath: "polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%)" } : undefined}
+                    >
+                      Preview
+                    </div>
+                  )}
+                  <div className="flex-1 text-xs text-slate-400">
+                    Drag a photo here, or{" "}
+                    <label className="text-amber-400 hover:text-amber-300 cursor-pointer underline">
+                      browse
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePreviewPhotoFile(e.target.files?.[0])} />
+                    </label>
+                    {previewPhotoUrl && (
+                      <>
+                        {" · "}
+                        <button type="button" onClick={() => setPreviewPhotoUrl(null)} className="text-red-300 hover:text-red-200 underline">
+                          Clear
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              {editingDraft.photo_enabled && (
+                <div className="mt-3">
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Photo Frame Shape</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: "circle", label: "◯ Circle" },
+                        { value: "square", label: "◻ Square" },
+                        { value: "rounded_square", label: "▢ Rounded" },
+                        { value: "hexagon", label: "⬡ Hexagon" },
+                        { value: "oval", label: "⬭ Oval" },
+                        { value: "polaroid", label: "🖼 Polaroid" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setEditingDraft({ ...editingDraft, photo_frame: opt.value })}
+                        className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                          editingDraft.photo_frame === opt.value
+                            ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                            : "border-slate-700 text-slate-300 hover:border-slate-600"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="pt-2 border-t border-slate-800 space-y-3">
@@ -698,7 +813,6 @@ export default function QuizSettingsPage() {
                         { value: "top_center", label: "Top Center" },
                         { value: "top_left", label: "Top Left" },
                         { value: "top_right", label: "Top Right" },
-                        { value: "watermark", label: "Watermark" },
                       ] as const
                     ).map((opt) => (
                       <button
@@ -736,6 +850,71 @@ export default function QuizSettingsPage() {
                   </button>
                 </div>
               )}
+
+              <div className="pt-2 border-t border-slate-800">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Background Watermark</div>
+                <p className="text-[11px] text-slate-500 mb-2">Independent of the logo above — tick a box to turn it on, doesn't replace the small logo mark.</p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { value: "none", label: "None" },
+                      { value: "logo", label: "🖼 Logo as Watermark" },
+                      { value: "text", label: "🔤 Custom Text" },
+                    ] as const
+                  ).map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-center gap-1.5 text-sm font-semibold rounded-lg px-3 py-2 border-2 cursor-pointer transition-colors ${
+                        editingDraft.watermark_type === opt.value
+                          ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                          : "border-slate-700 text-slate-300 hover:border-slate-600"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editingDraft.watermark_type === opt.value}
+                        onChange={() => setEditingDraft({ ...editingDraft, watermark_type: editingDraft.watermark_type === opt.value ? "none" : opt.value })}
+                        className="sr-only"
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                {editingDraft.watermark_type === "text" && (
+                  <input
+                    className="mt-2 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                    value={editingDraft.watermark_text ?? ""}
+                    onChange={(e) => setEditingDraft({ ...editingDraft, watermark_text: e.target.value })}
+                    placeholder="e.g. SAMPLE, CONFIDENTIAL, your company name…"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Company Name Alignment</div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { value: "left", label: "Left" },
+                    { value: "center", label: "Center" },
+                    { value: "right", label: "Right" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setEditingDraft({ ...editingDraft, company_name_align: opt.value })}
+                    className={`text-sm font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                      editingDraft.company_name_align === opt.value
+                        ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

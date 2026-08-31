@@ -22,9 +22,12 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         certNumber: cert.cert_number,
         issuedDate: new Date(cert.issued_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
         companyName: cert.company_name,
+        companyNameAlign: cert.company_name_align,
         logoUrl: cert.cert_logo_url,
         logoPosition: cert.cert_logo_position,
         logoScale: cert.cert_logo_scale,
+        watermarkType: cert.cert_watermark_type,
+        watermarkText: cert.cert_watermark_text,
         title: cert.cert_title,
         achievementLine: cert.achievement_line,
         signatory1Name: cert.signatory1_name,
@@ -41,6 +44,7 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         signatureAlign: cert.signature_align,
         photoEnabled: cert.photo_enabled,
         photoUrl: cert.candidate_photo_url,
+        photoFrame: cert.cert_photo_frame,
       });
 
       downloadCanvasAsPng(canvas, `certificate-${cert.cert_number}.png`);
