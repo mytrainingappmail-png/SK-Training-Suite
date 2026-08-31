@@ -63,7 +63,7 @@ function QueryForm({ whatsappHref }: { whatsappHref: string | null }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border-2 border-slate-200 bg-white p-8 shadow-sm">
       <div className="flex gap-2">
         {(
           [
@@ -202,7 +202,7 @@ export default function MarketingHomePage() {
           <div className="mx-auto max-w-3xl">
             <h2 className="text-center text-3xl font-bold tracking-tight">{settings.about_title}</h2>
             <div
-              className="prose prose-slate mx-auto mt-8 max-w-none"
+              className="prose prose-slate prose-headings:text-slate-900 prose-p:text-slate-700 prose-li:text-slate-700 mx-auto mt-8 max-w-none"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(settings.about_content_html) }}
             />
           </div>
@@ -211,15 +211,21 @@ export default function MarketingHomePage() {
 
       {/* Features */}
       {features.length > 0 && (
-        <section className="bg-slate-50 px-6 py-20">
+        <section className="bg-gradient-to-b from-indigo-50 via-indigo-50/40 to-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight">Why Choose Us</h2>
+            <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Why Choose Us</p>
+            <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Everything you need, built in</h2>
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {features.map((f) => (
-                <div key={f.id} className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-                  <div className="text-3xl">{f.icon}</div>
-                  <h3 className="mt-3 text-base font-bold text-slate-900">{f.title}</h3>
-                  {f.description && <p className="mt-1.5 text-sm text-slate-500">{f.description}</p>}
+                <div
+                  key={f.id}
+                  className="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-2xl shadow-md shadow-indigo-500/25">
+                    {f.icon}
+                  </div>
+                  <h3 className="mt-4 text-base font-bold text-slate-900">{f.title}</h3>
+                  {f.description && <p className="mt-1.5 text-sm text-slate-600">{f.description}</p>}
                 </div>
               ))}
             </div>
@@ -231,17 +237,18 @@ export default function MarketingHomePage() {
       {testimonials.length > 0 && (
         <section className="px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight">What Our Customers Say</h2>
+            <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Testimonials</p>
+            <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">What Our Customers Say</h2>
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {testimonials.map((t) => (
-                <div key={t.id} className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50 p-6">
+                <div key={t.id} className="flex flex-col rounded-2xl border-2 border-slate-200 border-l-4 border-l-indigo-500 bg-white p-6 shadow-sm">
                   <div className="text-amber-400">{"★".repeat(t.rating)}{"☆".repeat(5 - t.rating)}</div>
-                  <p className="mt-3 flex-1 text-sm italic text-slate-700">“{t.quote}”</p>
+                  <p className="mt-3 flex-1 text-sm italic text-slate-800">“{t.quote}”</p>
                   <div className="mt-4 flex items-center gap-3">
                     {t.photo_url && <img src={t.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />}
                     <div>
                       <div className="text-sm font-bold text-slate-900">{t.name}</div>
-                      {t.role_or_company && <div className="text-xs text-slate-500">{t.role_or_company}</div>}
+                      {t.role_or_company && <div className="text-xs text-slate-600">{t.role_or_company}</div>}
                     </div>
                   </div>
                 </div>
@@ -253,17 +260,20 @@ export default function MarketingHomePage() {
 
       {/* Pricing */}
       {plans.length > 0 && (
-        <section className="bg-slate-50 px-6 py-20">
+        <section className="bg-gradient-to-b from-violet-50 via-violet-50/40 to-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight">Simple, Transparent Pricing</h2>
+            <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Pricing</p>
+            <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Simple, Transparent Pricing</h2>
             <div className="mt-6 flex justify-center">
-              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+              <div className="inline-flex rounded-xl border-2 border-slate-200 bg-white p-1">
                 {(["monthly", "yearly"] as const).map((cycle) => (
                   <button
                     key={cycle}
                     onClick={() => setBillingCycle(cycle)}
                     className={`rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${
-                      billingCycle === cycle ? "bg-slate-900 text-white" : "text-slate-500"
+                      billingCycle === cycle
+                        ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     {cycle}
@@ -271,32 +281,60 @@ export default function MarketingHomePage() {
                 ))}
               </div>
             </div>
-            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-              {plans.map((p) => (
-                <div key={p.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-900">{p.plan_name}</h3>
-                  {p.description && <p className="mt-1 text-sm text-slate-500">{p.description}</p>}
-                  <div className="mt-5">
-                    <span className="text-3xl font-extrabold text-slate-900">
-                      ₹{(billingCycle === "monthly" ? p.price_monthly : p.price_yearly).toLocaleString()}
-                    </span>
-                    <span className="text-sm text-slate-500">/{billingCycle === "monthly" ? "mo" : "yr"}</span>
-                  </div>
-                  <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-600">
-                    <li>👥 Up to {p.max_employees.toLocaleString()} employees</li>
-                    <li>📚 Up to {p.max_courses.toLocaleString()} courses</li>
-                    {p.features.split(",").filter(Boolean).map((f) => (
-                      <li key={f}>✓ {f.trim()}</li>
-                    ))}
-                  </ul>
-                  <a
-                    href="#get-started"
-                    className="mt-6 rounded-xl bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3 md:items-start">
+              {plans.map((p, i) => {
+                const featured = plans.length >= 3 && i === 1;
+                return (
+                  <div
+                    key={p.id}
+                    className={`relative flex flex-col rounded-2xl border-2 bg-white p-7 transition hover:-translate-y-0.5 ${
+                      featured
+                        ? "border-indigo-500 shadow-xl shadow-indigo-500/15 md:scale-105"
+                        : "border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md"
+                    }`}
                   >
-                    Get Started
-                  </a>
-                </div>
-              ))}
+                    {featured && (
+                      <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-md">
+                        Most Popular
+                      </span>
+                    )}
+                    <h3 className="text-lg font-bold text-slate-900">{p.plan_name}</h3>
+                    {p.description && <p className="mt-1 text-sm text-slate-600">{p.description}</p>}
+                    <div className="mt-5">
+                      <span className="text-3xl font-extrabold text-slate-900">
+                        ₹{(billingCycle === "monthly" ? p.price_monthly : p.price_yearly).toLocaleString()}
+                      </span>
+                      <span className="text-sm text-slate-600">/{billingCycle === "monthly" ? "mo" : "yr"}</span>
+                    </div>
+                    <ul className="mt-5 flex-1 space-y-2.5 text-sm text-slate-700">
+                      <li className="flex items-center gap-2.5">
+                        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs">👥</span>
+                        Up to {p.max_employees.toLocaleString()} employees
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs">📚</span>
+                        Up to {p.max_courses.toLocaleString()} courses
+                      </li>
+                      {p.features.split(",").filter(Boolean).map((f) => (
+                        <li key={f} className="flex items-center gap-2.5">
+                          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-600">✓</span>
+                          {f.trim()}
+                        </li>
+                      ))}
+                    </ul>
+                    <a
+                      href="#get-started"
+                      className={`mt-6 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${
+                        featured
+                          ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-500 hover:to-violet-500"
+                          : "bg-slate-900 text-white hover:bg-slate-800"
+                      }`}
+                    >
+                      Get Started
+                    </a>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -305,8 +343,8 @@ export default function MarketingHomePage() {
       {/* Get Started / Query Form */}
       <section id="get-started" className="px-6 py-20">
         <div className="mx-auto max-w-md">
-          <h2 className="text-center text-3xl font-bold tracking-tight">Get Started</h2>
-          <p className="mt-3 text-center text-sm text-slate-500">Tell us a bit about you and we'll be in touch.</p>
+          <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900">Get Started</h2>
+          <p className="mt-3 text-center text-sm text-slate-600">Tell us a bit about you and we'll be in touch.</p>
           <div className="mt-8">
             <QueryForm whatsappHref={whatsappHref} />
           </div>
