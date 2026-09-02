@@ -27,10 +27,14 @@ function Header() {
   const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef        = useRef<HTMLDivElement>(null);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
+  const [companyCode, setCompanyCode] = useState("");
 
   useEffect(() => {
     function refreshBranding() {
-      loadBranding().then((b) => setCompanyName(b.companyName));
+      loadBranding().then((b) => {
+        setCompanyName(b.companyName);
+        setCompanyCode(b.companyCode);
+      });
     }
     refreshBranding();
     window.addEventListener(BRANDING_CHANGED_EVENT, refreshBranding);
@@ -82,8 +86,16 @@ function Header() {
         <h1 className="text-2xl font-bold text-slate-800">
           Dashboard
         </h1>
-        <p className="text-sm text-slate-500">
-          Welcome to {companyName}
+        <p className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
+          <span>Welcome to {companyName}</span>
+          {companyCode && (
+            <span
+              title="Your company code — used to log in"
+              className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 font-mono text-xs font-semibold text-slate-600"
+            >
+              🔑 {companyCode}
+            </span>
+          )}
         </p>
       </div>
 

@@ -6,6 +6,7 @@ export interface PublicBrandingRow {
   login_logo_url: string;
   app_icon_url: string;
   favicon: string;
+  company_code: string;
 }
 
 // Works with no session (anon) — get_public_branding() is a SECURITY DEFINER

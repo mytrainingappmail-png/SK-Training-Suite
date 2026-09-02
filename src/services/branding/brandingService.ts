@@ -17,6 +17,7 @@ import { BRAND } from "../../config/branding";
 
 export interface ResolvedBranding {
   companyName: string;
+  companyCode: string;
   // Empty string means "use the bundled static logo asset". Used by the
   // sidebar/header, where the logo sits in a small white box.
   logoUrl: string;
@@ -71,6 +72,7 @@ export async function loadBranding(companyCode?: string): Promise<ResolvedBrandi
   const appIconUrl = overrideIcon?.trim() || dbIcon;
   const resolved: ResolvedBranding = {
     companyName: overrideName?.trim() || row?.company_name?.trim() || BRAND.companyName,
+    companyCode: row?.company_code?.trim() || "",
     logoUrl,
     loginLogoUrl: overrideLoginLogo?.trim() || dbLoginLogo || logoUrl,
     appIconUrl,
