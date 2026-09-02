@@ -31,6 +31,8 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   cert_eligibility: "all_pass",
   login_motivational_words: null,
   login_words_enabled: true,
+  login_logo_position: "top_center",
+  login_logo_scale: 100,
   result_close_minutes: 5,
 };
 

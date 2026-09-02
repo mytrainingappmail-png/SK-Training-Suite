@@ -230,6 +230,10 @@ export interface QuizSettings {
   login_motivational_words: string | null;
   /** Turns the falling-words effect on the landing screen on/off entirely — independent of the word list itself. */
   login_words_enabled: boolean;
+  /** Where the brand logo sits on the trainee landing screen — top_center is inline above the heading, top_left/top_right pin it to a corner. */
+  login_logo_position: CertLogoPosition;
+  /** Percent scale of the landing-screen logo's base size (64px). */
+  login_logo_scale: number;
   /** How long the post-quiz result screen stays open before auto-closing back to Join Quiz. */
   result_close_minutes: number;
   updated_at: string;
@@ -317,6 +321,8 @@ export interface QuizPublicBranding {
   footer_text: string | null;
   login_motivational_words: string | null;
   login_words_enabled: boolean;
+  login_logo_position: CertLogoPosition;
+  login_logo_scale: number;
 }
 
 export interface QuizCertificate {

@@ -153,9 +153,14 @@ export default function QuizAdminLoginPage() {
   }
 
   if (view === "landing") {
+    const logoPosition = branding?.login_logo_position ?? "top_center";
+    const logoScale = (branding?.login_logo_scale ?? 100) / 100;
+    const logoSize = Math.round(64 * logoScale);
+    const adminBtnCorner = logoPosition === "top_right" ? "left-5" : "right-5";
+
     return (
       <div
-        className="min-h-screen relative overflow-hidden flex items-center justify-center bg-slate-950 px-4 bg-cover bg-center"
+        className="min-h-screen relative overflow-hidden flex items-center justify-center bg-slate-950 px-4 bg-contain bg-no-repeat bg-center"
         style={branding?.login_background_url ? { backgroundImage: `url(${branding.login_background_url})` } : undefined}
       >
         <div
@@ -167,19 +172,34 @@ export default function QuizAdminLoginPage() {
         />
         {branding?.login_words_enabled !== false && <FallingWords words={motivationalWords} />}
 
+        {branding?.brand_logo_url && logoPosition !== "top_center" && (
+          <img
+            src={branding.brand_logo_url}
+            alt=""
+            className={`absolute top-5 ${logoPosition === "top_left" ? "left-5" : "right-5"} object-contain rounded-xl bg-white/5 backdrop-blur`}
+            style={{ height: `${logoSize}px`, width: `${logoSize}px` }}
+          />
+        )}
+
         <button
           onClick={() => setView("admin")}
-          className="absolute top-5 right-5 text-xs font-semibold text-slate-400 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5 bg-slate-900/60 backdrop-blur transition-colors"
+          className={`absolute top-5 ${adminBtnCorner} text-xs font-semibold text-slate-400 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5 bg-slate-900/60 backdrop-blur transition-colors`}
         >
           Admin →
         </button>
 
         <div className="relative w-full max-w-sm text-center">
-          {branding?.brand_logo_url ? (
-            <img src={branding.brand_logo_url} alt="" className="h-16 w-16 object-contain rounded-xl mx-auto mb-4" />
-          ) : (
-            <div className="h-3 w-3 rounded-full bg-amber-400 mx-auto mb-4 animate-pulse" />
-          )}
+          {logoPosition === "top_center" &&
+            (branding?.brand_logo_url ? (
+              <img
+                src={branding.brand_logo_url}
+                alt=""
+                className="object-contain rounded-xl mx-auto mb-4"
+                style={{ height: `${logoSize}px`, width: `${logoSize}px` }}
+              />
+            ) : (
+              <div className="h-3 w-3 rounded-full bg-amber-400 mx-auto mb-4 animate-pulse" />
+            ))}
           <h1 className="text-2xl font-extrabold text-white tracking-tight">
             {branding?.brand_name || branding?.company_name || "Live Quiz"}
           </h1>
@@ -203,7 +223,7 @@ export default function QuizAdminLoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-slate-950 px-4 bg-cover bg-center"
+      className="min-h-screen flex items-center justify-center bg-slate-950 px-4 bg-contain bg-no-repeat bg-center"
       style={branding?.login_background_url ? { backgroundImage: `url(${branding.login_background_url})` } : undefined}
     >
       <div className="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-slate-800 rounded-2xl p-8">

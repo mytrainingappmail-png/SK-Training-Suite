@@ -193,6 +193,8 @@ export default function QuizSettingsPage() {
         footer_text: settings.footer_text,
         login_motivational_words: settings.login_motivational_words,
         login_words_enabled: settings.login_words_enabled,
+        login_logo_position: settings.login_logo_position,
+        login_logo_scale: settings.login_logo_scale,
       });
       setBrandingMessage("Branding saved.");
     } finally {
@@ -505,6 +507,48 @@ export default function QuizSettingsPage() {
               onChange={(url) => setSettings({ ...settings, login_banner_url: url })}
               previewClassName="h-16 w-28 object-contain rounded-lg bg-slate-800 border border-slate-700"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Landing Screen Logo</label>
+            <p className="text-[11px] text-slate-500 mb-2">Uses the Company Logo set above — controls only how it looks on the trainee Join Quiz landing screen.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { value: "top_left", label: "Top Left" },
+                  { value: "top_center", label: "Top Center" },
+                  { value: "top_right", label: "Top Right" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSettings({ ...settings, login_logo_position: opt.value })}
+                  className={`text-xs font-semibold rounded-lg px-3 py-1.5 border-2 transition-colors ${
+                    settings.login_logo_position === opt.value
+                      ? "border-amber-400 bg-amber-400/10 text-amber-300"
+                      : "border-slate-700 text-slate-300 hover:border-slate-600"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <span className="text-xs text-slate-500 ml-1">Size:</span>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, login_logo_scale: Math.max(50, settings.login_logo_scale - 10) })}
+                className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+              >
+                −
+              </button>
+              <span className="font-mono text-xs text-white min-w-[2.5rem] text-center">{settings.login_logo_scale}%</span>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, login_logo_scale: Math.min(200, settings.login_logo_scale + 10) })}
+                className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 text-white font-bold text-sm"
+              >
+                +
+              </button>
+            </div>
           </div>
           <div>
             <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
