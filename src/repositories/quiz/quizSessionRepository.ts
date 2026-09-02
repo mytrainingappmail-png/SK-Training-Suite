@@ -47,7 +47,7 @@ export async function getSession(sessionId: string, client: SupabaseClient = sup
 
 export async function updateSessionPhase(
   sessionId: string,
-  patch: Partial<Pick<QuizSession, "phase" | "current_question_index" | "started_at" | "ended_at">>
+  patch: Partial<Pick<QuizSession, "phase" | "current_question_index" | "started_at" | "ended_at" | "question_started_at">>
 ): Promise<void> {
   const { error } = await supabaseQuiz.from("quiz_sessions").update(patch).eq("id", sessionId);
 

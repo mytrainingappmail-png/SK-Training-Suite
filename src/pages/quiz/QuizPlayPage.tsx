@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
-import { getCurrentQuestion, submitAnswer } from "../../services/quiz/quizPlayService";
+import { getCurrentQuestion, submitAnswer, heartbeat } from "../../services/quiz/quizPlayService";
 import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
@@ -44,6 +44,7 @@ export default function QuizPlayPage() {
   const [reviewSecondsLeft, setReviewSecondsLeft] = useState(REVIEW_VISIBLE_SECONDS);
   const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
   const [endStep, setEndStep] = useState<"splash" | "details">("splash");
+  const [justReconnected, setJustReconnected] = useState(false);
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -87,10 +88,32 @@ export default function QuizPlayPage() {
       }
       const rows = await listParticipants(sessionId, supabaseQuizPlayer);
       const mine = rows.find((p) => p.auth_user_id === uid);
-      if (mine) setParticipantId(mine.id);
-      else navigate(ROUTES.QUIZ_JOIN, { replace: true });
+      if (mine) {
+        setParticipantId(mine.id);
+        // Router state (participantId) only survives a normal navigation —
+        // getting here at all means the page was reloaded mid-quiz, so a
+        // quick "you're back, here's where things are" beats silently
+        // dropping them onto whatever question happens to be live now.
+        setJustReconnected(true);
+        setTimeout(() => setJustReconnected(false), 4000);
+      } else {
+        navigate(ROUTES.QUIZ_JOIN, { replace: true });
+      }
     })();
   }, [participantId, sessionId, navigate]);
+
+  // Safety-net heartbeat — while a question is live, periodically tells the
+  // server "I'm still here" (host's participant list shows this as presence)
+  // and asks it to auto-advance if the current question's timer has already
+  // expired. The host's own tab normally drives advancing, but that's a
+  // single browser tab's setInterval; if it stalls (backgrounded, screen
+  // locked, asleep), any participant's device still pings this and the
+  // session keeps moving instead of getting stuck.
+  useEffect(() => {
+    if (!sessionId || session?.phase !== "question") return;
+    const id = setInterval(() => heartbeat(sessionId), 4000);
+    return () => clearInterval(id);
+  }, [sessionId, session?.phase]);
 
   useEffect(() => {
     if (!sessionId || !session || session.phase !== "question") {
@@ -107,7 +130,14 @@ export default function QuizPlayPage() {
       if (cancelled || !q) return;
       setQuestion(q);
       questionStartedAt.current = Date.now();
-      setSecondsLeft(q.timer_seconds);
+      // Anchored off the server's question_started_at (when available)
+      // instead of always handing out a fresh full timer — a device that
+      // reconnects mid-question sees the actual time left, not an unfair
+      // extra full countdown.
+      const elapsedSec = session?.question_started_at
+        ? Math.floor((Date.now() - new Date(session.question_started_at).getTime()) / 1000)
+        : 0;
+      setSecondsLeft(Math.max(0, q.timer_seconds - Math.max(0, elapsedSec)));
       if (playerSettings?.sound_enabled !== false) playTone("pop");
     });
 
@@ -359,6 +389,11 @@ export default function QuizPlayPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
+      {justReconnected && (
+        <div className="bg-amber-400 text-amber-950 text-center text-xs font-bold py-1.5">
+          🔄 Reconnected — you're on Question {question.question_index + 1} of {question.total_questions}
+        </div>
+      )}
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
           Q{question.question_index + 1} of {question.total_questions}

@@ -61,3 +61,14 @@ export async function joinSession(sessionId: string, displayName: string): Promi
   if (!row) throw new Error("Could not join this quiz session.");
   return row;
 }
+
+/** Called periodically while a question is live — updates this device's
+ * "last seen" presence and doubles as the auto-advance safety net (the
+ * RPC itself verifies server-side whether the current question's timer
+ * has actually expired; a call before that is always a harmless no-op). */
+export async function heartbeat(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuizPlayer.rpc("quiz_participant_heartbeat", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizParticipantRepository] heartbeat:", error);
+  }
+}

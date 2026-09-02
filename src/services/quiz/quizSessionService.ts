@@ -39,6 +39,7 @@ export async function startQuiz(sessionId: string): Promise<void> {
     phase: "question",
     current_question_index: 0,
     started_at: new Date().toISOString(),
+    question_started_at: new Date().toISOString(),
   });
 }
 
@@ -53,7 +54,11 @@ export async function advanceQuestion(sessionId: string, totalQuestions: number)
     return "ended";
   }
 
-  await sessionRepo.updateSessionPhase(sessionId, { phase: "question", current_question_index: nextIndex });
+  await sessionRepo.updateSessionPhase(sessionId, {
+    phase: "question",
+    current_question_index: nextIndex,
+    question_started_at: new Date().toISOString(),
+  });
   return "question";
 }
 

@@ -127,3 +127,7 @@ export async function submitAnswer(
 ): Promise<SubmitAnswerResult> {
   return answerRepo.submitAnswer(sessionId, questionId, optionId, responseTimeMs);
 }
+
+export async function heartbeat(sessionId: string): Promise<void> {
+  return participantRepo.heartbeat(sessionId);
+}

@@ -104,6 +104,8 @@ export interface QuizSession {
   question_order: string[] | null;
   started_at: string | null;
   ended_at: string | null;
+  /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
+  question_started_at: string | null;
   created_at: string;
 }
 
@@ -117,6 +119,8 @@ export interface QuizParticipant {
   total_response_time_ms: number;
   tab_switch_count: number;
   joined_at: string;
+  /** Updated by that participant's own periodic heartbeat — lets the host see who's actually still connected. */
+  last_seen_at: string | null;
 }
 
 export interface QuizAnswer {
