@@ -282,6 +282,21 @@ export default function QuizBuilderPage() {
     }
   }
 
+  // This same toggle also lives in Settings' quiz list, as an instant-save
+  // switch (no separate Save click) — it edits the exact same
+  // issue_certificate column. Left as a plain field-in-the-form here, this
+  // one only took effect on the next "Save Draft"/"Publish" click, which
+  // reads as "the option doesn't work" if you toggle it and navigate away.
+  // For an already-saved quiz, save it immediately too, same as Settings;
+  // a brand-new unsaved quiz has nothing to save yet, so it just updates
+  // the form as before.
+  async function handleToggleCertificate(next: boolean) {
+    setForm((f) => ({ ...f, issue_certificate: next }));
+    if (savedQuizId) {
+      await updateQuizMeta(savedQuizId, { issue_certificate: next });
+    }
+  }
+
   async function handleSaveDraft() {
     const id = await persist(false);
     if (id && isNew) navigate(ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", id), { replace: true });
@@ -395,7 +410,7 @@ export default function QuizBuilderPage() {
           <input
             type="checkbox"
             checked={form.issue_certificate}
-            onChange={(e) => setForm({ ...form, issue_certificate: e.target.checked })}
+            onChange={(e) => handleToggleCertificate(e.target.checked)}
           />
           🏆 Issue certificate for passing this quiz
         </label>
