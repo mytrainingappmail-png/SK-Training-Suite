@@ -16,7 +16,7 @@ import QuizCertificateButton from "../../components/quiz/QuizCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
 import type { PublicQuizQuestion, SubmitAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
-const REVIEW_VISIBLE_SECONDS = 5 * 60;
+const DEFAULT_REVIEW_VISIBLE_SECONDS = 5 * 60;
 
 interface LocationState {
   participantId?: string;
@@ -41,7 +41,7 @@ export default function QuizPlayPage() {
   const [certificate, setCertificate] = useState<QuizCertificate | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [reviewQuestions, setReviewQuestions] = useState<AnswerReviewQuestion[] | null>(null);
-  const [reviewSecondsLeft, setReviewSecondsLeft] = useState(REVIEW_VISIBLE_SECONDS);
+  const [reviewSecondsLeft, setReviewSecondsLeft] = useState(DEFAULT_REVIEW_VISIBLE_SECONDS);
   const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
   const [endStep, setEndStep] = useState<"splash" | "details">("splash");
   const [justReconnected, setJustReconnected] = useState(false);
@@ -192,10 +192,12 @@ export default function QuizPlayPage() {
   }, [sessionId, session?.phase]);
 
   // Once the trainee moves past the splash into their certificate/answer review,
-  // this screen auto-closes back to the Join Quiz page after a few minutes.
+  // this screen auto-closes back to the Join Quiz page after a few minutes —
+  // admin-configurable in Quiz Settings, defaulting to 5 if never set.
   useEffect(() => {
     if (endStep !== "details") return;
-    setReviewSecondsLeft(REVIEW_VISIBLE_SECONDS);
+    const closeSeconds = (playerSettings?.result_close_minutes ?? 5) * 60;
+    setReviewSecondsLeft(closeSeconds);
     const t = setInterval(() => {
       setReviewSecondsLeft((s) => {
         if (s <= 1) {
@@ -207,7 +209,7 @@ export default function QuizPlayPage() {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [endStep, navigate]);
+  }, [endStep, navigate, playerSettings?.result_close_minutes]);
 
   async function handleSubmit(optionId: string | null) {
     if (!sessionId || !question || answered) return;

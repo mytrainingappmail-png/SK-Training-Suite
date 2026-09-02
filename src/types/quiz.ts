@@ -226,6 +226,12 @@ export interface QuizSettings {
   result_fail_title: string | null;
   result_fail_message: string | null;
   cert_eligibility: CertEligibility;
+  /** One word/quote per line — the falling text on the trainee login/join landing screen. Falls back to a built-in default list when blank. */
+  login_motivational_words: string | null;
+  /** Turns the falling-words effect on the landing screen on/off entirely — independent of the word list itself. */
+  login_words_enabled: boolean;
+  /** How long the post-quiz result screen stays open before auto-closing back to Join Quiz. */
+  result_close_minutes: number;
   updated_at: string;
 }
 
@@ -288,6 +294,7 @@ export interface QuizPlayerSettings {
   result_fail_title: string | null;
   result_fail_message: string | null;
   cert_eligibility: CertEligibility;
+  result_close_minutes: number;
 }
 
 /** The calling participant's own outcome, via get_my_result RPC. */
@@ -308,6 +315,8 @@ export interface QuizPublicBranding {
   login_banner_url: string | null;
   favicon_url: string | null;
   footer_text: string | null;
+  login_motivational_words: string | null;
+  login_words_enabled: boolean;
 }
 
 export interface QuizCertificate {

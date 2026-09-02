@@ -9,6 +9,55 @@ import type { QuizPublicBranding } from "../../types/quiz";
 
 type Mode = "login" | "forgot-request" | "forgot-verify";
 
+// Shown when a company hasn't customized login_motivational_words yet —
+// one per line, admin-editable in Quiz Settings.
+const DEFAULT_MOTIVATIONAL_WORDS = [
+  "Hardwork", "Discipline", "Consistency", "Confidence", "Growth",
+  "Focus", "Excellence", "Dedication", "Learn", "Achieve",
+  "Success", "Persistence", "Ambition", "Passion", "Winner",
+];
+
+function FallingWords({ words }: { words: string[] }) {
+  // A fixed, randomized-looking layout computed once per mount (not on
+  // every render) — each word gets its own horizontal spot, fall
+  // duration, delay and size so the rain reads as organic, not a grid.
+  const [drops] = useState(() =>
+    words.map((word, i) => ({
+      word,
+      left: ((i * 37 + 11) % 100),
+      duration: 14 + ((i * 7) % 10),
+      delay: -((i * 3) % 14),
+      size: 0.8 + ((i % 4) * 0.15),
+      opacity: 0.12 + ((i % 3) * 0.07),
+    }))
+  );
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <style>{`
+        @keyframes quiz-word-fall {
+          0% { transform: translateY(-10vh); }
+          100% { transform: translateY(110vh); }
+        }
+      `}</style>
+      {drops.map((d, i) => (
+        <span
+          key={i}
+          className="absolute top-0 font-bold text-amber-300 whitespace-nowrap select-none"
+          style={{
+            left: `${d.left}%`,
+            fontSize: `${d.size}rem`,
+            opacity: d.opacity,
+            animation: `quiz-word-fall ${d.duration}s linear ${d.delay}s infinite`,
+          }}
+        >
+          {d.word}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function QuizAdminLoginPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
@@ -16,6 +65,7 @@ export default function QuizAdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [view, setView] = useState<"landing" | "admin">("landing");
   const [mode, setMode] = useState<Mode>("login");
   const [identifier, setIdentifier] = useState("");
   const [otp, setOtp] = useState("");
@@ -32,6 +82,10 @@ export default function QuizAdminLoginPage() {
       applyQuizFavicon(b?.favicon_url);
     });
   }, []);
+
+  const motivationalWords = branding?.login_motivational_words
+    ? branding.login_motivational_words.split(/\r?\n|,/).map((w) => w.trim()).filter(Boolean)
+    : DEFAULT_MOTIVATIONAL_WORDS;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,12 +152,67 @@ export default function QuizAdminLoginPage() {
     setConfirmPassword("");
   }
 
+  if (view === "landing") {
+    return (
+      <div
+        className="min-h-screen relative overflow-hidden flex items-center justify-center bg-slate-950 px-4 bg-cover bg-center"
+        style={branding?.login_background_url ? { backgroundImage: `url(${branding.login_background_url})` } : undefined}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-30"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 15%, #6366F1 0%, transparent 35%), radial-gradient(circle at 85% 25%, #F59E0B 0%, transparent 30%), radial-gradient(circle at 50% 90%, #A855F7 0%, transparent 40%)",
+          }}
+        />
+        {branding?.login_words_enabled !== false && <FallingWords words={motivationalWords} />}
+
+        <button
+          onClick={() => setView("admin")}
+          className="absolute top-5 right-5 text-xs font-semibold text-slate-400 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5 bg-slate-900/60 backdrop-blur transition-colors"
+        >
+          Admin →
+        </button>
+
+        <div className="relative w-full max-w-sm text-center">
+          {branding?.brand_logo_url ? (
+            <img src={branding.brand_logo_url} alt="" className="h-16 w-16 object-contain rounded-xl mx-auto mb-4" />
+          ) : (
+            <div className="h-3 w-3 rounded-full bg-amber-400 mx-auto mb-4 animate-pulse" />
+          )}
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">
+            {branding?.brand_name || branding?.company_name || "Live Quiz"}
+          </h1>
+          <p className="text-sm text-slate-400 mt-2">{branding?.brand_tagline || "Test your knowledge. Prove your edge."}</p>
+
+          <button
+            onClick={() => navigate(ROUTES.QUIZ_JOIN)}
+            className="mt-10 w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-amber-950 font-extrabold text-lg py-4 shadow-lg shadow-amber-500/25 transition-all hover:scale-[1.02]"
+          >
+            👤 Join a Quiz
+          </button>
+          <p className="text-xs text-slate-500 mt-4">Get the PIN from your trainer, then tap above</p>
+
+          {branding?.footer_text && (
+            <p className="mt-10 text-center text-[11px] text-slate-600 whitespace-pre-line">{branding.footer_text}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen flex items-center justify-center bg-slate-950 px-4 bg-cover bg-center"
       style={branding?.login_background_url ? { backgroundImage: `url(${branding.login_background_url})` } : undefined}
     >
       <div className="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-slate-800 rounded-2xl p-8">
+        <button
+          onClick={() => setView("landing")}
+          className="text-xs font-semibold text-slate-500 hover:text-slate-300 mb-4 transition-colors"
+        >
+          ← Back
+        </button>
         {branding?.login_banner_url && (
           <img src={branding.login_banner_url} alt="" className="w-full h-28 object-contain rounded-xl mb-5 bg-slate-950/40" />
         )}

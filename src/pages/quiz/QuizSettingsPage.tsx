@@ -191,6 +191,8 @@ export default function QuizSettingsPage() {
         login_banner_url: settings.login_banner_url,
         favicon_url: settings.favicon_url,
         footer_text: settings.footer_text,
+        login_motivational_words: settings.login_motivational_words,
+        login_words_enabled: settings.login_words_enabled,
       });
       setBrandingMessage("Branding saved.");
     } finally {
@@ -291,6 +293,7 @@ export default function QuizSettingsPage() {
         result_improve_message: settings.result_improve_message,
         result_fail_title: settings.result_fail_title,
         result_fail_message: settings.result_fail_message,
+        result_close_minutes: settings.result_close_minutes,
       });
       setMessagesSavedMessage("Result messages saved.");
     } finally {
@@ -501,6 +504,25 @@ export default function QuizSettingsPage() {
               companyId={me.company_id}
               onChange={(url) => setSettings({ ...settings, login_banner_url: url })}
               previewClassName="h-16 w-28 object-contain rounded-lg bg-slate-800 border border-slate-700"
+            />
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+              <input
+                type="checkbox"
+                checked={settings.login_words_enabled}
+                onChange={(e) => setSettings({ ...settings, login_words_enabled: e.target.checked })}
+              />
+              Falling Words / Quotes
+            </label>
+            <p className="text-[11px] text-slate-500 mb-1.5">One word or short quote per line — animates falling behind the "Join a Quiz" button on the landing screen. Leave blank to use a built-in default set.</p>
+            <textarea
+              disabled={!settings.login_words_enabled}
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 font-mono disabled:opacity-40"
+              rows={6}
+              value={settings.login_motivational_words ?? ""}
+              onChange={(e) => setSettings({ ...settings, login_motivational_words: e.target.value })}
+              placeholder={"Hardwork\nDiscipline\nConsistency\nConfidence\nGrowth\n…"}
             />
           </div>
         </div>
@@ -1255,6 +1277,19 @@ export default function QuizSettingsPage() {
               placeholder="Don't worry — review the material and retake the quiz when ready."
             />
           </div>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800">
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Result Screen Auto-Close (minutes)</label>
+          <p className="text-[11px] text-slate-500 mb-1.5">After a trainee sees their result/certificate, the screen auto-returns to Join Quiz after this long.</p>
+          <input
+            type="number"
+            min={1}
+            max={60}
+            className="w-24 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+            value={settings.result_close_minutes}
+            onChange={(e) => setSettings({ ...settings, result_close_minutes: Math.max(1, parseInt(e.target.value, 10) || 5) })}
+          />
         </div>
 
         {messagesSavedMessage && <div className="text-sm text-emerald-300">{messagesSavedMessage}</div>}
