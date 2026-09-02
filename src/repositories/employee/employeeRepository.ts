@@ -74,6 +74,24 @@ export async function updateEmployee(
   return data;
 }
 
+/** For an employee already migrated to real Supabase Auth (auth_user_id
+ * set) — keeps their real login password in sync whenever it's changed
+ * from the admin side (Employee Management's "Reset Password"), since
+ * that flow can't sign in AS the employee to change it directly. Uses a
+ * service-role Edge Function; never callable with just the anon key. */
+export async function syncEmployeeAuthPassword(authUserId: string, newPassword: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("update-employee-auth-password", {
+    body: { authUserId, newPassword },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (data?.success === false) {
+    throw new Error(data.error ?? "Could not update the employee's login password.");
+  }
+}
+
 export async function deleteEmployee(
   id: string
 ): Promise<void> {

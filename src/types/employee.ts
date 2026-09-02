@@ -25,13 +25,19 @@ export interface Employee {
 
   attendance_location_scope: AttendanceLocationScope;
 
+  /** Set once this employee has a real Supabase Auth account (the login-security migration) — null means they still log in via the legacy password column below. */
+  auth_user_id: string | null;
+
+  /** Kept in sync with whatever the employee's current password actually is, migrated or not — see authService.changePassword / employeeService.resetPassword. */
+  password: string | null;
+
   created_at: string;
   updated_at: string;
 }
 
 export type EmployeeForm = Omit<
   Employee,
-  "id" | "created_at" | "updated_at"
+  "id" | "created_at" | "updated_at" | "auth_user_id" | "password"
 > & {
   /**
    * Only present in the create/edit form — never part of the read

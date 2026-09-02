@@ -7,7 +7,7 @@ import { departmentService }  from '../../services/department/departmentService'
 import { designationService } from '../../services/designation/designationService';
 import { loadRoles }          from '../../services/role/roleService';
 import { updateEmployee }     from '../../repositories/employee/employeeRepository';
-import { supabase }           from '../../lib/supabase';
+import { changePassword }     from '../../services/auth/authService';
 
 import type { Company }     from '../../types/company';
 import type { Branch }      from '../../types/branch';
@@ -238,47 +238,24 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   }
   async function handleChangePassword() {
     setPasswordBanner(null);
-
-if (!validatePassword()) return;
-
-if (!user) return;
-    setPasswordBanner(null);
+    if (!validatePassword()) return;
     if (!user) return;
 
-    // Client-side validation
-   
     try {
-      // Fetch current password from DB
-      const { data: emp, error: fetchErr } = await supabase
-        .from('employees')
-        .select('password')
-        .eq('id', user.id)
-        .maybeSingle();
+      const result = await changePassword({
+        employeeId: user.id,
+        currentPassword,
+        newPassword,
+      });
 
-      if (fetchErr || !emp) {
-        setPasswordBanner('Failed to verify current password.');
-        return;
-      }
-      if (emp.password !== currentPassword) {
-        setPasswordErrors({ currentPassword: 'Current password is incorrect.' });
-        return;
-      }
-      if (currentPassword === newPassword) {
-        setPasswordErrors({ newPassword: 'New password must differ from current password.' });
-        return;
-      }
-
-      // Update password and timestamp
-      const { error: updateErr } = await supabase
-        .from('employees')
-        .update({
-          password:             newPassword,
-          password_changed_at:  new Date().toISOString(),
-        })
-        .eq('id', user.id);
-
-      if (updateErr) {
-        setPasswordBanner('Failed to change password. Please try again.');
+      if (!result.success) {
+        if (result.error === 'Current password is incorrect.') {
+          setPasswordErrors({ currentPassword: result.error });
+        } else if (result.error.includes('different from the current password')) {
+          setPasswordErrors({ newPassword: 'New password must differ from current password.' });
+        } else {
+          setPasswordBanner(result.error);
+        }
         return;
       }
 
@@ -290,8 +267,7 @@ if (!user) return;
       setPasswordBanner(
         err instanceof Error ? err.message : 'An unexpected error occurred.'
       );
-    } finally {
-      }
+    }
   }
 
   // ── Read-only display values (resolved from lookup arrays) ──────────────────

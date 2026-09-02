@@ -7,6 +7,7 @@ import {
   updateEmployee,
   deleteEmployee,
   toggleEmployeeStatus,
+  syncEmployeeAuthPassword,
 } from "../../repositories/employee/employeeRepository";
 
 class EmployeeService {
@@ -42,6 +43,13 @@ class EmployeeService {
     }
 
     await deleteEmployee(id);
+  }
+
+  async resetPassword(authUserId: string, newPassword: string): Promise<void> {
+    if (newPassword.length < 6) {
+      throw new Error("Password must be at least 6 characters.");
+    }
+    await syncEmployeeAuthPassword(authUserId, newPassword);
   }
 
   async setStatus(id: string, active: boolean): Promise<void> {

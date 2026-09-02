@@ -159,7 +159,7 @@ function fail(error: string): LoginResult {
   return { success: false, user: null, error };
 }
 
-function internalEmailFor(companyCode: string, employeeCode: string): string {
+export function internalEmailFor(companyCode: string, employeeCode: string): string {
   return `${companyCode.toLowerCase()}.${employeeCode.toLowerCase()}@internal.sktraining`;
 }
 
@@ -318,11 +318,19 @@ export async function changePassword(
   if (!newPassword) {
     return { success: false, error: "New password is required." };
   }
+  if (newPassword.length < 6) {
+    return { success: false, error: "New password must be at least 6 characters." };
+  }
+  if (currentPassword === newPassword) {
+    return {
+      success: false,
+      error: "New password must be different from the current password.",
+    };
+  }
 
-  // Fetch current password to verify before changing
   const { data: emp, error: fetchError } = await supabase
     .from("employees")
-    .select("id, password")
+    .select("id, password, auth_user_id, employee_code, companies(company_code)")
     .eq("id", employeeId)
     .maybeSingle();
 
@@ -330,17 +338,37 @@ export async function changePassword(
     return { success: false, error: "Employee not found." };
   }
 
-  if (emp.password !== currentPassword) {
+  // Migrated employees actually authenticate against real Supabase Auth,
+  // not the legacy password column below — so verifying/changing their
+  // password has to go through it too, or the column ends up saying one
+  // thing while the real login still expects another (the exact bug that
+  // was locking migrated employees out after any password change).
+  if (emp.auth_user_id) {
+    const companiesJoin = emp.companies as { company_code: string } | { company_code: string }[] | null;
+    const companyCode = Array.isArray(companiesJoin) ? companiesJoin[0]?.company_code : companiesJoin?.company_code;
+    if (!companyCode) {
+      return { success: false, error: "Could not resolve your company. Please contact support." };
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: internalEmailFor(companyCode, emp.employee_code as string),
+      password: currentPassword,
+    });
+    if (signInError) {
+      return { success: false, error: "Current password is incorrect." };
+    }
+
+    const { error: updateAuthError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateAuthError) {
+      console.error("[authService] changePassword (auth):", updateAuthError.message);
+      return { success: false, error: "Failed to update password. Please try again." };
+    }
+  } else if (emp.password !== currentPassword) {
     return { success: false, error: "Current password is incorrect." };
   }
 
-  if (emp.password === newPassword) {
-    return {
-      success: false,
-      error: "New password must be different from the current password.",
-    };
-  }
-
+  // Kept in sync either way — still what non-migrated employees actually
+  // log in with, and read/displayed elsewhere for migrated ones too.
   const { error: updateError } = await supabase
     .from("employees")
     .update({
