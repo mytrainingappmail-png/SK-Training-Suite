@@ -25,6 +25,8 @@ export interface CoursePlayerLesson {
   downloadable:    boolean;
   resources:       CoursePlayerResource[];
   completed:       boolean;
+  /** Set only for a 'quiz'-type lesson that has a linked Assessment — this is that module's test. */
+  assessmentId:    string | null;
 }
 
 export interface CoursePlayerModule {
@@ -43,12 +45,17 @@ export interface CoursePlayerCourse {
   courseCode:         string;
   courseName:         string;
   shortDescription:   string;
+  fullDescription:    string;
   thumbnail:          string;
   level:              string;
   durationDays:       number;
   durationHours:      number;
   passingPercentage:  number;
   certificateEnabled: boolean;
+  /** Admin toggle — when true, "Next" is disabled until the current lesson is marked complete (Back is never gated). */
+  requireCompletionBeforeNext: boolean;
+  /** Admin toggle — when true, a module's quiz-lesson (if it has one) must be passed before the next module unlocks. */
+  testCompulsoryAfterModule: boolean;
   modules:            CoursePlayerModule[];
 }
 

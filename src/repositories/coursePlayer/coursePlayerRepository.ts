@@ -44,6 +44,7 @@ interface SBLesson {
   display_order:    number;
   downloadable:     boolean;
   learning_resources: SBResource[] | null;
+  assessments:      { id: string } | { id: string }[] | null;
 }
 
 interface SBModule {
@@ -62,12 +63,15 @@ interface SBCourse {
   course_code:         string;
   course_name:         string;
   short_description:   string;
+  full_description:    string;
   thumbnail:           string;
   level:               string;
   duration_days:       number;
   duration_hours:      number;
   passing_percentage:  number;
   certificate_enabled: boolean;
+  require_completion_before_next: boolean;
+  test_compulsory_after_module:   boolean;
   modules:             SBModule[] | null;
 }
 
@@ -103,6 +107,7 @@ function normaliseResource(r: SBResource): CoursePlayerResource {
 }
 
 function normaliseLesson(l: SBLesson, completedIds: Set<string>): CoursePlayerLesson {
+  const assessment = unwrap(l.assessments);
   return {
     id:              l.id,
     lessonTitle:     l.lesson_title,
@@ -116,6 +121,7 @@ function normaliseLesson(l: SBLesson, completedIds: Set<string>): CoursePlayerLe
     resources:       (l.learning_resources ?? []).map(normaliseResource)
                        .sort((a, b) => a.displayOrder - b.displayOrder),
     completed:       completedIds.has(l.id),
+    assessmentId:    assessment?.id ?? null,
   };
 }
 
@@ -140,12 +146,15 @@ function normaliseCourse(c: SBCourse, completedIds: Set<string>): CoursePlayerCo
     courseCode:         c.course_code         ?? '',
     courseName:         c.course_name,
     shortDescription:   c.short_description   ?? '',
+    fullDescription:    c.full_description    ?? '',
     thumbnail:          c.thumbnail           ?? '',
     level:              c.level               ?? 'beginner',
     durationDays:       c.duration_days       ?? 0,
     durationHours:      c.duration_hours      ?? 0,
     passingPercentage:  c.passing_percentage  ?? 50,
     certificateEnabled: c.certificate_enabled ?? false,
+    requireCompletionBeforeNext: c.require_completion_before_next ?? false,
+    testCompulsoryAfterModule:   c.test_compulsory_after_module   ?? false,
     modules:            (c.modules ?? [])
                           .map((m) => normaliseModule(m, completedIds))
                           .sort((a, b) => a.moduleOrder - b.moduleOrder),
@@ -172,12 +181,15 @@ export async function getCoursePlayerData(
          course_code,
          course_name,
          short_description,
+         full_description,
          thumbnail,
          level,
          duration_days,
          duration_hours,
          passing_percentage,
          certificate_enabled,
+         require_completion_before_next,
+         test_compulsory_after_module,
          modules (
            id,
            module_code,
@@ -204,6 +216,9 @@ export async function getCoursePlayerData(
                description,
                display_order,
                downloadable
+             ),
+             assessments (
+               id
              )
            )
          )
@@ -220,20 +235,16 @@ export async function getCoursePlayerData(
   const sbCourse = unwrap(row.courses);
   if (!sbCourse) throw new Error('Course not found.');
 
-  // 2. Fetch completed lesson IDs for this employee + course
-  const allLessonIds: string[] = (sbCourse.modules ?? [])
-    .flatMap((m) => (m.lessons ?? []).map((l) => l.id));
-
+  // 2. Fetch completed lesson IDs for this enrollment from lesson_progress
   const completedIds = new Set<string>();
 
-  if (allLessonIds.length > 0) {
-    // assessment_results tracks lesson completion via assessment_assignments
-    // Use learning_path_progress or a dedicated lesson progress table if available.
-    // For now derive from enrollment completion_percentage being 100 as a safe fallback.
-    // Actual lesson-level progress requires a lesson_progress table (not yet migrated).
-    // We leave completedIds empty — UI shows 0% per lesson until that table exists.
-    void allLessonIds; // prevent unused-variable warning
-  }
+  const { data: progressRows, error: progressErr } = await supabase
+    .from('lesson_progress')
+    .select('lesson_id')
+    .eq('enrollment_id', enrollmentId);
+
+  if (progressErr) throw new Error(progressErr.message);
+  (progressRows ?? []).forEach((p) => completedIds.add(p.lesson_id as string));
 
   const enrollment: CoursePlayerEnrollment = {
     enrollmentId:         row.id,
@@ -250,9 +261,19 @@ export async function getCoursePlayerData(
 
 export async function markLessonComplete(
   enrollmentId: string,
-  _lessonId:    string,
+  lessonId:     string,
+  companyId:    string,
   percentage:   number,
 ): Promise<void> {
+  const { error: progressErr } = await supabase
+    .from('lesson_progress')
+    .upsert(
+      { enrollment_id: enrollmentId, lesson_id: lessonId, company_id: companyId },
+      { onConflict: 'enrollment_id,lesson_id' },
+    );
+
+  if (progressErr) throw new Error(progressErr.message);
+
   const { error } = await supabase
     .from('enrollments')
     .update({
@@ -263,4 +284,25 @@ export async function markLessonComplete(
     .eq('id', enrollmentId);
 
   if (error) throw new Error(error.message);
+}
+
+// Returns the subset of `assessmentIds` that this employee has PASSED at
+// least once — used to gate module progression when
+// `testCompulsoryAfterModule` is on.
+export async function getPassedAssessmentIds(
+  employeeId:    string,
+  assessmentIds: string[],
+): Promise<Set<string>> {
+  if (assessmentIds.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from('assessment_results')
+    .select('assessment_id')
+    .eq('employee_id', employeeId)
+    .eq('passed', true)
+    .in('assessment_id', assessmentIds);
+
+  if (error) throw new Error(error.message);
+
+  return new Set((data ?? []).map((r) => r.assessment_id as string));
 }

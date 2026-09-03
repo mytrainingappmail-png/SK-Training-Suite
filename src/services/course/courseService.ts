@@ -26,6 +26,8 @@ function toCourseForm(course: Course): CourseForm {
     duration_hours: course.duration_hours,
     passing_percentage: course.passing_percentage,
     certificate_enabled: course.certificate_enabled,
+    require_completion_before_next: course.require_completion_before_next,
+    test_compulsory_after_module: course.test_compulsory_after_module,
     display_order: course.display_order,
     active: course.active,
     created_by: course.created_by,

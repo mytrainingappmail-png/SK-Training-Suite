@@ -461,6 +461,8 @@ function CourseModal({
           duration_hours:      editing.duration_hours,
           passing_percentage:  editing.passing_percentage,
           certificate_enabled: editing.certificate_enabled,
+          require_completion_before_next: editing.require_completion_before_next,
+          test_compulsory_after_module:   editing.test_compulsory_after_module,
           display_order:       editing.display_order,
           active:              editing.active,
           created_by:          editing.created_by,
@@ -772,6 +774,33 @@ function CourseModal({
                 <div>
                   <p className="text-sm font-medium text-slate-700">Active</p>
                   <p className="text-xs text-slate-500">Course is published and available</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Progression gating — both optional, off by default */}
+            <div className="flex flex-wrap gap-6 rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <label className="flex cursor-pointer items-center gap-3">
+                <Toggle
+                  on={form.require_completion_before_next}
+                  onChange={() => field("require_completion_before_next", !form.require_completion_before_next)}
+                  disabled={saving}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Require Completion Before Next</p>
+                  <p className="text-xs text-slate-500">Trainee must mark a page complete before "Next" unlocks (Back always works)</p>
+                </div>
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-3">
+                <Toggle
+                  on={form.test_compulsory_after_module}
+                  onChange={() => field("test_compulsory_after_module", !form.test_compulsory_after_module)}
+                  disabled={saving}
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Test Compulsory After Module</p>
+                  <p className="text-xs text-slate-500">Trainee must pass a module's quiz lesson before the next module unlocks</p>
                 </div>
               </label>
             </div>

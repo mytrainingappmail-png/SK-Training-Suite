@@ -8,11 +8,12 @@
 // are computed client-side from the data this service already returns.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { loadCoursePlayer, completeLesson } from '../../services/coursePlayer/coursePlayerService';
+import { loadCoursePlayer, completeLesson, loadPassedAssessmentIds } from '../../services/coursePlayer/coursePlayerService';
 import { getCurrentUser }                   from '../../services/auth/session';
 import { loadCompany }                      from '../../services/company/companyService';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import CardPagination from '../shared/CardPagination';
+import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type {
   CoursePlayerData,
@@ -75,6 +76,17 @@ function CompletedPill() {
         <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
       </svg>
       Done
+    </span>
+  );
+}
+
+function LockedPill() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+      <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+      </svg>
+      Locked
     </span>
   );
 }
@@ -309,6 +321,8 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   const [cardsPerPage,   setCardsPerPage]   = useState(12);
   const [modulesPage,    setModulesPage]    = useState(0);
   const [lessonsPage,    setLessonsPage]    = useState(0);
+  const [passedAssessmentIds, setPassedAssessmentIds] = useState<Set<string>>(new Set());
+  const [activeQuizLesson, setActiveQuizLesson]        = useState<CoursePlayerLesson | null>(null);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -340,6 +354,14 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   const hasNext         = currentIndex < allLessons.length - 1;
   const completedCount  = allLessons.filter((l) => l.completed).length;
 
+  const nextLessonForGate = hasNext ? allLessons[currentIndex + 1] : null;
+  const nextLessonLocked  = !!nextLessonForGate && isLessonLocked(nextLessonForGate);
+  const nextLockedReason  = !nextLessonLocked
+    ? ''
+    : data?.course.requireCompletionBeforeNext && activeLesson && !activeLesson.completed
+      ? 'Mark this page complete to continue.'
+      : 'Pass this module\'s test to continue.';
+
   // Resume Learning — first incomplete lesson in order, or the last lesson
   // if everything is already complete.
   const resumeLesson = useMemo(() => {
@@ -369,6 +391,15 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
         // Land on the Modules grid by default — "Continue Learning"
         // below jumps straight into the resume lesson for anyone who
         // just wants to pick up where they left off.
+        const assessmentIds = d.course.modules
+          .flatMap((m) => m.lessons)
+          .map((l) => l.assessmentId)
+          .filter((id): id is string => !!id);
+        if (assessmentIds.length > 0) {
+          loadPassedAssessmentIds(user.id, assessmentIds)
+            .then(setPassedAssessmentIds)
+            .catch((err: unknown) => console.error(err));
+        }
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load course.');
@@ -376,6 +407,60 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
       })
       .finally(() => setLoading(false));
   }, [enrollmentId, user?.id]);
+
+  // A module's test is "passed" if it has no quiz lesson at all (nothing to
+  // gate on), or its quiz lesson's assessment has been passed at least once.
+  function moduleQuizLesson(mod: CoursePlayerModule): CoursePlayerLesson | null {
+    return mod.lessons.find((l) => l.lessonType === 'quiz' && l.assessmentId) ?? null;
+  }
+
+  function moduleTestPassed(mod: CoursePlayerModule): boolean {
+    const quiz = moduleQuizLesson(mod);
+    if (!quiz || !quiz.assessmentId) return true;
+    return passedAssessmentIds.has(quiz.assessmentId);
+  }
+
+  // Whether `lesson` is reachable yet, given the course's two optional
+  // gates. Back navigation is never affected by this — only forward access.
+  function isLessonLocked(lesson: CoursePlayerLesson): boolean {
+    if (!data) return false;
+    const idx = allLessons.findIndex((l) => l.id === lesson.id);
+    if (idx <= 0) return false;
+
+    if (data.course.requireCompletionBeforeNext) {
+      if (allLessons.slice(0, idx).some((l) => !l.completed)) return true;
+    }
+
+    if (data.course.testCompulsoryAfterModule) {
+      const lessonModuleIdx = data.course.modules.findIndex((m) => m.lessons.some((l) => l.id === lesson.id));
+      for (let i = 0; i < lessonModuleIdx; i++) {
+        if (!moduleTestPassed(data.course.modules[i])) return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Whether the whole module is done enough (per the active gates) to move
+  // on to the next module.
+  function canAdvanceFromModule(mod: CoursePlayerModule): boolean {
+    if (!data) return true;
+    if (data.course.requireCompletionBeforeNext && !moduleCompleted(mod)) return false;
+    if (data.course.testCompulsoryAfterModule && !moduleTestPassed(mod)) return false;
+    return true;
+  }
+
+  // Whether `mod` itself is reachable yet — true only when some earlier
+  // module hasn't cleared the active gates.
+  function isModuleLocked(mod: CoursePlayerModule): boolean {
+    if (!data) return false;
+    const idx = data.course.modules.findIndex((m) => m.id === mod.id);
+    if (idx <= 0) return false;
+    for (let i = 0; i < idx; i++) {
+      if (!canAdvanceFromModule(data.course.modules[i])) return true;
+    }
+    return false;
+  }
 
   function selectLesson(mod: CoursePlayerModule, lesson: CoursePlayerLesson) {
     setSelectedModule(mod);
@@ -396,6 +481,11 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
     if (mod) selectLesson(mod, prev);
   }
 
+  // Note: deliberately doesn't re-check isLessonLocked here — the Next
+  // button (its only normal caller) is already disabled while locked, and
+  // handleMarkComplete (which also calls this right after marking the
+  // current lesson complete) does its own gate check against the
+  // just-updated completion state instead of this stale render's data.
   function goNext() {
     if (!hasNext || !data) return;
     const next = allLessons[currentIndex + 1];
@@ -418,20 +508,59 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   }
 
   function handleLaunchQuiz(lesson: CoursePlayerLesson) {
-    if (onLaunchQuiz) {
+    if (lesson.assessmentId) {
+      setActiveQuizLesson(lesson);
+    } else if (onLaunchQuiz) {
       onLaunchQuiz(lesson);
     } else {
       showToast('Quiz launch is handled by your training administrator.');
     }
   }
 
+  async function handleQuizFinished() {
+    const quizLesson = activeQuizLesson;
+    setActiveQuizLesson(null);
+    if (!quizLesson || !user?.id || !data) return;
+
+    const { assessmentId } = quizLesson;
+    if (!assessmentId) return;
+
+    const passed = await loadPassedAssessmentIds(user.id, [assessmentId]);
+    setPassedAssessmentIds((prev) => new Set([...prev, ...passed]));
+
+    // A passed test also marks its lesson complete, so it satisfies the
+    // "complete before next" gate without a separate manual step.
+    if (passed.has(assessmentId) && !quizLesson.completed) {
+      try {
+        const pct = await completeLesson(enrollmentId, quizLesson.id, user.companyId, allLessons.length, completedCount);
+        setLocalPct(pct);
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            course: {
+              ...prev.course,
+              modules: prev.course.modules.map((m) => ({
+                ...m,
+                lessons: m.lessons.map((l) => (l.id === quizLesson.id ? { ...l, completed: true } : l)),
+              })),
+            },
+          };
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
   async function handleMarkComplete() {
-    if (!activeLesson || !data || completing) return;
+    if (!activeLesson || !data || !user?.id || completing) return;
     setCompleting(true);
     try {
       const pct = await completeLesson(
         enrollmentId,
         activeLesson.id,
+        user.companyId,
         allLessons.length,
         completedCount,
       );
@@ -453,7 +582,19 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
         };
       });
       showToast('Page marked complete');
-      if (hasNext) goNext();
+      // The lesson just completed satisfies the "complete before next" gate
+      // for the immediate next lesson by definition — only the module-test
+      // gate (crossing into a module whose predecessor's test isn't passed
+      // yet) can still block auto-advancing here.
+      const next = hasNext ? allLessons[currentIndex + 1] : null;
+      if (next) {
+        const currentModule = data.course.modules.find((m) => m.lessons.some((l) => l.id === activeLesson.id));
+        const nextModule    = data.course.modules.find((m) => m.lessons.some((l) => l.id === next.id));
+        const crossingModule = !!currentModule && !!nextModule && currentModule.id !== nextModule.id;
+        const blockedByTest = data.course.testCompulsoryAfterModule && crossingModule && currentModule && !moduleTestPassed(currentModule);
+        if (!blockedByTest) goNext();
+        else showToast('Pass this module\'s test to continue.');
+      }
     } catch (err) {
       console.error(err);
       showToast('Failed to save progress');
@@ -542,6 +683,12 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
             {/* ── Level 1: Modules grid, scoped to this course only ── */}
             {view === 'modules' && (
               <>
+                {course.fullDescription && (
+                  <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
+                    <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">About this course</h3>
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">{course.fullDescription}</p>
+                  </div>
+                )}
                 <h2 className="mb-4 text-lg font-bold text-slate-800">Modules</h2>
                 {course.modules.length === 0 ? (
                   <EmptyState text="No modules available for this course yet." />
@@ -550,6 +697,7 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     {course.modules.slice(modulesPage * cardsPerPage, (modulesPage + 1) * cardsPerPage).map((mod) => {
                       const isModuleComplete = moduleCompleted(mod);
+                      const locked = isModuleLocked(mod);
                       return (
                         <ThumbnailCard
                           key={mod.id}
@@ -557,7 +705,8 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                           subtitle={`${mod.lessons.length} lesson${mod.lessons.length === 1 ? '' : 's'} · ${mod.estimatedMinutes} min`}
                           thumbnailUrl={mod.thumbnail}
                           cornerTag={<OrderPill order={mod.moduleOrder} />}
-                          badge={isModuleComplete ? <CompletedPill /> : undefined}
+                          badge={locked ? <LockedPill /> : isModuleComplete ? <CompletedPill /> : undefined}
+                          disabled={locked}
                           onClick={() => { setSelectedModule(mod); setLessonsPage(0); setView('lessons'); }}
                         />
                       );
@@ -596,17 +745,21 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   ) : (
                     <>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                      {selectedModule.lessons.slice(lessonsPage * cardsPerPage, (lessonsPage + 1) * cardsPerPage).map((lesson) => (
-                        <ThumbnailCard
-                          key={lesson.id}
-                          title={lesson.lessonTitle}
-                          subtitle={`${lesson.lessonType} · ${lesson.durationMinutes} min`}
-                          thumbnailUrl={lesson.thumbnail}
-                          cornerTag={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"><LessonIcon type={lesson.lessonType} /></span>}
-                          badge={lesson.completed ? <CompletedPill /> : undefined}
-                          onClick={() => selectLesson(selectedModule, lesson)}
-                        />
-                      ))}
+                      {selectedModule.lessons.slice(lessonsPage * cardsPerPage, (lessonsPage + 1) * cardsPerPage).map((lesson) => {
+                        const locked = isLessonLocked(lesson);
+                        return (
+                          <ThumbnailCard
+                            key={lesson.id}
+                            title={lesson.lessonTitle}
+                            subtitle={`${lesson.lessonType} · ${lesson.durationMinutes} min`}
+                            thumbnailUrl={lesson.thumbnail}
+                            cornerTag={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"><LessonIcon type={lesson.lessonType} /></span>}
+                            badge={locked ? <LockedPill /> : lesson.completed ? <CompletedPill /> : undefined}
+                            disabled={locked}
+                            onClick={() => selectLesson(selectedModule, lesson)}
+                          />
+                        );
+                      })}
                     </div>
                     <CardPagination
                       page={lessonsPage}
@@ -618,10 +771,18 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                 </div>
 
                 {nextModuleAfter(selectedModule) && (
-                  <div className="mt-6 flex justify-end">
+                  <div className="mt-6 flex flex-col items-end gap-2">
+                    {!canAdvanceFromModule(selectedModule) && (
+                      <p className="text-xs font-medium text-slate-500">
+                        {data.course.testCompulsoryAfterModule && !moduleTestPassed(selectedModule)
+                          ? 'Pass this module\'s test to unlock the next module.'
+                          : 'Complete every lesson in this module to unlock the next one.'}
+                      </p>
+                    )}
                     <button
                       onClick={() => { setSelectedModule(nextModuleAfter(selectedModule)); setLessonsPage(0); }}
-                      className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95"
+                      disabled={!canAdvanceFromModule(selectedModule)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-yellow-400 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:active:scale-100"
                     >
                       Next Module: {nextModuleAfter(selectedModule)?.moduleName}
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -681,7 +842,8 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
 
                     <button
                       onClick={goNext}
-                      disabled={!hasNext}
+                      disabled={!hasNext || nextLessonLocked}
+                      title={nextLessonLocked ? nextLockedReason : undefined}
                       className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-40 active:scale-95"
                     >
                       {enrollment.status === 'COMPLETED' ? 'Review Next' : 'Next'}
@@ -691,6 +853,10 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                     </button>
                   </div>
                 </div>
+
+                {nextLessonLocked && (
+                  <p className="mt-2 text-right text-xs font-medium text-slate-500">{nextLockedReason}</p>
+                )}
 
                 {/* course completion banner */}
                 {localPct >= 100 && (
@@ -714,6 +880,18 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {activeQuizLesson?.assessmentId && user?.id && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
+            <AssessmentPlayer
+              assessmentId={activeQuizLesson.assessmentId}
+              employeeId={user.id}
+              onFinish={handleQuizFinished}
+            />
+          </div>
         </div>
       )}
     </div>

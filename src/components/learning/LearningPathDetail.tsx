@@ -34,8 +34,20 @@ function Skeleton() {
 interface PathCourseRow {
   courseId: string;
   sequenceNo: number;
+  unlockPrevious: boolean;
   course: Course | null;
   enrollment: MyCourse | null;
+}
+
+function LockedPill() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+      <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+      </svg>
+      Locked
+    </span>
+  );
 }
 
 function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDetailProps) {
@@ -64,6 +76,7 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
           .map((pc) => ({
             courseId: pc.course_id,
             sequenceNo: pc.sequence_no,
+            unlockPrevious: pc.unlock_previous,
             course: courseById.get(pc.course_id) ?? null,
             enrollment: enrollmentByCourseId.get(pc.course_id) ?? null,
           }));
@@ -73,8 +86,16 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
       .finally(() => setLoading(false));
   }, [learningPathId, user?.id]);
 
+  function isPathLocked(row: PathCourseRow): boolean {
+    if (!row.unlockPrevious) return false;
+    const idx = rows.findIndex((r) => r.courseId === row.courseId);
+    if (idx <= 0) return false;
+    const prev = rows[idx - 1];
+    return prev.enrollment?.status !== 'COMPLETED';
+  }
+
   function openCourse(row: PathCourseRow) {
-    if (!row.enrollment) return;
+    if (!row.enrollment || isPathLocked(row)) return;
     navigate(ROUTES.COURSE_PLAYER.replace(':courseId', row.enrollment.enrollmentId));
   }
 
@@ -104,17 +125,27 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
 
         {!loading && !error && rows.length > 0 && (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((row) => (
-              <ThumbnailCard
-                key={row.courseId}
-                title={row.course?.course_name ?? 'Untitled Course'}
-                subtitle={row.enrollment ? `${row.enrollment.completionPercentage}% complete` : 'Not assigned to you yet'}
-                thumbnailUrl={row.course?.thumbnail ?? row.enrollment?.thumbnail}
-                cornerTag={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[11px] font-bold text-white">{row.sequenceNo}</span>}
-                disabled={!row.enrollment}
-                onClick={() => openCourse(row)}
-              />
-            ))}
+            {rows.map((row) => {
+              const locked = isPathLocked(row);
+              return (
+                <ThumbnailCard
+                  key={row.courseId}
+                  title={row.course?.course_name ?? 'Untitled Course'}
+                  subtitle={
+                    locked
+                      ? 'Complete the previous course to unlock'
+                      : row.enrollment
+                        ? `${row.enrollment.completionPercentage}% complete`
+                        : 'Not assigned to you yet'
+                  }
+                  thumbnailUrl={row.course?.thumbnail ?? row.enrollment?.thumbnail}
+                  cornerTag={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[11px] font-bold text-white">{row.sequenceNo}</span>}
+                  badge={locked ? <LockedPill /> : undefined}
+                  disabled={!row.enrollment || locked}
+                  onClick={() => openCourse(row)}
+                />
+              );
+            })}
           </div>
         )}
       </div>
