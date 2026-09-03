@@ -30,6 +30,20 @@ function IconPdf({ className = 'h-5 w-5' }: { className?: string }) {
 function IconDownload({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>);
 }
+function IconScale({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M12 3l-5.5 3M12 3l5.5 3m-11 0-3 6a4 4 0 0 0 8 0l-3-6h-2Zm11 0-3 6a4 4 0 0 0 8 0l-3-6h-2Z" /></svg>);
+}
+function IconCheckCircle({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>);
+}
+function IconX({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>);
+}
+function IconQuestion({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 17.25h.008v.008H12v-.008Z" /></svg>);
+}
+
+const MAX_COMPARE = 3;
 
 // Rotating gradient palette so the project grid reads as colorful and
 // distinct, even with no per-project photo available.
@@ -62,6 +76,32 @@ function Projects() {
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [completedProjectIds, setCompletedProjectIds] = useState<Set<string>>(new Set());
   const [markingComplete, setMarkingComplete] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [showCompareView, setShowCompareView] = useState(false);
+  const [compareToast, setCompareToast] = useState('');
+
+  function toggleCompareMode() {
+    setCompareMode((v) => !v);
+    setCompareIds([]);
+    setShowCompareView(false);
+  }
+
+  function toggleCompareSelection(projectId: string) {
+    setCompareIds((prev) => {
+      if (prev.includes(projectId)) return prev.filter((id) => id !== projectId);
+      if (prev.length >= MAX_COMPARE) {
+        setCompareToast(`You can compare up to ${MAX_COMPARE} projects at a time.`);
+        setTimeout(() => setCompareToast(''), 2200);
+        return prev;
+      }
+      return [...prev, projectId];
+    });
+  }
+
+  const compareProjects = compareIds
+    .map((id) => projects.find((p) => p.projectId === id))
+    .filter((p): p is Project => !!p);
 
   function toggleFaq(key: string) {
     setOpenFaqKeys((prev) => {
@@ -106,6 +146,159 @@ function Projects() {
   const openProject = projects.find((p) => p.projectId === openProjectId) ?? null;
   const openProjectIndex = projects.findIndex((p) => p.projectId === openProjectId);
   const openGradient = GRADIENTS[Math.max(openProjectIndex, 0) % GRADIENTS.length];
+
+  if (showCompareView && compareProjects.length >= 2) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={() => setShowCompareView(false)}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800"
+          >
+            <IconArrowLeft className="h-3.5 w-3.5" /> Back to Projects
+          </button>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
+            <IconScale className="h-3.5 w-3.5" /> Comparing {compareProjects.length} Projects
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="w-40 bg-slate-50 p-4 text-left align-bottom text-xs font-semibold uppercase tracking-wide text-slate-400"> </th>
+                {compareProjects.map((p, i) => (
+                  <th key={p.projectId} className="min-w-[220px] border-l border-slate-100 p-4 text-left align-top">
+                    <div className="relative overflow-hidden rounded-xl">
+                      <div className={`relative flex h-28 w-full items-end bg-gradient-to-br ${GRADIENTS[projects.findIndex((x) => x.projectId === p.projectId) % GRADIENTS.length]} p-3`}>
+                        {p.thumbnail ? (
+                          <img src={p.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                        ) : (
+                          <IconBuilding className="absolute right-3 top-3 h-8 w-8 text-white/50" />
+                        )}
+                        <button
+                          onClick={() => setCompareIds((prev) => prev.filter((id) => id !== p.projectId))}
+                          aria-label="Remove from comparison"
+                          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow transition hover:bg-white"
+                        >
+                          <IconX className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="relative z-10 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white">#{i + 1}</span>
+                      </div>
+                    </div>
+                    <p className="mt-2 font-bold leading-snug text-slate-800">{p.projectName}</p>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr>
+                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Overview</td>
+                {compareProjects.map((p) => (
+                  <td key={p.projectId} className="border-l border-slate-100 p-4 align-top text-slate-600">
+                    {p.shortDescription || <span className="text-slate-300">—</span>}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Brochures</td>
+                {compareProjects.map((p) => (
+                  <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
+                    {p.brochures.length === 0 ? (
+                      <span className="text-slate-300">None available</span>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {p.brochures.map((b) => (
+                          <a
+                            key={b.resourceId}
+                            href={b.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:underline"
+                          >
+                            <IconPdf className="h-3.5 w-3.5 flex-shrink-0" /> {b.title || 'Download Brochure'}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Topics Covered</td>
+                {compareProjects.map((p) => {
+                  const pages = p.sections.filter((s) => s.section_type === 'page');
+                  return (
+                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
+                      {pages.length === 0 ? (
+                        <span className="text-slate-300">—</span>
+                      ) : (
+                        <ul className="space-y-1 text-xs text-slate-600">
+                          {pages.map((s) => <li key={s.id} className="flex items-start gap-1.5"><span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-indigo-400" />{s.title}</li>)}
+                        </ul>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr>
+                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">FAQs</td>
+                {compareProjects.map((p) => {
+                  const faqCount = p.sections.filter((s) => s.section_type === 'faq').reduce((sum, s) => sum + s.faq_items.length, 0);
+                  return (
+                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
+                      {faqCount === 0 ? (
+                        <span className="text-slate-300">—</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-600">
+                          <IconQuestion className="h-3.5 w-3.5" /> {faqCount} question{faqCount === 1 ? '' : 's'} answered
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr>
+                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Mandatory Test</td>
+                {compareProjects.map((p) => {
+                  const hasTest = p.sections.some((s) => s.section_type === 'test');
+                  return (
+                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
+                      {hasTest ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                          <IconCheckCircle className="h-3.5 w-3.5" /> Required
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">Not required</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr>
+                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Your Progress</td>
+                {compareProjects.map((p) => {
+                  const done = completedProjectIds.has(p.projectId);
+                  return (
+                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
+                      {done ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          <IconCheckCircle className="h-3.5 w-3.5" /> Completed
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Not started</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   if (openProject) {
     return (
@@ -289,14 +482,31 @@ function Projects() {
 
     <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <input
-          className="w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+          className="min-w-[200px] flex-1 rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
           placeholder="Search by project name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <button
+          onClick={toggleCompareMode}
+          className={`inline-flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm transition active:scale-95 ${
+            compareMode
+              ? 'bg-slate-800 text-white hover:bg-slate-900'
+              : 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white hover:shadow-md'
+          }`}
+        >
+          {compareMode ? <IconX className="h-4 w-4" /> : <IconScale className="h-4 w-4" />}
+          {compareMode ? 'Cancel Compare' : 'Compare Projects'}
+        </button>
       </div>
+
+      {compareMode && (
+        <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-700">
+          Pick up to {MAX_COMPARE} projects to compare side by side — tap a card to select it.
+        </div>
+      )}
 
       {error && (
         <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>
@@ -311,26 +521,66 @@ function Projects() {
       )}
 
       {!loading && !error && filtered.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((project) => (
-            <ThumbnailCard
-              key={project.projectId}
-              title={project.projectName}
-              subtitle={project.shortDescription}
-              thumbnailUrl={project.thumbnail}
-              onClick={() => setOpenProjectId(project.projectId)}
-            >
-              {project.brochures.length > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500">
-                  <IconPdf className="h-3 w-3" /> {project.brochures.length} brochure{project.brochures.length === 1 ? '' : 's'}
-                </span>
-              )}
-            </ThumbnailCard>
-          ))}
+        <div className={`grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 ${compareMode ? 'pb-20' : ''}`}>
+          {filtered.map((project) => {
+            const selected = compareIds.includes(project.projectId);
+            const selectionOrder = compareIds.indexOf(project.projectId);
+            return (
+              <div key={project.projectId} className={`w-full [&>button]:w-full ${selected ? 'rounded-2xl ring-2 ring-indigo-500' : ''}`}>
+                <ThumbnailCard
+                  title={project.projectName}
+                  subtitle={project.shortDescription}
+                  thumbnailUrl={project.thumbnail}
+                  onClick={() => compareMode ? toggleCompareSelection(project.projectId) : setOpenProjectId(project.projectId)}
+                  badge={selected ? (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white shadow">
+                      {selectionOrder + 1}
+                    </span>
+                  ) : undefined}
+                >
+                  {project.brochures.length > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500">
+                      <IconPdf className="h-3 w-3" /> {project.brochures.length} brochure{project.brochures.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </ThumbnailCard>
+              </div>
+            );
+          })}
         </div>
       )}
 
     </div>
+
+    {compareMode && compareIds.length > 0 && (
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {compareProjects.map((p) => (
+              <span key={p.projectId} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-3 pr-1.5 text-xs font-semibold text-slate-700">
+                {p.projectName}
+                <button onClick={() => toggleCompareSelection(p.projectId)} aria-label="Remove" className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600">
+                  <IconX className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowCompareView(true)}
+            disabled={compareIds.length < 2}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <IconScale className="h-4 w-4" /> Compare {compareIds.length > 0 ? `(${compareIds.length})` : ''}
+          </button>
+        </div>
+      </div>
+    )}
+
+    {compareToast && (
+      <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+        {compareToast}
+      </div>
+    )}
     </div>
   );
 }
