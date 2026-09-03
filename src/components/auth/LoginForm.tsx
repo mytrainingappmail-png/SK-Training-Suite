@@ -196,6 +196,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, in
   const navigate = useNavigate();
   const { refresh } = useAuthorization();
   const [companyCode, setCompanyCode] = useState(initialCompanyCode ?? '');
+  // Company Code is optional for a regular employee — kept collapsed by
+  // default so the common case is just Employee ID + Password, but
+  // starts open when a company-branded link (/:companyCode) pre-fills it,
+  // or once someone types into it directly.
+  const [showCompanyCode, setShowCompanyCode] = useState(!!initialCompanyCode?.trim());
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -218,13 +223,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, in
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("LOGIN BUTTON CLICKED");
     if (loading) return;
 
-    if (!companyCode.trim()) {
-      setErrorMessage('Company Code is required.');
-      return;
-    }
     if (!employeeId.trim()) {
       setErrorMessage('Employee ID is required.');
       return;
@@ -271,16 +271,6 @@ navigate('/dashboard', { replace: true });
 
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <InputField
-          id="companyCode"
-          label="Company Code"
-          placeholder="Enter company code"
-          value={companyCode}
-          onChange={(v) => { setCompanyCode(v); setErrorMessage(null); onCompanyCodeChange?.(v); }}
-          disabled={loading}
-          accentColor={accentColor}
-        />
-
-        <InputField
           id="employeeId"
           label="Employee ID"
           placeholder="Enter employee ID"
@@ -312,6 +302,26 @@ navigate('/dashboard', { replace: true });
             </button>
           }
         />
+
+        {showCompanyCode ? (
+          <InputField
+            id="companyCode"
+            label="Company Code (optional)"
+            placeholder="Only needed if your admin asked for it"
+            value={companyCode}
+            onChange={(v) => { setCompanyCode(v); setErrorMessage(null); onCompanyCodeChange?.(v); }}
+            disabled={loading}
+            accentColor={accentColor}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowCompanyCode(true)}
+            className="text-xs font-medium text-slate-400 hover:text-white transition-colors duration-200"
+          >
+            + Have a Company Code? (usually only needed by admins)
+          </button>
+        )}
 
         {errorMessage !== null && (
           <div

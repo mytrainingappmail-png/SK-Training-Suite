@@ -131,11 +131,14 @@ function MyCourses() {
         statValue={`${completedCount}/${courses.length}`}
       />
 
-    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div className="rounded-2xl border-2 border-slate-200 bg-white p-8 shadow-sm">
 
-      <div className="mb-6">
+      <div className="mb-6 relative">
+        <svg className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
         <input
-          className="w-full rounded-xl border p-3"
+          className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-400/20"
           placeholder="Search by course name, code or category..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}

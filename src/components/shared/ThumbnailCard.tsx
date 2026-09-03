@@ -2,16 +2,34 @@
 //
 // One shared card style for every browsable grid in the app (Courses,
 // Modules, Lessons, Learning Paths, Projects) — a real thumbnail image
-// filling an aspect-video top, or an explicit "No Thumbnail" placeholder
-// when none is set, with the heading below. Matches VideoLibrary.tsx,
-// which was the reference design employees already know.
+// filling an aspect-video top, or a colorful placeholder (a deterministic
+// gradient + icon picked from the title, so a grid of un-thumbnailed
+// items still reads as varied and alive instead of a wall of identical
+// gray boxes) when none is set, with the heading below.
 
 import type { ReactNode } from 'react';
 
-function IconImagePlaceholder({ className = 'h-8 w-8' }: { className?: string }) {
+// Warm-to-cool spread so a full page of cards doesn't skew toward one hue.
+const PLACEHOLDER_PALETTES: [string, string][] = [
+  ['#6366F1', '#8B5CF6'], // indigo → violet
+  ['#F59E0B', '#EA580C'], // amber → orange
+  ['#0EA5E9', '#0891B2'], // sky → cyan
+  ['#EC4899', '#DB2777'], // pink → rose
+  ['#10B981', '#059669'], // emerald → green
+  ['#8B5CF6', '#D946EF'], // violet → fuchsia
+  ['#1E3A8A', '#0F172A'], // blue → navy (echoes the section hero banner)
+];
+
+function paletteFor(seed: string): [string, string] {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  return PLACEHOLDER_PALETTES[hash % PLACEHOLDER_PALETTES.length];
+}
+
+function IconBook({ className = 'h-9 w-9' }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3 20.25h18a1.5 1.5 0 0 0 1.5-1.5V5.25a1.5 1.5 0 0 0-1.5-1.5H3a1.5 1.5 0 0 0-1.5 1.5v13.5a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25a1.125 1.125 0 1 1-2.25 0 1.125 1.125 0 0 1 2.25 0Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
     </svg>
   );
 }
@@ -31,20 +49,29 @@ interface ThumbnailCardProps {
 }
 
 function ThumbnailCard({ title, subtitle, thumbnailUrl, badge, cornerTag, children, onClick, disabled }: ThumbnailCardProps) {
+  const [from, to] = paletteFor(title || 'course');
+
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+      className="group flex flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
     >
       <div className="relative aspect-video w-full flex-shrink-0 bg-slate-100">
         {thumbnailUrl ? (
           <img src={thumbnailUrl} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-slate-300">
-            <IconImagePlaceholder />
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">No Thumbnail</span>
+          <div
+            className="relative flex h-full w-full flex-col items-center justify-center gap-1.5 overflow-hidden text-white"
+            style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+          >
+            <div
+              className="pointer-events-none absolute inset-0 opacity-25"
+              style={{ backgroundImage: 'radial-gradient(circle at 15% 20%, #FFFFFF 0%, transparent 30%), radial-gradient(circle at 85% 80%, #FFFFFF 0%, transparent 35%)' }}
+            />
+            <IconBook className="relative h-9 w-9 drop-shadow-sm" />
+            <span className="relative text-[11px] font-bold uppercase tracking-wider drop-shadow-sm">No Thumbnail</span>
           </div>
         )}
         {cornerTag && (

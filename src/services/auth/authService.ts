@@ -60,9 +60,11 @@ export async function login(
   const { companyCode, employeeId, password } = credentials;
 
   // ── 1. Validate inputs ─────────────────────────────────────────────────────
-  if (!companyCode.trim()) {
-    return fail("Company code is required.");
-  }
+  // Company Code is optional — employee_code is only guaranteed unique
+  // WITHIN a company, so without it every active company is searched for
+  // a match instead. A code is still honored when typed (unchanged path),
+  // useful if the same employee_code happens to exist in more than one
+  // company, or an admin just prefers to scope it explicitly.
   if (!employeeId.trim()) {
     return fail("Employee ID is required.");
   }
@@ -70,69 +72,82 @@ export async function login(
     return fail("Password is required.");
   }
 
-  // ── 2. Resolve and validate company ───────────────────────────────────────
-  const company = await fetchCompany(companyCode.trim());
-  if (!company) {
-    return fail("Invalid company code.");
-  }
-  if (!company.active) {
-    return fail("This company account is inactive. Contact support.");
+  // ── 2. Find every employee this could be ──────────────────────────────────
+  let candidates: EmployeeRowWithCode[];
+
+  if (companyCode.trim()) {
+    const company = await fetchCompany(companyCode.trim());
+    if (!company) {
+      return fail("Invalid company code.");
+    }
+    if (!company.active) {
+      return fail("This company account is inactive. Contact support.");
+    }
+    const emp = await fetchEmployee(employeeId.trim(), company.id);
+    candidates = emp ? [{ ...emp, company_code: companyCode.trim() }] : [];
+  } else {
+    candidates = await fetchEmployeeAnyCompany(employeeId.trim());
   }
 
-  // ── 3. Fetch employee ──────────────────────────────────────────────────────
-  const emp = await fetchEmployee(employeeId.trim(), company.id);
-  if (!emp) {
+  if (candidates.length === 0) {
     return fail("Invalid employee ID or password.");
   }
 
-  // ── 4. Validate employee active status ────────────────────────────────────
-  if (!emp.active) {
-    return fail("Your account is inactive. Contact your administrator.");
+  // ── 3. Try each candidate's password — real Supabase Auth if migrated,
+  //      legacy check otherwise — until one matches. In the overwhelming
+  //      majority of cases there's exactly one candidate anyway. ────────────
+  let matched: EmployeeRowWithCode | null = null;
+  for (const candidate of candidates) {
+    const passwordValid = candidate.auth_user_id
+      ? await validateViaSupabaseAuth(candidate.company_code, candidate.employee_code as string, password)
+      : candidate.password === password;
+    if (passwordValid) {
+      matched = candidate;
+      break;
+    }
   }
 
-  // ── 5. Validate account not locked ────────────────────────────────────────
-  if (emp.account_locked) {
+  if (!matched) {
+    await handleFailedAttempt(candidates[0].id, candidates[0].failed_login_attempts ?? 0);
+    // Generic message — do not reveal which field was wrong
+    return fail("Invalid employee ID or password.");
+  }
+
+  // ── 4. Validate the matched employee's active/locked status ───────────────
+  if (!matched.active) {
+    return fail("Your account is inactive. Contact your administrator.");
+  }
+  if (matched.account_locked) {
     return fail(
       "Your account has been locked after too many failed login attempts. " +
       "Contact your administrator to unlock it."
     );
   }
 
-  // ── 6. Validate password — real Supabase Auth if migrated, legacy check otherwise ──
-  const passwordValid = emp.auth_user_id
-    ? await validateViaSupabaseAuth(companyCode.trim(), employeeId.trim(), password)
-    : emp.password === password;
+  // ── 5. Successful login — reset counters, update timestamps ───────────────
+  await handleSuccessfulLogin(matched.id);
 
-  if (!passwordValid) {
-    await handleFailedAttempt(emp.id, emp.failed_login_attempts ?? 0);
-    // Generic message — do not reveal which field was wrong
-    return fail("Invalid employee ID or password.");
-  }
+  // ── 6. Resolve active role ────────────────────────────────────────────────
+  const roleId = await resolveRoleId(matched.id);
 
-  // ── 7. Successful login — reset counters, update timestamps ───────────────
-  await handleSuccessfulLogin(emp.id);
-
-  // ── 8. Resolve active role ────────────────────────────────────────────────
-  const roleId = await resolveRoleId(emp.id);
-
-  // ── 9. Map to User interface ──────────────────────────────────────────────
+  // ── 7. Map to User interface ──────────────────────────────────────────────
   const user: User = {
-    id:            emp.id            as string,
-    employeeId:    emp.employee_code as string,
-    companyId:     emp.company_id    as string,
-    branchId:      (emp.branch_id     as string | null) ?? "",
-    departmentId:  (emp.department_id as string | null) ?? "",
-    designationId: (emp.designation_id as string | null) ?? "",
+    id:            matched.id            as string,
+    employeeId:    matched.employee_code as string,
+    companyId:     matched.company_id    as string,
+    branchId:      (matched.branch_id     as string | null) ?? "",
+    departmentId:  (matched.department_id as string | null) ?? "",
+    designationId: (matched.designation_id as string | null) ?? "",
     roleId,
-    firstName:     (emp.first_name as string | null) ?? "",
-    lastName:      (emp.last_name  as string | null) ?? "",
-    email:         (emp.email      as string | null) ?? "",
-    mobile:        (emp.mobile     as string | null) ?? "",
+    firstName:     (matched.first_name as string | null) ?? "",
+    lastName:      (matched.last_name  as string | null) ?? "",
+    email:         (matched.email      as string | null) ?? "",
+    mobile:        (matched.mobile     as string | null) ?? "",
     profileImage:  "",
     status:        "active" as UserStatus,
   };
 
-  // ── 10. Store session ─────────────────────────────────────────────────────
+  // ── 8. Store session ───────────────────────────────────────────────────────
   setCurrentUser(user);
 
   return { success: true, user, error: null };
@@ -245,6 +260,27 @@ async function fetchEmployee(
   }
 
   return (data as EmployeeRow[] | null)?.[0] ?? null;
+}
+
+interface EmployeeRowWithCode extends EmployeeRow {
+  company_code: string;
+}
+
+/** No company code typed — searches every active company for a matching
+ * employee_code. Normally returns at most one row; a second only shows up
+ * if two different companies happen to share the exact same employee
+ * code, in which case login() tries each candidate's password in turn. */
+async function fetchEmployeeAnyCompany(employeeCode: string): Promise<EmployeeRowWithCode[]> {
+  const { data, error } = await supabase.rpc("login_lookup_employee_any_company", {
+    p_employee_code: employeeCode,
+  });
+
+  if (error) {
+    console.error("[authService] fetchEmployeeAnyCompany:", error.message);
+    return [];
+  }
+
+  return (data as EmployeeRowWithCode[] | null) ?? [];
 }
 
 async function handleFailedAttempt(
