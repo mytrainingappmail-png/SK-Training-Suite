@@ -8,12 +8,21 @@ import {
   toggleActive,
 } from "../../services/learningPathEnrollment/learningPathEnrollmentService";
 import { loadLearningPaths } from "../../services/learningPath/learningPathService";
+import { loadLearningPathCourses } from "../../services/learningPathCourse/learningPathCourseService";
+import {
+  loadEnrollments as loadCourseEnrollments,
+  createEnrollment as createCourseEnrollment,
+} from "../../services/enrollment/enrollmentService";
+import { notifyLearningPathAssigned } from "../../services/notification/notificationService";
 import { loadCompanies }      from "../../services/company/companyService";
 import { branchService }      from "../../services/branch/branchService";
 import { departmentService }  from "../../services/department/departmentService";
 import { designationService } from "../../services/designation/designationService";
 import { employeeService }    from "../../services/employee/employeeService";
 import { getCurrentUser }     from "../../services/auth/session";
+import DurationPicker from "../shared/DurationPicker";
+import { computeDeadline, formatDeadline } from "../../utils/deadline";
+import type { DurationUnit } from "../../utils/deadline";
 
 import type {
   LearningPathEnrollment,
@@ -21,12 +30,14 @@ import type {
   EnrollmentType,
   EnrollmentStatus,
 } from "../../types/learningPathEnrollment";
-import type { LearningPath }  from "../../types/learningPath";
+import type { LearningPath }     from "../../types/learningPath";
+import type { LearningPathCourse } from "../../types/learningPathCourse";
 import type { Company }       from "../../types/company";
 import type { Branch }        from "../../types/branch";
 import type { Department }    from "../../types/department";
 import type { Designation }   from "../../types/designation";
 import type { Employee }      from "../../types/employee";
+import type { Enrollment }    from "../../types/enrollment";
 import { defaultEnrollmentForm } from "../../types/learningPathEnrollment";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -334,6 +345,17 @@ function EnrollmentModal({
       : { ...defaultEnrollmentForm }
   );
 
+  // "Complete within X hours/days" — computes end_date from now, rather
+  // than admins picking a raw calendar date. 0 = no deadline.
+  const [duration, setDuration]         = useState(0);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>('days');
+
+  useEffect(() => {
+    if (duration > 0) field('end_date', computeDeadline(duration, durationUnit));
+    else if (!isEdit) field('end_date', '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, durationUnit]);
+
   const [errs, setErrs] = useState<FormErrs>({});
   const firstRef = useRef<HTMLSelectElement>(null);
 
@@ -548,10 +570,11 @@ function EnrollmentModal({
                   onChange={(e) => field("start_date", e.target.value)}
                   disabled={saving} className={CLS_INPUT} />
               </FL>
-              <FL label="End Date">
-                <input type="date" value={form.end_date}
-                  onChange={(e) => field("end_date", e.target.value)}
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Complete Within">
+                <DurationPicker value={duration} unit={durationUnit} onChange={(v, u) => { setDuration(v); setDurationUnit(u); }} disabled={saving} inputClassName={CLS_SELECT} />
+                {isEdit && form.end_date && duration === 0 && (
+                  <p className="mt-1 text-xs text-slate-400">Current deadline: {formatDeadline(form.end_date)}</p>
+                )}
               </FL>
             </div>
             {errs.date_range && (
@@ -641,6 +664,8 @@ export default function LearningPathEnrollmentManagement() {
   const [departments,  setDepartments]  = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [employees,    setEmployees]    = useState<Employee[]>([]);
+  const [pathCourses,  setPathCourses]  = useState<LearningPathCourse[]>([]);
+  const [courseEnrollments, setCourseEnrollments] = useState<Enrollment[]>([]);
 
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
@@ -693,7 +718,7 @@ export default function LearningPathEnrollmentManagement() {
     setLoading(true);
     setBanner("");
     try {
-      const [enData, lpData, coData, brData, deData, dgData, emData] =
+      const [enData, lpData, coData, brData, deData, dgData, emData, pcData, ceData] =
         await Promise.all([
           loadEnrollments(),
           loadLearningPaths(),
@@ -702,6 +727,8 @@ export default function LearningPathEnrollmentManagement() {
           departmentService.getAll(),
           designationService.getAll(),
           employeeService.getAll(),
+          loadLearningPathCourses(),
+          loadCourseEnrollments(),
         ]);
       setEnrollments(enData);
       setLearningPaths(lpData);
@@ -710,6 +737,8 @@ export default function LearningPathEnrollmentManagement() {
       setDepartments(deData);
       setDesignations(dgData);
       setEmployees(emData);
+      setPathCourses(pcData);
+      setCourseEnrollments(ceData);
     } catch (err) {
       console.error(err);
       setBanner("Failed to load data. Please refresh.");
@@ -736,6 +765,22 @@ export default function LearningPathEnrollmentManagement() {
     }, 0);
   }
 
+  // Resolves whichever group the admin targeted (company/branch/department/
+  // designation/employee) into the concrete list of employees it means —
+  // needed because "My Learning Paths" only ever looks at employee-type
+  // rows, so a group-type enrollment alone would be invisible to everyone
+  // it was meant for.
+  function resolveTargetEmployees(data: LearningPathEnrollmentForm): Employee[] {
+    switch (data.enrollment_type) {
+      case "company":     return employees.filter((e) => e.company_id === data.company_id);
+      case "branch":      return employees.filter((e) => e.branch_id === data.branch_id);
+      case "department":  return employees.filter((e) => e.department_id === data.department_id);
+      case "designation": return employees.filter((e) => e.designation_id === data.designation_id);
+      case "employee":    return employees.filter((e) => e.id === data.employee_id);
+      default:            return [];
+    }
+  }
+
   // ── Save
   const handleSave = useCallback(
     async (data: LearningPathEnrollmentForm) => {
@@ -744,7 +789,88 @@ export default function LearningPathEnrollmentManagement() {
         if (modal?.type === "edit") {
           await saveEnrollment(modal.enrollment.id, data);
         } else {
-          await createEnrollment(data);
+          const targets = resolveTargetEmployees(data);
+          const pathCoursesForPath = pathCourses.filter((pc) => pc.learning_path_id === data.learning_path_id && pc.active);
+          const alreadyEnrolledEmployeeIds = new Set(
+            enrollments
+              .filter((e) => e.learning_path_id === data.learning_path_id && e.enrollment_type === "employee" && e.active)
+              .map((e) => e.employee_id)
+          );
+          const newlyAssigned: Employee[] = [];
+
+          for (const emp of targets) {
+            if (alreadyEnrolledEmployeeIds.has(emp.id)) continue;
+            // Optional id fields must be null, not "", or Postgres rejects
+            // them ("invalid input syntax for type uuid") — same rule as
+            // superadmin/EnrollmentManagement.tsx's onSubmit. The form
+            // types model these columns as plain `string`, so the null
+            // assignment needs the same escape-hatch cast used there.
+            await createEnrollment({
+              ...data,
+              company_id:     emp.company_id,
+              branch_id:      emp.branch_id || null,
+              department_id:  emp.department_id || null,
+              designation_id: emp.designation_id || null,
+              employee_id:    emp.id,
+              enrollment_type: "employee",
+            } as unknown as LearningPathEnrollmentForm);
+
+            for (const pc of pathCoursesForPath) {
+              const alreadyEnrolledInCourse = courseEnrollments.some(
+                (ce) => ce.employee_id === emp.id && ce.course_id === pc.course_id
+              );
+              if (alreadyEnrolledInCourse) continue;
+              // assigned_by must be null, not an employee id — the column
+              // is a real FK to a `users` table (not `employees`), which
+              // this app doesn't otherwise populate (see the identical
+              // note in superadmin/EnrollmentManagement.tsx's onSubmit).
+              await createCourseEnrollment({
+                company_id: emp.company_id,
+                branch_id: emp.branch_id || null,
+                employee_id: emp.id,
+                course_id: pc.course_id,
+                // The `enrollments` table's chk_course_or_learning_path
+                // constraint requires learning_path_id to be null whenever
+                // enrollment_type is COURSE — it can't also record which
+                // path caused this course to be auto-enrolled.
+                learning_path_id: null,
+                assignment_type: "AUTO",
+                enrollment_type: "COURSE",
+                status: "PENDING",
+                assigned_by: null,
+                assigned_at: new Date().toISOString(),
+                start_date: null,
+                due_date: data.end_date || null,
+                completed_at: null,
+                expiry_date: null,
+                completion_percentage: 0,
+                certificate_id: null,
+                remarks: "",
+                is_active: true,
+              } as unknown as Parameters<typeof createCourseEnrollment>[0]);
+            }
+
+            newlyAssigned.push(emp);
+          }
+
+          if (newlyAssigned.length > 0) {
+            const user = getCurrentUser();
+            const path = learningPaths.find((p) => p.id === data.learning_path_id);
+            if (user && path) {
+              const byCompany = new Map<string, string[]>();
+              newlyAssigned.forEach((e) => byCompany.set(e.company_id, [...(byCompany.get(e.company_id) ?? []), e.id]));
+              for (const [companyId, employeeIds] of byCompany) {
+                await notifyLearningPathAssigned(
+                  companyId,
+                  user.id,
+                  `${user.firstName} ${user.lastName}`.trim(),
+                  path.path_name,
+                  employeeIds,
+                  data.end_date || null
+                );
+              }
+            }
+          }
         }
         await load();
         setBanner("");
@@ -755,7 +881,7 @@ export default function LearningPathEnrollmentManagement() {
         setSaving(false);
       }
     },
-    [modal, load]
+    [modal, load, employees, pathCourses, courseEnrollments, enrollments, learningPaths]
   );
 
   // ── Delete

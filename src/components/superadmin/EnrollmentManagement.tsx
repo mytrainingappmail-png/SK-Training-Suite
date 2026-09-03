@@ -14,6 +14,11 @@ import { loadCertificates }  from "../../services/certificate/certificateService
 import { loadCompanies }     from "../../services/company/companyService";
 import { branchService }     from "../../services/branch/branchService";
 import { employeeService }   from "../../services/employee/employeeService";
+import { notifyCourseAssigned } from "../../services/notification/notificationService";
+import { getCurrentUser }    from "../../services/auth/session";
+import DurationPicker from "../shared/DurationPicker";
+import { computeDeadline, formatDeadline } from "../../utils/deadline";
+import type { DurationUnit } from "../../utils/deadline";
 
 import type {
   Enrollment,
@@ -386,6 +391,17 @@ function EnrollmentModal({
       : { ...defaultEnrollmentForm }
   );
 
+  // "Complete within X hours/days" — computes due_date from now, rather
+  // than admins picking a raw calendar date. 0 = no deadline.
+  const [duration, setDuration]         = useState(0);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>('days');
+
+  useEffect(() => {
+    if (duration > 0) field('due_date', computeDeadline(duration, durationUnit));
+    else if (!isEdit) field('due_date', '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, durationUnit]);
+
   const [errs, setErrs] = useState<FormErrs>({});
   const firstRef = useRef<HTMLSelectElement>(null);
 
@@ -614,10 +630,11 @@ function EnrollmentModal({
             </div>
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <FL label="Due Date">
-                <input type="date" value={form.due_date}
-                  onChange={(e) => field("due_date", e.target.value)}
-                  disabled={saving} className={CLS_INPUT} />
+              <FL label="Complete Within">
+                <DurationPicker value={duration} unit={durationUnit} onChange={(v, u) => { setDuration(v); setDurationUnit(u); }} disabled={saving} inputClassName={CLS_INPUT} />
+                {isEdit && form.due_date && duration === 0 && (
+                  <p className="mt-1 text-xs text-slate-400">Current deadline: {formatDeadline(form.due_date)}</p>
+                )}
               </FL>
               <FL label="Expiry Date">
                 <input type="date" value={form.expiry_date}
@@ -820,6 +837,22 @@ export default function EnrollmentManagement() {
           await saveEnrollment(modal.enrollment.id, data);
         } else {
           await createEnrollment(data);
+          if (data.enrollment_type === "COURSE" && data.course_id) {
+            const user = getCurrentUser();
+            const emp = employees.find((e) => e.id === data.employee_id);
+            if (user && emp) {
+              const courseName = courses.find((c) => c.id === data.course_id)?.course_name ?? "a course";
+              await notifyCourseAssigned(
+                emp.company_id,
+                user.id,
+                `${user.firstName} ${user.lastName}`.trim(),
+                data.course_id,
+                courseName,
+                [emp.id],
+                data.due_date || null
+              );
+            }
+          }
         }
         await load();
         setBanner("");
@@ -830,7 +863,7 @@ export default function EnrollmentManagement() {
         setSaving(false);
       }
     },
-    [modal, load]
+    [modal, load, employees, courses]
   );
 
   // ── Delete

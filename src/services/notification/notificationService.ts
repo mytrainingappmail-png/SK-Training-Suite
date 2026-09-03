@@ -1,10 +1,12 @@
 // src/services/notification/notificationService.ts
 
 import * as repo from '../../repositories/notification/notificationRepository';
+import { defaultNotificationForm } from '../../types/notification';
 import type { Notification, NotificationForm, NotificationAudienceType, EmployeeNotification } from '../../types/notification';
 import type { Employee } from '../../types/employee';
 import type { EmployeeRole } from '../../types/employeeRole';
 import type { Enrollment } from '../../types/enrollment';
+import { formatDeadline } from '../../utils/deadline';
 
 export async function loadCompanyNotifications(companyId: string): Promise<Notification[]> {
   return repo.loadNotifications(companyId);
@@ -111,4 +113,52 @@ export async function loadMyNotifications(employeeId: string): Promise<EmployeeN
 
 export async function markMyNotificationRead(recipientId: string): Promise<void> {
   return repo.markMyNotificationRead(recipientId);
+}
+
+// ── Assignment notifications ─────────────────────────────────────────────────
+// Fired right after an admin assigns a course or a learning path, so the
+// employee sees it in their bell without the admin composing anything.
+
+export async function notifyCourseAssigned(
+  companyId: string,
+  createdBy: string | null,
+  createdByName: string,
+  courseId: string,
+  courseName: string,
+  employeeIds: string[],
+  dueAt: string | null
+): Promise<void> {
+  if (employeeIds.length === 0) return;
+  const deadlineText = dueAt ? ` Complete by ${formatDeadline(dueAt)}.` : '';
+  const notification = await repo.createNotification(companyId, createdBy, {
+    ...defaultNotificationForm,
+    type: 'course_assigned',
+    title: 'New course assigned',
+    message: `You've been assigned "${courseName}".${deadlineText}`,
+    audience_type: 'employee',
+    course_id: courseId,
+    created_by_name: createdByName,
+  });
+  await sendNotificationNow(notification, employeeIds);
+}
+
+export async function notifyLearningPathAssigned(
+  companyId: string,
+  createdBy: string | null,
+  createdByName: string,
+  pathName: string,
+  employeeIds: string[],
+  dueAt: string | null
+): Promise<void> {
+  if (employeeIds.length === 0) return;
+  const deadlineText = dueAt ? ` Complete by ${formatDeadline(dueAt)}.` : '';
+  const notification = await repo.createNotification(companyId, createdBy, {
+    ...defaultNotificationForm,
+    type: 'learning_path_assigned',
+    title: 'New learning path assigned',
+    message: `You've been assigned the "${pathName}" learning path.${deadlineText}`,
+    audience_type: 'employee',
+    created_by_name: createdByName,
+  });
+  await sendNotificationNow(notification, employeeIds);
 }
