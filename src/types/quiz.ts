@@ -107,6 +107,8 @@ export interface QuizSession {
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
   question_started_at: string | null;
   created_at: string;
+  /** Set once this session has been moved into a Batch Records folder — see QuizResultFolder. */
+  folder_id: string | null;
 }
 
 export interface QuizParticipant {
@@ -154,6 +156,20 @@ export interface QuizSessionResultRow {
   rank: number;
   percent_correct: number;
   grade: QuizGrade;
+  /** Set once this session has been moved into a Batch Records folder — see QuizResultFolder. */
+  folder_id: string | null;
+}
+
+/** A named, permanent archive for ended sessions (typically final tests) —
+ * "Batch Records" in the Results page. Company-wide, not tied to one quiz,
+ * since a batch's record may span more than one quiz/module. */
+export interface QuizResultFolder {
+  id: string;
+  company_id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** Who certificates go to for a quiz, admin-configured — a competition, not a participation trophy. */
