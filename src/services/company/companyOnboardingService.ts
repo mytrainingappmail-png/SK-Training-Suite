@@ -99,6 +99,7 @@ export async function onboardCompany(input: CompanyOnboardingInput): Promise<Com
     admin_console_button_color: "#eab308",
     admin_console_border_color: "#facc15",
     sidebar_name_position: "left",
+    sidebar_menu_order: null,
   }).catch((err) => {
     throw new Error(`Company create failed: ${err instanceof Error ? err.message : String(err)}`);
   });

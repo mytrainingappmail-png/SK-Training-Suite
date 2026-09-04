@@ -136,7 +136,7 @@ function ProjectDetailCard({
             </button>
             {showFullDetails && (
               <div
-                className="prose prose-sm mt-3 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                className="prose prose-sm mt-3 max-w-none overflow-x-auto rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_table]:min-w-[420px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:p-2"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.fullDescription) }}
               />
             )}
@@ -260,6 +260,78 @@ function ProjectDetailCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Compare-mode card — a stripped-down version of the detail card: just
+// the header and description, no FAQ/test/page sections (those stay in
+// the full single-project view). Sits side by side as a grid column,
+// not stacked full-width, so it actually reads like a comparison.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ProjectCompareCardProps {
+  project: Project;
+  gradient: string;
+  indexBadge: number;
+  onRemove: () => void;
+}
+
+function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: ProjectCompareCardProps) {
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
+      <div className={`relative bg-gradient-to-r ${gradient} px-5 py-5 text-white`}>
+        <span className="absolute left-4 top-4 rounded-full bg-black/40 px-2.5 py-0.5 text-xs font-bold">#{indexBadge}</span>
+        <button
+          onClick={onRemove}
+          aria-label="Remove from comparison"
+          className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow transition hover:bg-white"
+        >
+          <IconX className="h-3.5 w-3.5" />
+        </button>
+        <div className="mt-6 flex items-center gap-3">
+          <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-white/20 backdrop-blur-sm">
+            {project.thumbnail ? (
+              <img src={project.thumbnail} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center"><IconBuilding className="h-6 w-6" /></div>
+            )}
+          </div>
+          <h2 className="text-base font-bold leading-snug">{project.projectName}</h2>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-4 p-5">
+        {project.shortDescription && (
+          <p className="text-sm font-medium text-slate-700">{project.shortDescription}</p>
+        )}
+        {project.fullDescription && (
+          <div
+            className="prose prose-sm max-w-none overflow-x-auto text-sm leading-relaxed text-slate-600 [&_table]:w-full [&_table]:min-w-[320px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:p-2"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.fullDescription) }}
+          />
+        )}
+
+        {project.brochures.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {project.brochures.map((b) => (
+              <a
+                key={b.resourceId}
+                href={b.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
+              >
+                <IconPdf className="h-3.5 w-3.5" />
+                Download Brochure
+                <IconDownload className="h-3 w-3" />
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Projects
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -337,7 +409,6 @@ function Projects() {
 
   if (showCompareView && compareProjects.length >= 2) {
     return (
-      <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
@@ -351,33 +422,18 @@ function Projects() {
           </div>
         </div>
 
-        {compareProjects.map((p, i) => (
-          <ProjectDetailCard
-            key={p.projectId}
-            project={p}
-            gradient={GRADIENTS[projects.findIndex((x) => x.projectId === p.projectId) % GRADIENTS.length]}
-            completed={completedProjectIds.has(p.projectId)}
-            marking={markingProjectId === p.projectId}
-            onMarkComplete={() => handleMarkComplete(p.projectId)}
-            onLaunchQuiz={setActiveTestAssessmentId}
-            indexBadge={i + 1}
-            onRemove={() => setCompareIds((prev) => prev.filter((id) => id !== p.projectId))}
-          />
-        ))}
-      </div>
-
-      {activeTestAssessmentId && user?.id && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
-            <AssessmentPlayer
-              assessmentId={activeTestAssessmentId}
-              employeeId={user.id}
-              onFinish={() => setActiveTestAssessmentId(null)}
+        <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {compareProjects.map((p, i) => (
+            <ProjectCompareCard
+              key={p.projectId}
+              project={p}
+              gradient={GRADIENTS[projects.findIndex((x) => x.projectId === p.projectId) % GRADIENTS.length]}
+              indexBadge={i + 1}
+              onRemove={() => setCompareIds((prev) => prev.filter((id) => id !== p.projectId))}
             />
-          </div>
+          ))}
         </div>
-      )}
-      </>
+      </div>
     );
   }
 
@@ -477,13 +533,7 @@ function Projects() {
                       {selectionOrder + 1}
                     </span>
                   ) : undefined}
-                >
-                  {project.brochures.length > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500">
-                      <IconPdf className="h-3 w-3" /> {project.brochures.length} brochure{project.brochures.length === 1 ? '' : 's'}
-                    </span>
-                  )}
-                </ThumbnailCard>
+                />
               </div>
             );
           })}

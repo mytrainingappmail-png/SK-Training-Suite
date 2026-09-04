@@ -17,3 +17,57 @@
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Rich-text table style presets (set from RichTextEditor's "Table
+   Style" picker as a class on the <table> itself). Global — not
+   scoped to the editor — so saved content renders identically
+   wherever it's displayed later (project pages, course pages, etc),
+   not just while being edited. */
+.rt-table-plain,
+.rt-table-striped,
+.rt-table-bold-header,
+.rt-table-bordered-grid {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.rt-table-plain td, .rt-table-plain th,
+.rt-table-striped td, .rt-table-striped th,
+.rt-table-bold-header td, .rt-table-bold-header th,
+.rt-table-bordered-grid td, .rt-table-bordered-grid th {
+  border: 1px solid #CBD5E1;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.rt-table-plain th,
+.rt-table-striped th {
+  background: #F1F5F9;
+  font-weight: 600;
+}
+
+.rt-table-striped td {
+  background: #FFFFFF;
+}
+
+.rt-table-striped tbody tr:nth-child(even) td {
+  background: #F8FAFC;
+}
+
+.rt-table-bold-header th {
+  background: #1E293B;
+  color: #FACC15;
+  font-weight: 700;
+  border-color: #1E293B;
+}
+
+.rt-table-bordered-grid td,
+.rt-table-bordered-grid th {
+  border: 2px solid #334155;
+}
+
+.rt-table-bordered-grid th {
+  background: #E2E8F0;
+  font-weight: 600;
+}

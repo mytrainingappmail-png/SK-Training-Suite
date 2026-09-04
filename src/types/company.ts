@@ -87,6 +87,11 @@ export interface Company {
   // regardless of how long it is (see Sidebar.tsx's FitText).
   sidebar_name_position: "left" | "center";
 
+  // Admin-controlled display order for the employee-facing sidebar —
+  // an ordered array of MenuItem ids (see src/config/menu.ts). null/empty
+  // means "use the built-in order" (Sidebar.tsx's fallback).
+  sidebar_menu_order: string[] | null;
+
   created_at: string;
 
   updated_at: string;

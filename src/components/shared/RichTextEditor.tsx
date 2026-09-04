@@ -8,7 +8,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Table } from '@tiptap/extension-table';
+import { Table, TableView, type TableOptions } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
@@ -62,6 +62,70 @@ const TableCellWithColor = TableCell.extend({
           if (!attributes.backgroundColor) return {};
           return { style: `background-color: ${attributes.backgroundColor}` };
         },
+      },
+    };
+  },
+});
+
+// One-click table designs (Word's "Table Design" ribbon, simplified to
+// four presets). The chosen preset is stored as a real class on the
+// <table> element itself — not an inline style — so it survives
+// save/reload and, crucially, still renders correctly wherever the
+// saved HTML is displayed later (Projects.tsx, course pages, etc.),
+// not just inside this editor. The actual CSS for each class lives
+// globally in src/index.css for exactly that reason.
+const TABLE_STYLES = [
+  { value: 'plain',         label: 'Plain' },
+  { value: 'striped',       label: 'Striped Rows' },
+  { value: 'bold-header',   label: 'Bold Header' },
+  { value: 'bordered-grid', label: 'Bordered Grid' },
+] as const;
+
+// The resizable-table plugin this editor already relies on for
+// column-drag-resize (prosemirror-tables' columnResizing) constructs its
+// node view as `new View(node, cellMinWidth, view)` — no HTMLAttributes
+// argument at all — so the stock TableView never applies our
+// `class="rt-table-…"`, neither at construction nor (its `update()` only
+// resyncs column widths) when a style is picked afterwards. Subclassing
+// to set the class ourselves, from the node's own attrs rather than the
+// HTMLAttributes TipTap normally threads through, fixes both cases.
+class StyledTableView extends TableView {
+  constructor(...args: ConstructorParameters<typeof TableView>) {
+    super(...args);
+    this.syncStyleClass(args[0]);
+  }
+  update(node: Parameters<InstanceType<typeof TableView>['update']>[0]) {
+    const handled = super.update(node);
+    if (handled) this.syncStyleClass(node);
+    return handled;
+  }
+  private syncStyleClass(node: { attrs: Record<string, unknown> }) {
+    const withoutStyleClasses = this.table.className.split(' ').filter((c) => c && !c.startsWith('rt-table-'));
+    const tableStyle = node.attrs.tableStyle ?? 'plain';
+    this.table.className = [...withoutStyleClasses, `rt-table-${tableStyle}`].join(' ');
+  }
+}
+
+const TableWithStyle = Table.extend({
+  addOptions() {
+    return {
+      ...(this.parent?.() ?? ({} as TableOptions)),
+      View: StyledTableView,
+    };
+  },
+  addAttributes() {
+    const parentAttrs = (this as { parent?: () => Record<string, unknown> }).parent?.() ?? {};
+    return {
+      ...parentAttrs,
+      tableStyle: {
+        default: 'plain',
+        parseHTML: (element: HTMLElement) => {
+          const match = Array.from(element.classList).find((c) => c.startsWith('rt-table-'));
+          return match ? match.replace('rt-table-', '') : 'plain';
+        },
+        renderHTML: (attributes: Record<string, unknown>) => ({
+          class: `rt-table-${attributes.tableStyle ?? 'plain'}`,
+        }),
       },
     };
   },
@@ -150,7 +214,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Start writing…' }),
       ImageExtension.configure({ inline: false }),
-      Table.configure({ resizable: true }),
+      TableWithStyle.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCellWithColor,
@@ -203,9 +267,8 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         .rte-content ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
         .rte-content ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
         .rte-content li { margin: 0.15rem 0; }
-        .rte-content table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
-        .rte-content td, .rte-content th { border: 2px solid #64748B; padding: 8px; vertical-align: top; position: relative; }
-        .rte-content th { background: #F1F5F9; font-weight: 600; }
+        .rte-content table { margin: 0.75rem 0; }
+        .rte-content td, .rte-content th { position: relative; }
         .rte-content .selectedCell { background: #E0E7FF; }
         .rte-content img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; }
         .rte-content p.is-editor-empty:first-child::before { color: #94A3B8; content: attr(data-placeholder); float: left; pointer-events: none; height: 0; }
@@ -311,6 +374,23 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
                 className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Merge Selected Cells</button>
               <button onClick={() => editor.chain().focus().splitCell().run()} disabled={!editor.can().splitCell()}
                 className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Split Cell</button>
+              <div className="my-1 border-t border-slate-100" />
+              <div className="px-3 py-1 text-xs font-semibold text-slate-400">Table Style</div>
+              <div className="grid grid-cols-2 gap-1.5 px-3 py-2">
+                {TABLE_STYLES.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => editor.chain().focus().updateAttributes('table', { tableStyle: s.value }).run()}
+                    className={`rounded-lg border px-2 py-1.5 text-left text-xs font-medium transition ${
+                      editor.getAttributes('table').tableStyle === s.value
+                        ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
               <div className="my-1 border-t border-slate-100" />
               <div className="px-3 py-1 text-xs font-semibold text-slate-400">Cell Color</div>
               <div className="flex flex-wrap gap-1.5 px-3 py-2">

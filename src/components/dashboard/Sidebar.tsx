@@ -237,6 +237,7 @@ function Sidebar() {
   const [companyName, setCompanyName] = useState(BRAND.companyName);
   const [logoUrl, setLogoUrl] = useState('');
   const [namePosition, setNamePosition] = useState<"left" | "center">("left");
+  const [menuOrder, setMenuOrder] = useState<string[] | null>(null);
   const [adminSectionsOpen, setAdminSectionsOpen] = useState(false);
   const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(new Set());
   // From the active Theme (Admin → Theme) — falls back to the static
@@ -276,6 +277,7 @@ function Sidebar() {
     loadCompany().then((c) => {
       setIsPlatformOperator(c?.is_platform_operator ?? false);
       setNamePosition(c?.sidebar_name_position ?? "left");
+      setMenuOrder(c?.sidebar_menu_order ?? null);
       if (c?.id) {
         loadCompanyModuleFlags(c.id).then(setModuleFlags).catch(() => setModuleFlags({}));
       }
@@ -305,7 +307,7 @@ function Sidebar() {
       });
   }, [user?.roleId]);
 
-  const visibleItems = MENU.filter((item) => {
+  let visibleItems = MENU.filter((item) => {
     if (!item.visible) return false;
     if (item.group === "Teaching" && !isTrainer) return false;
     if (item.group === "My Learning" && (isTrainer || isSuperAdmin)) return false;
@@ -326,6 +328,20 @@ function Sidebar() {
     if (!requiredPermission) return true;
     return can(requiredPermission);
   });
+  // Admin-controlled sidebar sequence: a flat custom order of item ids
+  // reorders visibleItems before `groups` is derived from it below, so
+  // both group order and within-group item order follow the same list —
+  // no separate group-order concept needed. Items not present in the
+  // saved order (added after it was last saved) fall back to the end,
+  // in their built-in order.
+  if (menuOrder && menuOrder.length > 0) {
+    const orderIndex = new Map(menuOrder.map((id, i) => [id, i]));
+    visibleItems = [...visibleItems].sort((a, b) => {
+      const ai = orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bi = orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
+  }
   const groups = Array.from(new Set(visibleItems.map((item) => item.group)));
 
   const navRef = useRef<HTMLElement>(null);

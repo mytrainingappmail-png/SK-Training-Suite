@@ -58,7 +58,7 @@ export const MENU: MenuItem[] = [
   // ── My Learning ──────────────────────────────────────────────────────
   {
     id: "learning-home",
-    title: "Learning Home",
+    title: "My Dashboard",
     route: ROUTES.LEARNING_HOME,
     icon: "home",
     visible: true,

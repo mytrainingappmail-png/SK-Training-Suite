@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Company } from "../../types/company";
+import { MENU, type MenuItem } from "../../config/menu";
 
 import {
   loadCompany,
@@ -86,6 +87,90 @@ function ColorField({
           className="w-28 rounded-lg border px-2 py-1.5 text-sm font-mono"
         />
       </div>
+    </div>
+  );
+}
+
+// Same "flat custom order, stable-sort fallback to built-in order" logic
+// as Sidebar.tsx applies when actually rendering the sidebar — kept here
+// so the admin preview list matches exactly what employees will see.
+function orderMenuItems(order: string[] | null): MenuItem[] {
+  if (!order || order.length === 0) return MENU;
+  const index = new Map(order.map((id, i) => [id, i]));
+  return [...MENU].sort((a, b) => {
+    const ai = index.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bi = index.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+}
+
+function SidebarOrderEditor({
+  order,
+  onChange,
+}: {
+  order: string[] | null;
+  onChange: (order: string[] | null) => void;
+}) {
+  const ordered = orderMenuItems(order);
+
+  function move(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= ordered.length) return;
+    const next = [...ordered];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next.map((item) => item.id));
+  }
+
+  let lastGroup = "";
+  return (
+    <div>
+      <div className="max-w-lg overflow-hidden rounded-xl border">
+        {ordered.map((item, index) => {
+          const showGroupHeader = item.group !== lastGroup;
+          lastGroup = item.group;
+          return (
+            <div key={item.id}>
+              {showGroupHeader && (
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-400 first:border-t-0">
+                  {item.group}
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t px-3 py-2 first:border-t-0">
+                <span className="text-sm font-medium text-slate-700">{item.title}</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => move(index, -1)}
+                    disabled={index === 0}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label={`Move ${item.title} up`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(index, 1)}
+                    disabled={index === ordered.length - 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label={`Move ${item.title} down`}
+                  >
+                    ↓
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {order && order.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="mt-3 text-sm font-semibold text-slate-500 underline hover:text-slate-700"
+        >
+          Reset to Default Order
+        </button>
+      )}
     </div>
   );
 }
@@ -465,6 +550,17 @@ function CompanyManagement() {
             <option value="center">Centered</option>
           </select>
         </div>
+      </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="mb-1 text-base font-bold text-slate-800">Sidebar Menu Order</h3>
+        <p className="mb-5 text-sm text-slate-500">
+          Choose the order employees see these sections in their sidebar. A role that can't see a section (e.g. Teaching, for non-trainers) simply skips over it — the rest stay in this order.
+        </p>
+        <SidebarOrderEditor
+          order={company.sidebar_menu_order}
+          onChange={(order) => setCompany({ ...company, sidebar_menu_order: order })}
+        />
       </div>
 
     </div>
