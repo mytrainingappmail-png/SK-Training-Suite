@@ -79,7 +79,7 @@ function Header() {
   }
 
   return (
-    <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8">
+    <header className="print:hidden h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8">
 
       {/* Left — page title */}
       <div>

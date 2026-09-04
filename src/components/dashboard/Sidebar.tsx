@@ -374,7 +374,7 @@ function Sidebar() {
 
       <aside
         style={{ backgroundColor: sidebarColor }}
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800 transition-transform duration-200 ease-in-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-56 lg:translate-x-0 ${
+        className={`print:hidden fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800 transition-transform duration-200 ease-in-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-56 lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

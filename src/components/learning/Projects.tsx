@@ -281,7 +281,7 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
         <button
           onClick={onRemove}
           aria-label="Remove from comparison"
-          className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow transition hover:bg-white"
+          className="print:hidden absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow transition hover:bg-white"
         >
           <IconX className="h-3.5 w-3.5" />
         </button>
@@ -303,7 +303,7 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
         )}
         {project.fullDescription && (
           <div
-            className="prose prose-sm max-w-none overflow-x-auto text-sm leading-relaxed text-slate-600 [&_table]:w-full [&_table]:min-w-[320px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:p-2"
+            className="prose prose-sm max-w-none overflow-x-auto text-sm leading-relaxed text-slate-600 [&_table]:w-full [&_table]:min-w-[320px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-1.5 [&_td]:text-xs [&_th]:border [&_th]:border-slate-200 [&_th]:p-1.5 [&_th]:text-xs print:overflow-visible print:[&_table]:min-w-0"
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.fullDescription) }}
           />
         )}
@@ -410,19 +410,35 @@ function Projects() {
   if (showCompareView && compareProjects.length >= 2) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="print:hidden flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={() => setShowCompareView(false)}
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800"
           >
             <IconArrowLeft className="h-3.5 w-3.5" /> Back to Projects
           </button>
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
-            <IconScale className="h-3.5 w-3.5" /> Comparing {compareProjects.length} Projects
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
+              <IconScale className="h-3.5 w-3.5" /> Comparing {compareProjects.length} Projects
+            </div>
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700"
+            >
+              <IconDownload className="h-3.5 w-3.5" /> Download as PDF
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3">
+        {/* Only shown when actually printing — the on-screen header above
+            (with its Back/Download buttons) is hidden then, so the PDF
+            still needs its own title. */}
+        <div className="hidden print:block">
+          <h1 className="text-xl font-bold text-slate-900">Project Comparison — {compareProjects.map((p) => p.projectName).join(" vs. ")}</h1>
+          <p className="mt-1 text-xs text-slate-500">Generated {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+        </div>
+
+        <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3 print:grid-cols-1 print:gap-8">
           {compareProjects.map((p, i) => (
             <ProjectCompareCard
               key={p.projectId}

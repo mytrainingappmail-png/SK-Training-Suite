@@ -1,4 +1,15 @@
 @import "tailwindcss";
+
+/* Printing / "Download as PDF" (window.print()) — without this, browsers
+   drop background colors and gradients by default, so a colorful card
+   (e.g. Compare Projects) would print as plain white. */
+@media print {
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
 /* Sidebar Scrollbar */
 
 .sidebar-scroll::-webkit-scrollbar {

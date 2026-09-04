@@ -75,7 +75,7 @@ function HelpBotWidget() {
   if (!can(PERMISSIONS.VIEW_HELP_CENTER)) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-40">
+    <div className="print:hidden fixed bottom-6 right-6 z-40">
       {open && (
         <div className="mb-3 flex h-[420px] w-80 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
           <div className="flex items-center justify-between px-4 py-3 text-white" style={{ backgroundColor: '#0F172A' }}>
