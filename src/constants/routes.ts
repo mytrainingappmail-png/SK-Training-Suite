@@ -60,8 +60,6 @@ export const ROUTES = {
 
   MY_PROGRESS: "/learning/progress",
 
-  CONTINUE_LEARNING: "/learning/continue",
-
   VIDEOS: "/learning/videos",
 
   PROJECTS: "/learning/projects",

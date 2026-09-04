@@ -4,9 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import { useEffect, useMemo, useState } from 'react';
 import { loadMyLearningPaths } from '../../services/myLearningPath/myLearningPathService';
+import { loadMyCourses } from '../../services/myCourses/myCourseService';
+import { loadLearningPathCourses } from '../../services/learningPathCourse/learningPathCourseService';
+import { loadContinueLearning } from '../../services/continueLearning/continueLearningService';
 import { getCurrentUser }      from '../../services/auth/session';
 import SectionHeroBanner from './SectionHeroBanner';
+import ThumbnailCard from '../shared/ThumbnailCard';
+import { formatMinutesRemaining, formatDueCountdown } from '../../utils/deadline';
 import type { MyLearningPath, MyLearningPathStatus } from '../../types/myLearningPath';
+import type { MyCourse } from '../../types/myCourse';
+import type { ContinueLearningItem } from '../../types/continueLearning';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -213,6 +220,12 @@ const navigate = useNavigate();
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
 
+  // Courses assigned directly (not through any Learning Path) still need
+  // a home now that My Courses is just a catalog — they show here too,
+  // so every actionable piece of training lives in one screen.
+  const [standaloneCourses, setStandaloneCourses] = useState<MyCourse[]>([]);
+  const [continueByCourseId, setContinueByCourseId] = useState<Map<string, ContinueLearningItem>>(new Map());
+
   useEffect(() => {
     if (!user?.id) {
       setError('No active session.');
@@ -230,6 +243,14 @@ const navigate = useNavigate();
         console.error(err);
       })
       .finally(() => setLoading(false));
+
+    Promise.all([loadMyCourses(user.id), loadLearningPathCourses(), loadContinueLearning(user.id)])
+      .then(([myCourses, pathCourses, continueItems]) => {
+        const pathCourseIds = new Set(pathCourses.filter((pc) => pc.active).map((pc) => pc.course_id));
+        setStandaloneCourses(myCourses.filter((c) => !pathCourseIds.has(c.courseId)));
+        setContinueByCourseId(new Map(continueItems.map((c) => [c.courseId, c])));
+      })
+      .catch((err: unknown) => console.error(err));
   }, [user?.id]);
 
   const filtered = useMemo(() => {
@@ -287,6 +308,41 @@ const navigate = useNavigate();
       )}
 
     </div>
+
+    {!loading && standaloneCourses.length > 0 && (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+        <h3 className="mb-1 text-lg font-bold text-slate-800">Individually Assigned Courses</h3>
+        <p className="mb-6 text-sm text-slate-500">Assigned to you directly, outside any learning path.</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {standaloneCourses.map((course) => {
+            const completed = course.status === 'COMPLETED';
+            const due = course.dueDate ? formatDueCountdown(course.dueDate) : null;
+            const minutesLeft = continueByCourseId.get(course.courseId)
+              ? formatMinutesRemaining(continueByCourseId.get(course.courseId)!.estimatedMinutesRemaining)
+              : '';
+            return (
+              <ThumbnailCard
+                key={course.enrollmentId}
+                title={course.courseName}
+                subtitle={completed ? 'Completed' : `${course.completionPercentage}% complete`}
+                thumbnailUrl={course.thumbnail}
+                disabled={course.status === 'CANCELLED' || course.status === 'EXPIRED'}
+                onClick={() => navigate(ROUTES.COURSE_PLAYER.replace(':courseId', course.enrollmentId))}
+              >
+                {!completed && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {minutesLeft && <span className="text-slate-500">{minutesLeft}</span>}
+                    {due && (
+                      <span className={due.overdue ? 'font-semibold text-red-600' : 'text-slate-500'}>{due.text}</span>
+                    )}
+                  </div>
+                )}
+              </ThumbnailCard>
+            );
+          })}
+        </div>
+      </div>
+    )}
     </div>
   );
 }

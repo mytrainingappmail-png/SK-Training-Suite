@@ -23,3 +23,22 @@ export function formatDeadline(iso: string | null): string {
     day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
   });
 }
+
+// ── Employee-facing "how am I doing" formatting ──────────────────────────────
+
+export function formatMinutesRemaining(minutes: number): string {
+  if (minutes <= 0) return '';
+  if (minutes < 60) return `~${minutes} min left`;
+  const hours = Math.round(minutes / 60);
+  return `~${hours} hr${hours === 1 ? '' : 's'} left`;
+}
+
+export function formatDueCountdown(dueDate: string): { text: string; overdue: boolean } | null {
+  if (!dueDate) return null;
+  const due = new Date(dueDate);
+  const now = new Date();
+  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}`, overdue: true };
+  if (diffDays === 0) return { text: 'Due today', overdue: false };
+  return { text: `${diffDays} day${diffDays === 1 ? '' : 's'} left`, overdue: false };
+}

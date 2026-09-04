@@ -66,17 +66,9 @@ export const MENU: MenuItem[] = [
   },
   {
     id: "my-courses",
-    title: "My Courses",
+    title: "Course Catalog",
     route: ROUTES.MY_COURSES,
     icon: "book-open",
-    visible: true,
-    group: "My Learning",
-  },
-  {
-    id: "continue-learning",
-    title: "Continue Learning",
-    route: ROUTES.CONTINUE_LEARNING,
-    icon: "play-circle",
     visible: true,
     group: "My Learning",
   },
@@ -98,7 +90,7 @@ export const MENU: MenuItem[] = [
   },
   {
     id: "my-learning-paths",
-    title: "Learning Paths",
+    title: "My Learning Path",
     route: ROUTES.MY_LEARNING_PATHS,
     icon: "map",
     visible: true,

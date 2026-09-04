@@ -11,11 +11,14 @@ import { useNavigate } from 'react-router-dom';
 import { loadMyCourses } from '../../services/myCourses/myCourseService';
 import { loadLearningPathCourses } from '../../services/learningPathCourse/learningPathCourseService';
 import { loadCourses } from '../../services/course/courseService';
+import { loadContinueLearning } from '../../services/continueLearning/continueLearningService';
 import { getCurrentUser } from '../../services/auth/session';
 import { ROUTES } from '../../constants/routes';
 import ThumbnailCard from '../shared/ThumbnailCard';
+import { formatMinutesRemaining, formatDueCountdown } from '../../utils/deadline';
 import type { MyCourse } from '../../types/myCourse';
 import type { Course } from '../../types/course';
+import type { ContinueLearningItem } from '../../types/continueLearning';
 
 interface LearningPathDetailProps {
   learningPathId: string;
@@ -37,6 +40,7 @@ interface PathCourseRow {
   unlockPrevious: boolean;
   course: Course | null;
   enrollment: MyCourse | null;
+  continueInfo: ContinueLearningItem | null;
 }
 
 function LockedPill() {
@@ -66,10 +70,11 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
     }
     setLoading(true);
     setError('');
-    Promise.all([loadLearningPathCourses(), loadCourses(), loadMyCourses(user.id)])
-      .then(([pathCourses, courses, myCourses]) => {
+    Promise.all([loadLearningPathCourses(), loadCourses(), loadMyCourses(user.id), loadContinueLearning(user.id)])
+      .then(([pathCourses, courses, myCourses, continueItems]) => {
         const courseById = new Map(courses.map((c) => [c.id, c]));
         const enrollmentByCourseId = new Map(myCourses.map((m) => [m.courseId, m]));
+        const continueByCourseId = new Map(continueItems.map((c) => [c.courseId, c]));
         const list = pathCourses
           .filter((pc) => pc.learning_path_id === learningPathId && pc.active)
           .sort((a, b) => a.sequence_no - b.sequence_no)
@@ -77,6 +82,7 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
             courseId: pc.course_id,
             sequenceNo: pc.sequence_no,
             unlockPrevious: pc.unlock_previous,
+            continueInfo: continueByCourseId.get(pc.course_id) ?? null,
             course: courseById.get(pc.course_id) ?? null,
             enrollment: enrollmentByCourseId.get(pc.course_id) ?? null,
           }));
@@ -127,6 +133,9 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {rows.map((row) => {
               const locked = isPathLocked(row);
+              const completed = row.enrollment?.status === 'COMPLETED';
+              const due = row.enrollment?.dueDate ? formatDueCountdown(row.enrollment.dueDate) : null;
+              const minutesLeft = row.continueInfo ? formatMinutesRemaining(row.continueInfo.estimatedMinutesRemaining) : '';
               return (
                 <ThumbnailCard
                   key={row.courseId}
@@ -135,7 +144,7 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
                     locked
                       ? 'Complete the previous course to unlock'
                       : row.enrollment
-                        ? `${row.enrollment.completionPercentage}% complete`
+                        ? completed ? 'Completed' : `${row.enrollment.completionPercentage}% complete`
                         : 'Not assigned to you yet'
                   }
                   thumbnailUrl={row.course?.thumbnail ?? row.enrollment?.thumbnail}
@@ -143,7 +152,16 @@ function LearningPathDetail({ learningPathId, pathName, onBack }: LearningPathDe
                   badge={locked ? <LockedPill /> : undefined}
                   disabled={!row.enrollment || locked}
                   onClick={() => openCourse(row)}
-                />
+                >
+                  {!locked && row.enrollment && !completed && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                      {minutesLeft && <span className="text-slate-500">{minutesLeft}</span>}
+                      {due && (
+                        <span className={due.overdue ? 'font-semibold text-red-600' : 'text-slate-500'}>{due.text}</span>
+                      )}
+                    </div>
+                  )}
+                </ThumbnailCard>
               );
             })}
           </div>

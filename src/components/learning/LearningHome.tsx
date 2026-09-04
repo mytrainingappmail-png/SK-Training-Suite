@@ -8,7 +8,7 @@
 //   ../../types/learning                      — LearningHome
 
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { loadLearningHome }    from '../../services/learning/learningService';
 import { getCurrentUser }      from '../../services/auth/session';
 import { loadVisibleCoursesForEmployee } from '../../services/courseVisibility/courseVisibilityService';
@@ -188,6 +188,7 @@ const Ic = {
 
 export default function LearningHome() {
   const user = getCurrentUser();
+  const navigate = useNavigate();
   const [data,    setData]    = useState<LearningHome | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -368,7 +369,7 @@ export default function LearningHome() {
 
                 {/* CTA */}
                 <button
-                  onClick={() => console.info('[LearningHome] Continue:', course.courseId)}
+                  onClick={() => navigate(ROUTES.COURSE_PLAYER.replace(':courseId', course.enrollmentId))}
                   className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-yellow-400 active:scale-95"
                 >
                   {course.completionPercentage > 0 ? 'Continue' : 'Start'}
