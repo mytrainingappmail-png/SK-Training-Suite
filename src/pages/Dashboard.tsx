@@ -1059,7 +1059,7 @@ function Dashboard({
               return (
                 <div key={key} className="group flex items-center gap-1.5">
                   <button
-                    onClick={() => navigate(ROUTES.ADMIN, { state: { tab: action.tab } })}
+                    onClick={() => navigate(`${ROUTES.ADMIN}/${action.tab}`)}
                     className="flex flex-1 items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
                     <span className="flex items-center gap-2"><IconPlus className="h-4 w-4" /> {action.label}</span> <IconArrowRight />

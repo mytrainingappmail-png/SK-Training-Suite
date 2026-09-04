@@ -100,7 +100,7 @@ function Training() {
         </div>
 
         <button
-          onClick={() => navigate(ROUTES.ADMIN, { state: { tab: 'course' } })}
+          onClick={() => navigate(`${ROUTES.ADMIN}/course`)}
           className="rounded-xl bg-yellow-500 px-5 py-3 font-semibold transition hover:bg-yellow-400"
         >
           + Create Course
@@ -122,7 +122,7 @@ function Training() {
             <button
               key={course.id}
               type="button"
-              onClick={() => navigate(ROUTES.ADMIN, { state: { tab: 'course-builder', courseId: course.id } })}
+              onClick={() => navigate(`${ROUTES.ADMIN}/course-builder`, { state: { courseId: course.id } })}
               className="rounded-2xl border p-6 text-left transition hover:border-yellow-400 hover:shadow-lg"
             >
 

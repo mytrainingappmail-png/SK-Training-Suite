@@ -41,7 +41,6 @@ import { CoursePlayerRoute, LessonPlayerRoute, ResourceViewerRoute, LearningPath
 import MyAssessments from "./components/learning/MyAssessments";
 import MyCertificates from "./components/learning/MyCertificates";
 import MyProgress from "./components/learning/MyProgress";
-import ContinueLearning from "./components/learning/ContinueLearning";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
@@ -218,6 +217,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path={`${ROUTES.ADMIN}/:tab`}
+          element={
+            <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_COMPANY]} redirectTo={ROUTES.DASHBOARD}>
+              <Admin />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Learning (employee-facing) — any logged-in user can access
             their own learning content. These are intentionally NOT
@@ -233,7 +240,6 @@ function App() {
         <Route path={ROUTES.MY_CERTIFICATES} element={<MyCertificates />} />
         <Route path={ROUTES.MY_LEARNING_PATHS} element={<LearningPathsRoute />} />
         <Route path={ROUTES.MY_PROGRESS} element={<MyProgress />} />
-        <Route path={ROUTES.CONTINUE_LEARNING} element={<ContinueLearning />} />
         <Route path={ROUTES.VIDEOS} element={<Videos />} />
         <Route path={ROUTES.PROJECTS} element={<ProjectsPage />} />
         <Route path={ROUTES.BRAINSTORMING} element={<BrainstormingPage />} />

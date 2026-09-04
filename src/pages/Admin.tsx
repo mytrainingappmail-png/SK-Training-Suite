@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ROUTES } from "../constants/routes";
 
 // import Sidebar from "../components/dashboard/Sidebar";
 // import Header from "../components/dashboard/Header";
@@ -34,6 +35,7 @@ import LearningPathCourseManagement from "../components/superadmin/LearningPathC
 import LearningPathEnrollmentManagement from "../components/superadmin/LearningPathEnrollmentManagement";
 import LearningPathProgressManagement from "../components/superadmin/LearningPathProgressManagement";
 import EnrollmentManagement from "../components/superadmin/EnrollmentManagement";
+import AssignTrainingManagement from "../components/superadmin/AssignTrainingManagement";
 import TrainingBatchManagement from "../components/superadmin/TrainingBatchManagement";
 import EmployeeRoleManagement from "../components/superadmin/EmployeeRoleManagement";
 import ReportManagement from "../components/superadmin/ReportManagement";
@@ -89,11 +91,30 @@ const TAB_MODULE_MAP: Record<string, string> = {
   "employee-of-the-month": "employee_of_the_month",
 };
 
+function humanizeTab(tab: string): string {
+  return tab.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 function Admin() {
   const location = useLocation();
-  const requestedTab = (location.state as { tab?: string; courseId?: string } | null)?.tab;
-  const requestedCourseId = (location.state as { tab?: string; courseId?: string } | null)?.courseId;
-  const [activeTab, setActiveTab] = useState(requestedTab || "company");
+  const navigate = useNavigate();
+  const { tab: tabParam } = useParams<{ tab?: string }>();
+  const requestedCourseId = (location.state as { courseId?: string } | null)?.courseId;
+  const activeTab = tabParam ?? "";
+  // Every existing button in the grid below already calls
+  // setActiveTab("x") — keeping the name and just swapping what it does
+  // (navigate to /admin/x instead of setting local state) means none of
+  // those ~58 call sites need touching.
+  function setActiveTab(tab: string) {
+    navigate(`${ROUTES.ADMIN}/${tab}`);
+  }
+  function goBackToConsole() {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(ROUTES.ADMIN);
+  }
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
   const { can, PERMISSIONS } = useAuthorization();
   const [search, setSearch] = useState("");
   const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
@@ -175,30 +196,49 @@ function Admin() {
         <></>
 
         <main className="p-8">
-          <div
-            className="rounded-2xl p-6"
-            style={{ backgroundColor: consoleColors.bg, border: `2px solid ${consoleColors.border}` }}
-          >
-            <h1 className="text-3xl font-bold" style={{ color: contrastText(consoleColors.bg) }}>
-              Super Admin Console
-            </h1>
+          {!activeTab ? (
+            <div
+              className="rounded-2xl p-6"
+              style={{ backgroundColor: consoleColors.bg, border: `2px solid ${consoleColors.border}` }}
+            >
+              <h1 className="text-3xl font-bold" style={{ color: contrastText(consoleColors.bg) }}>
+                Super Admin Console
+              </h1>
 
-            <p className="mt-2" style={{ color: consoleColors.border }}>
-              Configure and manage the complete Learning Management Platform.
-            </p>
+              <p className="mt-2" style={{ color: consoleColors.border }}>
+                Configure and manage the complete Learning Management Platform.
+              </p>
 
-            <div className="mt-6">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search modules…"
-                className="w-full max-w-md rounded-xl bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none"
-                style={{ border: `2px solid ${consoleColors.border}` }}
-              />
+              <div className="mt-6">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search modules…"
+                  className="w-full max-w-md rounded-xl bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none"
+                  style={{ border: `2px solid ${consoleColors.border}` }}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              className="flex items-center justify-between rounded-2xl p-4"
+              style={{ backgroundColor: consoleColors.bg, border: `2px solid ${consoleColors.border}` }}
+            >
+              <button
+                onClick={goBackToConsole}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow transition hover:brightness-110"
+                style={{ backgroundColor: consoleColors.button, color: contrastText(consoleColors.button) }}
+              >
+                ← Back to Admin Console
+              </button>
+              <h2 className="text-lg font-bold" style={{ color: contrastText(consoleColors.bg) }}>
+                {humanizeTab(activeTab)}
+              </h2>
+            </div>
+          )}
 
+          {!activeTab && (
           <div className="mt-8 space-y-5">
             {(can(PERMISSIONS.VIEW_COMPANY) && matches("Company")) ||
              (can(PERMISSIONS.VIEW_BRANCH) && matches("Branches")) ||
@@ -313,7 +353,9 @@ function Admin() {
               </div>
             ) : null}
 
-            {(can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths")) ||
+            {(can(PERMISSIONS.VIEW_ENROLLMENT) && matches("Assign Training")) ||
+             (can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Assign Training")) ||
+             (can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths")) ||
              (can(PERMISSIONS.VIEW_LP_COURSE) && matches("Learning Path Courses")) ||
              (can(PERMISSIONS.VIEW_LP_ENROLLMENT) && matches("Learning Path Enrollments")) ||
              (can(PERMISSIONS.VIEW_LP_PROGRESS) && matches("Learning Path Progress")) ||
@@ -321,6 +363,9 @@ function Admin() {
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Learning Paths & Enrollment</p>
                 <div className="flex flex-wrap gap-3">
+                  {(can(PERMISSIONS.VIEW_ENROLLMENT) || can(PERMISSIONS.VIEW_LP_ENROLLMENT)) && matches("Assign Training") && (
+                    <button onClick={() => setActiveTab("assign-training")} className={getTabClass()} style={getTabStyle("assign-training")}>🎯 Assign Training</button>
+                  )}
                   {can(PERMISSIONS.VIEW_LEARNING_PATH) && matches("Learning Paths") && (
                     <button onClick={() => setActiveTab("learning-path")} className={getTabClass()} style={getTabStyle("learning-path")}>Learning Paths</button>
                   )}
@@ -505,7 +550,9 @@ function Admin() {
               </div>
             ) : null}
           </div>
+          )}
 
+          {activeTab && (
           <div className="mt-8">
             {activeTab === "company" && can(PERMISSIONS.VIEW_COMPANY) && <CompanyManagement />}
 
@@ -552,6 +599,9 @@ function Admin() {
             )}
             {activeTab === "learning-path-enrollment" && can(PERMISSIONS.VIEW_LP_ENROLLMENT) && moduleAllowed("learning-path-enrollment") && (
               <LearningPathEnrollmentManagement />
+            )}
+            {activeTab === "assign-training" && (can(PERMISSIONS.VIEW_ENROLLMENT) || can(PERMISSIONS.VIEW_LP_ENROLLMENT)) && (
+              <AssignTrainingManagement />
             )}
             {activeTab === "learning-path-progress" && can(PERMISSIONS.VIEW_LP_PROGRESS) && moduleAllowed("learning-path-progress") && (
               <LearningPathProgressManagement />
@@ -628,6 +678,7 @@ function Admin() {
 
             {activeTab === "geofence" && moduleAllowed("geofence") && <GeofenceManagement />}
           </div>
+          )}
         </main>
       </div>
     </div>

@@ -27,7 +27,7 @@ function DashboardRouter() {
   const [roleCode, setRoleCode] = useState<string | null | undefined>(undefined);
 
   function goToAdminTab(tab: string, courseId?: string) {
-    navigate(ROUTES.ADMIN, { state: { tab, courseId } });
+    navigate(`${ROUTES.ADMIN}/${tab}`, courseId ? { state: { courseId } } : undefined);
   }
 
   useEffect(() => {
