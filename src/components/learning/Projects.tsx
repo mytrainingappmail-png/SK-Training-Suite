@@ -7,6 +7,11 @@
 // Page/Test/FAQ sections an admin has added. Same visual language as
 // MyCourses/LearningHome, with a more colorful/photographic
 // real-estate-brochure feel.
+//
+// Compare mode reuses the exact same single-project detail card
+// (ProjectDetailCard) stacked once per selected project, each in its own
+// bordered box — not a row-by-row attribute table — so "compare" just
+// means "read these side by side, one after another."
 
 import { useEffect, useState } from 'react';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
@@ -33,14 +38,8 @@ function IconDownload({ className = 'h-4 w-4' }: { className?: string }) {
 function IconScale({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M12 3l-5.5 3M12 3l5.5 3m-11 0-3 6a4 4 0 0 0 8 0l-3-6h-2Zm11 0-3 6a4 4 0 0 0 8 0l-3-6h-2Z" /></svg>);
 }
-function IconCheckCircle({ className = 'h-4 w-4' }: { className?: string }) {
-  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>);
-}
 function IconX({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>);
-}
-function IconQuestion({ className = 'h-4 w-4' }: { className?: string }) {
-  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 17.25h.008v.008H12v-.008Z" /></svg>);
 }
 
 const MAX_COMPARE = 3;
@@ -64,6 +63,206 @@ function Skeleton() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The single-project detail — used both for "open one project" and,
+// stacked, for "compare N projects". Owns its own expand/collapse state
+// so multiple instances on screen at once never fight over one toggle.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ProjectDetailCardProps {
+  project: Project;
+  gradient: string;
+  completed: boolean;
+  marking: boolean;
+  onMarkComplete: () => void;
+  onLaunchQuiz: (assessmentId: string) => void;
+  indexBadge?: number;
+  onRemove?: () => void;
+}
+
+function ProjectDetailCard({
+  project, gradient, completed, marking, onMarkComplete, onLaunchQuiz, indexBadge, onRemove,
+}: ProjectDetailCardProps) {
+  const [showFullDetails, setShowFullDetails] = useState(false);
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
+
+  function toggleKey(key: string) {
+    setOpenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
+      <div className={`relative bg-gradient-to-r ${gradient} px-8 py-8 text-white`}>
+        {indexBadge !== undefined && (
+          <span className="absolute left-8 top-6 rounded-full bg-black/40 px-2.5 py-0.5 text-xs font-bold">#{indexBadge}</span>
+        )}
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            aria-label="Remove from comparison"
+            className="absolute right-6 top-6 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow transition hover:bg-white"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+        )}
+        <div className={`flex items-center gap-4 ${indexBadge !== undefined ? 'mt-6' : ''}`}>
+          <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-white/20 backdrop-blur-sm">
+            {project.thumbnail ? (
+              <img src={project.thumbnail} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center"><IconBuilding className="h-9 w-9" /></div>
+            )}
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">{project.projectName}</h2>
+            {project.shortDescription && <p className="mt-1 text-sm text-white/80">{project.shortDescription}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5 p-8">
+        {project.fullDescription && (
+          <div>
+            <button
+              onClick={() => setShowFullDetails((v) => !v)}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:underline"
+            >
+              {showFullDetails ? 'Hide Full Details ▲' : 'View Full Details ▼'}
+            </button>
+            {showFullDetails && (
+              <div
+                className="prose prose-sm mt-3 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.fullDescription) }}
+              />
+            )}
+          </div>
+        )}
+
+        {project.brochures.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {project.brochures.map((b) => (
+              <a
+                key={b.resourceId}
+                href={b.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
+              >
+                <IconPdf className="h-4 w-4" />
+                Download Brochure
+                <IconDownload className="h-3.5 w-3.5" />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {project.sections.length > 0 && (
+          <div className="space-y-3 border-t border-slate-100 pt-4">
+            {project.sections.map((section) => {
+              if (section.section_type === 'page') {
+                const key = `page-${section.id}`;
+                return (
+                  <div key={section.id}>
+                    <button
+                      onClick={() => toggleKey(key)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline"
+                    >
+                      {openKeys.has(key) ? '▼' : '▶'} {section.title}
+                    </button>
+                    {openKeys.has(key) && (
+                      <div
+                        className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
+                      />
+                    )}
+                  </div>
+                );
+              }
+              if (section.section_type === 'faq') {
+                return (
+                  <div key={section.id}>
+                    <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
+                    <div className="space-y-2">
+                      {section.faq_items.map((item, i) => {
+                        const key = `faq-${section.id}-${i}`;
+                        return (
+                          <div key={key} className="rounded-xl bg-slate-50 p-3">
+                            <button
+                              onClick={() => toggleKey(key)}
+                              className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-700"
+                            >
+                              {item.question}
+                              <span className="ml-2 flex-shrink-0 text-slate-400">{openKeys.has(key) ? '−' : '+'}</span>
+                            </button>
+                            {openKeys.has(key) && (
+                              <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+              // section_type === 'test'
+              return (
+                <div key={section.id} className={`flex items-center justify-between gap-3 rounded-xl p-4 ${completed ? 'bg-amber-50' : 'bg-slate-100'}`}>
+                  <div>
+                    <p className={`text-sm font-semibold ${completed ? 'text-amber-900' : 'text-slate-500'}`}>
+                      {completed ? '' : '🔒 '}{section.title}
+                    </p>
+                    <p className={`text-xs ${completed ? 'text-amber-700' : 'text-slate-400'}`}>
+                      {completed
+                        ? `Take this test to confirm you've gone through ${project.projectName}.`
+                        : 'Mark the project complete above to unlock this mandatory test.'}
+                    </p>
+                  </div>
+                  {section.assessment_id && (
+                    <button
+                      onClick={() => completed && onLaunchQuiz(section.assessment_id!)}
+                      disabled={!completed}
+                      className={`flex-shrink-0 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 ${
+                        completed ? 'bg-amber-500 text-white hover:bg-amber-600' : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                      }`}
+                    >
+                      {completed ? 'Take Test' : 'Locked'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {project.sections.some((s) => s.section_type === 'test') && !completed && (
+          <div className="rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4 text-center">
+            <p className="mb-3 text-sm font-medium text-indigo-900">
+              Read through this project, then mark it complete to unlock the mandatory test.
+            </p>
+            <button
+              onClick={onMarkComplete}
+              disabled={marking}
+              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {marking ? 'Marking…' : '✓ Mark Project as Complete'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Projects
+// ─────────────────────────────────────────────────────────────────────────────
+
 function Projects() {
   const user = getCurrentUser();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -71,11 +270,9 @@ function Projects() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
-  const [showFullDetails, setShowFullDetails] = useState(false);
-  const [openFaqKeys, setOpenFaqKeys] = useState<Set<string>>(new Set());
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [completedProjectIds, setCompletedProjectIds] = useState<Set<string>>(new Set());
-  const [markingComplete, setMarkingComplete] = useState(false);
+  const [markingProjectId, setMarkingProjectId] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompareView, setShowCompareView] = useState(false);
@@ -103,15 +300,6 @@ function Projects() {
     .map((id) => projects.find((p) => p.projectId === id))
     .filter((p): p is Project => !!p);
 
-  function toggleFaq(key: string) {
-    setOpenFaqKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
   useEffect(() => {
     if (!user?.id) {
       setError('No active session.');
@@ -127,14 +315,14 @@ function Projects() {
     loadCompletedProjectIds(user.id).then((ids) => setCompletedProjectIds(new Set(ids))).catch(() => {});
   }, [user?.id]);
 
-  async function handleMarkComplete() {
-    if (!user?.id || !openProjectId) return;
-    setMarkingComplete(true);
+  async function handleMarkComplete(projectId: string) {
+    if (!user?.id) return;
+    setMarkingProjectId(projectId);
     try {
-      await markProjectComplete(openProjectId, user.id, user.companyId ?? '');
-      setCompletedProjectIds((prev) => new Set(prev).add(openProjectId));
+      await markProjectComplete(projectId, user.id, user.companyId ?? '');
+      setCompletedProjectIds((prev) => new Set(prev).add(projectId));
     } finally {
-      setMarkingComplete(false);
+      setMarkingProjectId(null);
     }
   }
 
@@ -149,6 +337,7 @@ function Projects() {
 
   if (showCompareView && compareProjects.length >= 2) {
     return (
+      <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
@@ -162,299 +351,50 @@ function Projects() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="w-40 bg-slate-50 p-4 text-left align-bottom text-xs font-semibold uppercase tracking-wide text-slate-400"> </th>
-                {compareProjects.map((p, i) => (
-                  <th key={p.projectId} className="min-w-[220px] border-l border-slate-100 p-4 text-left align-top">
-                    <div className="relative overflow-hidden rounded-xl">
-                      <div className={`relative flex h-28 w-full items-end bg-gradient-to-br ${GRADIENTS[projects.findIndex((x) => x.projectId === p.projectId) % GRADIENTS.length]} p-3`}>
-                        {p.thumbnail ? (
-                          <img src={p.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                        ) : (
-                          <IconBuilding className="absolute right-3 top-3 h-8 w-8 text-white/50" />
-                        )}
-                        <button
-                          onClick={() => setCompareIds((prev) => prev.filter((id) => id !== p.projectId))}
-                          aria-label="Remove from comparison"
-                          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow transition hover:bg-white"
-                        >
-                          <IconX className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="relative z-10 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white">#{i + 1}</span>
-                      </div>
-                    </div>
-                    <p className="mt-2 font-bold leading-snug text-slate-800">{p.projectName}</p>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              <tr>
-                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Overview</td>
-                {compareProjects.map((p) => (
-                  <td key={p.projectId} className="border-l border-slate-100 p-4 align-top text-slate-600">
-                    {p.shortDescription || <span className="text-slate-300">—</span>}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Brochures</td>
-                {compareProjects.map((p) => (
-                  <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
-                    {p.brochures.length === 0 ? (
-                      <span className="text-slate-300">None available</span>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {p.brochures.map((b) => (
-                          <a
-                            key={b.resourceId}
-                            href={b.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                            className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:underline"
-                          >
-                            <IconPdf className="h-3.5 w-3.5 flex-shrink-0" /> {b.title || 'Download Brochure'}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Topics Covered</td>
-                {compareProjects.map((p) => {
-                  const pages = p.sections.filter((s) => s.section_type === 'page');
-                  return (
-                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
-                      {pages.length === 0 ? (
-                        <span className="text-slate-300">—</span>
-                      ) : (
-                        <ul className="space-y-1 text-xs text-slate-600">
-                          {pages.map((s) => <li key={s.id} className="flex items-start gap-1.5"><span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-indigo-400" />{s.title}</li>)}
-                        </ul>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-              <tr>
-                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">FAQs</td>
-                {compareProjects.map((p) => {
-                  const faqCount = p.sections.filter((s) => s.section_type === 'faq').reduce((sum, s) => sum + s.faq_items.length, 0);
-                  return (
-                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
-                      {faqCount === 0 ? (
-                        <span className="text-slate-300">—</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-600">
-                          <IconQuestion className="h-3.5 w-3.5" /> {faqCount} question{faqCount === 1 ? '' : 's'} answered
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-              <tr>
-                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Mandatory Test</td>
-                {compareProjects.map((p) => {
-                  const hasTest = p.sections.some((s) => s.section_type === 'test');
-                  return (
-                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
-                      {hasTest ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                          <IconCheckCircle className="h-3.5 w-3.5" /> Required
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">Not required</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-              <tr>
-                <td className="bg-slate-50 p-4 align-top text-xs font-semibold uppercase tracking-wide text-slate-400">Your Progress</td>
-                {compareProjects.map((p) => {
-                  const done = completedProjectIds.has(p.projectId);
-                  return (
-                    <td key={p.projectId} className="border-l border-slate-100 p-4 align-top">
-                      {done ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                          <IconCheckCircle className="h-3.5 w-3.5" /> Completed
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">Not started</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {compareProjects.map((p, i) => (
+          <ProjectDetailCard
+            key={p.projectId}
+            project={p}
+            gradient={GRADIENTS[projects.findIndex((x) => x.projectId === p.projectId) % GRADIENTS.length]}
+            completed={completedProjectIds.has(p.projectId)}
+            marking={markingProjectId === p.projectId}
+            onMarkComplete={() => handleMarkComplete(p.projectId)}
+            onLaunchQuiz={setActiveTestAssessmentId}
+            indexBadge={i + 1}
+            onRemove={() => setCompareIds((prev) => prev.filter((id) => id !== p.projectId))}
+          />
+        ))}
       </div>
+
+      {activeTestAssessmentId && user?.id && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
+            <AssessmentPlayer
+              assessmentId={activeTestAssessmentId}
+              employeeId={user.id}
+              onFinish={() => setActiveTestAssessmentId(null)}
+            />
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 
   if (openProject) {
     return (
       <>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className={`bg-gradient-to-r ${openGradient} px-8 py-8 text-white`}>
-          <button onClick={() => setOpenProjectId(null)} className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white/90 transition hover:text-white">
-            <IconArrowLeft /> Back to Projects
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-white/20 backdrop-blur-sm">
-              {openProject.thumbnail ? (
-                <img src={openProject.thumbnail} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center"><IconBuilding className="h-9 w-9" /></div>
-              )}
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">{openProject.projectName}</h2>
-              {openProject.shortDescription && <p className="mt-1 text-sm text-white/80">{openProject.shortDescription}</p>}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-5 p-8">
-          {openProject.fullDescription && (
-            <div>
-              <button
-                onClick={() => setShowFullDetails((v) => !v)}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:underline"
-              >
-                {showFullDetails ? 'Hide Full Details ▲' : 'View Full Details ▼'}
-              </button>
-              {showFullDetails && (
-                <div
-                  className="prose prose-sm mt-3 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(openProject.fullDescription) }}
-                />
-              )}
-            </div>
-          )}
-
-          {openProject.brochures.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {openProject.brochures.map((b) => (
-                <a
-                  key={b.resourceId}
-                  href={b.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
-                >
-                  <IconPdf className="h-4 w-4" />
-                  Download Brochure
-                  <IconDownload className="h-3.5 w-3.5" />
-                </a>
-              ))}
-            </div>
-          )}
-
-          {openProject.sections.length > 0 && (
-            <div className="space-y-3 border-t border-slate-100 pt-4">
-              {openProject.sections.map((section) => {
-                if (section.section_type === 'page') {
-                  const key = `page-${section.id}`;
-                  return (
-                    <div key={section.id}>
-                      <button
-                        onClick={() => toggleFaq(key)}
-                        className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline"
-                      >
-                        {openFaqKeys.has(key) ? '▼' : '▶'} {section.title}
-                      </button>
-                      {openFaqKeys.has(key) && (
-                        <div
-                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
-                        />
-                      )}
-                    </div>
-                  );
-                }
-                if (section.section_type === 'faq') {
-                  return (
-                    <div key={section.id}>
-                      <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
-                      <div className="space-y-2">
-                        {section.faq_items.map((item, i) => {
-                          const key = `faq-${section.id}-${i}`;
-                          return (
-                            <div key={key} className="rounded-xl bg-slate-50 p-3">
-                              <button
-                                onClick={() => toggleFaq(key)}
-                                className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-700"
-                              >
-                                {item.question}
-                                <span className="ml-2 flex-shrink-0 text-slate-400">{openFaqKeys.has(key) ? '−' : '+'}</span>
-                              </button>
-                              {openFaqKeys.has(key) && (
-                                <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                }
-                // section_type === 'test'
-                const isUnlocked = completedProjectIds.has(openProject.projectId);
-                return (
-                  <div key={section.id} className={`flex items-center justify-between gap-3 rounded-xl p-4 ${isUnlocked ? 'bg-amber-50' : 'bg-slate-100'}`}>
-                    <div>
-                      <p className={`text-sm font-semibold ${isUnlocked ? 'text-amber-900' : 'text-slate-500'}`}>
-                        {isUnlocked ? '' : '🔒 '}{section.title}
-                      </p>
-                      <p className={`text-xs ${isUnlocked ? 'text-amber-700' : 'text-slate-400'}`}>
-                        {isUnlocked
-                          ? `Take this test to confirm you've gone through ${openProject.projectName}.`
-                          : 'Mark the project complete above to unlock this mandatory test.'}
-                      </p>
-                    </div>
-                    {section.assessment_id && (
-                      <button
-                        onClick={() => isUnlocked && setActiveTestAssessmentId(section.assessment_id)}
-                        disabled={!isUnlocked}
-                        className={`flex-shrink-0 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 ${
-                          isUnlocked ? 'bg-amber-500 text-white hover:bg-amber-600' : 'cursor-not-allowed bg-slate-200 text-slate-400'
-                        }`}
-                      >
-                        {isUnlocked ? 'Take Test' : 'Locked'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {openProject.sections.some((s) => s.section_type === 'test') && !completedProjectIds.has(openProject.projectId) && (
-            <div className="rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4 text-center">
-              <p className="mb-3 text-sm font-medium text-indigo-900">
-                Read through this project, then mark it complete to unlock the mandatory test.
-              </p>
-              <button
-                onClick={handleMarkComplete}
-                disabled={markingComplete}
-                className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {markingComplete ? 'Marking…' : '✓ Mark Project as Complete'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <button onClick={() => setOpenProjectId(null)} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800">
+        <IconArrowLeft className="h-3.5 w-3.5" /> Back to Projects
+      </button>
+      <ProjectDetailCard
+        project={openProject}
+        gradient={openGradient}
+        completed={completedProjectIds.has(openProject.projectId)}
+        marking={markingProjectId === openProject.projectId}
+        onMarkComplete={() => handleMarkComplete(openProject.projectId)}
+        onLaunchQuiz={setActiveTestAssessmentId}
+      />
 
       {activeTestAssessmentId && user?.id && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -504,7 +444,7 @@ function Projects() {
 
       {compareMode && (
         <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-700">
-          Pick up to {MAX_COMPARE} projects to compare side by side — tap a card to select it.
+          Pick up to {MAX_COMPARE} projects to compare — tap a card to select it.
         </div>
       )}
 
