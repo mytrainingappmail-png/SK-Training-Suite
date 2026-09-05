@@ -23,6 +23,10 @@ export async function deleteQuiz(quizId: string): Promise<void> {
   return quizRepo.deleteQuiz(quizId);
 }
 
+export async function deleteQuizzes(quizIds: string[]): Promise<void> {
+  return quizRepo.deleteQuizzes(quizIds);
+}
+
 export interface SaveQuestionsResult {
   ok: boolean;
   error?: string;

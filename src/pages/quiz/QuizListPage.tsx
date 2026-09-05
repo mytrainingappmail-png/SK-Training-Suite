@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
-import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes } from "../../services/quiz/quizService";
+import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes } from "../../services/quiz/quizService";
 import { launchSession } from "../../services/quiz/quizSessionService";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import type { Quiz } from "../../types/quiz";
@@ -21,6 +21,7 @@ export default function QuizListPage() {
   const [merging, setMerging] = useState(false);
   const [mergeTitle, setMergeTitle] = useState("");
   const [showMergeForm, setShowMergeForm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function refresh() {
     if (!admin) return;
@@ -96,6 +97,32 @@ export default function QuizListPage() {
     });
   }
 
+  function selectAllFiltered() {
+    setSelected(new Set(filtered.map((q) => q.id)));
+  }
+
+  async function handleBulkDelete() {
+    if (selected.size === 0) return;
+    const titles = quizzes.filter((q) => selected.has(q.id)).map((q) => q.title);
+    if (
+      !confirm(
+        `Delete ${selected.size} quiz(zes)?\n\n${titles.join("\n")}\n\nThis also permanently deletes every question in them and every past session/result ever run on them. This cannot be undone.`
+      )
+    )
+      return;
+    setBulkDeleting(true);
+    setError("");
+    try {
+      await deleteQuizzes([...selected]);
+      setSelected(new Set());
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete the selected quizzes.");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   async function handleMerge() {
     if (!admin || selected.size < 2) return;
     setMerging(true);
@@ -131,12 +158,22 @@ export default function QuizListPage() {
         )}
       </div>
 
-      <input
-        className="w-full rounded-lg bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white outline-none focus:border-violet-500"
-        placeholder="🔍  Search quizzes…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          className="flex-1 min-w-[16rem] rounded-lg bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white outline-none focus:border-violet-500"
+          placeholder="🔍  Search quizzes…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {canEdit && filtered.length > 0 && (
+          <button
+            onClick={selectAllFiltered}
+            className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-2 whitespace-nowrap"
+          >
+            ☑ Select All ({filtered.length}{search ? " matching" : ""})
+          </button>
+        )}
+      </div>
 
       {error && (
         <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
@@ -222,7 +259,7 @@ export default function QuizListPage() {
                 {canEdit && (
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 border border-dashed border-slate-700 rounded-lg px-2.5 py-1.5 cursor-pointer">
                     <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelected(q.id)} />
-                    Merge
+                    Select
                   </label>
                 )}
               </div>
@@ -231,16 +268,25 @@ export default function QuizListPage() {
         </div>
       )}
 
-      {canEdit && selected.size >= 2 && (
+      {canEdit && selected.size >= 1 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900 border border-violet-500 rounded-2xl shadow-2xl p-4 w-[92%] max-w-lg">
           {!showMergeForm ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-white font-semibold flex-1">{selected.size} quizzes selected</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm text-white font-semibold flex-1">{selected.size} quiz{selected.size === 1 ? "" : "zes"} selected</span>
+              {selected.size >= 2 && (
+                <button
+                  onClick={() => setShowMergeForm(true)}
+                  className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+                >
+                  🔗 Merge Selected
+                </button>
+              )}
               <button
-                onClick={() => setShowMergeForm(true)}
-                className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="text-sm font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
               >
-                🔗 Merge Selected
+                {bulkDeleting ? "Deleting…" : "🗑 Delete Selected"}
               </button>
               <button
                 onClick={() => setSelected(new Set())}

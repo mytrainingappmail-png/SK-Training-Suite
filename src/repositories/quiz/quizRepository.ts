@@ -128,6 +128,20 @@ export async function deleteQuiz(quizId: string): Promise<void> {
   }
 }
 
+/** One statement for the whole batch — questions/options/sessions/results
+ * cascade per quiz exactly like a single deleteQuiz would, just for every
+ * id at once (e.g. clearing out a handful of merged test quizzes that
+ * never panned out). */
+export async function deleteQuizzes(quizIds: string[]): Promise<void> {
+  if (quizIds.length === 0) return;
+  const { error } = await supabaseQuiz.from("quizzes").delete().in("id", quizIds);
+
+  if (error) {
+    console.error("[quizRepository] deleteQuizzes:", error);
+    throw new Error(error.message);
+  }
+}
+
 /** Replaces the whole question set for a quiz — matches the "edit in memory, save on publish" builder flow. */
 export async function replaceQuestions(quizId: string, questions: QuestionForm[]): Promise<void> {
   const { error: delError } = await supabaseQuiz.from("quiz_questions").delete().eq("quiz_id", quizId);
