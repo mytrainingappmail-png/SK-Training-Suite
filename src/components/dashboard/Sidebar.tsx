@@ -96,129 +96,6 @@ const MENU_PERMISSION_MAP: Record<string, PermissionCode> = {
   "help-center": PERMISSIONS.VIEW_HELP_CENTER,
 };
 
-// Every tab inside the Admin page (src/pages/Admin.tsx), grouped for the
-// sidebar so each one is reachable directly instead of "click Admin, then
-// find the right tab button". `permission` mirrors exactly what Admin.tsx
-// itself checks for that tab (or is left unset for tabs Admin.tsx shows to
-// anyone who can already reach the Admin page at all) — this only adds a
-// second path to the same already-gated destinations, never a new one.
-interface AdminSectionItem {
-  tab: string;
-  label: string;
-  permission?: PermissionCode;
-  // True for tabs backed by genuinely platform-wide tables (settings, menus,
-  // permissions, themes, subscription_plans, discount_codes,
-  // payment_settings — see 20260722130000_platform_operator_scoping.sql),
-  // writable only by the one platform-operator company. Every other
-  // company's own SUPER_ADMIN already has the underlying permission (it's
-  // granted per-role, not per-company), so `permission` alone doesn't hide
-  // these — without this flag a tenant admin sees the link, opens the tab,
-  // and any save hits a raw Postgres RLS error with no explanation.
-  operatorOnly?: boolean;
-  // Gates this tab on the company's app_modules toggle (see
-  // src/services/company/appModuleService.ts) — for tabs that manage
-  // content belonging to an optional section (e.g. Real Estate Projects),
-  // as opposed to structural admin capability every company needs
-  // (Branches, Roles, Employees, ...) which is never gated this way.
-  moduleKey?: string;
-}
-interface AdminSectionGroup {
-  group: string;
-  items: AdminSectionItem[];
-}
-
-const ADMIN_SECTIONS: AdminSectionGroup[] = [
-  {
-    group: 'Organization',
-    items: [
-      { tab: 'company', label: 'Company', permission: PERMISSIONS.VIEW_COMPANY },
-      { tab: 'branch', label: 'Branches', permission: PERMISSIONS.VIEW_BRANCH },
-      { tab: 'department', label: 'Departments', permission: PERMISSIONS.VIEW_DEPARTMENT },
-      { tab: 'designation', label: 'Designations', permission: PERMISSIONS.VIEW_DESIGNATION },
-      { tab: 'employee', label: 'Employees', permission: PERMISSIONS.VIEW_EMPLOYEE },
-      { tab: 'employee-of-the-month', label: 'Employee of the Month', permission: PERMISSIONS.VIEW_EMPLOYEE, moduleKey: 'employee_of_the_month' },
-      { tab: 'roles', label: 'Roles', permission: PERMISSIONS.VIEW_ROLE },
-      { tab: 'employee-role', label: 'Employee Roles', permission: PERMISSIONS.VIEW_EMPLOYEE_ROLE },
-      { tab: 'permissions', label: 'Permissions', permission: PERMISSIONS.VIEW_PERMISSION, operatorOnly: true },
-      { tab: 'role-permission', label: 'Permission Matrix', permission: PERMISSIONS.VIEW_PERMISSION },
-    ],
-  },
-  {
-    group: 'Learning Content',
-    items: [
-      { tab: 'category', label: 'Categories', permission: PERMISSIONS.VIEW_CATEGORY, moduleKey: 'courses' },
-      { tab: 'course', label: 'Courses', permission: PERMISSIONS.VIEW_COURSE, moduleKey: 'courses' },
-      { tab: 'course-builder', label: 'Course Builder', permission: PERMISSIONS.VIEW_COURSE, moduleKey: 'courses' },
-      { tab: 'resource', label: 'Resources', permission: PERMISSIONS.VIEW_RESOURCE, moduleKey: 'courses' },
-      { tab: 'course-visibility', label: 'Course Visibility', moduleKey: 'courses' },
-      { tab: 'video-library-content', label: 'Video Library', moduleKey: 'courses' },
-      { tab: 'real-estate-projects', label: 'Projects', moduleKey: 'projects' },
-      { tab: 'brainstorming', label: 'Brainstorming', operatorOnly: true, moduleKey: 'brainstorming' },
-    ],
-  },
-  {
-    group: 'Assessments & Certification',
-    items: [
-      { tab: 'assessment', label: 'Assessment', permission: PERMISSIONS.VIEW_ASSESSMENT, moduleKey: 'assessments' },
-      { tab: 'question', label: 'Question Bank', permission: PERMISSIONS.VIEW_QUESTION_BANK, moduleKey: 'assessments' },
-      { tab: 'assignment', label: 'Assignments', permission: PERMISSIONS.VIEW_ASSIGNMENT, moduleKey: 'assessments' },
-      { tab: 'evaluation', label: 'Evaluation Rules', permission: PERMISSIONS.VIEW_EVALUATION_RULE, moduleKey: 'assessments' },
-      { tab: 'results', label: 'Results', permission: PERMISSIONS.VIEW_ASSESSMENT_RESULT, moduleKey: 'assessments' },
-      { tab: 'certificate', label: 'Certificates', permission: PERMISSIONS.VIEW_CERTIFICATE, moduleKey: 'certificates' },
-      { tab: 'certificate-template', label: 'Certificate Templates', permission: PERMISSIONS.VIEW_CERT_TEMPLATE, moduleKey: 'certificates' },
-      { tab: 'certificate-generation', label: 'Certificate Queue', permission: PERMISSIONS.VIEW_CERT_QUEUE, moduleKey: 'certificates' },
-      { tab: 'certificate-verification', label: 'Certificate Verification', permission: PERMISSIONS.VIEW_CERT_VERIFICATION, moduleKey: 'certificates' },
-      { tab: 'bulk-certificate-issue', label: 'Bulk Certificate Issue', moduleKey: 'certificates' },
-    ],
-  },
-  {
-    group: 'Learning Paths & Training',
-    items: [
-      { tab: 'learning-path', label: 'Learning Paths', permission: PERMISSIONS.VIEW_LEARNING_PATH, moduleKey: 'learning_paths' },
-      { tab: 'learning-path-course', label: 'Learning Path Courses', permission: PERMISSIONS.VIEW_LP_COURSE, moduleKey: 'learning_paths' },
-      { tab: 'learning-path-enrollment', label: 'Learning Path Enrollments', permission: PERMISSIONS.VIEW_LP_ENROLLMENT, moduleKey: 'learning_paths' },
-      { tab: 'learning-path-progress', label: 'Learning Path Progress', permission: PERMISSIONS.VIEW_LP_PROGRESS, moduleKey: 'learning_paths' },
-      { tab: 'enrollment', label: 'Enrollments', permission: PERMISSIONS.VIEW_ENROLLMENT },
-      { tab: 'training-batch', label: 'Training Batches', permission: PERMISSIONS.VIEW_TRAINING_BATCH },
-      { tab: 'trainer-assignment', label: 'Trainer Assignments', permission: PERMISSIONS.VIEW_TRAINER_ASSIGNMENT },
-      { tab: 'attendance', label: 'Attendance', moduleKey: 'attendance' },
-      { tab: 'geofence', label: 'Attendance Geofencing', moduleKey: 'attendance' },
-    ],
-  },
-  {
-    group: 'Platform & Billing',
-    items: [
-      { tab: 'plans', label: 'Plans', operatorOnly: true },
-      { tab: 'company-license', label: 'Company Licenses' },
-      { tab: 'discount-codes', label: 'Discount Codes', operatorOnly: true },
-      { tab: 'license-notifications', label: 'License Notifications' },
-      { tab: 'payment-settings', label: 'Payment Settings', operatorOnly: true },
-      { tab: 'company-modules', label: 'Company Modules', operatorOnly: true },
-    ],
-  },
-  {
-    group: 'System',
-    items: [
-      { tab: 'theme', label: 'Theme', permission: PERMISSIONS.VIEW_THEME, operatorOnly: true },
-      { tab: 'settings', label: 'Settings', permission: PERMISSIONS.VIEW_SETTINGS, operatorOnly: true },
-      { tab: 'legal-documents', label: 'Legal Documents', operatorOnly: true },
-      { tab: 'marketing-website', label: 'Marketing Website', operatorOnly: true },
-      { tab: 'menu', label: 'Menu', permission: PERMISSIONS.VIEW_MENU, operatorOnly: true },
-      { tab: 'reports', label: 'Reports', permission: PERMISSIONS.VIEW_REPORTS },
-      { tab: 'notifications', label: 'Notifications' },
-      { tab: 'security-migration', label: 'Secure Login Migration' },
-      { tab: 'audit-log', label: 'Audit Log', permission: PERMISSIONS.VIEW_AUDIT_LOG },
-    ],
-  },
-  {
-    group: 'Support',
-    items: [
-      { tab: 'support-tickets', label: 'Ticket Management', permission: PERMISSIONS.VIEW_SUPPORT_TICKET, moduleKey: 'support_tickets' },
-      { tab: 'email-templates', label: 'Email Templates', permission: PERMISSIONS.VIEW_EMAIL_TEMPLATE, moduleKey: 'support_tickets' },
-    ],
-  },
-];
-
 function Sidebar() {
   const location = useLocation();
   const user = getCurrentUser();
@@ -238,22 +115,11 @@ function Sidebar() {
   const [logoUrl, setLogoUrl] = useState('');
   const [namePosition, setNamePosition] = useState<"left" | "center">("left");
   const [menuOrder, setMenuOrder] = useState<string[] | null>(null);
-  const [adminSectionsOpen, setAdminSectionsOpen] = useState(false);
-  const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(new Set());
   // From the active Theme (Admin → Theme) — falls back to the static
   // defaults, which match the current design exactly, so nothing changes
   // visually until an admin actually activates a different theme.
   const [sidebarColor, setSidebarColor] = useState(BRAND.primaryColor);
   const [accentColor, setAccentColor] = useState(BRAND.secondaryColor);
-
-  function toggleAdminGroup(group: string) {
-    setOpenAdminGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(group)) next.delete(group);
-      else next.add(group);
-      return next;
-    });
-  }
 
   useEffect(() => {
     setMobileOpen(false);
@@ -454,67 +320,6 @@ function Sidebar() {
 
             </div>
           ))}
-
-          {can(PERMISSIONS.VIEW_COMPANY) && (
-            <div className="mb-5">
-              <button
-                onClick={() => setAdminSectionsOpen((v) => !v)}
-                className="mb-2 flex w-full items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300"
-              >
-                <span>Admin Sections</span>
-                <svg
-                  className={`h-3 w-3 transition-transform ${adminSectionsOpen ? 'rotate-90' : ''}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                </svg>
-              </button>
-
-              {adminSectionsOpen && ADMIN_SECTIONS.map(({ group, items }) => {
-                const visible = items.filter((item) =>
-                  (!item.permission || can(item.permission)) &&
-                  (!item.operatorOnly || isPlatformOperator) &&
-                  (!item.moduleKey || moduleFlags[item.moduleKey] !== false)
-                );
-                if (visible.length === 0) return null;
-                const isGroupOpen = openAdminGroups.has(group);
-                return (
-                  <div key={group} className="mb-1">
-                    <button
-                      onClick={() => toggleAdminGroup(group)}
-                      className="mb-1 flex w-full items-center justify-between rounded-lg px-4 py-1.5 text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                    >
-                      <span>{group}</span>
-                      <svg
-                        className={`h-3 w-3 transition-transform ${isGroupOpen ? 'rotate-90' : ''}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </button>
-                    {isGroupOpen && visible.map((item) => {
-                      const isActive = location.pathname === '/admin' && (location.state as { tab?: string } | null)?.tab === item.tab;
-                      return (
-                        <Link
-                          key={item.tab}
-                          to="/admin"
-                          state={{ tab: item.tab }}
-                          style={isActive ? { backgroundColor: accentColor, color: "#000" } : undefined}
-                          className={`block w-full mb-1 rounded-lg px-6 py-2 text-sm transition ${
-                            isActive
-                              ? 'font-semibold'
-                              : 'text-slate-400 hover:bg-yellow-500 hover:text-black'
-                          }`}
-                        >
-                          {item.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          )}
 
         </nav>
 
