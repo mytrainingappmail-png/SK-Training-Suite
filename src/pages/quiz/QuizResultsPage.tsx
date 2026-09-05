@@ -1,22 +1,14 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listSessionsForCompany, deleteSession, deleteSessions, deleteAllSessions } from "../../repositories/quiz/quizSessionRepository";
 import { getCompanySessionResults, getAnswerDistribution } from "../../repositories/quiz/quizAnalyticsRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
-import {
-  listFoldersForCompany,
-  createFolder,
-  renameFolder,
-  deleteFolder,
-  moveSessionToFolder,
-} from "../../repositories/quiz/quizResultFolderRepository";
+import { listFoldersForCompany, createFolder, moveSessionToFolder } from "../../repositories/quiz/quizResultFolderRepository";
 import { buildDetailedReportCsv, buildTraineeSummaryCsv, computeChampions } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
-import { isCertEligible, MEDALS } from "../../services/quiz/quizRankingService";
-import QuizAnswerDistributionBars from "../../components/quiz/QuizAnswerDistributionBars";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
-import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
+import SessionResultCard, { GRADE_STYLE } from "../../components/quiz/SessionResultCard";
 import type {
   QuizSession,
   QuizSessionResultRow,
@@ -26,12 +18,6 @@ import type {
   ChampMusic,
   CertEligibility,
 } from "../../types/quiz";
-
-const GRADE_STYLE: Record<string, string> = {
-  PASS: "text-emerald-300 bg-emerald-500/15 border-emerald-500/30",
-  NEED_IMPROVEMENT: "text-amber-300 bg-amber-500/15 border-amber-500/30",
-  FAIL: "text-red-300 bg-red-500/15 border-red-500/30",
-};
 
 function toIsoStart(dateStr: string): string | undefined {
   return dateStr ? new Date(`${dateStr}T00:00:00`).toISOString() : undefined;
@@ -66,94 +52,6 @@ function startOfMonthStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** One ended session's card — rank list + answer breakdown on expand.
- * Shared by the everyday "Session list" and each Batch Records folder's
- * drilled-in view, which differ only in what `actions` renders (Delete +
- * Move vs. Delete + Remove-from-folder). */
-function SessionResultCard({
-  session,
-  rows,
-  isOpen,
-  onToggle,
-  distribution,
-  certEligibility,
-  companyId,
-  actions,
-}: {
-  session: QuizSession;
-  rows: QuizSessionResultRow[];
-  isOpen: boolean;
-  onToggle: () => void;
-  distribution: AnswerDistributionQuestion[] | undefined;
-  certEligibility: CertEligibility;
-  companyId: string | null;
-  actions?: ReactNode;
-}) {
-  const nPass = rows.filter((r) => r.grade === "PASS").length;
-  const nImp = rows.filter((r) => r.grade === "NEED_IMPROVEMENT").length;
-  const nFail = rows.filter((r) => r.grade === "FAIL").length;
-
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <div className="flex items-center justify-between gap-3">
-        <button className="flex-1 text-left flex items-center justify-between" onClick={onToggle}>
-          <div>
-            <div className="font-semibold text-sm text-white">{rows[0]?.quiz_title ?? "Quiz session"}</div>
-            <div className="text-xs text-slate-500 mt-1">
-              {session.ended_at ? new Date(session.ended_at).toLocaleString("en-IN") : ""} · {rows.length} participant{rows.length === 1 ? "" : "s"}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">✅ {nPass} Pass</span>
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">⚠ {nImp} Improve</span>
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-red-500/15 text-red-300">✗ {nFail} Fail</span>
-            </div>
-          </div>
-          <span className="text-slate-500 ml-3">{isOpen ? "▲" : "▼"}</span>
-        </button>
-        {actions}
-      </div>
-
-      {isOpen && (
-        <div className="mt-4 pt-4 border-t border-slate-800 space-y-5">
-          {rows.length === 0 ? (
-            <div className="text-xs text-slate-500">No participants.</div>
-          ) : (
-            rows
-              .slice()
-              .sort((a, b) => a.rank - b.rank)
-              .map((r) => (
-                <div key={r.participant_id} className="flex items-center gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
-                  <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[r.rank - 1] ?? `#${r.rank}`}</span>
-                  <span className="flex-1 truncate">{r.display_name}</span>
-                  <span className="text-xs text-slate-400">
-                    {r.correct_count}/{r.total_questions} · {r.percent_correct}%
-                  </span>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
-                    {r.grade.replace("_", " ")}
-                  </span>
-                  {isCertEligible(r.rank, r.grade, certEligibility) && companyId && (
-                    <QuizAdminCertificateButton participantId={r.participant_id} companyId={companyId} />
-                  )}
-                </div>
-              ))
-          )}
-
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
-              📊 Answer Breakdown
-            </div>
-            {distribution ? (
-              <QuizAnswerDistributionBars questions={distribution} />
-            ) : (
-              <div className="text-xs text-slate-500">Loading…</div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function QuizResultsPage() {
   const admin = getCurrentQuizAdmin();
   const canEdit = canEditQuizContent();
@@ -186,13 +84,10 @@ export default function QuizResultsPage() {
   const [perfFrom, setPerfFrom] = useState("");
   const [perfTo, setPerfTo] = useState("");
 
-  // Batch Records
+  // Just enough Final Result data to power the per-session "Move to
+  // folder" action below — full folder management (create/rename/
+  // delete/drill-in) lives on its own Final Result tab.
   const [folders, setFolders] = useState<QuizResultFolder[]>([]);
-  const [expandedFolder, setExpandedFolder] = useState<string | null>(null);
-  const [showNewFolderForm, setShowNewFolderForm] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
   const [movingSessionId, setMovingSessionId] = useState<string | null>(null);
   const [moveNewFolderName, setMoveNewFolderName] = useState("");
   const [folderBusy, setFolderBusy] = useState(false);
@@ -317,45 +212,6 @@ export default function QuizResultsPage() {
     }
   }
 
-  async function handleCreateFolder() {
-    if (!admin || !newFolderName.trim()) return;
-    setFolderBusy(true);
-    try {
-      await createFolder(admin.company_id, newFolderName.trim(), admin.id);
-      setNewFolderName("");
-      setShowNewFolderForm(false);
-      refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create folder.");
-    } finally {
-      setFolderBusy(false);
-    }
-  }
-
-  async function handleRenameFolder(folderId: string) {
-    if (!renameValue.trim()) return;
-    setFolderBusy(true);
-    try {
-      await renameFolder(folderId, renameValue.trim());
-      setRenamingFolderId(null);
-      refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to rename folder.");
-    } finally {
-      setFolderBusy(false);
-    }
-  }
-
-  async function handleDeleteFolder(folderId: string) {
-    if (!confirm("Delete this folder? It must be empty — move any sessions out first.")) return;
-    try {
-      await deleteFolder(folderId);
-      refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete folder.");
-    }
-  }
-
   async function handleMoveToFolder(sessionId: string, folderId: string | null) {
     setFolderBusy(true);
     try {
@@ -399,12 +255,6 @@ export default function QuizResultsPage() {
   function handlePerformanceDownload() {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsvFile(`quiz-performance-${stamp}.csv`, buildDetailedReportCsv(perfRows));
-  }
-
-  function handleFolderDownload(folderName: string, rows: QuizSessionResultRow[]) {
-    const stamp = new Date().toISOString().slice(0, 10);
-    const safeName = folderName.trim().replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "batch";
-    downloadCsvFile(`quiz-${safeName}-${stamp}.csv`, buildDetailedReportCsv(rows));
   }
 
   function applyQuickFilter(kind: "lastWeek" | "lastMonth" | "thisWeek" | "thisMonth") {
@@ -678,185 +528,6 @@ export default function QuizResultsPage() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Batch Records */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="font-semibold text-white">📁 Final Result</h2>
-            <p className="text-xs text-slate-500">
-              Move a final test's session in here to keep a permanent, organized record — it stops showing in the everyday list below.
-            </p>
-          </div>
-          {canEdit && (
-            <button
-              onClick={() => setShowNewFolderForm((v) => !v)}
-              className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
-            >
-              + New Folder
-            </button>
-          )}
-        </div>
-
-        {showNewFolderForm && (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              autoFocus
-              className="flex-1 min-w-[12rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              placeholder="e.g. Batch No 12"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateFolder();
-              }}
-            />
-            <button
-              onClick={handleCreateFolder}
-              disabled={folderBusy || !newFolderName.trim()}
-              className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-lg px-4 py-2"
-            >
-              Create
-            </button>
-            <button
-              onClick={() => {
-                setShowNewFolderForm(false);
-                setNewFolderName("");
-              }}
-              className="text-sm font-semibold text-slate-400 hover:text-slate-200 px-3 py-2"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {folders.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-800 rounded-xl">
-            No batch folders yet.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {folders.map((f) => {
-              const folderSessions = sessions.filter((s) => s.folder_id === f.id);
-              const folderRows = allResults.filter((r) => r.folder_id === f.id);
-              const isFolderOpen = expandedFolder === f.id;
-              const isRenaming = renamingFolderId === f.id;
-
-              return (
-                <div key={f.id} className="border border-slate-800 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 p-4 bg-slate-950/40">
-                    {isRenaming ? (
-                      <div className="flex-1 flex items-center gap-2">
-                        <input
-                          autoFocus
-                          className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-sm text-white outline-none focus:border-violet-500"
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleRenameFolder(f.id);
-                          }}
-                        />
-                        <button
-                          onClick={() => handleRenameFolder(f.id)}
-                          disabled={folderBusy || !renameValue.trim()}
-                          className="text-xs font-semibold text-emerald-300 hover:text-emerald-200 disabled:opacity-40"
-                        >
-                          Save
-                        </button>
-                        <button onClick={() => setRenamingFolderId(null)} className="text-xs font-semibold text-slate-400 hover:text-slate-200">
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="flex-1 text-left flex items-center gap-2"
-                        onClick={() => setExpandedFolder(isFolderOpen ? null : f.id)}
-                      >
-                        <span className="text-lg">📁</span>
-                        <span className="font-semibold text-sm text-white">{f.name}</span>
-                        <span className="text-xs text-slate-500">
-                          {folderSessions.length} session{folderSessions.length === 1 ? "" : "s"}
-                        </span>
-                        <span className="text-slate-500 ml-auto">{isFolderOpen ? "▲" : "▼"}</span>
-                      </button>
-                    )}
-                    {canEdit && !isRenaming && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            setRenamingFolderId(f.id);
-                            setRenameValue(f.name);
-                          }}
-                          className="text-xs font-semibold text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => handleDeleteFolder(f.id)}
-                          className="text-xs font-semibold text-red-300 hover:text-red-200 border border-red-900/50 rounded-lg px-2.5 py-1.5"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {isFolderOpen && (
-                    <div className="p-4 space-y-3 border-t border-slate-800">
-                      {folderRows.length > 0 && (
-                        <div className="flex justify-end">
-                          <button
-                            onClick={() => handleFolderDownload(f.name, folderRows)}
-                            className="text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-amber-950 rounded-lg px-3 py-1.5"
-                          >
-                            ⬇ Download this batch's record
-                          </button>
-                        </div>
-                      )}
-                      {folderSessions.length === 0 ? (
-                        <div className="text-xs text-slate-500 text-center py-4">Empty — move a session in from the list below.</div>
-                      ) : (
-                        folderSessions.map((s) => {
-                          const rows = allResults.filter((r) => r.session_id === s.id);
-                          return (
-                            <SessionResultCard
-                              key={s.id}
-                              session={s}
-                              rows={rows}
-                              isOpen={expanded === s.id}
-                              onToggle={() => toggle(s.id, s.quiz_id)}
-                              distribution={distributions[s.id]}
-                              certEligibility={certEligibility}
-                              companyId={admin?.company_id ?? null}
-                              actions={
-                                canEdit ? (
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                      onClick={() => handleMoveToFolder(s.id, null)}
-                                      className="text-xs font-semibold text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5"
-                                    >
-                                      ↩ Remove from Folder
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteSession(s.id)}
-                                      className="text-xs font-semibold text-red-300 hover:text-red-200 border border-red-900/50 rounded-lg px-2.5 py-1.5"
-                                    >
-                                      🗑
-                                    </button>
-                                  </div>
-                                ) : undefined
-                              }
-                            />
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Session list */}

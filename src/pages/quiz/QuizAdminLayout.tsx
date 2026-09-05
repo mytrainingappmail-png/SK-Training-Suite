@@ -13,6 +13,7 @@ const navItems = [
   { to: ROUTES.QUIZ_ADMIN_QUIZZES, label: "Quizzes" },
   { to: ROUTES.QUIZ_ADMIN_SURVEYS, label: "Surveys" },
   { to: ROUTES.QUIZ_ADMIN_RESULTS, label: "Results" },
+  { to: ROUTES.QUIZ_ADMIN_FINAL_RESULT, label: "Final Result" },
   { to: ROUTES.QUIZ_ADMIN_USERS, label: "Users" },
   { to: ROUTES.QUIZ_ADMIN_SETTINGS, label: "Settings" },
 ];

@@ -97,6 +97,7 @@ export const ROUTES = {
   QUIZ_ADMIN_BUILDER_EDIT: "/quiz-admin/quizzes/:quizId",
   QUIZ_ADMIN_HOST: "/quiz-admin/host/:sessionId",
   QUIZ_ADMIN_RESULTS: "/quiz-admin/results",
+  QUIZ_ADMIN_FINAL_RESULT: "/quiz-admin/final-result",
   QUIZ_ADMIN_USERS: "/quiz-admin/users",
   QUIZ_ADMIN_SETTINGS: "/quiz-admin/settings",
 

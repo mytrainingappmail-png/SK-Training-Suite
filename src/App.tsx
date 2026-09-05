@@ -52,6 +52,7 @@ import QuizListPage from "./pages/quiz/QuizListPage";
 import QuizBuilderPage from "./pages/quiz/QuizBuilderPage";
 import QuizHostLivePage from "./pages/quiz/QuizHostLivePage";
 import QuizResultsPage from "./pages/quiz/QuizResultsPage";
+import QuizFinalResultPage from "./pages/quiz/QuizFinalResultPage";
 import QuizJoinPage from "./pages/quiz/QuizJoinPage";
 import QuizPlayPage from "./pages/quiz/QuizPlayPage";
 import QuizUsersPage from "./pages/quiz/QuizUsersPage";
@@ -110,6 +111,7 @@ function App() {
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_SETTINGS} element={<SurveySettingsPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_LIVE_HOST} element={<SurveyLiveHostPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_RESULTS} element={<QuizResultsPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_FINAL_RESULT} element={<QuizFinalResultPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_USERS} element={<QuizUsersPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SETTINGS} element={<QuizSettingsPage />} />
       </Route>
