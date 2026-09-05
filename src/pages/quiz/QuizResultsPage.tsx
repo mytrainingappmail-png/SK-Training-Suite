@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
-import { listSessionsForCompany, deleteSession, deleteAllSessions } from "../../repositories/quiz/quizSessionRepository";
+import { listSessionsForCompany, deleteSession, deleteSessions, deleteAllSessions } from "../../repositories/quiz/quizSessionRepository";
 import { getCompanySessionResults, getAnswerDistribution } from "../../repositories/quiz/quizAnalyticsRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
 import {
@@ -197,6 +197,10 @@ export default function QuizResultsPage() {
   const [moveNewFolderName, setMoveNewFolderName] = useState("");
   const [folderBusy, setFolderBusy] = useState(false);
 
+  // Bulk-select in the everyday Session list (not the Final Result folders)
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
+  const [bulkDeletingSessions, setBulkDeletingSessions] = useState(false);
+
   function refresh() {
     if (!admin) return;
     setLoading(true);
@@ -281,6 +285,35 @@ export default function QuizResultsPage() {
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete all sessions.");
+    }
+  }
+
+  function toggleSessionSelected(sessionId: string) {
+    setSelectedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }
+
+  function selectAllSessions() {
+    setSelectedSessionIds(new Set(unfiledSessions.map((s) => s.id)));
+  }
+
+  async function handleBulkDeleteSessions() {
+    if (selectedSessionIds.size === 0) return;
+    if (!confirm(`Delete ${selectedSessionIds.size} session(s) and all their results? This cannot be undone.`)) return;
+    setBulkDeletingSessions(true);
+    setError("");
+    try {
+      await deleteSessions([...selectedSessionIds]);
+      setSelectedSessionIds(new Set());
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete the selected sessions.");
+    } finally {
+      setBulkDeletingSessions(false);
     }
   }
 
@@ -651,7 +684,7 @@ export default function QuizResultsPage() {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="font-semibold text-white">📁 Batch Records</h2>
+            <h2 className="font-semibold text-white">📁 Final Result</h2>
             <p className="text-xs text-slate-500">
               Move a final test's session in here to keep a permanent, organized record — it stops showing in the everyday list below.
             </p>
@@ -833,6 +866,35 @@ export default function QuizResultsPage() {
         </div>
       ) : (
         <div className="space-y-3">
+          {canEdit && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={selectAllSessions}
+                className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5"
+              >
+                ☑ Select All ({unfiledSessions.length})
+              </button>
+              {selectedSessionIds.size > 0 && (
+                <>
+                  <span className="text-xs text-slate-400">{selectedSessionIds.size} selected</span>
+                  <button
+                    onClick={handleBulkDeleteSessions}
+                    disabled={bulkDeletingSessions}
+                    className="text-xs font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg px-3 py-1.5"
+                  >
+                    {bulkDeletingSessions ? "Deleting…" : "🗑 Delete Selected"}
+                  </button>
+                  <button
+                    onClick={() => setSelectedSessionIds(new Set())}
+                    className="text-xs text-slate-400 hover:text-white px-1"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {unfiledSessions.map((s) => {
             const rows = allResults.filter((r) => r.session_id === s.id);
             const isMoveOpen = movingSessionId === s.id;
@@ -850,6 +912,14 @@ export default function QuizResultsPage() {
                 actions={
                   canEdit ? (
                     <div className="relative flex items-center gap-1 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedSessionIds.has(s.id)}
+                        onChange={() => toggleSessionSelected(s.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mr-1 h-4 w-4"
+                        aria-label="Select this session"
+                      />
                       <button
                         onClick={() => {
                           setMovingSessionId(isMoveOpen ? null : s.id);

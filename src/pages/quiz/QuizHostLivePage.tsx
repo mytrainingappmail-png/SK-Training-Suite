@@ -469,12 +469,13 @@ export default function QuizHostLivePage() {
                     <div className="space-y-1.5">
                       {rankByMarks(participants).map((p, i) => {
                           const grade = participantGrade(p.correct_count, totalQuestions, quiz);
+                          const pct = totalQuestions === 0 ? 0 : Math.round((p.correct_count / totalQuestions) * 100);
                           return (
                             <div key={p.id} className="flex items-center gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
                               <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[i] ?? `#${i + 1}`}</span>
                               <span className="flex-1 truncate">{p.display_name}</span>
                               <span className="text-xs text-slate-400">
-                                {p.correct_count}/{totalQuestions}
+                                {p.correct_count}/{totalQuestions} · {pct}%
                               </span>
                               {p.tab_switch_count > 0 && (
                                 <span

@@ -98,6 +98,18 @@ export async function deleteSession(sessionId: string): Promise<void> {
   }
 }
 
+/** One statement for the whole batch, so clearing out a pile of old
+ * practice sessions doesn't mean clicking delete once per row. */
+export async function deleteSessions(sessionIds: string[]): Promise<void> {
+  if (sessionIds.length === 0) return;
+  const { error } = await supabaseQuiz.from("quiz_sessions").delete().in("id", sessionIds);
+
+  if (error) {
+    console.error("[quizSessionRepository] deleteSessions:", error);
+    throw new Error(error.message);
+  }
+}
+
 export async function deleteAllSessions(companyId: string): Promise<void> {
   const { error } = await supabaseQuiz.from("quiz_sessions").delete().eq("company_id", companyId);
 
