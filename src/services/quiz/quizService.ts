@@ -68,6 +68,7 @@ export async function publishQuiz(quizId: string): Promise<void> {
       marks: q.marks,
       explanation: q.explanation,
       is_hidden: q.is_hidden,
+      source_label: q.source_label,
       options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
     }))
   );
@@ -108,6 +109,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
         marks: q.marks,
         explanation: q.explanation,
         is_hidden: q.is_hidden,
+        source_label: q.source_label,
         options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
       }))
     );
@@ -156,6 +158,10 @@ export async function mergeQuizzes(
       marks: question.marks,
       explanation: question.explanation,
       is_hidden: question.is_hidden,
+      // Tags every question with the quiz it came FROM (not the merged
+      // quiz being built) — this is what later lets "remove Project X's
+      // questions" find them again inside the merged result.
+      source_label: q.title,
       options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
     }))
   );

@@ -27,6 +27,7 @@ function blankQuestion(): EditableQuestion {
     marks: 1,
     explanation: "",
     is_hidden: false,
+    source_label: null,
     options: [
       { option_text: "", is_correct: true },
       { option_text: "", is_correct: false },
@@ -65,6 +66,7 @@ export default function QuizBuilderPage() {
   const [notice, setNotice] = useState("");
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [csvImportedCount, setCsvImportedCount] = useState<number | null>(null);
+  const [removeSourceChoice, setRemoveSourceChoice] = useState("");
 
   useEffect(() => {
     if (isNew && !canEdit) navigate(ROUTES.QUIZ_ADMIN_QUIZZES, { replace: true });
@@ -100,6 +102,7 @@ export default function QuizBuilderPage() {
                 marks: q.marks,
                 explanation: q.explanation,
                 is_hidden: q.is_hidden,
+                source_label: q.source_label,
                 options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
               }))
             : [blankQuestion()]
@@ -162,6 +165,25 @@ export default function QuizBuilderPage() {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
   }
 
+  /** Bulk-remove every question tagged with this source (see mergeQuizzes)
+   * — e.g. a merged-in project that turned out not to be needed. Falls
+   * back to a single blank question rather than leaving the list empty,
+   * matching removeQuestion's own floor of at least one question. */
+  function removeQuestionsFromSource(sourceLabel: string) {
+    setQuestions((prev) => {
+      const remaining = prev.filter((q) => q.source_label !== sourceLabel);
+      return remaining.length > 0 ? remaining : [blankQuestion()];
+    });
+  }
+
+  function handleRemoveSourceClick() {
+    if (!removeSourceChoice) return;
+    const count = sourceLabelCounts.get(removeSourceChoice) ?? 0;
+    if (!confirm(`Remove ${count} question(s) from "${removeSourceChoice}"? The rest of this quiz stays as-is. Click Save/Publish afterwards to make it permanent.`)) return;
+    removeQuestionsFromSource(removeSourceChoice);
+    setRemoveSourceChoice("");
+  }
+
   function duplicateQuestion(localId: string) {
     setQuestions((prev) => {
       const index = prev.findIndex((q) => q.localId === localId);
@@ -213,6 +235,14 @@ export default function QuizBuilderPage() {
   function isBlankQuestion(q: EditableQuestion): boolean {
     return !q.question_text.trim() && q.options.every((o) => !o.option_text.trim());
   }
+
+  // Distinct source projects present among the current questions — only
+  // non-empty for a merged quiz (see mergeQuizzes). Counts included so
+  // "remove all of X" shows exactly how many that'll take with it.
+  const sourceLabelCounts = questions.reduce((map, q) => {
+    if (q.source_label) map.set(q.source_label, (map.get(q.source_label) ?? 0) + 1);
+    return map;
+  }, new Map<string, number>());
 
   function handleDownloadSampleCsv() {
     downloadCsvFile("live-quiz-sample.csv", buildSampleCsv());
@@ -469,11 +499,41 @@ export default function QuizBuilderPage() {
           )}
         </div>
 
+        {canEdit && sourceLabelCounts.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 bg-slate-900/60 border border-dashed border-slate-700 rounded-xl px-3 py-2.5">
+            <span className="text-xs font-semibold text-slate-400">🧹 Remove a merged-in project:</span>
+            <select
+              value={removeSourceChoice}
+              onChange={(e) => setRemoveSourceChoice(e.target.value)}
+              className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white"
+            >
+              <option value="">Choose a source project…</option>
+              {[...sourceLabelCounts.entries()].map(([label, count]) => (
+                <option key={label} value={label}>
+                  {label} ({count} question{count === 1 ? "" : "s"})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleRemoveSourceClick}
+              disabled={!removeSourceChoice}
+              className="text-xs font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white rounded-lg px-3 py-1.5"
+            >
+              🗑 Remove Its Questions
+            </button>
+          </div>
+        )}
+
         {questions.map((q, qi) => (
           <div key={q.localId} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
+                {q.source_label && (
+                  <span title="Came in via merge" className="text-[10px] font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/30 rounded-full px-2 py-0.5">
+                    📎 {q.source_label}
+                  </span>
+                )}
                 <button
                   onClick={() => toggleHidden(q.localId)}
                   title={q.is_hidden ? "Hidden — not asked live, doesn't count toward results. Click to unhide." : "Click to hide this question from play"}

@@ -72,6 +72,8 @@ export interface QuizQuestion {
   display_order: number;
   /** Skipped entirely when the quiz is launched live, and excluded from every total-question/percentage/pass-fail calculation — reversible, unlike deleting the question. */
   is_hidden: boolean;
+  /** The source quiz's title when this question arrived via mergeQuizzes — lets a merged quiz's questions later be found and removed by which project they came from. Null for a question created directly. */
+  source_label: string | null;
   options: QuizQuestionOption[];
 }
 
