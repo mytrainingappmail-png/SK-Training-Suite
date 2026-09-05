@@ -104,7 +104,7 @@ export function CallingAppBreaksTab({
               <p className="text-sm font-semibold text-slate-900">
                 {BREAK_TYPES.find((t) => t.value === myActiveBreak.break_type)?.icon} On {myActiveBreak.break_type} break
               </p>
-              <p className="mt-1 text-xs text-slate-500">Started {new Date(myActiveBreak.started_at).toLocaleTimeString()} · {formatDuration(now - new Date(myActiveBreak.started_at).getTime())} so far</p>
+              <p className="mt-1 text-xs text-slate-600">Started {new Date(myActiveBreak.started_at).toLocaleTimeString()} · {formatDuration(now - new Date(myActiveBreak.started_at).getTime())} so far</p>
             </div>
             <button onClick={handleEnd} disabled={ending} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
               {ending ? "Ending…" : "End Break"}
@@ -127,7 +127,7 @@ export function CallingAppBreaksTab({
             </div>
           </div>
         )}
-        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
           Today's total break time: <span className="font-semibold text-slate-700">{formatDuration(myMinutesToday)}</span> across {myBreaksToday.length} break{myBreaksToday.length === 1 ? "" : "s"}.
         </p>
       </section>
@@ -147,7 +147,7 @@ export function CallingAppBreaksTab({
                   ) : (
                     <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-semibold text-emerald-700">Available</span>
                   )}
-                  <span className="text-slate-400">Today: {formatDuration(s.todayTotal)}</span>
+                  <span className="text-slate-600">Today: {formatDuration(s.todayTotal)}</span>
                 </div>
               </div>
             ))}

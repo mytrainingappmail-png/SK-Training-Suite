@@ -64,7 +64,7 @@ export default function CallingAppGuard({ children }: { children: React.ReactNod
         <div className="max-w-md space-y-3 text-center">
           <div className="text-3xl">🔒</div>
           <h1 className="text-lg font-semibold">Calling App is not enabled</h1>
-          <p className="text-sm text-slate-400">This company's access to the Calling App has been turned off. Contact your administrator.</p>
+          <p className="text-sm text-slate-600">This company's access to the Calling App has been turned off. Contact your administrator.</p>
         </div>
       </div>
     );

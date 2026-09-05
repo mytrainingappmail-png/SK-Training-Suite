@@ -26,7 +26,7 @@ export default function CallingAppStandalonePage() {
           <span className="font-semibold tracking-wide text-slate-900">Calling App</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden text-sm text-slate-500 sm:block">{admin.display_name}</span>
+          <span className="hidden text-sm text-slate-600 sm:block">{admin.display_name}</span>
           <button onClick={handleLogout} className="text-sm font-semibold text-red-500 hover:text-red-600">Logout</button>
         </div>
       </nav>

@@ -37,8 +37,8 @@ function DispositionsPanel({ identity, dispositions, onChanged }: { identity: Ca
 
   return (
     <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Dispositions</h3>
-      <p className="text-xs text-slate-400">Call outcomes your team picks from. Tag each Positive/Neutral/Negative — this drives the Reports quality score.</p>
+      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600">Dispositions</h3>
+      <p className="text-xs text-slate-600">Call outcomes your team picks from. Tag each Positive/Neutral/Negative — this drives the Reports quality score.</p>
 
       <div className="space-y-2">
         {dispositions.map((d) => (
@@ -46,7 +46,7 @@ function DispositionsPanel({ identity, dispositions, onChanged }: { identity: Ca
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
               <span className="text-sm font-medium text-slate-800">{d.label}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500">{d.outcome_type}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600">{d.outcome_type}</span>
             </div>
             <button onClick={() => handleDelete(d.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
           </div>
@@ -98,13 +98,13 @@ function CustomFieldsPanel({ identity, fieldDefs, onChanged }: { identity: Calli
 
   return (
     <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Custom Fields</h3>
-      <p className="text-xs text-slate-400">Extra columns on your calling sheet — e.g. "Budget", "Preferred Location". Shows up in CSV upload/download automatically.</p>
+      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600">Custom Fields</h3>
+      <p className="text-xs text-slate-600">Extra columns on your calling sheet — e.g. "Budget", "Preferred Location". Shows up in CSV upload/download automatically.</p>
 
       <div className="space-y-2">
         {fieldDefs.map((f) => (
           <div key={f.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5">
-            <span className="text-sm font-medium text-slate-800">{f.label} <span className="text-xs text-slate-400">({f.field_type})</span></span>
+            <span className="text-sm font-medium text-slate-800">{f.label} <span className="text-xs text-slate-600">({f.field_type})</span></span>
             <button onClick={() => handleDelete(f.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
           </div>
         ))}
@@ -141,7 +141,7 @@ export function CallingAppSettingsTab({
     <div className="space-y-6">
       <DispositionsPanel identity={identity} dispositions={dispositions} onChanged={onChanged} />
       <CustomFieldsPanel identity={identity} fieldDefs={fieldDefs} onChanged={onChanged} />
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-xs text-slate-500">
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-xs text-slate-600">
         To add/remove who has Calling App access, or change someone's Admin/Upload/Download permissions, go to the main app's <span className="font-semibold">Admin → Calling App</span> tab.
       </div>
     </div>

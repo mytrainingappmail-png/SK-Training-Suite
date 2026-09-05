@@ -28,7 +28,7 @@ export async function grantEmployeeAccess(
   employeeId: string,
   displayName: string,
   email: string | null,
-  opts: { isAdmin: boolean; canUpload: boolean; canDownload: boolean; dailyTarget: number; role?: CallingAppAdminRole; reportsTo?: string | null }
+  opts: { isAdmin: boolean; canUpload: boolean; canDownload: boolean; canManageMasterSheet?: boolean; dailyTarget: number; role?: CallingAppAdminRole; reportsTo?: string | null }
 ): Promise<CallingAppAdmin> {
   const { data, error } = await supabase
     .from("calling_app_admins")
@@ -40,6 +40,7 @@ export async function grantEmployeeAccess(
       is_admin: opts.isAdmin,
       can_upload: opts.canUpload,
       can_download: opts.canDownload,
+      can_manage_master_sheet: opts.canManageMasterSheet ?? false,
       daily_target: opts.dailyTarget,
       role: opts.role ?? "agent",
       reports_to: opts.reportsTo ?? null,
@@ -54,7 +55,7 @@ export async function grantEmployeeAccess(
   return data;
 }
 
-export async function updateCallingAppAdmin(id: string, patch: Partial<Pick<CallingAppAdmin, "is_admin" | "can_upload" | "can_download" | "daily_target" | "status" | "role" | "reports_to">>): Promise<CallingAppAdmin> {
+export async function updateCallingAppAdmin(id: string, patch: Partial<Pick<CallingAppAdmin, "is_admin" | "can_upload" | "can_download" | "can_manage_master_sheet" | "daily_target" | "status" | "role" | "reports_to">>): Promise<CallingAppAdmin> {
   const { data, error } = await supabase
     .from("calling_app_admins")
     .update(patch)

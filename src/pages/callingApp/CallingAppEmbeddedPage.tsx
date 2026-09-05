@@ -50,7 +50,7 @@ export default function CallingAppEmbeddedPage() {
   }, []);
 
   if (state === "checking") {
-    return <div className="flex h-40 items-center justify-center text-sm text-slate-400">Loading…</div>;
+    return <div className="flex h-40 items-center justify-center text-sm text-slate-600">Loading…</div>;
   }
 
   if (state === "no-access") {
@@ -58,7 +58,7 @@ export default function CallingAppEmbeddedPage() {
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
         <div className="text-3xl">🔒</div>
         <p className="mt-2 text-sm font-semibold text-slate-700">You don't have Calling App access.</p>
-        <p className="mt-1 text-xs text-slate-500">Ask your Super Admin to grant it from Admin → Calling App.</p>
+        <p className="mt-1 text-xs text-slate-600">Ask your Super Admin to grant it from Admin → Calling App.</p>
       </div>
     );
   }

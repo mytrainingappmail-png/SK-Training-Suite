@@ -91,7 +91,7 @@ function CallDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">{contact.name}</h3>
-        <p className="text-sm text-slate-500">{contact.mobile_no}{contact.project_name && ` · ${contact.project_name}`}</p>
+        <p className="text-sm text-slate-600">{contact.mobile_no}{contact.project_name && ` · ${contact.project_name}`}</p>
 
         <div className="mt-4 flex gap-2">
           <a href={`tel:${contact.mobile_no}`} className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-emerald-700">
@@ -104,7 +104,7 @@ function CallDialog({
 
         <div className="mt-5 space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Disposition</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-600">Disposition</label>
             <select value={dispositionId} onChange={(e) => setDispositionId(e.target.value)} className={`${INPUT_CLS} w-full`}>
               <option value="">— Select outcome —</option>
               {dispositions.filter((d) => d.is_active).map((d) => (
@@ -113,11 +113,11 @@ function CallDialog({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Remarks</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-600">Remarks</label>
             <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} className={`${INPUT_CLS} w-full`} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Next Call (optional)</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-600">Next Call (optional)</label>
             <input type="datetime-local" value={nextCallAt} onChange={(e) => setNextCallAt(e.target.value)} className={`${INPUT_CLS} w-full`} />
           </div>
         </div>
@@ -226,7 +226,7 @@ function UploadModal({
 
         {fileName && (
           <div className="mt-3">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">List Name</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-600">List Name</label>
             <input value={listName} onChange={(e) => setListName(e.target.value)} className={`${INPUT_CLS} w-full`} />
             <p className="mt-2 text-sm text-slate-600">{rows.length} valid row(s) found{errors.length > 0 && `, ${errors.length} skipped`}.</p>
             {errors.length > 0 && (
@@ -344,7 +344,7 @@ export function CallingAppSheetTab({
       </div>
 
       {filtered.length === 0 && (
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-10 text-center text-sm text-slate-400 shadow-sm">
+        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-10 text-center text-sm text-slate-600 shadow-sm">
           No contacts match. {admin.can_upload && "Upload a CSV to get started."}
         </div>
       )}
@@ -359,15 +359,15 @@ export function CallingAppSheetTab({
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold text-slate-800">{c.name} {c.is_prospect && <span title="Prospect">🎯</span>}</p>
-                  <p className="text-sm text-slate-500">{c.mobile_no}</p>
-                  {c.project_name && <p className="text-xs text-slate-400">{c.project_name}</p>}
+                  <p className="text-sm text-slate-600">{c.mobile_no}</p>
+                  {c.project_name && <p className="text-xs text-slate-600">{c.project_name}</p>}
                 </div>
                 {disp ? (
                   <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: `${disp.color}22`, color: disp.color }}>{disp.label}</span>
-                ) : <span className="shrink-0 text-xs text-slate-400">Not called</span>}
+                ) : <span className="shrink-0 text-xs text-slate-600">Not called</span>}
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                 <span>Attempts: {c.attempt_count}</span>
                 <span>Next call: {c.next_call_at ? new Date(c.next_call_at).toLocaleDateString() : "—"}</span>
               </div>
@@ -391,7 +391,7 @@ export function CallingAppSheetTab({
       <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-sm md:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Mobile</th>
               <th className="px-4 py-3">Disposition</th>
@@ -406,12 +406,12 @@ export function CallingAppSheetTab({
               const disp = c.disposition_id ? dispositionById.get(c.disposition_id) : null;
               return (
                 <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{c.name} {c.is_prospect && <span title="Prospect">🎯</span>}{c.project_name && <div className="text-xs text-slate-400">{c.project_name}</div>}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{c.name} {c.is_prospect && <span title="Prospect">🎯</span>}{c.project_name && <div className="text-xs text-slate-600">{c.project_name}</div>}</td>
                   <td className="px-4 py-3 text-slate-600">{c.mobile_no}</td>
                   <td className="px-4 py-3">
                     {disp ? (
                       <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: `${disp.color}22`, color: disp.color }}>{disp.label}</span>
-                    ) : <span className="text-xs text-slate-400">Not called</span>}
+                    ) : <span className="text-xs text-slate-600">Not called</span>}
                   </td>
                   {admin.is_admin && (
                     <td className="px-4 py-3">
@@ -421,8 +421,8 @@ export function CallingAppSheetTab({
                       </select>
                     </td>
                   )}
-                  <td className="px-4 py-3 text-slate-500">{c.attempt_count}</td>
-                  <td className="px-4 py-3 text-slate-500">{c.next_call_at ? new Date(c.next_call_at).toLocaleDateString() : "—"}</td>
+                  <td className="px-4 py-3 text-slate-600">{c.attempt_count}</td>
+                  <td className="px-4 py-3 text-slate-600">{c.next_call_at ? new Date(c.next_call_at).toLocaleDateString() : "—"}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => setCallTarget(c)} className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Call & Log</button>
                   </td>

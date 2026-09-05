@@ -49,7 +49,7 @@ export function CallingAppReportsTab({
       <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3 text-right">Total Calls</th>
               <th className="px-4 py-3 text-right">Positive</th>
@@ -60,7 +60,7 @@ export function CallingAppReportsTab({
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-400">No call activity yet.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">No call activity yet.</td></tr>
             )}
             {rows.map((r) => (
               <tr key={r.admin.id} className="border-b border-slate-50 last:border-0">
@@ -69,7 +69,7 @@ export function CallingAppReportsTab({
                 <td className="px-4 py-3 text-right text-emerald-600">{r.positive}</td>
                 <td className="px-4 py-3 text-right text-rose-500">{r.negative}</td>
                 <td className="px-4 py-3 text-right font-bold text-indigo-600">{r.qualityScore}%</td>
-                <td className="px-4 py-3 text-right text-slate-500">{r.assignedContacts}</td>
+                <td className="px-4 py-3 text-right text-slate-600">{r.assignedContacts}</td>
               </tr>
             ))}
           </tbody>
@@ -79,12 +79,12 @@ export function CallingAppReportsTab({
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <p className="mb-3 text-sm font-semibold text-slate-900">Disposition Breakdown</p>
         {dispositionBreakdown.length === 0 ? (
-          <p className="text-xs text-slate-400">No calls logged yet.</p>
+          <p className="text-xs text-slate-600">No calls logged yet.</p>
         ) : (
           <div className="space-y-2">
             {dispositionBreakdown.map((d) => (
               <div key={d.label}>
-                <div className="mb-0.5 flex justify-between text-xs text-slate-500"><span>{d.label}</span><span>{d.count}</span></div>
+                <div className="mb-0.5 flex justify-between text-xs text-slate-600"><span>{d.label}</span><span>{d.count}</span></div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full" style={{ width: `${(d.count / maxBreakdown) * 100}%`, backgroundColor: d.color }} />
                 </div>

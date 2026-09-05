@@ -28,13 +28,13 @@ function HandoffRow({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
       <div>
-        <p className="text-sm font-semibold text-slate-800">{contact?.name ?? "Unknown contact"} <span className="font-normal text-slate-400">· {contact?.mobile_no}</span></p>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="text-sm font-semibold text-slate-800">{contact?.name ?? "Unknown contact"} <span className="font-normal text-slate-600">· {contact?.mobile_no}</span></p>
+        <p className="mt-0.5 text-xs text-slate-600">
           {showFrom && <>From {adminById.get(handoff.from_admin_id)?.display_name ?? "someone"} </>}
           {showFrom && showTo && "→ "}
           {showTo && <>To {adminById.get(handoff.to_admin_id)?.display_name ?? "someone"}</>}
         </p>
-        {handoff.note && <p className="mt-1 text-xs italic text-slate-400">"{handoff.note}"</p>}
+        {handoff.note && <p className="mt-1 text-xs italic text-slate-600">"{handoff.note}"</p>}
       </div>
       <div className="flex items-center gap-2">
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[handoff.status]}`}>{handoff.status}</span>
@@ -107,7 +107,7 @@ export function CallingAppProspectsTab({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
         Mark a lead as a Prospect and request a handoff right from the <span className="font-semibold">Call & Log</span> dialog in the Calling Sheet — this tab is where you review requests and see who's escalating what.
       </div>
 
@@ -137,18 +137,18 @@ export function CallingAppProspectsTab({
 
       <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <h3 className="mb-1 text-sm font-bold text-slate-900">🎯 Prospects</h3>
-        <p className="mb-3 text-xs text-slate-400">Contacts flagged as genuine prospects{isTeamView ? " across your team" : ""}.</p>
+        <p className="mb-3 text-xs text-slate-600">Contacts flagged as genuine prospects{isTeamView ? " across your team" : ""}.</p>
         {prospectContacts.length === 0 ? (
-          <p className="text-xs text-slate-400">No prospects flagged yet.</p>
+          <p className="text-xs text-slate-600">No prospects flagged yet.</p>
         ) : (
           <div className="space-y-2">
             {prospectContacts.map((c) => (
               <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-4 py-2.5 text-sm">
                 <div>
-                  <span className="font-medium text-slate-800">{c.name}</span> <span className="text-slate-400">· {c.mobile_no}</span>
-                  {c.project_name && <span className="text-slate-400"> · {c.project_name}</span>}
+                  <span className="font-medium text-slate-800">{c.name}</span> <span className="text-slate-600">· {c.mobile_no}</span>
+                  {c.project_name && <span className="text-slate-600"> · {c.project_name}</span>}
                 </div>
-                <span className="text-xs text-slate-500">{c.assigned_to ? adminById.get(c.assigned_to)?.display_name ?? "—" : "Unassigned"}</span>
+                <span className="text-xs text-slate-600">{c.assigned_to ? adminById.get(c.assigned_to)?.display_name ?? "—" : "Unassigned"}</span>
               </div>
             ))}
           </div>

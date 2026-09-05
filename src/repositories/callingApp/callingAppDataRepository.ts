@@ -25,6 +25,9 @@ import type {
   CallingAppHandoff,
   CallingAppBreak,
   BreakType,
+  CallingAppSettings,
+  CallingAppNotification,
+  CallingAppBatchPerformance,
 } from "../../types/callingApp";
 
 export async function listDispositions(client: SupabaseClient, companyId: string): Promise<CallingAppDisposition[]> {
@@ -232,14 +235,87 @@ export async function getUnassignedContacts(client: SupabaseClient, companyId: s
 
 /** Hands a specific batch of contacts to one employee in one go —
  * records who distributed it and when, which is what makes "kisko
- * kitna diya" reportable afterwards. */
-export async function distributeContacts(client: SupabaseClient, contactIds: string[], assignTo: string, assignedBy: string): Promise<void> {
+ * kitna diya" reportable afterwards. Also notifies the employee, same as
+ * an automatic top-up would — a manual and an automatic distribution
+ * should feel identical from the receiving agent's side. */
+export async function distributeContacts(client: SupabaseClient, contactIds: string[], assignTo: string, assignedBy: string, companyId: string): Promise<void> {
   if (contactIds.length === 0) return;
   const { error } = await client
     .from("calling_app_contacts")
     .update({ assigned_to: assignTo, assigned_by: assignedBy, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .in("id", contactIds);
   if (error) throw new Error(error.message);
+
+  const { error: notifyError } = await client.from("calling_app_notifications").insert({
+    company_id: companyId,
+    recipient_admin_id: assignTo,
+    kind: "leads_assigned",
+    message: `${contactIds.length} new lead(s) have been given to you.`,
+  });
+  if (notifyError) throw new Error(notifyError.message);
+}
+
+// ── Settings (auto-distribution on/off + batch size) ────────────────────
+
+export async function getSettings(client: SupabaseClient, companyId: string): Promise<CallingAppSettings> {
+  const { data, error } = await client.from("calling_app_settings").select("*").eq("company_id", companyId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ?? { company_id: companyId, auto_distribute_enabled: false, auto_distribute_batch_size: 50, updated_at: new Date().toISOString() };
+}
+
+export async function saveSettings(client: SupabaseClient, companyId: string, patch: Partial<Pick<CallingAppSettings, "auto_distribute_enabled" | "auto_distribute_batch_size">>): Promise<CallingAppSettings> {
+  const { data, error } = await client
+    .from("calling_app_settings")
+    .upsert({ company_id: companyId, ...patch, updated_at: new Date().toISOString() }, { onConflict: "company_id" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// ── Notifications ────────────────────────────────────────────────────────
+
+/** Everything the CALLER is allowed to see — their own personal ones, plus
+ * (if they can manage the Master Sheet) every "authority broadcast" —
+ * enforced by RLS, this just reads without filtering client-side. */
+export async function listNotifications(client: SupabaseClient, companyId: string): Promise<CallingAppNotification[]> {
+  const { data, error } = await client
+    .from("calling_app_notifications")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function markNotificationRead(client: SupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from("calling_app_notifications").update({ is_read: true }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Recall ───────────────────────────────────────────────────────────────
+
+/** Pulls an agent's leads back into the unassigned pool — onlyUnworked=true
+ * (the default, safer case) leaves anything they've already attempted
+ * alone; false takes back everything still assigned to them regardless
+ * (e.g. they've left the company). Returns how many were recalled. */
+export async function recallContacts(client: SupabaseClient, fromAdminId: string, onlyUnworked: boolean): Promise<number> {
+  const { data, error } = await client.rpc("recall_calling_app_contacts", { p_from_admin_id: fromAdminId, p_only_unworked: onlyUnworked });
+  if (error) throw new Error(error.message);
+  return data ?? 0;
+}
+
+// ── Batch performance ("who completed their data in how much time") ─────
+
+export async function listBatchPerformance(client: SupabaseClient, companyId: string): Promise<CallingAppBatchPerformance[]> {
+  const { data, error } = await client
+    .from("calling_app_batch_performance")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("assigned_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export function buildMasterSheetSummary(lists: CallingAppCallList[], contacts: CallingAppContact[]): MasterSheetListSummary[] {

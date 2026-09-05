@@ -24,6 +24,10 @@ export interface CallingAppAdmin {
   is_admin: boolean;
   can_upload: boolean;
   can_download: boolean;
+  /** Master Sheet authority (upload/distribute/recall leads), independent
+   * of is_admin — lets a Team Leader (or anyone) manage data distribution
+   * without also getting Settings access. is_admin always implies this. */
+  can_manage_master_sheet: boolean;
   daily_target: number;
   status: CallingAppAdminStatus;
   role: CallingAppAdminRole;
@@ -162,4 +166,41 @@ export interface CallingAppBreak {
   break_type: BreakType;
   started_at: string;
   ended_at: string | null;
+}
+
+// ── Automation (auto-distribution + notifications + performance) ───────
+
+export interface CallingAppSettings {
+  company_id: string;
+  auto_distribute_enabled: boolean;
+  auto_distribute_batch_size: number;
+  updated_at: string;
+}
+
+export type CallingAppNotificationKind = "leads_assigned" | "pool_empty";
+
+export interface CallingAppNotification {
+  id: string;
+  company_id: string;
+  /** null = an "authority" broadcast, visible to anyone who can manage the Master Sheet. */
+  recipient_admin_id: string | null;
+  kind: CallingAppNotificationKind;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+/** One distribution event (manual or auto) — every contact given to the
+ * same agent in the same batch shares one assigned_at, which is what
+ * groups them here. Lets "who completed their data in how much time" be
+ * judged directly. */
+export interface CallingAppBatchPerformance {
+  company_id: string;
+  admin_id: string;
+  assigned_at: string;
+  batch_size: number;
+  worked_count: number;
+  is_complete: boolean;
+  first_worked_at: string | null;
+  last_worked_at: string | null;
 }

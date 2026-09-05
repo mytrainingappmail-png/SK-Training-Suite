@@ -41,7 +41,7 @@ export default function CallingAppLoginPage() {
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
           )}
 
-          <label className="text-xs font-medium text-slate-500">Username</label>
+          <label className="text-xs font-medium text-slate-600">Username</label>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -49,7 +49,7 @@ export default function CallingAppLoginPage() {
             autoComplete="username"
             className="mt-1 mb-4 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <label className="text-xs font-medium text-slate-500">Password</label>
+          <label className="text-xs font-medium text-slate-600">Password</label>
           <input
             type="password"
             value={password}

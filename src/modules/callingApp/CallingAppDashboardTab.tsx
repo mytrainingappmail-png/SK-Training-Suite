@@ -10,7 +10,7 @@ function isToday(iso: string): boolean {
 function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" style={{ borderTopWidth: 3, borderTopColor: accent }}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</p>
       <p className="mt-1 text-2xl font-bold" style={{ color: accent }}>{value}</p>
     </div>
   );
@@ -66,7 +66,7 @@ export function CallingAppDashboardTab({
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-semibold text-slate-700">Today's Target</span>
-            <span className="text-slate-500">{myLogsToday.length} / {target} calls</span>
+            <span className="text-slate-600">{myLogsToday.length} / {target} calls</span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
             <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all" style={{ width: `${progressPct}%` }} />
@@ -78,7 +78,7 @@ export function CallingAppDashboardTab({
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-900">🏆 Today's Leaderboard</p>
           {leaderboard.length === 0 ? (
-            <p className="text-xs text-slate-400">No calls logged yet today.</p>
+            <p className="text-xs text-slate-600">No calls logged yet today.</p>
           ) : (
             <div className="space-y-2">
               {leaderboard.map((row, i) => (

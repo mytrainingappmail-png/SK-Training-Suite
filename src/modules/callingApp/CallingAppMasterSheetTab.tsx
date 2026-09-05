@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import * as dataRepo from "../../repositories/callingApp/callingAppDataRepository";
 import { parseContactsCsv, downloadCsvFile, buildSampleCsv } from "../../services/callingApp/callingAppCsvService";
 import type { CallingAppIdentity } from "./CallingAppShell";
-import type { CallingAppCallList, CallingAppContact, CallingAppCustomFieldDef, CallingAppAdmin, MasterSheetListSummary, DuplicateContactGroup } from "../../types/callingApp";
+import type { CallingAppCallList, CallingAppContact, CallingAppCustomFieldDef, CallingAppAdmin, MasterSheetListSummary, DuplicateContactGroup, CallingAppSettings, CallingAppBatchPerformance } from "../../types/callingApp";
 
 const INPUT_CLS = "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30";
 
@@ -63,7 +63,7 @@ function DuplicatesPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-bold text-slate-900">Find & Remove Duplicates</h3>
-          <p className="mt-1 text-xs text-slate-400">Same mobile number uploaded more than once — review before removing, or clean them all in one go.</p>
+          <p className="mt-1 text-xs text-slate-600">Same mobile number uploaded more than once — review before removing, or clean them all in one go.</p>
         </div>
         <button onClick={scan} disabled={loading} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
           {loading ? "Scanning…" : groups === null ? "Scan for Duplicates" : "Rescan"}
@@ -91,7 +91,7 @@ function DuplicatesPanel({
                         <div key={c.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-1.5 text-xs">
                           <span>
                             {c.name} {i === 0 && <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Keep (oldest)</span>}
-                            {c.assigned_to && <span className="ml-1 text-slate-400">· assigned to {adminById.get(c.assigned_to)?.display_name ?? "someone"}</span>}
+                            {c.assigned_to && <span className="ml-1 text-slate-600">· assigned to {adminById.get(c.assigned_to)?.display_name ?? "someone"}</span>}
                           </span>
                           {i > 0 && (
                             <button onClick={() => handleRemoveOne(c.id)} className="font-semibold text-red-500 hover:underline">Remove</button>
@@ -188,13 +188,13 @@ function UploadToMasterSheet({
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
       <h3 className="text-sm font-bold text-slate-900">Upload to Master Sheet</h3>
-      <p className="mt-1 text-xs text-slate-400">These contacts land in the shared pool, unassigned — distribute them to one or more employees below whenever you're ready. No limit on how many you can upload.</p>
+      <p className="mt-1 text-xs text-slate-600">These contacts land in the shared pool, unassigned — distribute them to one or more employees below whenever you're ready. No limit on how many you can upload.</p>
 
       <input ref={fileRef} type="file" accept=".csv" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="mt-3 w-full text-sm" />
 
       {fileName && (
         <div className="mt-3">
-          <label className="mb-1 block text-xs font-semibold text-slate-500">List Name</label>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">List Name</label>
           <input value={listName} onChange={(e) => setListName(e.target.value)} className={`${INPUT_CLS} w-full`} />
           <p className="mt-2 text-sm text-slate-600">{rows.length} valid row(s) found{errors.length > 0 && `, ${errors.length} skipped`}.</p>
           {errors.length > 0 && (
@@ -222,6 +222,232 @@ function UploadToMasterSheet({
           {uploading ? "Uploading…" : `Add ${rowsToImport.length} to Master Sheet`}
         </button>
       </div>
+    </div>
+  );
+}
+
+function AutoDistributePanel({
+  identity,
+  showToast,
+}: {
+  identity: CallingAppIdentity;
+  showToast: (msg: string, ok?: boolean) => void;
+}) {
+  const [settings, setSettings] = useState<CallingAppSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    dataRepo.getSettings(identity.client, identity.admin.company_id).then(setSettings);
+  }, [identity.client, identity.admin.company_id]);
+
+  async function toggle(next: boolean) {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const updated = await dataRepo.saveSettings(identity.client, identity.admin.company_id, { auto_distribute_enabled: next });
+      setSettings(updated);
+      showToast(next ? "Auto-distribution turned ON." : "Auto-distribution turned off.");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not save.", false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveBatchSize(next: number) {
+    if (!settings || next <= 0) return;
+    setSaving(true);
+    try {
+      const updated = await dataRepo.saveSettings(identity.client, identity.admin.company_id, { auto_distribute_batch_size: next });
+      setSettings(updated);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not save.", false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!settings) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">⚡ Auto-Distribution</h3>
+          <p className="mt-1 text-xs text-slate-600">
+            When ON, the moment an employee finishes every lead they were given, they're topped up automatically from the Master Sheet — no need to distribute by hand each time.
+            If the pool runs low or empty, you'll be notified here instead.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => toggle(!settings.auto_distribute_enabled)}
+          disabled={saving}
+          className={`relative h-7 w-14 shrink-0 rounded-full transition ${settings.auto_distribute_enabled ? "bg-emerald-500" : "bg-slate-300"} disabled:opacity-50`}
+        >
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${settings.auto_distribute_enabled ? "left-8" : "left-1"}`} />
+        </button>
+      </div>
+
+      {settings.auto_distribute_enabled && (
+        <div className="mt-4 flex items-center gap-2">
+          <label className="text-xs font-semibold text-slate-600">Top-up batch size (per employee)</label>
+          <input
+            type="number"
+            min={1}
+            defaultValue={settings.auto_distribute_batch_size}
+            onBlur={(e) => saveBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            className={`${INPUT_CLS} w-24`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecallPanel({
+  identity,
+  teamAdmins,
+  contacts,
+  onDone,
+  showToast,
+}: {
+  identity: CallingAppIdentity;
+  teamAdmins: CallingAppAdmin[];
+  contacts: CallingAppContact[];
+  onDone: () => void;
+  showToast: (msg: string, ok?: boolean) => void;
+}) {
+  const [adminId, setAdminId] = useState("");
+  const [recalling, setRecalling] = useState(false);
+
+  const mine = contacts.filter((c) => c.assigned_to === adminId);
+  const pending = mine.filter((c) => c.attempt_count === 0).length;
+  const worked = mine.length - pending;
+
+  async function handleRecall(onlyUnworked: boolean) {
+    if (!adminId) return;
+    const label = teamAdmins.find((a) => a.id === adminId)?.display_name ?? "this employee";
+    const scopeLabel = onlyUnworked ? `their ${pending} never-called lead(s)` : `ALL ${mine.length} lead(s) currently assigned to them (including already-worked ones)`;
+    if (!window.confirm(`Recall ${scopeLabel} from ${label} back to the Master Sheet pool?`)) return;
+    setRecalling(true);
+    try {
+      const count = await dataRepo.recallContacts(identity.client, adminId, onlyUnworked);
+      showToast(`Recalled ${count} contact(s) from ${label}.`);
+      onDone();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Recall failed.", false);
+    } finally {
+      setRecalling(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-slate-900">↩ Recall Data</h3>
+      <p className="mt-1 text-xs text-slate-600">Pull leads back from an employee into the unassigned pool — e.g. they've left, or are sitting on more than they can work through.</p>
+
+      <div className="mt-3">
+        <select value={adminId} onChange={(e) => setAdminId(e.target.value)} className={`${INPUT_CLS} w-full sm:w-64`}>
+          <option value="">— Select employee —</option>
+          {teamAdmins.map((a) => <option key={a.id} value={a.id}>{a.display_name}</option>)}
+        </select>
+      </div>
+
+      {adminId && (
+        <>
+          <p className="mt-3 text-sm text-slate-700">
+            {mine.length} total assigned · <span className="font-semibold text-amber-600">{pending} never called</span> · {worked} already worked
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => handleRecall(true)}
+              disabled={recalling || pending === 0}
+              className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-40"
+            >
+              Recall {pending} Never-Called
+            </button>
+            <button
+              onClick={() => handleRecall(false)}
+              disabled={recalling || mine.length === 0}
+              className="rounded-xl border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+            >
+              Recall ALL {mine.length} (including worked)
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BatchPerformancePanel({
+  identity,
+  teamAdmins,
+}: {
+  identity: CallingAppIdentity;
+  teamAdmins: CallingAppAdmin[];
+}) {
+  const [batches, setBatches] = useState<CallingAppBatchPerformance[] | null>(null);
+  const adminById = new Map(teamAdmins.map((a) => [a.id, a]));
+
+  useEffect(() => {
+    dataRepo.listBatchPerformance(identity.client, identity.admin.company_id).then(setBatches);
+  }, [identity.client, identity.admin.company_id]);
+
+  function formatDuration(fromIso: string, toIso: string): string {
+    const ms = new Date(toIso).getTime() - new Date(fromIso).getTime();
+    if (ms < 0) return "—";
+    const hours = ms / 3_600_000;
+    if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))} min`;
+    if (hours < 48) return `${hours.toFixed(1)} hrs`;
+    return `${(hours / 24).toFixed(1)} days`;
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <h3 className="mb-1 text-sm font-bold text-slate-900">⏱ Batch Completion Time</h3>
+      <p className="mb-3 text-xs text-slate-600">Every batch an employee was given (manual or automatic), and how long it took them to work through it — a direct read on pace.</p>
+      {!batches ? (
+        <p className="text-xs text-slate-600">Loading…</p>
+      ) : batches.length === 0 ? (
+        <p className="text-xs text-slate-600">No batches distributed yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
+                <th className="px-3 py-2">Employee</th>
+                <th className="px-3 py-2">Given On</th>
+                <th className="px-3 py-2 text-right">Batch Size</th>
+                <th className="px-3 py-2 text-right">Worked</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Time Taken</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batches.map((b) => (
+                <tr key={`${b.admin_id}-${b.assigned_at}`} className="border-b border-slate-50 last:border-0">
+                  <td className="px-3 py-2 font-medium text-slate-800">{adminById.get(b.admin_id)?.display_name ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-600">{new Date(b.assigned_at).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{b.batch_size}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{b.worked_count}</td>
+                  <td className="px-3 py-2">
+                    {b.is_complete ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">Complete</span>
+                    ) : (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">In Progress</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 font-semibold text-indigo-700">
+                    {b.is_complete && b.first_worked_at && b.last_worked_at ? formatDuration(b.assigned_at, b.last_worked_at) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -269,7 +495,7 @@ function DistributePanel({
       for (const adminId of selectedAdmins) {
         const batch = await dataRepo.getUnassignedContacts(identity.client, identity.admin.company_id, listId || undefined, perEmployee);
         if (batch.length === 0) break;
-        await dataRepo.distributeContacts(identity.client, batch.map((c) => c.id), adminId, identity.admin.id);
+        await dataRepo.distributeContacts(identity.client, batch.map((c) => c.id), adminId, identity.admin.id, identity.admin.company_id);
         totalGiven += batch.length;
       }
       showToast(`Distributed ${totalGiven} contacts across ${selectedAdmins.size} employee(s).`);
@@ -285,32 +511,32 @@ function DistributePanel({
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
       <h3 className="text-sm font-bold text-slate-900">Distribute Data</h3>
-      <p className="mt-1 text-xs text-slate-400">Give the next batch of unassigned contacts to one or more employees — no need to upload a fresh file each time.</p>
+      <p className="mt-1 text-xs text-slate-600">Give the next batch of unassigned contacts to one or more employees — no need to upload a fresh file each time.</p>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">From</label>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">From</label>
           <select value={listId} onChange={(e) => setListId(e.target.value)} className={`${INPUT_CLS} w-full`}>
             <option value="">Any list (oldest unassigned first)</option>
             {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
-          <p className="mt-1 text-xs text-slate-400">{poolCount === null ? "…" : `${poolCount} unassigned available`}</p>
+          <p className="mt-1 text-xs text-slate-600">{poolCount === null ? "…" : `${poolCount} unassigned available`}</p>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">Contacts per employee</label>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">Contacts per employee</label>
           <input type="number" min={1} value={perEmployee} onChange={(e) => setPerEmployee(Math.max(1, parseInt(e.target.value, 10) || 1))} className={`${INPUT_CLS} w-full`} />
         </div>
       </div>
 
       <div className="mt-4">
-        <label className="mb-1.5 block text-xs font-semibold text-slate-500">Give to (select one or more)</label>
+        <label className="mb-1.5 block text-xs font-semibold text-slate-600">Give to (select one or more)</label>
         <div className="flex flex-wrap gap-2">
           {teamAdmins.map((a) => (
             <button
               key={a.id}
               type="button"
               onClick={() => toggleAdmin(a.id)}
-              className={`rounded-full border-2 px-3 py-1.5 text-xs font-semibold ${selectedAdmins.has(a.id) ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}
+              className={`rounded-full border-2 px-3 py-1.5 text-xs font-semibold ${selectedAdmins.has(a.id) ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600"}`}
             >
               {a.display_name}
             </button>
@@ -365,33 +591,39 @@ export function CallingAppMasterSheetTab({
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <h3 className="mb-3 text-sm font-bold text-slate-900">Lists in the Master Sheet</h3>
         {listSummaries.length === 0 ? (
-          <p className="text-xs text-slate-400">No lists uploaded yet.</p>
+          <p className="text-xs text-slate-600">No lists uploaded yet.</p>
         ) : (
           <div className="space-y-2">
             {listSummaries.map((s) => (
               <div key={s.list.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-4 py-2.5 text-sm">
                 <span className="font-medium text-slate-800">{s.list.name}</span>
-                <span className="text-xs text-slate-500">{s.total} total · {s.assigned} distributed · <span className="font-semibold text-indigo-600">{s.unassigned} remaining</span></span>
+                <span className="text-xs text-slate-600">{s.total} total · {s.assigned} distributed · <span className="font-semibold text-indigo-600">{s.unassigned} remaining</span></span>
               </div>
             ))}
           </div>
         )}
       </div>
 
+      <AutoDistributePanel identity={identity} showToast={showToast} />
+
       <DistributePanel identity={identity} lists={lists} teamAdmins={teamAdmins} onDone={refresh} showToast={showToast} />
+
+      <RecallPanel identity={identity} teamAdmins={teamAdmins} contacts={contacts} onDone={onChanged} showToast={showToast} />
 
       <DuplicatesPanel identity={identity} teamAdmins={teamAdmins} onDone={refresh} showToast={showToast} />
 
+      <BatchPerformancePanel identity={identity} teamAdmins={teamAdmins} />
+
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <h3 className="mb-1 text-sm font-bold text-slate-900">Who Has Been Given How Much</h3>
-        <p className="mb-3 text-xs text-slate-400">So you always know who's running low before they ask.</p>
+        <p className="mb-3 text-xs text-slate-600">So you always know who's running low before they ask.</p>
         {distribution.length === 0 ? (
-          <p className="text-xs text-slate-400">Nobody has been given any data yet.</p>
+          <p className="text-xs text-slate-600">Nobody has been given any data yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
                   <th className="px-3 py-2">Employee</th>
                   <th className="px-3 py-2 text-right">Total Given</th>
                   <th className="px-3 py-2 text-right">Still Pending</th>
@@ -405,8 +637,8 @@ export function CallingAppMasterSheetTab({
                     <td className="px-3 py-2 font-medium text-slate-800">{d.admin.display_name}</td>
                     <td className="px-3 py-2 text-right text-slate-600">{d.totalAssigned}</td>
                     <td className="px-3 py-2 text-right font-semibold text-amber-600">{d.pending}</td>
-                    <td className="px-3 py-2 text-slate-500">{d.firstAssignedAt ? new Date(d.firstAssignedAt).toLocaleDateString() : "—"}</td>
-                    <td className="px-3 py-2 text-slate-500">{d.lastAssignedAt ? new Date(d.lastAssignedAt).toLocaleDateString() : "—"}</td>
+                    <td className="px-3 py-2 text-slate-600">{d.firstAssignedAt ? new Date(d.firstAssignedAt).toLocaleDateString() : "—"}</td>
+                    <td className="px-3 py-2 text-slate-600">{d.lastAssignedAt ? new Date(d.lastAssignedAt).toLocaleDateString() : "—"}</td>
                   </tr>
                 ))}
               </tbody>

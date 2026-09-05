@@ -26,6 +26,7 @@ export default function CallingAppAdminSetupPanel() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [canUpload, setCanUpload] = useState(true);
   const [canDownload, setCanDownload] = useState(true);
+  const [canManageMasterSheet, setCanManageMasterSheet] = useState(false);
   const [dailyTarget, setDailyTarget] = useState(0);
   const [role, setRole] = useState<CallingAppAdminRole>("agent");
   const [reportsTo, setReportsTo] = useState("");
@@ -93,7 +94,7 @@ export default function CallingAppAdminSetupPanel() {
           setSaving(false);
           return;
         }
-        await grantEmployeeAccess(companyId, employeeId, displayName.trim(), email.trim() || null, { isAdmin, canUpload, canDownload, dailyTarget, role, reportsTo: reportsTo || null });
+        await grantEmployeeAccess(companyId, employeeId, displayName.trim(), email.trim() || null, { isAdmin, canUpload, canDownload, canManageMasterSheet, dailyTarget, role, reportsTo: reportsTo || null });
         setCreated(`Access granted to ${displayName.trim()} — they'll see "Calling App" in their own dashboard.`);
       } else {
         if (!username.trim() || !password) {
@@ -135,6 +136,7 @@ export default function CallingAppAdminSetupPanel() {
       setIsAdmin(false);
       setCanUpload(true);
       setCanDownload(true);
+      setCanManageMasterSheet(false);
       setDailyTarget(0);
       setRole("agent");
       setReportsTo("");
@@ -146,7 +148,7 @@ export default function CallingAppAdminSetupPanel() {
     }
   }
 
-  async function toggleAdminField(admin: CallingAppAdmin, field: "is_admin" | "can_upload" | "can_download", value: boolean) {
+  async function toggleAdminField(admin: CallingAppAdmin, field: "is_admin" | "can_upload" | "can_download" | "can_manage_master_sheet", value: boolean) {
     await updateCallingAppAdmin(admin.id, { [field]: value });
     refresh();
   }
@@ -178,7 +180,7 @@ export default function CallingAppAdminSetupPanel() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">📞 Calling App — Access Setup</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Control exactly who can open the Calling App — either through their existing LMS login, or with a completely separate username/password.
         </p>
       </div>
@@ -188,19 +190,19 @@ export default function CallingAppAdminSetupPanel() {
 
       <form onSubmit={handleCreate} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Access Type</label>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Access Type</label>
           <div className="flex gap-2">
-            <button type="button" onClick={() => setAccessType("lms")} className={`flex-1 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold ${accessType === "lms" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}>
+            <button type="button" onClick={() => setAccessType("lms")} className={`flex-1 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold ${accessType === "lms" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600"}`}>
               Use their existing LMS login
             </button>
-            <button type="button" onClick={() => setAccessType("dedicated")} className={`flex-1 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold ${accessType === "dedicated" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}>
+            <button type="button" onClick={() => setAccessType("dedicated")} className={`flex-1 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold ${accessType === "dedicated" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600"}`}>
               Create a separate login
             </button>
           </div>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
             {accessType === "lms" ? "Employee (required)" : "Link to an employee (optional — prefills name/email)"}
           </label>
           <select value={employeeId} onChange={(e) => handlePickEmployee(e.target.value)} className={INPUT_CLS}>
@@ -213,11 +215,11 @@ export default function CallingAppAdminSetupPanel() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Display Name</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Display Name</label>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={INPUT_CLS} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email (optional)</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Email (optional)</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT_CLS} />
           </div>
         </div>
@@ -225,11 +227,11 @@ export default function CallingAppAdminSetupPanel() {
         {accessType === "dedicated" && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Username</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Username</label>
               <input value={username} onChange={(e) => setUsername(e.target.value)} className={INPUT_CLS} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Password</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Password</label>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" className={INPUT_CLS} />
             </div>
           </div>
@@ -240,22 +242,27 @@ export default function CallingAppAdminSetupPanel() {
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={canUpload} onChange={(e) => setCanUpload(e.target.checked)} /> Can Upload</label>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={canDownload} onChange={(e) => setCanDownload(e.target.checked)} /> Can Download</label>
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Daily Target</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Daily Target</label>
             <input type="number" min={0} value={dailyTarget} onChange={(e) => setDailyTarget(Math.max(0, parseInt(e.target.value, 10) || 0))} className={INPUT_CLS} />
           </div>
         </div>
 
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={canManageMasterSheet} onChange={(e) => setCanManageMasterSheet(e.target.checked)} /> Can Manage Master Sheet (upload/distribute/recall leads)
+        </label>
+        <p className="-mt-2 text-[11px] text-slate-600">Gives Master Sheet access without Settings — e.g. a Team Leader who should distribute leads to their own team but not touch dispositions/custom fields.</p>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Report Role</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Report Role</label>
             <select value={role} onChange={(e) => handleRoleChange(e.target.value as CallingAppAdminRole)} className={INPUT_CLS}>
               {(Object.keys(ROLE_LABELS) as CallingAppAdminRole[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
             </select>
-            <p className="mt-1 text-[11px] text-slate-400">Controls whose numbers they can see in Dashboard/Reports — separate from Admin above.</p>
+            <p className="mt-1 text-[11px] text-slate-600">Controls whose numbers they can see in Dashboard/Reports — separate from Admin above.</p>
           </div>
           {reportsToOptionsFor(role).length > 0 && (
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reports To (optional)</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Reports To (optional)</label>
               <select value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} className={INPUT_CLS}>
                 <option value="">— None —</option>
                 {reportsToOptionsFor(role).map((a) => <option key={a.id} value={a.id}>{a.display_name} ({ROLE_LABELS[a.role]})</option>)}
@@ -271,12 +278,12 @@ export default function CallingAppAdminSetupPanel() {
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-slate-700">Current Access ({admins.length})</h3>
-        {admins.length === 0 && <p className="text-xs text-slate-400">No one has Calling App access yet.</p>}
+        {admins.length === 0 && <p className="text-xs text-slate-600">No one has Calling App access yet.</p>}
         {admins.map((a) => (
           <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
             <div>
-              <p className="text-sm font-semibold text-slate-800">{a.display_name} {a.username && <span className="text-xs text-slate-400">({a.username})</span>}</p>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm font-semibold text-slate-800">{a.display_name} {a.username && <span className="text-xs text-slate-600">({a.username})</span>}</p>
+              <p className="text-xs text-slate-600">
                 {a.employee_id ? "LMS login" : "Dedicated login"} · {a.status}
               </p>
             </div>
@@ -284,6 +291,7 @@ export default function CallingAppAdminSetupPanel() {
               <label className="flex items-center gap-1"><input type="checkbox" checked={a.is_admin} onChange={(e) => toggleAdminField(a, "is_admin", e.target.checked)} /> Admin</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={a.can_upload} onChange={(e) => toggleAdminField(a, "can_upload", e.target.checked)} /> Upload</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={a.can_download} onChange={(e) => toggleAdminField(a, "can_download", e.target.checked)} /> Download</label>
+              <label className="flex items-center gap-1"><input type="checkbox" checked={a.can_manage_master_sheet} onChange={(e) => toggleAdminField(a, "can_manage_master_sheet", e.target.checked)} /> Master Sheet</label>
               <select value={a.role} onChange={(e) => changeRole(a, e.target.value as CallingAppAdminRole)} className="rounded-lg border border-slate-200 px-1.5 py-1">
                 {(Object.keys(ROLE_LABELS) as CallingAppAdminRole[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
               </select>
