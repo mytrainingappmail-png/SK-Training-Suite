@@ -343,7 +343,9 @@ export function CallingAppSheetTab({
           )}
         </div>
         <div className="flex flex-wrap gap-2 sm:ml-auto">
-          <button onClick={() => downloadSampleFor(fieldDefs)} className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:flex-none">Sample CSV</button>
+          {admin.can_upload && (
+            <button onClick={() => downloadSampleFor(fieldDefs)} className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:flex-none">Sample CSV</button>
+          )}
           {admin.can_download && (
             <button onClick={handleExport} className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:flex-none">
               Export CSV
