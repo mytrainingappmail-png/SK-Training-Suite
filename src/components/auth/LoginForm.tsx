@@ -248,6 +248,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, in
 
 if (!result.success) {
   setErrorMessage(result.error);
+  if (result.error.startsWith('This account requires a Company Code')) {
+    setShowCompanyCode(true);
+  }
   return;
 }
 

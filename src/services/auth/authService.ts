@@ -90,7 +90,19 @@ export async function login(
     const emp = await fetchEmployee(employeeId.trim(), company.id);
     candidates = emp ? [{ ...emp, company_code: companyCode.trim() }] : [];
   } else {
-    candidates = await fetchEmployeeAnyCompany(employeeId.trim());
+    const allCandidates = await fetchEmployeeAnyCompany(employeeId.trim());
+    // A Super Admin (the company owner's role) is the highest-value
+    // account in each company, and employee_code is just a sequential
+    // number — every company's owner ends up as "00001". Left in the
+    // no-code fallback, that means one guessed password gets tried
+    // against every company's owner at once. Super Admin accounts are
+    // excluded from this path entirely; they must log in with a Company
+    // Code (typed, or via the /:companyCode branded link) instead.
+    const nonSuperAdmin = allCandidates.filter((c) => !c.is_super_admin);
+    if (nonSuperAdmin.length === 0 && allCandidates.length > 0) {
+      return fail("This account requires a Company Code. Please enter it above, or use your company's login link.");
+    }
+    candidates = nonSuperAdmin;
   }
 
   if (candidates.length === 0) {
@@ -244,6 +256,7 @@ interface EmployeeRow {
   failed_login_attempts: number | null;
   account_locked:        boolean | null;
   auth_user_id:          string | null;
+  is_super_admin:        boolean;
 }
 
 async function fetchEmployee(
