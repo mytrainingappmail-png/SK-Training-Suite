@@ -285,6 +285,7 @@ export default function CallingAppAdminSetupPanel() {
               <p className="text-sm font-semibold text-slate-800">{a.display_name} {a.username && <span className="text-xs text-slate-600">({a.username})</span>}</p>
               <p className="text-xs text-slate-600">
                 {a.employee_id ? "LMS login" : "Dedicated login"} · {a.status}
+                {a.registered_mobile_no && <> · 📱 {a.registered_mobile_no}</>}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs">

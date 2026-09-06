@@ -69,8 +69,12 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
     setTimeout(() => setToast(null), 4000);
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent` skips the loading-spinner remount — for quick background
+  // refreshes (e.g. after saving a registered mobile number) where
+  // unmounting the whole tab would also wipe its own local UI state
+  // (like a "Saved ✓" confirmation) before it's even seen.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [disps, defs, cts, logs, hos, brks, notifs] = await Promise.all([
         dataRepo.listDispositions(client, admin.company_id),
@@ -190,7 +194,7 @@ export function CallingAppShell({ identity }: { identity: CallingAppIdentity }) 
       )}
 
       {tab === "dashboard" && (
-        <CallingAppDashboardTab admin={admin} contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} scopeAdminIds={scopeAdminIds} />
+        <CallingAppDashboardTab identity={identity} admin={admin} contacts={contacts} callLogs={callLogs} dispositions={dispositions} teamAdmins={teamAdmins} scopeAdminIds={scopeAdminIds} onChanged={() => load(true)} />
       )}
       {tab === "sheet" && (
         <CallingAppSheetTab identity={identity} contacts={contacts} dispositions={dispositions} fieldDefs={fieldDefs} teamAdmins={teamAdmins} onChanged={load} showToast={showToast} />

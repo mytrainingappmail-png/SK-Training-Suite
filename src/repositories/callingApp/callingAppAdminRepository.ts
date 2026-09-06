@@ -55,7 +55,7 @@ export async function grantEmployeeAccess(
   return data;
 }
 
-export async function updateCallingAppAdmin(id: string, patch: Partial<Pick<CallingAppAdmin, "is_admin" | "can_upload" | "can_download" | "can_manage_master_sheet" | "daily_target" | "status" | "role" | "reports_to">>): Promise<CallingAppAdmin> {
+export async function updateCallingAppAdmin(id: string, patch: Partial<Pick<CallingAppAdmin, "is_admin" | "can_upload" | "can_download" | "can_manage_master_sheet" | "daily_target" | "status" | "role" | "reports_to" | "registered_mobile_no">>): Promise<CallingAppAdmin> {
   const { data, error } = await supabase
     .from("calling_app_admins")
     .update(patch)

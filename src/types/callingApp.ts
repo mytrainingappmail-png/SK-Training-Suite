@@ -28,6 +28,9 @@ export interface CallingAppAdmin {
    * of is_admin — lets a Team Leader (or anyone) manage data distribution
    * without also getting Settings access. is_admin always implies this. */
   can_manage_master_sheet: boolean;
+  /** Which SIM/number this employee actually calls from — a record-keeping
+   * label only (dual-SIM phones are common), not a live telephony link. */
+  registered_mobile_no: string | null;
   daily_target: number;
   status: CallingAppAdminStatus;
   role: CallingAppAdminRole;

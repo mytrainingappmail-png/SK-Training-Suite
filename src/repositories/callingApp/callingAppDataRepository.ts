@@ -318,6 +318,17 @@ export async function listBatchPerformance(client: SupabaseClient, companyId: st
   return data ?? [];
 }
 
+// ── Registered mobile number ────────────────────────────────────────────
+
+/** Lets the CURRENT admin set/change which SIM they call from — works for
+ * either login type since it goes through an RPC keyed off
+ * current_calling_app_admin_id(), not the normal RLS write policy (which
+ * only trusts an LMS employee session). Pass "" to clear it. */
+export async function updateMyRegisteredMobile(client: SupabaseClient, mobile: string): Promise<void> {
+  const { error } = await client.rpc("update_my_registered_mobile", { p_mobile: mobile });
+  if (error) throw new Error(error.message);
+}
+
 export function buildMasterSheetSummary(lists: CallingAppCallList[], contacts: CallingAppContact[]): MasterSheetListSummary[] {
   return lists.map((list) => {
     const inList = contacts.filter((c) => c.list_id === list.id);
