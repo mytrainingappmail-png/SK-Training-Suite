@@ -226,7 +226,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, in
     if (loading) return;
 
     if (!employeeId.trim()) {
-      setErrorMessage('Employee ID is required.');
+      setErrorMessage('Employee ID or email is required.');
       return;
     }
     if (!password) {
@@ -272,8 +272,8 @@ navigate('/dashboard', { replace: true });
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <InputField
           id="employeeId"
-          label="Employee ID"
-          placeholder="Enter employee ID"
+          label="Employee ID or Email"
+          placeholder="Enter employee ID or email"
           value={employeeId}
           onChange={(v) => { setEmployeeId(v); setErrorMessage(null); }}
           disabled={loading}

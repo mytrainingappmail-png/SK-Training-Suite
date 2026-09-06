@@ -65,8 +65,12 @@ export async function login(
   // a match instead. A code is still honored when typed (unchanged path),
   // useful if the same employee_code happens to exist in more than one
   // company, or an admin just prefers to scope it explicitly.
+  //
+  // The "Employee ID" field also doubles as an email field — the lookup
+  // RPCs match against employee_code OR email (case-insensitive), so
+  // someone can type either without needing a separate toggle.
   if (!employeeId.trim()) {
-    return fail("Employee ID is required.");
+    return fail("Employee ID or email is required.");
   }
   if (!password) {
     return fail("Password is required.");
@@ -90,7 +94,7 @@ export async function login(
   }
 
   if (candidates.length === 0) {
-    return fail("Invalid employee ID or password.");
+    return fail("Invalid employee ID/email or password.");
   }
 
   // ── 3. Try each candidate's password — real Supabase Auth if migrated,
@@ -110,7 +114,7 @@ export async function login(
   if (!matched) {
     await handleFailedAttempt(candidates[0].id, candidates[0].failed_login_attempts ?? 0);
     // Generic message — do not reveal which field was wrong
-    return fail("Invalid employee ID or password.");
+    return fail("Invalid employee ID/email or password.");
   }
 
   // ── 4. Validate the matched employee's active/locked status ───────────────
