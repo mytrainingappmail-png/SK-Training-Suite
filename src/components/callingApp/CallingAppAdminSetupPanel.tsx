@@ -24,8 +24,8 @@ export default function CallingAppAdminSetupPanel() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [canUpload, setCanUpload] = useState(true);
-  const [canDownload, setCanDownload] = useState(true);
+  const [canUpload, setCanUpload] = useState(false);
+  const [canDownload, setCanDownload] = useState(false);
   const [canManageMasterSheet, setCanManageMasterSheet] = useState(false);
   const [dailyTarget, setDailyTarget] = useState(0);
   const [role, setRole] = useState<CallingAppAdminRole>("agent");
