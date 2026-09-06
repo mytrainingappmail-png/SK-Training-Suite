@@ -19,10 +19,15 @@ function StatCard({ label, value, accent }: { label: string; value: string | num
   );
 }
 
-type RangeKey = "today" | "yesterday" | "week" | "month";
-const RANGE_LABELS: Record<RangeKey, string> = { today: "Today", yesterday: "Yesterday", week: "This Week", month: "This Month" };
+type RangeKey = "today" | "yesterday" | "week" | "month" | "custom";
+const RANGE_LABELS: Record<RangeKey, string> = { today: "Today", yesterday: "Yesterday", week: "This Week", month: "This Month", custom: "Pick a Date" };
 
-function rangeBounds(key: RangeKey): { from: Date; to: Date } {
+function todayStr(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+function rangeBounds(key: RangeKey, customDate: string): { from: Date; to: Date } {
   const now = new Date();
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
@@ -38,6 +43,14 @@ function rangeBounds(key: RangeKey): { from: Date; to: Date } {
     const monday = new Date(now);
     monday.setDate(monday.getDate() - diff);
     return { from: startOfDay(monday), to: endOfDay(now) };
+  }
+  if (key === "custom") {
+    // Parse "YYYY-MM-DD" as LOCAL midnight, not UTC — `new Date("YYYY-MM-DD")`
+    // parses as UTC and can shift a day off in IST, the exact bug we just
+    // hit seeding demo data.
+    const [y, m, d] = customDate.split("-").map(Number);
+    const picked = new Date(y, (m || 1) - 1, d || 1);
+    return { from: startOfDay(picked), to: endOfDay(picked) };
   }
   const first = new Date(now.getFullYear(), now.getMonth(), 1);
   return { from: startOfDay(first), to: endOfDay(now) };
@@ -102,6 +115,7 @@ export function CallingAppDashboardTab({
   // ── Call Activity (Callyzer-style breakdown for one person) ──────────
   const [viewingId, setViewingId] = useState(admin.id);
   const [range, setRange] = useState<RangeKey>("today");
+  const [customDate, setCustomDate] = useState(todayStr());
 
   const viewingAdmin = teamAdmins.find((a) => a.id === viewingId) ?? admin;
   const isViewingSelf = viewingId === admin.id;
@@ -118,7 +132,7 @@ export function CallingAppDashboardTab({
     setMobileInput(myRegisteredMobile ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myRegisteredMobile]);
-  const { from, to } = rangeBounds(range);
+  const { from, to } = rangeBounds(range, customDate);
   const viewingLogs = useMemo(
     () => callLogs.filter((l) => l.admin_id === viewingId && new Date(l.called_at) >= from && new Date(l.called_at) <= to),
     [callLogs, viewingId, from, to]
@@ -231,6 +245,15 @@ export function CallingAppDashboardTab({
             >
               {(Object.keys(RANGE_LABELS) as RangeKey[]).map((k) => <option key={k} value={k}>{RANGE_LABELS[k]}</option>)}
             </select>
+            {range === "custom" && (
+              <input
+                type="date"
+                value={customDate}
+                max={todayStr()}
+                onChange={(e) => setCustomDate(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+              />
+            )}
           </div>
         </div>
 
