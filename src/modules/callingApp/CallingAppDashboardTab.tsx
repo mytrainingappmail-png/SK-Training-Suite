@@ -138,17 +138,22 @@ export function CallingAppDashboardTab({
     [callLogs, viewingId, from, to]
   );
 
-  const outcomeCounts = useMemo(() => {
-    let positive = 0, neutral = 0, negative = 0, none = 0;
-    for (const l of viewingLogs) {
-      const outcome = l.disposition_id ? dispositionById.get(l.disposition_id)?.outcome_type : undefined;
-      if (outcome === "positive") positive += 1;
-      else if (outcome === "negative") negative += 1;
-      else if (outcome === "neutral") neutral += 1;
-      else none += 1;
-    }
-    return { positive, neutral, negative, none };
-  }, [viewingLogs, dispositionById]);
+  // Per-disposition breakdown — the actual labels the employee picked
+  // (Not Interested, Busy/No Answer, Wrong Number, ...), not just the
+  // positive/neutral/negative bucket, since that was too vague to read at
+  // a glance.
+  const OUTCOME_COLOR: Record<string, string> = { positive: "#10b981", neutral: "#f59e0b", negative: "#f43f5e" };
+  const dispositionBars = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of viewingLogs) counts.set(l.disposition_id ?? "__none", (counts.get(l.disposition_id ?? "__none") ?? 0) + 1);
+    const bars = dispositions
+      .map((d) => ({ id: d.id, label: d.label, color: OUTCOME_COLOR[d.outcome_type] ?? "#94a3b8", count: counts.get(d.id) ?? 0 }))
+      .filter((b) => b.count > 0);
+    const noneCount = counts.get("__none") ?? 0;
+    if (noneCount > 0) bars.push({ id: "__none", label: "No Outcome Set", color: "#94a3b8", count: noneCount });
+    return bars.sort((a, b) => b.count - a.count);
+  }, [viewingLogs, dispositions]);
+  const maxDispositionCount = Math.max(1, ...dispositionBars.map((b) => b.count));
 
   const hourlyBuckets = useMemo(() => {
     const buckets = Array.from({ length: BUCKET_COUNT }, () => ({ positive: 0, neutral: 0, negative: 0 }));
@@ -277,55 +282,64 @@ export function CallingAppDashboardTab({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-slate-50 px-3 py-2.5 text-center">
-            <p className="text-lg font-bold text-slate-900">{viewingLogs.length}</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Calls</p>
-          </div>
-          <div className="rounded-xl bg-emerald-50 px-3 py-2.5 text-center">
-            <p className="text-lg font-bold text-emerald-700">{outcomeCounts.positive}</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Positive</p>
-          </div>
-          <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-center">
-            <p className="text-lg font-bold text-amber-700">{outcomeCounts.neutral + outcomeCounts.none}</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">Neutral</p>
-          </div>
-          <div className="rounded-xl bg-rose-50 px-3 py-2.5 text-center">
-            <p className="text-lg font-bold text-rose-700">{outcomeCounts.negative}</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Negative</p>
-          </div>
+        <div className="rounded-xl bg-slate-50 px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-slate-900">{viewingLogs.length}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Dials</p>
         </div>
 
         {viewingLogs.length === 0 ? (
           <p className="py-6 text-center text-xs text-slate-500">No calls logged in this range.</p>
         ) : (
-          <div>
-            <div className="flex h-32 items-end gap-1.5">
-              {hourlyBuckets.map((b, i) => {
-                const total = b.positive + b.neutral + b.negative;
-                const heightPct = (total / maxBucketValue) * 100;
-                return (
-                  <div key={i} className="flex flex-1 flex-col items-center justify-end gap-0.5" style={{ height: "100%" }}>
-                    <div className="flex w-full flex-1 flex-col-reverse items-stretch justify-start overflow-hidden rounded-t" style={{ height: `${Math.max(heightPct, total > 0 ? 4 : 0)}%`, marginTop: "auto" }}>
-                      {b.positive > 0 && <div className="w-full bg-emerald-500" style={{ flex: b.positive }} title={`${b.positive} positive`} />}
-                      {b.neutral > 0 && <div className="w-full bg-amber-400" style={{ flex: b.neutral }} title={`${b.neutral} neutral`} />}
-                      {b.negative > 0 && <div className="w-full bg-rose-500" style={{ flex: b.negative }} title={`${b.negative} negative`} />}
-                    </div>
+          <>
+            {/* One bar per actual disposition (Not Interested, Busy/No
+                Answer, Wrong Number, ...) instead of a vague positive/
+                neutral/negative bucket — easier to read at a glance. */}
+            <div>
+              <p className="mb-2 text-xs font-bold text-slate-700">Calls by Outcome</p>
+              <div className="flex items-end gap-3 overflow-x-auto pb-1" style={{ height: 140 }}>
+                {dispositionBars.map((b) => (
+                  <div key={b.id} className="flex h-full min-w-[4.5rem] flex-col items-center justify-end gap-1">
+                    <span className="text-xs font-bold text-slate-900">{b.count}</span>
+                    <div
+                      className="w-10 rounded-t"
+                      style={{ height: `${Math.max((b.count / maxDispositionCount) * 100, 6)}%`, backgroundColor: b.color }}
+                      title={`${b.label}: ${b.count}`}
+                    />
+                    <span className="text-center text-[10px] font-semibold leading-tight text-slate-700">{b.label}</span>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-            <div className="mt-1 flex gap-1.5">
-              {hourlyBuckets.map((_, i) => (
-                <div key={i} className="flex-1 text-center text-[10px] text-slate-400">{bucketLabel(i)}</div>
-              ))}
+
+            {/* Time-of-day spread — `called_at` is the exact moment the
+                employee saved this entry in the Calling Sheet (a real
+                server timestamp), not something read off the phone, so it's
+                only as accurate as when they log each call. */}
+            <div>
+              <p className="mb-2 text-xs font-bold text-slate-700">Calls by Time of Day</p>
+              <div className="flex h-32 items-end gap-1.5">
+                {hourlyBuckets.map((b, i) => {
+                  const total = b.positive + b.neutral + b.negative;
+                  const heightPct = (total / maxBucketValue) * 100;
+                  return (
+                    <div key={i} className="flex flex-1 flex-col items-center justify-end gap-0.5" style={{ height: "100%" }}>
+                      <div className="flex w-full flex-1 flex-col-reverse items-stretch justify-start overflow-hidden rounded-t" style={{ height: `${Math.max(heightPct, total > 0 ? 4 : 0)}%`, marginTop: "auto" }}>
+                        {b.positive > 0 && <div className="w-full bg-emerald-500" style={{ flex: b.positive }} title={`${b.positive} positive`} />}
+                        {b.neutral > 0 && <div className="w-full bg-amber-400" style={{ flex: b.neutral }} title={`${b.neutral} neutral`} />}
+                        {b.negative > 0 && <div className="w-full bg-rose-500" style={{ flex: b.negative }} title={`${b.negative} negative`} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-1 flex gap-1.5">
+                {hourlyBuckets.map((_, i) => (
+                  <div key={i} className="flex-1 text-center text-[10px] font-bold text-slate-700">{bucketLabel(i)}</div>
+                ))}
+              </div>
+              <p className="mt-2 text-center text-[10px] text-slate-400">Time = when the call was logged in the Calling Sheet, not auto-detected from the phone.</p>
             </div>
-            <div className="mt-3 flex justify-center gap-4 text-[11px] text-slate-600">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Positive</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Neutral</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Negative</span>
-            </div>
-          </div>
+          </>
         )}
       </div>
     </div>
