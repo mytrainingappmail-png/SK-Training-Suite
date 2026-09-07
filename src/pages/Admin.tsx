@@ -48,6 +48,7 @@ import DiscountCodeManagement from "../modules/license/DiscountCodeManagement";
 import NotificationLog from "../modules/license/NotificationLog";
 import PaymentSettingsManagement from "../modules/payment/PaymentSettingsManagement";
 import CompanyModulesManagement from "../components/superadmin/CompanyModulesManagement";
+import ContentDistributionManagement from "../components/superadmin/ContentDistributionManagement";
 import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibilityMatrix";
 import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
 import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
@@ -521,7 +522,8 @@ function Admin() {
              (isPlatformOperator && matches("Discount Codes")) ||
              matches("License Notifications") ||
              (isPlatformOperator && matches("Payment Settings")) ||
-             (isPlatformOperator && matches("Company Modules")) ? (
+             (isPlatformOperator && matches("Company Modules")) ||
+             (isPlatformOperator && matches("Content Distribution")) ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Billing & Licensing</p>
                 <div className="flex flex-wrap gap-3">
@@ -545,6 +547,9 @@ function Admin() {
                   )}
                   {isPlatformOperator && matches("Company Modules") && (
                     <button onClick={() => setActiveTab("company-modules")} className={getTabClass()} style={getTabStyle("company-modules")}>Company Modules</button>
+                  )}
+                  {isPlatformOperator && matches("Content Distribution") && (
+                    <button onClick={() => setActiveTab("content-distribution")} className={getTabClass()} style={getTabStyle("content-distribution")}>Content Distribution</button>
                   )}
                 </div>
               </div>
@@ -661,6 +666,7 @@ function Admin() {
             {activeTab === "payment-settings" && isPlatformOperator && <PaymentSettingsManagement />}
 
             {activeTab === "company-modules" && isPlatformOperator && <CompanyModulesManagement />}
+            {activeTab === "content-distribution" && isPlatformOperator && <ContentDistributionManagement />}
 
             {activeTab === "course-visibility" && moduleAllowed("course-visibility") && <CourseVisibilityMatrix />}
 
