@@ -5,7 +5,7 @@
 // videoLibraryService.ts for course-lesson videos).
 
 import {
-  getSubjects, createSubject, deleteSubject,
+  getSubjects, createSubject, updateSubject, deleteSubject,
   getVideos, createVideo, updateVideo, deleteVideo,
   uploadVideoFile, uploadVideoThumbnail,
 } from '../../repositories/videoLibraryContent/videoLibraryContentRepository';
@@ -25,6 +25,12 @@ export async function saveSubject(form: VideoSubjectForm): Promise<VideoSubject>
 
 export async function removeSubject(id: string): Promise<void> {
   await deleteSubject(id);
+}
+
+export async function reorderSubjects(orderedIds: string[]): Promise<void> {
+  for (let i = 0; i < orderedIds.length; i++) {
+    await updateSubject(orderedIds[i], { display_order: i });
+  }
 }
 
 export async function loadVideos(): Promise<LibraryVideo[]> {

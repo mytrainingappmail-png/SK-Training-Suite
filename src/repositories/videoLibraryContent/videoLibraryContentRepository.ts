@@ -27,6 +27,12 @@ export async function createSubject(form: VideoSubjectForm): Promise<VideoSubjec
   return data;
 }
 
+export async function updateSubject(id: string, form: Partial<VideoSubjectForm>): Promise<VideoSubject> {
+  const { data, error } = await supabase.from('video_subjects').update(form).eq('id', id).select().maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function deleteSubject(id: string): Promise<void> {
   const { error } = await supabase.from('video_subjects').delete().eq('id', id);
   if (error) throw new Error(error.message);

@@ -152,6 +152,12 @@ export async function editSection(id: string, form: Partial<RealEstateProjectSec
   return updateSection(id, form);
 }
 
+export async function reorderSections(orderedIds: string[]): Promise<void> {
+  for (let i = 0; i < orderedIds.length; i++) {
+    await updateSection(orderedIds[i], { display_order: i });
+  }
+}
+
 export async function removeSection(id: string): Promise<void> {
   await deleteSection(id);
 }

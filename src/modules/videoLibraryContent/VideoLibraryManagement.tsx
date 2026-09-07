@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  loadSubjects, saveSubject, removeSubject,
+  loadSubjects, saveSubject, removeSubject, reorderSubjects,
   loadVideos, saveVideo, removeVideo, reorderVideos,
   uploadRealVideoFile, uploadRealThumbnail, youtubeThumbnailFor,
 } from '../../services/videoLibraryContent/videoLibraryContentService';
@@ -48,6 +48,7 @@ function VideoLibraryManagement() {
   const [uploadingThumb, setUploadingThumb] = useState(false);
 
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [draggedSubjectId, setDraggedSubjectId] = useState<string | null>(null);
   const [previewVideo, setPreviewVideo] = useState<LibraryVideo | null>(null);
 
   const videoFileRef = useRef<HTMLInputElement>(null);
@@ -86,6 +87,31 @@ function VideoLibraryManagement() {
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to delete subject.');
     }
+  }
+
+  async function handleSubjectDrop(targetId: string) {
+    if (!draggedSubjectId || draggedSubjectId === targetId) return;
+    const ids = subjects.map((s) => s.id);
+    const fromIdx = ids.indexOf(draggedSubjectId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const reordered = [...ids];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedSubjectId);
+    setDraggedSubjectId(null);
+    await reorderSubjects(reordered);
+    fetchAll();
+  }
+
+  async function moveSubject(subjectId: string, direction: 'up' | 'down') {
+    const ids = subjects.map((s) => s.id);
+    const idx = ids.indexOf(subjectId);
+    const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx === -1 || swapWith < 0 || swapWith >= ids.length) return;
+    const reordered = [...ids];
+    [reordered[idx], reordered[swapWith]] = [reordered[swapWith], reordered[idx]];
+    await reorderSubjects(reordered);
+    fetchAll();
   }
 
   function openNewVideoForm() {
@@ -208,12 +234,33 @@ function VideoLibraryManagement() {
           <input value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="New subject name..." className={INPUT_CLS} />
           <button onClick={handleAddSubject} className="flex-shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add</button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {subjects.map((s) => (
-            <span key={s.id} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
-              {s.subject_name}
-              <button onClick={() => handleDeleteSubject(s.id)} className="text-red-500 hover:text-red-700">✕</button>
-            </span>
+        {subjects.length > 1 && <p className="mb-2 text-xs text-slate-400">Drag, or use the arrows, to change the order shown to employees.</p>}
+        <div className="space-y-1.5">
+          {subjects.map((s, i) => (
+            <div
+              key={s.id}
+              draggable
+              onDragStart={() => setDraggedSubjectId(s.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleSubjectDrop(s.id)}
+              className={`flex cursor-grab items-center gap-2 rounded-xl border bg-slate-50 px-3 py-2 transition active:cursor-grabbing ${
+                draggedSubjectId === s.id ? 'border-indigo-300 opacity-50' : 'border-slate-100'
+              }`}
+            >
+              <IconDrag className="h-4 w-4 flex-shrink-0 text-slate-300" />
+              <div className="flex flex-shrink-0 flex-col gap-0.5">
+                <button onClick={() => moveSubject(s.id, 'up')} disabled={i === 0}
+                  className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30" title="Move up">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /></svg>
+                </button>
+                <button onClick={() => moveSubject(s.id, 'down')} disabled={i === subjects.length - 1}
+                  className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30" title="Move down">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                </button>
+              </div>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{s.subject_name}</span>
+              <button onClick={() => handleDeleteSubject(s.id)} className="flex-shrink-0 text-xs font-semibold text-red-500 hover:underline">Delete</button>
+            </div>
           ))}
         </div>
       </div>

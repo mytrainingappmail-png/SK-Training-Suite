@@ -28,7 +28,7 @@ import {
   loadProjects, saveProject, editProject, removeProject, reorderProjects,
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
-  loadSectionsForProject, saveSection, editSection, removeSection,
+  loadSectionsForProject, saveSection, editSection, removeSection, reorderSections,
 } from '../../services/realEstateProject/realEstateProjectService';
 import {
   loadAssessments, createAssessment as createAssessmentSvc,
@@ -257,6 +257,7 @@ function RealEstateProjectManagement() {
   const [sectionDraft, setSectionDraft] = useState<RealEstateProjectSectionForm | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [savingSection, setSavingSection] = useState(false);
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
 
   const DEFAULT_TEST_SETTINGS = { passing_percentage: 70, duration_minutes: 15, shuffle_questions: true, shuffle_options: true };
   const [testSettingsDraft, setTestSettingsDraft] = useState(DEFAULT_TEST_SETTINGS);
@@ -528,6 +529,32 @@ function RealEstateProjectManagement() {
     }
   }
 
+  async function handleSectionDrop(targetId: string) {
+    if (!draggedSectionId || draggedSectionId === targetId || !editingProjectId || editingProjectId === 'new') return;
+    const ids = sections.map((s) => s.id);
+    const fromIdx = ids.indexOf(draggedSectionId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const reordered = [...ids];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedSectionId);
+    setDraggedSectionId(null);
+    await reorderSections(reordered);
+    fetchSections(editingProjectId);
+  }
+
+  async function moveSection(sectionId: string, direction: 'up' | 'down') {
+    if (!editingProjectId || editingProjectId === 'new') return;
+    const ids = sections.map((s) => s.id);
+    const idx = ids.indexOf(sectionId);
+    const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx === -1 || swapWith < 0 || swapWith >= ids.length) return;
+    const reordered = [...ids];
+    [reordered[idx], reordered[swapWith]] = [reordered[swapWith], reordered[idx]];
+    await reorderSections(reordered);
+    fetchSections(editingProjectId);
+  }
+
   function startNewQuestion() {
     const assessmentId = sectionDraft?.assessment_id;
     if (!assessmentId) return;
@@ -771,17 +798,38 @@ function RealEstateProjectManagement() {
                   {sections.length === 0 && (
                     <p className="text-xs text-slate-400">No sections yet — add one below.</p>
                   )}
-                  {sections.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                      <div className="flex items-center gap-3">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                  {sections.length > 1 && <p className="text-xs text-slate-400">Drag, or use the arrows, to change the order shown to employees.</p>}
+                  {sections.map((s, i) => (
+                    <div
+                      key={s.id}
+                      draggable
+                      onDragStart={() => setDraggedSectionId(s.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleSectionDrop(s.id)}
+                      className={`flex cursor-grab items-center justify-between gap-3 rounded-xl border bg-white p-3 transition active:cursor-grabbing ${
+                        draggedSectionId === s.id ? 'border-indigo-300 opacity-50' : 'border-slate-100'
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <IconGrip className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                        <div className="flex flex-shrink-0 flex-col gap-0.5">
+                          <button onClick={() => moveSection(s.id, 'up')} disabled={i === 0}
+                            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30" title="Move up">
+                            <IconArrowUp className="h-3 w-3" />
+                          </button>
+                          <button onClick={() => moveSection(s.id, 'down')} disabled={i === sections.length - 1}
+                            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30" title="Move down">
+                            <IconArrowDown className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                           s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600'
                         }`}>
                           {sectionTypeLabel(s.section_type)}
                         </span>
-                        <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+                        <p className="truncate text-sm font-semibold text-slate-800">{s.title}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-shrink-0 gap-2">
                         <button onClick={() => startEditSection(s)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                         <button onClick={() => handleDeleteSection(s.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                       </div>
