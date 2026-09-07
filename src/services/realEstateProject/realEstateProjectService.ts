@@ -76,6 +76,13 @@ export async function removeProject(id: string): Promise<void> {
   await deleteProject(id);
 }
 
+// Reorders the flat project list — mirrors the course reorder pattern
+// (each row re-saved with its new display_order), which is what the
+// employee-facing Projects page already sorts by.
+export async function reorderProjects(ordered: RealEstateProject[]): Promise<void> {
+  await Promise.all(ordered.map((p, i) => updateProject(p.id, { display_order: i + 1 })));
+}
+
 export async function loadBrochuresForProject(projectId: string): Promise<RealEstateProjectBrochure[]> {
   return getBrochuresForProject(projectId);
 }

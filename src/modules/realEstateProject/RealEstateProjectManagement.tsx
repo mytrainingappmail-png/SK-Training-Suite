@@ -8,7 +8,24 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  loadProjects, saveProject, editProject, removeProject,
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  loadProjects, saveProject, editProject, removeProject, reorderProjects,
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
   loadSectionsForProject, saveSection, editSection, removeSection,
@@ -35,6 +52,186 @@ function IconSpinner({ className = 'h-4 w-4' }: { className?: string }) {
 }
 const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
+function IconGrip({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+    </svg>
+  );
+}
+function IconArrowUp({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+    </svg>
+  );
+}
+function IconArrowDown({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
+}
+
+// Drag handle starts the drag (not the whole row), so an ordinary click on
+// the row never accidentally triggers a drag — same pattern as Course
+// Management's reorder modal.
+function SortableProjectRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: (opts: { dragHandleProps: { attributes: ReturnType<typeof useSortable>['attributes']; listeners: ReturnType<typeof useSortable>['listeners'] }; isDragging: boolean }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ dragHandleProps: { attributes, listeners }, isDragging })}
+    </div>
+  );
+}
+
+// No category grouping here (unlike Course reorder) — Projects is
+// deliberately a flat list (see the file-top comment in projectsService.ts).
+function ReorderProjectsModal({
+  projects,
+  saving,
+  onReorder,
+  onClose,
+}: {
+  projects: RealEstateProject[];
+  saving: boolean;
+  onReorder: (ordered: RealEstateProject[]) => void;
+  onClose: () => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const ordered = [...projects].sort((a, b) => a.display_order - b.display_order);
+
+  function moveProject(projectId: string, direction: 'up' | 'down') {
+    const index = ordered.findIndex((p) => p.id === projectId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+    onReorder(arrayMove(ordered, index, targetIndex));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIndex = ordered.findIndex((p) => p.id === active.id);
+    const toIndex = ordered.findIndex((p) => p.id === over.id);
+    if (fromIndex < 0 || toIndex < 0) return;
+    onReorder(arrayMove(ordered, fromIndex, toIndex));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-10"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reorder-projects-title"
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 id="reorder-projects-title" className="text-lg font-semibold text-slate-800">Reorder Projects</h2>
+            <p className="text-sm text-slate-500">Drag a project, or use the arrows, to change the order shown to employees.</p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="max-h-[65vh] space-y-1.5 overflow-y-auto p-6">
+          {ordered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">No projects yet.</p>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={ordered.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                {ordered.map((project, i) => (
+                  <SortableProjectRow key={project.id} id={project.id}>
+                    {({ dragHandleProps, isDragging }) => (
+                      <div
+                        className={`flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 ${
+                          isDragging ? 'z-10 shadow-lg ring-1 ring-yellow-400/50' : ''
+                        }`}
+                      >
+                        <button
+                          {...dragHandleProps.attributes}
+                          {...dragHandleProps.listeners}
+                          aria-label="Drag to reorder"
+                          title="Drag to reorder"
+                          disabled={saving}
+                          className="cursor-grab touch-none text-slate-400 transition hover:text-slate-600 active:cursor-grabbing disabled:opacity-40"
+                        >
+                          <IconGrip />
+                        </button>
+                        <div className="flex flex-col">
+                          <button
+                            onClick={() => moveProject(project.id, 'up')}
+                            disabled={saving || i === 0}
+                            aria-label="Move up"
+                            className="text-slate-400 transition hover:text-yellow-600 disabled:opacity-30"
+                          >
+                            <IconArrowUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => moveProject(project.id, 'down')}
+                            disabled={saving || i === ordered.length - 1}
+                            aria-label="Move down"
+                            className="text-slate-400 transition hover:text-yellow-600 disabled:opacity-30"
+                          >
+                            <IconArrowDown className="h-3 w-3" />
+                          </button>
+                        </div>
+                        {project.thumbnail_url ? (
+                          <img src={project.thumbnail_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-slate-100" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-800">{project.project_name}</p>
+                        </div>
+                      </div>
+                    )}
+                  </SortableProjectRow>
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RealEstateProjectManagement() {
   const user = getCurrentUser();
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
@@ -48,6 +245,8 @@ function RealEstateProjectManagement() {
   );
   const [savingProject, setSavingProject] = useState(false);
   const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const [brochureTitleDraft, setBrochureTitleDraft] = useState('');
   const [brochureLinkDraft, setBrochureLinkDraft] = useState('');
@@ -86,6 +285,19 @@ function RealEstateProjectManagement() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  async function handleReorderProjects(ordered: RealEstateProject[]) {
+    setReordering(true);
+    setProjects(ordered);
+    try {
+      await reorderProjects(ordered);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to reorder projects.');
+      fetchAll();
+    } finally {
+      setReordering(false);
+    }
+  }
 
   function fetchSections(projectId: string) {
     loadSectionsForProject(projectId)
@@ -826,9 +1038,18 @@ function RealEstateProjectManagement() {
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-700">All Projects</p>
-          <button onClick={startNewProject} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-            + New Project
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setReorderOpen(true)}
+              disabled={projects.length < 2}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Reorder Projects
+            </button>
+            <button onClick={startNewProject} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+              + New Project
+            </button>
+          </div>
         </div>
         <div className="space-y-2">
           {projects.length === 0 ? (
@@ -855,6 +1076,15 @@ function RealEstateProjectManagement() {
           )}
         </div>
       </div>
+
+      {reorderOpen && (
+        <ReorderProjectsModal
+          projects={projects}
+          saving={reordering}
+          onReorder={handleReorderProjects}
+          onClose={() => setReorderOpen(false)}
+        />
+      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
