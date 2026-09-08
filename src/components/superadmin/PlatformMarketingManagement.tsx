@@ -15,6 +15,10 @@ import {
   addMarketingUpdate,
   editMarketingUpdate,
   removeMarketingUpdate,
+  loadMarketingIndustryNews,
+  addMarketingIndustryNews,
+  editMarketingIndustryNews,
+  removeMarketingIndustryNews,
   loadInquiries,
   setInquiryStatus,
 } from "../../services/platformMarketing/platformMarketingService";
@@ -28,6 +32,7 @@ import type {
   PlatformMarketingInquiry,
   InquiryStatus,
   PlatformMarketingUpdate,
+  PlatformMarketingIndustryNews,
 } from "../../types/platformMarketing";
 
 const CLS_INPUT =
@@ -246,6 +251,107 @@ function UpdateRow({
   );
 }
 
+function IndustryNewsRow({
+  news,
+  onSave,
+  onDelete,
+  onMove,
+  isFirst,
+  isLast,
+}: {
+  news: PlatformMarketingIndustryNews;
+  onSave: (id: string, patch: { title: string; description: string; source_name: string | null; source_url: string | null }) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onMove: (id: string, direction: "up" | "down") => void;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const [title, setTitle] = useState(news.title);
+  const [description, setDescription] = useState(news.description);
+  const [sourceName, setSourceName] = useState(news.source_name ?? "");
+  const [sourceUrl, setSourceUrl] = useState(news.source_url ?? "");
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  function change<T>(setter: (v: T) => void) {
+    return (v: T) => {
+      setter(v);
+      setDirty(true);
+    };
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave(news.id, { title, description, source_name: sourceName || null, source_url: sourceUrl || null });
+      setDirty(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <div className="flex-1 space-y-2">
+        <input
+          value={title}
+          onChange={(e) => change(setTitle)(e.target.value)}
+          placeholder="Headline"
+          className={CLS_INPUT}
+        />
+        <textarea
+          value={description}
+          onChange={(e) => change(setDescription)(e.target.value)}
+          placeholder="Short summary"
+          rows={2}
+          className={CLS_INPUT}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <input value={sourceName} onChange={(e) => change(setSourceName)(e.target.value)} placeholder="Source name (optional)" className={CLS_INPUT} />
+          <input value={sourceUrl} onChange={(e) => change(setSourceUrl)(e.target.value)} placeholder="Source link (optional)" className={CLS_INPUT} />
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-2">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(news.id, "up")}
+            disabled={isFirst}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(news.id, "down")}
+            disabled={isLast}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+          >
+            ↓
+          </button>
+        </div>
+        {dirty && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onDelete(news.id)}
+          className="rounded-lg bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-500/20"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TestimonialRow({
   testimonial,
   onSave,
@@ -383,6 +489,7 @@ export default function PlatformMarketingManagement() {
   const [features, setFeatures] = useState<PlatformMarketingFeature[]>([]);
   const [testimonials, setTestimonials] = useState<PlatformMarketingTestimonial[]>([]);
   const [updates, setUpdates] = useState<PlatformMarketingUpdate[]>([]);
+  const [industryNews, setIndustryNews] = useState<PlatformMarketingIndustryNews[]>([]);
   const [inquiries, setInquiries] = useState<PlatformMarketingInquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -391,12 +498,13 @@ export default function PlatformMarketingManagement() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadInquiries()])
-      .then(([s, f, t, u, i]) => {
+    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadMarketingIndustryNews(), loadInquiries()])
+      .then(([s, f, t, u, n, i]) => {
         setSettings(s);
         setFeatures(f);
         setTestimonials(t);
         setUpdates(u);
+        setIndustryNews(n);
         setInquiries(i);
       })
       .finally(() => setLoading(false));
@@ -536,6 +644,41 @@ export default function PlatformMarketingManagement() {
     );
   }
 
+  async function handleAddIndustryNews() {
+    const created = await addMarketingIndustryNews({
+      title: "New Headline",
+      description: "",
+      source_name: null,
+      source_url: null,
+      display_order: industryNews.length,
+    });
+    setIndustryNews((prev) => [...prev, created]);
+  }
+
+  async function handleSaveIndustryNews(id: string, patch: { title: string; description: string; source_name: string | null; source_url: string | null }) {
+    const updated = await editMarketingIndustryNews(id, patch);
+    setIndustryNews((prev) => prev.map((n) => (n.id === id ? updated : n)));
+  }
+
+  async function handleDeleteIndustryNews(id: string) {
+    await removeMarketingIndustryNews(id);
+    setIndustryNews((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  async function handleMoveIndustryNews(id: string, direction: "up" | "down") {
+    const index = industryNews.findIndex((n) => n.id === id);
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= industryNews.length) return;
+
+    const reordered = [...industryNews];
+    [reordered[index], reordered[swapWith]] = [reordered[swapWith], reordered[index]];
+    setIndustryNews(reordered);
+
+    await Promise.all(
+      reordered.map((n, i) => (n.display_order !== i ? editMarketingIndustryNews(n.id, { display_order: i }) : Promise.resolve(n)))
+    );
+  }
+
   async function handleInquiryStatusChange(id: string, status: InquiryStatus) {
     const updated = await setInquiryStatus(id, status);
     setInquiries((prev) => prev.map((i) => (i.id === id ? updated : i)));
@@ -671,6 +814,36 @@ export default function PlatformMarketingManagement() {
               onMove={handleMoveUpdate}
               isFirst={i === 0}
               isLast={i === updates.length - 1}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Real Estate Industry News</h3>
+            <p className="mt-1 text-xs text-slate-400">A second scrolling ticker on the homepage — real, sourced news (e.g. RERA training mandates) that makes the case for why training matters. Link back to the real source.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddIndustryNews}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            + Add News
+          </button>
+        </div>
+        {industryNews.length === 0 && <p className="text-sm text-slate-400">No news items added yet.</p>}
+        <div className="space-y-3">
+          {industryNews.map((n, i) => (
+            <IndustryNewsRow
+              key={n.id}
+              news={n}
+              onSave={handleSaveIndustryNews}
+              onDelete={handleDeleteIndustryNews}
+              onMove={handleMoveIndustryNews}
+              isFirst={i === 0}
+              isLast={i === industryNews.length - 1}
             />
           ))}
         </div>

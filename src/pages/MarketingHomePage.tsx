@@ -12,6 +12,7 @@ import {
   loadMarketingFeatures,
   loadMarketingTestimonials,
   loadMarketingUpdates,
+  loadMarketingIndustryNews,
   loadPublicPricing,
   submitInquiry,
 } from "../services/platformMarketing/platformMarketingService";
@@ -22,47 +23,104 @@ import type {
   PlatformMarketingFeature,
   PlatformMarketingTestimonial,
   PlatformMarketingUpdate,
+  PlatformMarketingIndustryNews,
   PublicSubscriptionPlan,
   InquirySource,
 } from "../types/platformMarketing";
 
-// Fixed sidebar "What's New" ticker — auto-scrolls its list vertically,
+interface TickerItem {
+  id: string;
+  title: string;
+  description?: string;
+  sourceName?: string | null;
+  sourceUrl?: string | null;
+}
+
+// One card in the fixed sidebar stack — auto-scrolls its list vertically,
 // bottom to top, in a seamless loop (the list is duplicated once so the
-// loop point is invisible). Hidden on small screens (no room for a fixed
-// side panel next to real content) and paused for
-// prefers-reduced-motion.
-function UpdatesTicker({ updates }: { updates: PlatformMarketingUpdate[] }) {
-  if (updates.length === 0) return null;
-  const durationSec = Math.max(12, updates.length * 5);
+// loop point is invisible). Pauses on hover so it's actually readable, and
+// respects prefers-reduced-motion. `animationName` must be unique per
+// instance on the page — two tickers can't share one @keyframes name.
+function SidebarTicker({
+  animationName,
+  dotColorClass,
+  label,
+  items,
+  heightClass = "h-64",
+}: {
+  animationName: string;
+  dotColorClass: string;
+  label: string;
+  items: TickerItem[];
+  heightClass?: string;
+}) {
+  if (items.length === 0) return null;
+  const durationSec = Math.max(12, items.length * 5);
+  const trackClass = `marketing-ticker-track-${animationName}`;
 
   return (
-    <div className="fixed right-6 top-1/2 z-30 hidden w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 shadow-2xl shadow-black/30 backdrop-blur lg:block">
+    <div className="w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 shadow-2xl shadow-black/30 backdrop-blur">
       <style>{`
-        @keyframes marketing-updates-scroll {
+        @keyframes ${animationName} {
           0% { transform: translateY(0); }
           100% { transform: translateY(-50%); }
         }
-        .marketing-updates-track {
-          animation: marketing-updates-scroll ${durationSec}s linear infinite;
+        .${trackClass} {
+          animation: ${animationName} ${durationSec}s linear infinite;
+        }
+        .${trackClass}:hover {
+          animation-play-state: paused;
         }
         @media (prefers-reduced-motion: reduce) {
-          .marketing-updates-track { animation: none; }
+          .${trackClass} { animation: none; }
         }
       `}</style>
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-        <span className="flex h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-emerald-400" />
-        <span className="text-xs font-bold uppercase tracking-widest text-white">What's New</span>
+        <span className={`flex h-2 w-2 flex-shrink-0 animate-pulse rounded-full ${dotColorClass}`} />
+        <span className="text-xs font-bold uppercase tracking-widest text-white">{label}</span>
       </div>
-      <div className="relative h-72 overflow-hidden">
-        <div className="marketing-updates-track">
-          {[...updates, ...updates].map((u, i) => (
-            <div key={`${u.id}-${i}`} className="border-b border-white/5 px-4 py-3.5">
-              <p className="text-sm font-semibold text-white">{u.title}</p>
-              {u.description && <p className="mt-1 text-xs leading-relaxed text-slate-400">{u.description}</p>}
-            </div>
-          ))}
+      <div className={`relative ${heightClass} overflow-hidden`}>
+        <div className={trackClass}>
+          {[...items, ...items].map((item, i) => {
+            const Wrapper = item.sourceUrl ? "a" : "div";
+            return (
+              <Wrapper
+                key={`${item.id}-${i}`}
+                {...(item.sourceUrl ? { href: item.sourceUrl, target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="block border-b border-white/5 px-4 py-3.5 transition hover:bg-white/5"
+              >
+                <p className="text-sm font-semibold text-white">{item.title}</p>
+                {item.description && <p className="mt-1 text-xs leading-relaxed text-slate-400">{item.description}</p>}
+                {item.sourceName && <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">{item.sourceName} →</p>}
+              </Wrapper>
+            );
+          })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Fixed sidebar stack, near the top of the viewport (not centered) so it
+// doesn't compete with whichever section happens to be scrolled to
+// mid-page. Hidden on small screens — no room for a fixed side column
+// next to real content.
+function TickerSidebar({ updates, industryNews }: { updates: PlatformMarketingUpdate[]; industryNews: PlatformMarketingIndustryNews[] }) {
+  if (updates.length === 0 && industryNews.length === 0) return null;
+  return (
+    <div className="fixed right-6 top-24 z-30 hidden space-y-4 lg:block">
+      <SidebarTicker
+        animationName="marketing-updates-scroll"
+        dotColorClass="bg-emerald-400"
+        label="What's New"
+        items={updates.map((u) => ({ id: u.id, title: u.title, description: u.description }))}
+      />
+      <SidebarTicker
+        animationName="marketing-industry-news-scroll"
+        dotColorClass="bg-amber-400"
+        label="Real Estate Industry News"
+        items={industryNews.map((n) => ({ id: n.id, title: n.title, description: n.description, sourceName: n.source_name, sourceUrl: n.source_url }))}
+      />
     </div>
   );
 }
@@ -167,17 +225,19 @@ export default function MarketingHomePage() {
   const [features, setFeatures] = useState<PlatformMarketingFeature[]>([]);
   const [testimonials, setTestimonials] = useState<PlatformMarketingTestimonial[]>([]);
   const [updates, setUpdates] = useState<PlatformMarketingUpdate[]>([]);
+  const [industryNews, setIndustryNews] = useState<PlatformMarketingIndustryNews[]>([]);
   const [plans, setPlans] = useState<PublicSubscriptionPlan[]>([]);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadPublicPricing()])
-      .then(([s, f, t, u, p]) => {
+    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadMarketingIndustryNews(), loadPublicPricing()])
+      .then(([s, f, t, u, n, p]) => {
         setSettings(s);
         setFeatures(f);
         setTestimonials(t);
         setUpdates(u);
+        setIndustryNews(n);
         setPlans(p);
       })
       .finally(() => setLoading(false));
@@ -193,7 +253,7 @@ export default function MarketingHomePage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 lg:pr-96">
+    <div className="min-h-screen bg-white text-slate-900 lg:pr-80">
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -430,7 +490,7 @@ export default function MarketingHomePage() {
         )}
       </footer>
 
-      <UpdatesTicker updates={updates} />
+      <TickerSidebar updates={updates} industryNews={industryNews} />
 
       {/* Floating WhatsApp button */}
       {whatsappHref && (

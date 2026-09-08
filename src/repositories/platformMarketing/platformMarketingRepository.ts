@@ -11,6 +11,8 @@ import type {
   PlatformMarketingInquiryForm,
   PlatformMarketingUpdate,
   PlatformMarketingUpdateForm,
+  PlatformMarketingIndustryNews,
+  PlatformMarketingIndustryNewsForm,
 } from "../../types/platformMarketing";
 
 // Singleton settings row — a migration seeds exactly one, so this always
@@ -236,6 +238,56 @@ export async function deleteMarketingUpdate(id: string): Promise<void> {
   const { error } = await supabase.from("platform_marketing_updates").delete().eq("id", id);
   if (error) {
     console.error("[platformMarketingRepository] deleteMarketingUpdate:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function getMarketingIndustryNews(): Promise<PlatformMarketingIndustryNews[]> {
+  const { data, error } = await supabase
+    .from("platform_marketing_industry_news")
+    .select("*")
+    .order("display_order", { ascending: true });
+
+  if (error) {
+    console.error("[platformMarketingRepository] getMarketingIndustryNews:", error);
+    throw new Error(error.message);
+  }
+  return data ?? [];
+}
+
+export async function createMarketingIndustryNews(form: PlatformMarketingIndustryNewsForm): Promise<PlatformMarketingIndustryNews> {
+  const { data, error } = await supabase
+    .from("platform_marketing_industry_news")
+    .insert(form)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[platformMarketingRepository] createMarketingIndustryNews:", error);
+    throw new Error(error.message);
+  }
+  return data;
+}
+
+export async function updateMarketingIndustryNews(id: string, patch: Partial<PlatformMarketingIndustryNewsForm>): Promise<PlatformMarketingIndustryNews> {
+  const { data, error } = await supabase
+    .from("platform_marketing_industry_news")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[platformMarketingRepository] updateMarketingIndustryNews:", error);
+    throw new Error(error.message);
+  }
+  return data;
+}
+
+export async function deleteMarketingIndustryNews(id: string): Promise<void> {
+  const { error } = await supabase.from("platform_marketing_industry_news").delete().eq("id", id);
+  if (error) {
+    console.error("[platformMarketingRepository] deleteMarketingIndustryNews:", error);
     throw new Error(error.message);
   }
 }

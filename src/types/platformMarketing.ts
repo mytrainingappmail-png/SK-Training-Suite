@@ -79,6 +79,26 @@ export const defaultPlatformMarketingUpdateForm: PlatformMarketingUpdateForm = {
   display_order: 0,
 };
 
+export interface PlatformMarketingIndustryNews {
+  id: string;
+  title: string;
+  description: string;
+  source_name: string | null;
+  source_url: string | null;
+  display_order: number;
+  created_at: string;
+}
+
+export type PlatformMarketingIndustryNewsForm = Omit<PlatformMarketingIndustryNews, "id" | "created_at">;
+
+export const defaultPlatformMarketingIndustryNewsForm: PlatformMarketingIndustryNewsForm = {
+  title: "",
+  description: "",
+  source_name: null,
+  source_url: null,
+  display_order: 0,
+};
+
 /** Public-safe subset of subscription_plans, via get_public_subscription_plans(). */
 export interface PublicSubscriptionPlan {
   id: string;

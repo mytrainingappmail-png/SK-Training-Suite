@@ -6,6 +6,7 @@ import type {
   PlatformMarketingInquiryForm,
   PlatformMarketingInquiry,
   PlatformMarketingUpdateForm,
+  PlatformMarketingIndustryNewsForm,
 } from "../../types/platformMarketing";
 
 export async function loadMarketingSettings() {
@@ -80,6 +81,23 @@ export async function editMarketingUpdate(id: string, patch: Partial<PlatformMar
 
 export async function removeMarketingUpdate(id: string) {
   return repo.deleteMarketingUpdate(id);
+}
+
+export async function loadMarketingIndustryNews() {
+  return repo.getMarketingIndustryNews();
+}
+
+export async function addMarketingIndustryNews(form: PlatformMarketingIndustryNewsForm) {
+  if (!form.title.trim()) throw new Error("News title is required.");
+  return repo.createMarketingIndustryNews(form);
+}
+
+export async function editMarketingIndustryNews(id: string, patch: Partial<PlatformMarketingIndustryNewsForm>) {
+  return repo.updateMarketingIndustryNews(id, patch);
+}
+
+export async function removeMarketingIndustryNews(id: string) {
+  return repo.deleteMarketingIndustryNews(id);
 }
 
 export async function loadInquiries() {
