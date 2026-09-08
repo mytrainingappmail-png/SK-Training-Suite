@@ -9,6 +9,8 @@ import type {
   PublicSubscriptionPlan,
   PlatformMarketingInquiry,
   PlatformMarketingInquiryForm,
+  PlatformMarketingUpdate,
+  PlatformMarketingUpdateForm,
 } from "../../types/platformMarketing";
 
 // Singleton settings row — a migration seeds exactly one, so this always
@@ -186,6 +188,56 @@ export async function getMarketingInquiries(): Promise<PlatformMarketingInquiry[
     throw new Error(error.message);
   }
   return data ?? [];
+}
+
+export async function getMarketingUpdates(): Promise<PlatformMarketingUpdate[]> {
+  const { data, error } = await supabase
+    .from("platform_marketing_updates")
+    .select("*")
+    .order("display_order", { ascending: true });
+
+  if (error) {
+    console.error("[platformMarketingRepository] getMarketingUpdates:", error);
+    throw new Error(error.message);
+  }
+  return data ?? [];
+}
+
+export async function createMarketingUpdate(form: PlatformMarketingUpdateForm): Promise<PlatformMarketingUpdate> {
+  const { data, error } = await supabase
+    .from("platform_marketing_updates")
+    .insert(form)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[platformMarketingRepository] createMarketingUpdate:", error);
+    throw new Error(error.message);
+  }
+  return data;
+}
+
+export async function updateMarketingUpdate(id: string, patch: Partial<PlatformMarketingUpdateForm>): Promise<PlatformMarketingUpdate> {
+  const { data, error } = await supabase
+    .from("platform_marketing_updates")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[platformMarketingRepository] updateMarketingUpdate:", error);
+    throw new Error(error.message);
+  }
+  return data;
+}
+
+export async function deleteMarketingUpdate(id: string): Promise<void> {
+  const { error } = await supabase.from("platform_marketing_updates").delete().eq("id", id);
+  if (error) {
+    console.error("[platformMarketingRepository] deleteMarketingUpdate:", error);
+    throw new Error(error.message);
+  }
 }
 
 export async function updateMarketingInquiryStatus(id: string, status: PlatformMarketingInquiry["status"]): Promise<PlatformMarketingInquiry> {

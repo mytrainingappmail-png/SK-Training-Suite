@@ -5,6 +5,7 @@ import type {
   PlatformMarketingTestimonialForm,
   PlatformMarketingInquiryForm,
   PlatformMarketingInquiry,
+  PlatformMarketingUpdateForm,
 } from "../../types/platformMarketing";
 
 export async function loadMarketingSettings() {
@@ -62,6 +63,23 @@ export async function submitInquiry(form: PlatformMarketingInquiryForm) {
   if (!form.name.trim()) throw new Error("Name is required.");
   if (!form.phone?.trim() && !form.email?.trim()) throw new Error("Please provide a phone number or email so we can reach you.");
   return repo.submitMarketingInquiry(form);
+}
+
+export async function loadMarketingUpdates() {
+  return repo.getMarketingUpdates();
+}
+
+export async function addMarketingUpdate(form: PlatformMarketingUpdateForm) {
+  if (!form.title.trim()) throw new Error("Update title is required.");
+  return repo.createMarketingUpdate(form);
+}
+
+export async function editMarketingUpdate(id: string, patch: Partial<PlatformMarketingUpdateForm>) {
+  return repo.updateMarketingUpdate(id, patch);
+}
+
+export async function removeMarketingUpdate(id: string) {
+  return repo.deleteMarketingUpdate(id);
 }
 
 export async function loadInquiries() {

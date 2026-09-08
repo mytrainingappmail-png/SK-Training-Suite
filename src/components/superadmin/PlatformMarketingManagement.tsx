@@ -11,6 +11,10 @@ import {
   addMarketingTestimonial,
   editMarketingTestimonial,
   removeMarketingTestimonial,
+  loadMarketingUpdates,
+  addMarketingUpdate,
+  editMarketingUpdate,
+  removeMarketingUpdate,
   loadInquiries,
   setInquiryStatus,
 } from "../../services/platformMarketing/platformMarketingService";
@@ -23,6 +27,7 @@ import type {
   PlatformMarketingTestimonial,
   PlatformMarketingInquiry,
   InquiryStatus,
+  PlatformMarketingUpdate,
 } from "../../types/platformMarketing";
 
 const CLS_INPUT =
@@ -137,6 +142,101 @@ function FeatureRow({
         <button
           type="button"
           onClick={() => onDelete(feature.id)}
+          className="rounded-lg bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-500/20"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UpdateRow({
+  update,
+  onSave,
+  onDelete,
+  onMove,
+  isFirst,
+  isLast,
+}: {
+  update: PlatformMarketingUpdate;
+  onSave: (id: string, patch: { title: string; description: string }) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onMove: (id: string, direction: "up" | "down") => void;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const [title, setTitle] = useState(update.title);
+  const [description, setDescription] = useState(update.description);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  function change<T>(setter: (v: T) => void) {
+    return (v: T) => {
+      setter(v);
+      setDirty(true);
+    };
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave(update.id, { title, description });
+      setDirty(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <div className="flex-1 space-y-2">
+        <input
+          value={title}
+          onChange={(e) => change(setTitle)(e.target.value)}
+          placeholder="Update title"
+          className={CLS_INPUT}
+        />
+        <textarea
+          value={description}
+          onChange={(e) => change(setDescription)(e.target.value)}
+          placeholder="Short description (optional)"
+          rows={2}
+          className={CLS_INPUT}
+        />
+      </div>
+      <div className="flex flex-col items-end gap-2">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(update.id, "up")}
+            disabled={isFirst}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(update.id, "down")}
+            disabled={isLast}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+          >
+            ↓
+          </button>
+        </div>
+        {dirty && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onDelete(update.id)}
           className="rounded-lg bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-500/20"
         >
           Delete
@@ -282,6 +382,7 @@ export default function PlatformMarketingManagement() {
   const [settings, setSettings] = useState<PlatformMarketingSettings | null>(null);
   const [features, setFeatures] = useState<PlatformMarketingFeature[]>([]);
   const [testimonials, setTestimonials] = useState<PlatformMarketingTestimonial[]>([]);
+  const [updates, setUpdates] = useState<PlatformMarketingUpdate[]>([]);
   const [inquiries, setInquiries] = useState<PlatformMarketingInquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -290,11 +391,12 @@ export default function PlatformMarketingManagement() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadInquiries()])
-      .then(([s, f, t, i]) => {
+    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadInquiries()])
+      .then(([s, f, t, u, i]) => {
         setSettings(s);
         setFeatures(f);
         setTestimonials(t);
+        setUpdates(u);
         setInquiries(i);
       })
       .finally(() => setLoading(false));
@@ -399,6 +501,39 @@ export default function PlatformMarketingManagement() {
   async function handleDeleteTestimonial(id: string) {
     await removeMarketingTestimonial(id);
     setTestimonials((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  async function handleAddUpdate() {
+    const created = await addMarketingUpdate({
+      title: "New Update",
+      description: "",
+      display_order: updates.length,
+    });
+    setUpdates((prev) => [...prev, created]);
+  }
+
+  async function handleSaveUpdate(id: string, patch: { title: string; description: string }) {
+    const updated = await editMarketingUpdate(id, patch);
+    setUpdates((prev) => prev.map((u) => (u.id === id ? updated : u)));
+  }
+
+  async function handleDeleteUpdate(id: string) {
+    await removeMarketingUpdate(id);
+    setUpdates((prev) => prev.filter((u) => u.id !== id));
+  }
+
+  async function handleMoveUpdate(id: string, direction: "up" | "down") {
+    const index = updates.findIndex((u) => u.id === id);
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= updates.length) return;
+
+    const reordered = [...updates];
+    [reordered[index], reordered[swapWith]] = [reordered[swapWith], reordered[index]];
+    setUpdates(reordered);
+
+    await Promise.all(
+      reordered.map((u, i) => (u.display_order !== i ? editMarketingUpdate(u.id, { display_order: i }) : Promise.resolve(u)))
+    );
   }
 
   async function handleInquiryStatusChange(id: string, status: InquiryStatus) {
@@ -507,6 +642,36 @@ export default function PlatformMarketingManagement() {
         <div className="space-y-3">
           {testimonials.map((t) => (
             <TestimonialRow key={t.id} testimonial={t} onSave={handleSaveTestimonial} onDelete={handleDeleteTestimonial} />
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">What's New</h3>
+            <p className="mt-1 text-xs text-slate-400">Shown as a scrolling "What's New" ticker on the homepage — top of this list scrolls in first.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddUpdate}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            + Add Update
+          </button>
+        </div>
+        {updates.length === 0 && <p className="text-sm text-slate-400">No updates added yet.</p>}
+        <div className="space-y-3">
+          {updates.map((u, i) => (
+            <UpdateRow
+              key={u.id}
+              update={u}
+              onSave={handleSaveUpdate}
+              onDelete={handleDeleteUpdate}
+              onMove={handleMoveUpdate}
+              isFirst={i === 0}
+              isLast={i === updates.length - 1}
+            />
           ))}
         </div>
       </section>

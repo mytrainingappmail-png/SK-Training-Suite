@@ -11,6 +11,7 @@ import {
   loadMarketingSettings,
   loadMarketingFeatures,
   loadMarketingTestimonials,
+  loadMarketingUpdates,
   loadPublicPricing,
   submitInquiry,
 } from "../services/platformMarketing/platformMarketingService";
@@ -20,9 +21,51 @@ import type {
   PlatformMarketingSettings,
   PlatformMarketingFeature,
   PlatformMarketingTestimonial,
+  PlatformMarketingUpdate,
   PublicSubscriptionPlan,
   InquirySource,
 } from "../types/platformMarketing";
+
+// Fixed sidebar "What's New" ticker — auto-scrolls its list vertically,
+// bottom to top, in a seamless loop (the list is duplicated once so the
+// loop point is invisible). Hidden on small screens (no room for a fixed
+// side panel next to real content) and paused for
+// prefers-reduced-motion.
+function UpdatesTicker({ updates }: { updates: PlatformMarketingUpdate[] }) {
+  if (updates.length === 0) return null;
+  const durationSec = Math.max(12, updates.length * 5);
+
+  return (
+    <div className="fixed right-6 top-1/2 z-30 hidden w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 shadow-2xl shadow-black/30 backdrop-blur lg:block">
+      <style>{`
+        @keyframes marketing-updates-scroll {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-50%); }
+        }
+        .marketing-updates-track {
+          animation: marketing-updates-scroll ${durationSec}s linear infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .marketing-updates-track { animation: none; }
+        }
+      `}</style>
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+        <span className="flex h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-emerald-400" />
+        <span className="text-xs font-bold uppercase tracking-widest text-white">What's New</span>
+      </div>
+      <div className="relative h-72 overflow-hidden">
+        <div className="marketing-updates-track">
+          {[...updates, ...updates].map((u, i) => (
+            <div key={`${u.id}-${i}`} className="border-b border-white/5 px-4 py-3.5">
+              <p className="text-sm font-semibold text-white">{u.title}</p>
+              {u.description && <p className="mt-1 text-xs leading-relaxed text-slate-400">{u.description}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function QueryForm({ whatsappHref }: { whatsappHref: string | null }) {
   const [source, setSource] = useState<InquirySource>("trial");
@@ -123,16 +166,18 @@ export default function MarketingHomePage() {
   const [settings, setSettings] = useState<PlatformMarketingSettings | null>(null);
   const [features, setFeatures] = useState<PlatformMarketingFeature[]>([]);
   const [testimonials, setTestimonials] = useState<PlatformMarketingTestimonial[]>([]);
+  const [updates, setUpdates] = useState<PlatformMarketingUpdate[]>([]);
   const [plans, setPlans] = useState<PublicSubscriptionPlan[]>([]);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadPublicPricing()])
-      .then(([s, f, t, p]) => {
+    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadPublicPricing()])
+      .then(([s, f, t, u, p]) => {
         setSettings(s);
         setFeatures(f);
         setTestimonials(t);
+        setUpdates(u);
         setPlans(p);
       })
       .finally(() => setLoading(false));
@@ -160,6 +205,15 @@ export default function MarketingHomePage() {
             )}
             <span className="text-lg font-bold tracking-tight">{companyName}</span>
           </div>
+
+          <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
+            {settings?.about_content_html && <a href="#about" className="transition hover:text-slate-900">About Us</a>}
+            {features.length > 0 && <a href="#why-us" className="transition hover:text-slate-900">Why Us</a>}
+            {testimonials.length > 0 && <a href="#testimonials" className="transition hover:text-slate-900">Testimonials</a>}
+            {plans.length > 0 && <a href="#pricing" className="transition hover:text-slate-900">Pricing</a>}
+            <a href="#get-started" className="transition hover:text-slate-900">Contact</a>
+          </nav>
+
           <Link
             to={ROUTES.LOGIN}
             className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
@@ -196,13 +250,14 @@ export default function MarketingHomePage() {
         </div>
       </section>
 
-      {/* About */}
+      {/* About — dark navy band, matching the hero, so the page reads as a
+          deliberate light/dark rhythm rather than one long white scroll. */}
       {settings?.about_content_html && (
-        <section className="px-6 py-20">
+        <section id="about" className="bg-gradient-to-b from-slate-950 via-indigo-950/40 to-slate-950 px-6 py-20 text-white">
           <div className="mx-auto max-w-3xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight">{settings.about_title}</h2>
+            <h2 className="text-center text-3xl font-bold tracking-tight text-white">{settings.about_title}</h2>
             <div
-              className="prose prose-slate prose-headings:text-slate-900 prose-p:text-slate-700 prose-li:text-slate-700 mx-auto mt-8 max-w-none"
+              className="prose prose-invert prose-slate prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white mx-auto mt-8 max-w-none"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(settings.about_content_html) }}
             />
           </div>
@@ -211,7 +266,7 @@ export default function MarketingHomePage() {
 
       {/* Features */}
       {features.length > 0 && (
-        <section className="bg-gradient-to-b from-indigo-50 via-indigo-50/40 to-white px-6 py-20">
+        <section id="why-us" className="bg-gradient-to-b from-indigo-50 via-indigo-50/40 to-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
             <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Why Choose Us</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Everything you need, built in</h2>
@@ -235,7 +290,7 @@ export default function MarketingHomePage() {
 
       {/* Testimonials */}
       {testimonials.length > 0 && (
-        <section className="px-6 py-20">
+        <section id="testimonials" className="px-6 py-20">
           <div className="mx-auto max-w-5xl">
             <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Testimonials</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">What Our Customers Say</h2>
@@ -260,7 +315,7 @@ export default function MarketingHomePage() {
 
       {/* Pricing */}
       {plans.length > 0 && (
-        <section className="bg-gradient-to-b from-violet-50 via-violet-50/40 to-white px-6 py-20">
+        <section id="pricing" className="bg-gradient-to-b from-violet-50 via-violet-50/40 to-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
             <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Pricing</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Simple, Transparent Pricing</h2>
@@ -369,6 +424,8 @@ export default function MarketingHomePage() {
           <p className="mt-8 text-center text-xs text-slate-600">{settings.footer_copyright_text}</p>
         )}
       </footer>
+
+      <UpdatesTicker updates={updates} />
 
       {/* Floating WhatsApp button */}
       {whatsappHref && (

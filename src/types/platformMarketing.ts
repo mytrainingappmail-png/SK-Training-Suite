@@ -63,6 +63,22 @@ export const defaultPlatformMarketingTestimonialForm: PlatformMarketingTestimoni
   display_order: 0,
 };
 
+export interface PlatformMarketingUpdate {
+  id: string;
+  title: string;
+  description: string;
+  display_order: number;
+  created_at: string;
+}
+
+export type PlatformMarketingUpdateForm = Omit<PlatformMarketingUpdate, "id" | "created_at">;
+
+export const defaultPlatformMarketingUpdateForm: PlatformMarketingUpdateForm = {
+  title: "",
+  description: "",
+  display_order: 0,
+};
+
 /** Public-safe subset of subscription_plans, via get_public_subscription_plans(). */
 export interface PublicSubscriptionPlan {
   id: string;
