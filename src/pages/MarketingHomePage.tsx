@@ -108,17 +108,19 @@ function SidebarTicker({
 function TickerSidebar({ updates, industryNews }: { updates: PlatformMarketingUpdate[]; industryNews: PlatformMarketingIndustryNews[] }) {
   if (updates.length === 0 && industryNews.length === 0) return null;
   return (
-    <div className="fixed right-6 top-24 z-30 hidden space-y-4 lg:block">
+    <div className="fixed right-6 top-20 z-30 hidden space-y-4 lg:block">
       <SidebarTicker
         animationName="marketing-updates-scroll"
         dotColorClass="bg-emerald-400"
         label="What's New"
+        heightClass="h-48"
         items={updates.map((u) => ({ id: u.id, title: u.title, description: u.description }))}
       />
       <SidebarTicker
         animationName="marketing-industry-news-scroll"
         dotColorClass="bg-amber-400"
         label="Real Estate Industry News"
+        heightClass="h-48"
         items={industryNews.map((n) => ({ id: n.id, title: n.title, description: n.description, sourceName: n.source_name, sourceUrl: n.source_url }))}
       />
     </div>
