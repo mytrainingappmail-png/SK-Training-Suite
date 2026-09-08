@@ -193,7 +193,7 @@ export default function MarketingHomePage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-white text-slate-900 lg:pr-96">
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -203,7 +203,12 @@ export default function MarketingHomePage() {
             ) : (
               <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600" />
             )}
-            <span className="text-lg font-bold tracking-tight">{companyName}</span>
+            <div className="leading-tight">
+              <span className="block text-lg font-bold tracking-tight">{companyName}</span>
+              {settings?.footer_tagline && (
+                <span className="block text-[11px] font-medium text-slate-500">{settings.footer_tagline}</span>
+              )}
+            </div>
           </div>
 
           <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">

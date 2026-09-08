@@ -708,7 +708,7 @@ export default function PlatformMarketingManagement() {
           <FL label="Company Name (footer)">
             <input value={settings.footer_company_name ?? ""} onChange={(e) => field("footer_company_name", e.target.value)} className={CLS_INPUT} />
           </FL>
-          <FL label="Tagline (footer)">
+          <FL label="Tagline" hint="Shown under the logo in the header, and in the footer.">
             <input value={settings.footer_tagline ?? ""} onChange={(e) => field("footer_tagline", e.target.value)} className={CLS_INPUT} />
           </FL>
           <FL label="Copyright Text">
