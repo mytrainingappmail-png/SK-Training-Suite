@@ -64,6 +64,7 @@ export const ROUTES = {
 
   PROJECTS: "/learning/projects",
   BRAINSTORMING: "/learning/brainstorming",
+  INDUCTION: "/learning/induction",
 
   CERTIFICATE_VIEW: "/learning/certificate/:certificateId",
 

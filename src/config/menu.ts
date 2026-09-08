@@ -121,6 +121,14 @@ export const MENU: MenuItem[] = [
     group: "My Learning",
   },
   {
+    id: "induction",
+    title: "Induction",
+    route: ROUTES.INDUCTION,
+    icon: "graduation-cap",
+    visible: true,
+    group: "My Learning",
+  },
+  {
     id: "my-attendance",
     title: "My Attendance",
     route: ROUTES.MY_ATTENDANCE,

@@ -60,6 +60,14 @@ export async function getSettingNumber(key: string, fallback: number): Promise<n
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+// Same idea as getSettingNumber, for free-text config (e.g. the message
+// shown when a disabled sidebar item is clicked) — an admin can change
+// the wording from Settings Management without a code change.
+export async function getSettingText(key: string, fallback: string): Promise<string> {
+  const raw = await getSettingValueByKey(key);
+  return raw && raw.trim() ? raw : fallback;
+}
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 function validateForm(data: SettingForm): void {

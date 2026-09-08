@@ -11,7 +11,15 @@ import { loadBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/br
 import { loadCompany } from "../../services/company/companyService";
 import { loadCompanyModuleFlags } from "../../services/company/appModuleService";
 import { getMyEmployeeLinkedGrant } from "../../repositories/callingApp/callingAppAdminRepository";
+import { loadMyAssignment } from "../../services/induction/inductionService";
+import { getSettingText } from "../../services/setting/settingService";
 import type { PermissionCode } from "../../types/authorization";
+
+const DEFAULT_INDUCTION_LOCK_MESSAGE = "You're currently in induction — complete it first to unlock this.";
+// Stay usable even while in induction — not "learning" content, so they
+// don't distract from finishing the program, but blocking them isn't
+// useful either.
+const INDUCTION_EXEMPT_IDS = new Set(["induction", "my-attendance", "settings", "help-center", "my-tickets"]);
 
 // Shrinks text to fit its container on a single line, however long the
 // company name is — never wraps, never overflows. Measures the rendered
@@ -109,6 +117,12 @@ function Sidebar() {
   // separate from moduleFlags.calling_app (company-level purchase), since
   // Calling App access is also gated per-person (Admin → Calling App).
   const [hasCallingAppGrant, setHasCallingAppGrant] = useState(false);
+  // Whether the current employee has an active Induction assignment —
+  // while true, every item except INDUCTION_EXEMPT_IDS stays visible but
+  // becomes unclickable (a toast explains why instead of navigating).
+  const [inActiveInduction, setInActiveInduction] = useState(false);
+  const [inductionLockMessage, setInductionLockMessage] = useState(DEFAULT_INDUCTION_LOCK_MESSAGE);
+  const [lockToast, setLockToast] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [companyName, setCompanyName] = useState(BRAND.companyName);
@@ -160,6 +174,21 @@ function Sidebar() {
   }, []);
 
   useEffect(() => {
+    if (!user?.id) return;
+    loadMyAssignment(user.id)
+      .then((assignment) => setInActiveInduction(!!assignment && assignment.status === "active"))
+      .catch(() => setInActiveInduction(false));
+    getSettingText("induction_lock_message", DEFAULT_INDUCTION_LOCK_MESSAGE)
+      .then(setInductionLockMessage)
+      .catch(() => setInductionLockMessage(DEFAULT_INDUCTION_LOCK_MESSAGE));
+  }, [user?.id]);
+
+  function handleLockedClick() {
+    setLockToast(true);
+    setTimeout(() => setLockToast(false), 3000);
+  }
+
+  useEffect(() => {
     if (!user?.roleId) return;
     loadRoles()
       .then((roles) => {
@@ -178,6 +207,10 @@ function Sidebar() {
     if (item.group === "Teaching" && !isTrainer) return false;
     if (item.group === "My Learning" && (isTrainer || isSuperAdmin)) return false;
     if (item.id === "settings" && !isPlatformOperator) return false;
+    // Induction: only shown while the employee has an active assignment —
+    // disappears the moment an admin marks it complete (or removes it),
+    // per-person, same shape as the Calling App grant check below.
+    if (item.id === "induction" && !inActiveInduction) return false;
     // Live Quiz: Admin-tier only (same gate as the "Admin" console link)
     // AND only once the company has purchased the add-on. Employees,
     // Trainers, and Managers must never see it, per spec.
@@ -302,6 +335,24 @@ function Sidebar() {
                     );
                   }
 
+                  const locked = inActiveInduction && !INDUCTION_EXEMPT_IDS.has(item.id);
+                  if (locked) {
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={handleLockedClick}
+                        aria-label={`${item.title} — locked during induction`}
+                        className="flex w-full mb-1 items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-left text-slate-500 opacity-60 cursor-not-allowed"
+                      >
+                        {item.title}
+                        <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                        </svg>
+                      </button>
+                    );
+                  }
+
                   return (
                     <Link
                       key={item.id}
@@ -324,6 +375,12 @@ function Sidebar() {
         </nav>
 
       </aside>
+
+      {lockToast && (
+        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">
+          {inductionLockMessage}
+        </div>
+      )}
     </>
   );
 }

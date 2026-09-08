@@ -51,6 +51,7 @@ import CompanyModulesManagement from "../components/superadmin/CompanyModulesMan
 import ContentDistributionManagement from "../components/superadmin/ContentDistributionManagement";
 import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibilityMatrix";
 import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
+import InductionManagement from "../modules/induction/InductionManagement";
 import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
 import EmployeeOfTheMonthManagement from "../components/admin/employeeOfTheMonth/EmployeeOfTheMonthManagement";
 import LegalDocumentManagement from "../components/admin/legal/LegalDocumentManagement";
@@ -493,7 +494,8 @@ function Admin() {
              (moduleFlags.live_quiz && matches("Live Quiz")) ||
              (moduleFlags.calling_app && matches("Calling App")) ||
              (isPlatformOperator && matches("Brainstorming")) ||
-             matches("Projects") ? (
+             matches("Projects") ||
+             matches("Induction") ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Premium Add-ons</p>
                 <div className="flex flex-wrap gap-3">
@@ -511,6 +513,9 @@ function Admin() {
                   )}
                   {matches("Projects") && (
                     <button onClick={() => setActiveTab("real-estate-projects")} className={getTabClass()} style={getTabStyle("real-estate-projects")}>Projects</button>
+                  )}
+                  {matches("Induction") && (
+                    <button onClick={() => setActiveTab("induction")} className={getTabClass()} style={getTabStyle("induction")}>Induction</button>
                   )}
                 </div>
               </div>
@@ -671,6 +676,7 @@ function Admin() {
             {activeTab === "course-visibility" && moduleAllowed("course-visibility") && <CourseVisibilityMatrix />}
 
             {activeTab === "real-estate-projects" && moduleAllowed("real-estate-projects") && <RealEstateProjectManagement />}
+            {activeTab === "induction" && moduleAllowed("induction") && <InductionManagement />}
 
             {activeTab === "brainstorming" && isPlatformOperator && moduleAllowed("brainstorming") && <BrainstormingManagement />}
 
