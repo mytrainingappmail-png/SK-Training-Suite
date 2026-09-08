@@ -74,6 +74,12 @@ export async function deleteProject(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function getProject(id: string): Promise<RealEstateProject | null> {
+  const { data, error } = await supabase.from('real_estate_projects').select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ── Brochures ─────────────────────────────────────────────────────────────────
 
 export async function getBrochuresForProject(projectId: string): Promise<RealEstateProjectBrochure[]> {

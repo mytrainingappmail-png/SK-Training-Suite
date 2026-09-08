@@ -41,6 +41,14 @@ export interface RealEstateProject {
   thumbnail_url: string;
   active: boolean;
   display_order: number;
+  // null = shared across every branch (the default). Set = visible only
+  // to employees in that one branch.
+  branch_id: string | null;
+  // Set only on a row created via "Clone to Branch" -- points back at the
+  // generic (branch_id null) project it was cloned from, so the
+  // employee-facing query can prefer this branch's own customized clone
+  // over the generic version instead of showing both.
+  source_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,4 +64,6 @@ export const defaultRealEstateProjectForm: RealEstateProjectForm = {
   thumbnail_url: '',
   active: true,
   display_order: 0,
+  branch_id: null,
+  source_id: null,
 };

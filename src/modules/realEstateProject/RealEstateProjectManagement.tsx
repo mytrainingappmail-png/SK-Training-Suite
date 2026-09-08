@@ -29,7 +29,10 @@ import {
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
   loadSectionsForProject, saveSection, editSection, removeSection, reorderSections,
+  cloneProjectToBranch,
 } from '../../services/realEstateProject/realEstateProjectService';
+import { branchService } from '../../services/branch/branchService';
+import type { Branch } from '../../types/branch';
 import {
   loadAssessments, createAssessment as createAssessmentSvc,
   saveAssessment as saveAssessmentSettings, removeAssessment as removeAssessmentSvc,
@@ -236,6 +239,10 @@ function RealEstateProjectManagement() {
   const user = getCurrentUser();
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
   const [brochures, setBrochures] = useState<RealEstateProjectBrochure[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState('all');
+  const [cloneTargets, setCloneTargets] = useState<Record<string, string>>({});
+  const [cloningProjectId, setCloningProjectId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
@@ -277,10 +284,31 @@ function RealEstateProjectManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadProjects(), loadAllBrochures()])
-      .then(([p, b]) => { setProjects(p); setBrochures(b); })
+    Promise.all([loadProjects(), loadAllBrochures(), branchService.getAll()])
+      .then(([p, b, br]) => { setProjects(p); setBrochures(b); setBranches(br); })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
+  }
+
+  function branchName(id: string | null): string {
+    if (!id) return 'Shared (all branches)';
+    return branches.find((b) => b.id === id)?.branch_name ?? 'Unknown branch';
+  }
+
+  async function handleCloneProject(projectId: string) {
+    const targetBranchId = cloneTargets[projectId];
+    if (!targetBranchId || !user?.companyId) return;
+    setCloningProjectId(projectId);
+    try {
+      await cloneProjectToBranch(projectId, targetBranchId, user.companyId);
+      showToast(`Cloned to ${branchName(targetBranchId)} — edit the copy to customize it.`);
+      setCloneTargets((prev) => ({ ...prev, [projectId]: '' }));
+      fetchAll();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to clone.');
+    } finally {
+      setCloningProjectId(null);
+    }
   }
 
   useEffect(() => {
@@ -375,7 +403,7 @@ function RealEstateProjectManagement() {
     setSavingProject(true);
     try {
       if (editingProjectId === 'new') {
-        await saveProject({ ...draft, company_id: user.companyId, active: true, display_order: projects.length });
+        await saveProject({ ...draft, company_id: user.companyId, active: true, display_order: projects.length, branch_id: null, source_id: null });
       } else if (editingProjectId) {
         await editProject(editingProjectId, draft);
       }
@@ -1084,9 +1112,16 @@ function RealEstateProjectManagement() {
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold text-slate-700">All Projects</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {branches.length > 1 && (
+              <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className={`${INPUT_CLS} w-auto`}>
+                <option value="all">All branches</option>
+                <option value="generic">Shared only</option>
+                {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name} only</option>)}
+              </select>
+            )}
             <button
               onClick={() => setReorderOpen(true)}
               disabled={projects.length < 2}
@@ -1103,8 +1138,10 @@ function RealEstateProjectManagement() {
           {projects.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">No projects yet — add one above.</p>
           ) : (
-            projects.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+            projects
+              .filter((p) => branchFilter === 'all' || (branchFilter === 'generic' ? !p.branch_id : p.branch_id === branchFilter))
+              .map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
                 <div className="flex items-center gap-3">
                   {p.thumbnail_url ? (
                     <img src={p.thumbnail_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
@@ -1113,9 +1150,31 @@ function RealEstateProjectManagement() {
                   )}
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{p.project_name}</p>
+                    <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {branchName(p.branch_id)}
+                    </span>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {branches.length > 1 && !p.branch_id && (
+                    <>
+                      <select
+                        value={cloneTargets[p.id] ?? ''}
+                        onChange={(e) => setCloneTargets((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                      >
+                        <option value="">Clone to branch…</option>
+                        {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+                      </select>
+                      <button
+                        onClick={() => handleCloneProject(p.id)}
+                        disabled={!cloneTargets[p.id] || cloningProjectId === p.id}
+                        className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-40"
+                      >
+                        {cloningProjectId === p.id ? 'Cloning…' : 'Clone'}
+                      </button>
+                    </>
+                  )}
                   <button onClick={() => startEditProject(p)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteProject(p.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                 </div>

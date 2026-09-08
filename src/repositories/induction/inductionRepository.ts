@@ -41,6 +41,12 @@ export async function deleteDay(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function getDay(id: string): Promise<InductionDay | null> {
+  const { data, error } = await supabase.from('induction_days').select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ── Sections (Page / Test) ───────────────────────────────────────────────────
 
 export async function getSectionsForDay(dayId: string): Promise<InductionDaySection[]> {

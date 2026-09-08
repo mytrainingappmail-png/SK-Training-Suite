@@ -29,15 +29,18 @@ import {
   loadDays, saveDay, editDay, removeDay, reorderDays,
   loadSectionsForDay, saveSection, editSection, removeSection,
   loadAssignments, assignEmployee, markAssignmentComplete, reactivateAssignment, removeAssignment,
+  cloneDayToBranch,
 } from '../../services/induction/inductionService';
 import { loadAssessments } from '../../services/assessment/assessmentService';
 import { employeeService } from '../../services/employee/employeeService';
+import { branchService } from '../../services/branch/branchService';
 import { getCurrentUser } from '../../services/auth/session';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
 import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment } from '../../types/induction';
 import type { Assessment } from '../../types/assessment';
 import type { Employee } from '../../types/employee';
+import type { Branch } from '../../types/branch';
 
 const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
@@ -180,6 +183,10 @@ function InductionManagement() {
   const [assignments, setAssignments] = useState<InductionAssignment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState('all');
+  const [cloneTargets, setCloneTargets] = useState<Record<string, string>>({});
+  const [cloningDayId, setCloningDayId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
@@ -204,10 +211,31 @@ function InductionManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), loadAssessments()])
-      .then(([d, a, e, asm]) => { setDays(d); setAssignments(a); setEmployees(e); setAssessments(asm); })
+    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), loadAssessments(), branchService.getAll()])
+      .then(([d, a, e, asm, br]) => { setDays(d); setAssignments(a); setEmployees(e); setAssessments(asm); setBranches(br); })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
+  }
+
+  function branchName(id: string | null): string {
+    if (!id) return 'Shared (all branches)';
+    return branches.find((b) => b.id === id)?.branch_name ?? 'Unknown branch';
+  }
+
+  async function handleCloneDay(dayId: string) {
+    const targetBranchId = cloneTargets[dayId];
+    if (!targetBranchId || !user?.companyId) return;
+    setCloningDayId(dayId);
+    try {
+      await cloneDayToBranch(dayId, targetBranchId, user.companyId);
+      showToast(`Cloned to ${branchName(targetBranchId)} — edit the copy to customize it.`);
+      setCloneTargets((prev) => ({ ...prev, [dayId]: '' }));
+      fetchAll();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to clone.');
+    } finally {
+      setCloningDayId(null);
+    }
   }
 
   useEffect(() => { fetchAll(); }, []);
@@ -248,7 +276,7 @@ function InductionManagement() {
     setSavingDay(true);
     try {
       if (editingDayId === 'new') {
-        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, display_order: days.length, active: draft.active });
+        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, display_order: days.length, active: draft.active, branch_id: null, source_id: null });
         showToast('Day added.');
         setEditingDayId(created.id);
         fetchSections(created.id);
@@ -535,9 +563,16 @@ function InductionManagement() {
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold text-slate-700">All Days</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {branches.length > 1 && (
+              <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className={`${INPUT_CLS} w-auto`}>
+                <option value="all">All branches</option>
+                <option value="generic">Shared only</option>
+                {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name} only</option>)}
+              </select>
+            )}
             <button onClick={() => setReorderOpen(true)} disabled={days.length < 2} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">
               Reorder Days
             </button>
@@ -548,13 +583,40 @@ function InductionManagement() {
           {days.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">No days yet — add one above.</p>
           ) : (
-            [...days].sort((a, b) => a.display_order - b.display_order).map((d, i) => (
-              <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+            [...days]
+              .sort((a, b) => a.display_order - b.display_order)
+              .filter((d) => branchFilter === 'all' || (branchFilter === 'generic' ? !d.branch_id : d.branch_id === branchFilter))
+              .map((d, i) => (
+              <div key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Day {i + 1}: {d.title}</p>
-                  {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {branchName(d.branch_id)}
+                    </span>
+                    {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
+                  </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {branches.length > 1 && !d.branch_id && (
+                    <>
+                      <select
+                        value={cloneTargets[d.id] ?? ''}
+                        onChange={(e) => setCloneTargets((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                      >
+                        <option value="">Clone to branch…</option>
+                        {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+                      </select>
+                      <button
+                        onClick={() => handleCloneDay(d.id)}
+                        disabled={!cloneTargets[d.id] || cloningDayId === d.id}
+                        className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-40"
+                      >
+                        {cloningDayId === d.id ? 'Cloning…' : 'Clone'}
+                      </button>
+                    </>
+                  )}
                   <button onClick={() => startEditDay(d)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteDay(d.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                 </div>

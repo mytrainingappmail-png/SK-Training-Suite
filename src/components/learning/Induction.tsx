@@ -13,6 +13,7 @@ import {
 } from '../../services/induction/inductionService';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import { getCurrentUser } from '../../services/auth/session';
+import { resolveForBranch } from '../../utils/branchScoping';
 import SectionHeroBanner from './SectionHeroBanner';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
@@ -65,7 +66,8 @@ function Induction() {
     Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletedDayIds(user.id)])
       .then(async ([assignment, allDays, allSections, completedIds]) => {
         setHasAssignment(!!assignment && assignment.status === 'active');
-        const active = allDays.filter((d) => d.active).sort((a, b) => a.display_order - b.display_order);
+        const scoped = resolveForBranch(allDays, user.branchId || null);
+        const active = scoped.filter((d) => d.active).sort((a, b) => a.display_order - b.display_order);
         setDays(active);
         const grouped: Record<string, InductionDaySection[]> = {};
         for (const s of allSections) {

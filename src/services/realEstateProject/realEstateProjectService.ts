@@ -11,6 +11,7 @@ import {
   createProject as repoCreateProject,
   updateProject,
   deleteProject,
+  getProject,
   getBrochuresForProject,
   getAllBrochures,
   createBrochure as repoCreateBrochure,
@@ -81,6 +82,52 @@ export async function removeProject(id: string): Promise<void> {
 // employee-facing Projects page already sorts by.
 export async function reorderProjects(ordered: RealEstateProject[]): Promise<void> {
   await Promise.all(ordered.map((p, i) => updateProject(p.id, { display_order: i + 1 })));
+}
+
+// Clones a generic Project (branch_id null) plus its sections and
+// brochures into a branch-specific copy, so an admin can then edit that
+// copy's content (e.g. a different masterplan) without touching the
+// shared original. The clone's source_id points back at the original —
+// the employee-facing resolution (src/utils/branchScoping.ts) uses that
+// to prefer this branch's own copy over the generic one, never both.
+export async function cloneProjectToBranch(projectId: string, branchId: string, companyId: string): Promise<RealEstateProject> {
+  const source = await getProject(projectId);
+  if (!source) throw new Error('Project not found.');
+  const [sections, brochures] = await Promise.all([
+    getSectionsForProject(projectId),
+    getBrochuresForProject(projectId),
+  ]);
+
+  const cloned = await repoCreateProject({
+    company_id: companyId,
+    category_id: source.category_id,
+    project_name: source.project_name,
+    short_description: source.short_description,
+    full_description: source.full_description,
+    thumbnail_url: source.thumbnail_url,
+    active: source.active,
+    display_order: source.display_order,
+    branch_id: branchId,
+    source_id: source.id,
+  });
+
+  await Promise.all([
+    ...sections.map((s) =>
+      repoCreateSection({
+        company_id: companyId,
+        project_id: cloned.id,
+        section_type: s.section_type,
+        title: s.title,
+        display_order: s.display_order,
+        page_content: s.page_content,
+        assessment_id: s.assessment_id,
+        faq_items: s.faq_items,
+      })
+    ),
+    ...brochures.map((b) => repoCreateBrochure({ project_id: cloned.id, title: b.title, file_url: b.file_url })),
+  ]);
+
+  return cloned;
 }
 
 export async function loadBrochuresForProject(projectId: string): Promise<RealEstateProjectBrochure[]> {

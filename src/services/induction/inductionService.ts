@@ -4,7 +4,7 @@
 // realEstateProjectService.ts's shape.
 
 import {
-  getDays, createDay, updateDay, deleteDay,
+  getDays, createDay, updateDay, deleteDay, getDay,
   getSectionsForDay, getAllSections, createSection, updateSection, deleteSection,
   getCompletionsForEmployee, markDayComplete,
   getAssignments, getMyAssignment, createAssignment, setAssignmentStatus, deleteAssignment,
@@ -40,6 +40,44 @@ export async function removeDay(id: string): Promise<void> {
 // Reorders the flat Day list — same pattern as reorderProjects.
 export async function reorderDays(ordered: InductionDay[]): Promise<void> {
   await Promise.all(ordered.map((d, i) => updateDay(d.id, { display_order: i + 1 })));
+}
+
+// Clones a generic Day (branch_id null) plus all its sections into a
+// branch-specific copy, so an admin can then edit that copy's content
+// (e.g. a different masterplan) without touching the shared original.
+// The clone's source_id points back at the original — the employee-facing
+// resolution (see src/utils/branchScoping.ts) uses that to prefer this
+// branch's own copy over the generic one, never showing both.
+export async function cloneDayToBranch(dayId: string, branchId: string, companyId: string): Promise<InductionDay> {
+  const source = await getDay(dayId);
+  if (!source) throw new Error('Day not found.');
+  const sections = await getSectionsForDay(dayId);
+
+  const cloned = await createDay({
+    company_id: companyId,
+    title: source.title,
+    description: source.description,
+    display_order: source.display_order,
+    active: source.active,
+    branch_id: branchId,
+    source_id: source.id,
+  });
+
+  await Promise.all(
+    sections.map((s) =>
+      createSection({
+        company_id: companyId,
+        day_id: cloned.id,
+        section_type: s.section_type,
+        title: s.title,
+        display_order: s.display_order,
+        page_content: s.page_content,
+        assessment_id: s.assessment_id,
+      })
+    )
+  );
+
+  return cloned;
 }
 
 export async function loadSectionsForDay(dayId: string): Promise<InductionDaySection[]> {

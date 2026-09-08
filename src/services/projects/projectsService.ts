@@ -10,6 +10,7 @@
 import { loadProjects } from '../realEstateProject/realEstateProjectService';
 import { loadAllBrochures } from '../realEstateProject/realEstateProjectService';
 import { loadAllSections } from '../realEstateProject/realEstateProjectService';
+import { resolveForBranch } from '../../utils/branchScoping';
 import type { RealEstateProjectSection } from '../../types/realEstateProjectSection';
 
 export interface ProjectBrochure {
@@ -28,14 +29,14 @@ export interface Project {
   sections: RealEstateProjectSection[];
 }
 
-export async function loadProjectsForEmployee(_employeeId: string): Promise<Project[]> {
+export async function loadProjectsForEmployee(_employeeId: string, employeeBranchId: string | null = null): Promise<Project[]> {
   const [projects, brochures, sections] = await Promise.all([
     loadProjects(),
     loadAllBrochures(),
     loadAllSections(),
   ]);
 
-  return projects
+  return resolveForBranch(projects, employeeBranchId)
     .filter((p) => p.active)
     .map((p) => ({
       projectId: p.id,

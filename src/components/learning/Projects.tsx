@@ -380,7 +380,7 @@ function Projects() {
     }
     setLoading(true);
     setError('');
-    loadProjectsForEmployee(user.id)
+    loadProjectsForEmployee(user.id, user.branchId || null)
       .then(setProjects)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load projects.'))
       .finally(() => setLoading(false));
