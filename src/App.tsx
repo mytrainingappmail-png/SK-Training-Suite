@@ -24,6 +24,8 @@ import MyCourses from "./components/learning/MyCourses";
 import Videos from "./pages/Videos";
 import ProjectsPage from "./pages/Projects";
 import InductionPage from "./pages/InductionPage";
+import PerformanceTrackerPage from "./pages/PerformanceTrackerPage";
+import PerformanceTrackerTvPage from "./pages/PerformanceTrackerTvPage";
 import BrainstormingPage from "./pages/Brainstorming";
 import LegalDocumentPage from "./pages/LegalDocumentPage";
 import ContactUsPage from "./pages/ContactUsPage";
@@ -132,6 +134,18 @@ function App() {
       <Route element={<CallingAppGuard><Outlet /></CallingAppGuard>}>
         <Route path={ROUTES.CALLING_APP_DASHBOARD} element={<CallingAppStandalonePage />} />
       </Route>
+
+      {/* Performance Tracker TV Mode — full-bleed, no AppLayout chrome, for
+          an office TV/monitor. Uses the normal employee login (ProtectedRoute),
+          not a separate credential — see PerformanceTrackerTvMode.tsx. */}
+      <Route
+        path={ROUTES.PERFORMANCE_TRACKER_TV}
+        element={
+          <ProtectedRoute>
+            <PerformanceTrackerTvPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected Application — outer guard only checks "is logged in" */}
       <Route
@@ -246,6 +260,7 @@ function App() {
         <Route path={ROUTES.VIDEOS} element={<Videos />} />
         <Route path={ROUTES.PROJECTS} element={<ProjectsPage />} />
         <Route path={ROUTES.INDUCTION} element={<InductionPage />} />
+        <Route path={ROUTES.PERFORMANCE_TRACKER} element={<PerformanceTrackerPage />} />
         <Route path={ROUTES.BRAINSTORMING} element={<BrainstormingPage />} />
         <Route path={ROUTES.CERTIFICATE_VIEW} element={<CertificateViewPage />} />
         <Route path={ROUTES.MY_ATTENDANCE} element={<AttendancePage />} />

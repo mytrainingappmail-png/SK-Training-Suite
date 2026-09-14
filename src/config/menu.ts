@@ -38,6 +38,17 @@ export const MENU: MenuItem[] = [
     visible: true,
     group: "Overview",
   },
+  // Performance Tracker via the existing LMS login — same shape as
+  // Calling App above (uses this employee's own session, not a separate
+  // credential), gated by the performance_tracker company module.
+  {
+    id: "performance-tracker",
+    title: "Performance Tracker",
+    route: ROUTES.PERFORMANCE_TRACKER,
+    icon: "trending-up",
+    visible: true,
+    group: "Overview",
+  },
   {
     id: "dashboard",
     title: "Dashboard",

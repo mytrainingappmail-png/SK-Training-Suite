@@ -65,6 +65,7 @@ const MENU_MODULE_MAP: Record<string, string> = {
   "market-analytics": "market_analytics",
   "live-quiz": "live_quiz",
   "calling-app": "calling_app",
+  "performance-tracker": "performance_tracker",
   projects: "projects",
   brainstorming: "brainstorming",
   "help-center": "help_center",

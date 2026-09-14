@@ -134,4 +134,18 @@ export const ROUTES = {
   CALLING_APP_LOGIN: "/calling-app/login",
   CALLING_APP_DASHBOARD: "/calling-app/dashboard",
 
+  // ===========================
+  // Performance Tracker (premium add-on) — embedded inside AppLayout using
+  // the existing LMS session (same pattern as CALLING_APP above), not a
+  // separate credential like Live Quiz — the daily commit/report loop needs
+  // to be the SAME employee identity the rest of the app already knows,
+  // not a parallel one.
+  // ===========================
+
+  PERFORMANCE_TRACKER: "/performance-tracker",
+  // Full-bleed, no-chrome auto-rotating leaderboard — meant for an office
+  // TV/monitor, not day-to-day use. Still requires the normal login (no
+  // separate credential), just skips AppLayout's sidebar/header.
+  PERFORMANCE_TRACKER_TV: "/performance-tracker/tv",
+
 } as const;

@@ -12,7 +12,14 @@ function AppLayout() {
 
       <Sidebar />
 
-      <div className="flex-1 flex flex-col print:block">
+      {/* min-w-0 is required here: without it, a flex child's default
+          min-width:auto lets ANY unshrinkable-wide descendant (e.g. a
+          horizontally-scrolling tab bar with flex-shrink-0 items) push
+          this column — and the real viewport with it — wider than the
+          screen, defeating that descendant's own overflow-x-auto and
+          breaking mobile layout. Purely defensive; no effect when nothing
+          this wide exists. */}
+      <div className="flex-1 flex flex-col min-w-0 print:block">
 
         <Header />
 
