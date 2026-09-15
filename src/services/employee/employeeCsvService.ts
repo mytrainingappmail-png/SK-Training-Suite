@@ -302,22 +302,32 @@ export interface ImportResult {
   failedRows: { rowNum: number; employee_code: string; reason: string }[];
   managerLinkWarnings: string[];
   generatedPasswords: { employee_code: string; password: string }[];
+  structureErrors: string[];
 }
 
 export async function commitImport(companyId: string, plan: ImportPlan): Promise<ImportResult> {
   const result: ImportResult = {
     createdEmployees: 0, createdBranches: 0, createdDepartments: 0, createdDesignations: 0,
-    failedRows: [], managerLinkWarnings: [], generatedPasswords: [],
+    failedRows: [], managerLinkWarnings: [], generatedPasswords: [], structureErrors: [],
   };
 
   // Branches first (no dependency), then departments (need real branch ids),
   // then designations (need real branch+department ids) — resolving each
-  // "new:xxx" key to the real created row id as we go.
+  // "new:xxx" key to the real created row id as we go. Each creation is
+  // individually try/caught (e.g. a duplicate branch code) so one bad
+  // structural row can't abort the entire import — any employee row that
+  // depended on it will fail its own create below (missing id) and land in
+  // failedRows instead, and the admin sees exactly what happened rather
+  // than the modal hanging on the "importing" spinner forever.
   const branchKeyToId = new Map<string, string>();
   for (const b of plan.branchesToCreate) {
-    const created = await branchService.create({ company_id: companyId, branch_name: b.name, branch_code: b.code, active: true });
-    branchKeyToId.set(`new:${b.key}`, created.id);
-    result.createdBranches++;
+    try {
+      const created = await branchService.create({ company_id: companyId, branch_name: b.name, branch_code: b.code, active: true });
+      branchKeyToId.set(`new:${b.key}`, created.id);
+      result.createdBranches++;
+    } catch (e) {
+      result.structureErrors.push(`Branch "${b.name}" (${b.code}) could not be created: ${e instanceof Error ? e.message : "unknown error"}.`);
+    }
   }
 
   function resolveBranchId(key: string): string {
@@ -326,10 +336,14 @@ export async function commitImport(companyId: string, plan: ImportPlan): Promise
 
   const deptKeyToId = new Map<string, string>();
   for (const d of plan.departmentsToCreate) {
-    const branchId = resolveBranchId(d.branchKey);
-    const created = await departmentService.create({ company_id: companyId, branch_id: branchId, department_name: d.name, department_code: d.code, active: true });
-    deptKeyToId.set(`new:${d.key}`, created.id);
-    result.createdDepartments++;
+    try {
+      const branchId = resolveBranchId(d.branchKey);
+      const created = await departmentService.create({ company_id: companyId, branch_id: branchId, department_name: d.name, department_code: d.code, active: true });
+      deptKeyToId.set(`new:${d.key}`, created.id);
+      result.createdDepartments++;
+    } catch (e) {
+      result.structureErrors.push(`Department "${d.name}" (${d.code}) could not be created: ${e instanceof Error ? e.message : "unknown error"}.`);
+    }
   }
 
   function resolveDeptId(key: string): string {
@@ -338,14 +352,18 @@ export async function commitImport(companyId: string, plan: ImportPlan): Promise
 
   const desigKeyToId = new Map<string, string>();
   for (const d of plan.designationsToCreate) {
-    const branchId = resolveBranchId(d.branchKey);
-    const departmentId = resolveDeptId(d.departmentKey);
-    const created = await designationService.create({
-      company_id: companyId, branch_id: branchId, department_id: departmentId,
-      designation_name: d.name, designation_code: d.code, hierarchy_level: 1, active: true,
-    });
-    desigKeyToId.set(`new:${d.key}`, created.id);
-    result.createdDesignations++;
+    try {
+      const branchId = resolveBranchId(d.branchKey);
+      const departmentId = resolveDeptId(d.departmentKey);
+      const created = await designationService.create({
+        company_id: companyId, branch_id: branchId, department_id: departmentId,
+        designation_name: d.name, designation_code: d.code, hierarchy_level: 1, active: true,
+      });
+      desigKeyToId.set(`new:${d.key}`, created.id);
+      result.createdDesignations++;
+    } catch (e) {
+      result.structureErrors.push(`Designation "${d.name}" (${d.code}) could not be created: ${e instanceof Error ? e.message : "unknown error"}.`);
+    }
   }
 
   function resolveDesigId(key: string): string {
@@ -365,6 +383,14 @@ export async function commitImport(companyId: string, plan: ImportPlan): Promise
     const branchId = resolveBranchId(r.branchKey);
     const departmentId = resolveDeptId(r.departmentKey);
     const designationId = resolveDesigId(r.designationKey);
+    if (!branchId || !departmentId || !designationId) {
+      result.failedRows.push({
+        rowNum: r.row.rowNum,
+        employee_code: r.row.employee_code,
+        reason: "Skipped — its Branch/Department/Designation failed to be created (see the errors above).",
+      });
+      continue;
+    }
     const password = r.row.password || generateTemporaryPassword();
 
     const form: EmployeeForm = {

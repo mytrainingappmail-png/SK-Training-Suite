@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 import { ROUTES } from "./constants/routes";
@@ -7,72 +7,155 @@ import { loadBranding, applyDynamicIcon, BRANDING_CHANGED_EVENT } from "./servic
 
 import AppLayout from "./layouts/AppLayout";
 
+// Kept eager: these are the first things any visitor sees regardless of role
+// (marketing/login before auth, layout chrome + dashboard right after) — every
+// other route below is lazy so a single page's code isn't downloaded by
+// visitors who never open it.
 import LoginPage from "./pages/LoginPage";
 import MarketingHomePage from "./pages/MarketingHomePage";
 import DashboardRouter from "./pages/DashboardRouter";
-import Employees from "./pages/Employees";
-import Training from "./pages/Training";
-import Courses from "./pages/Courses";
-import Modules from "./pages/Modules";
-import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
-import Assessment from "./pages/Assessment";
-import Admin from "./pages/Admin";
-
-import LearningHome from "./components/learning/LearningHome";
-import MyCourses from "./components/learning/MyCourses";
-import Videos from "./pages/Videos";
-import ProjectsPage from "./pages/Projects";
-import InductionPage from "./pages/InductionPage";
-import PerformanceTrackerPage from "./pages/PerformanceTrackerPage";
-import ScriptsPage from "./pages/ScriptsPage";
-import PerformanceTrackerTvPage from "./pages/PerformanceTrackerTvPage";
-import BrainstormingPage from "./pages/Brainstorming";
-import LegalDocumentPage from "./pages/LegalDocumentPage";
-import ContactUsPage from "./pages/ContactUsPage";
-import PayLicensePage from "./pages/PayLicensePage";
-import CertificateViewPage from "./components/certificate/CertificateViewPage";
-import AttendancePage from "./pages/AttendancePage";
-import MyTicketsPage from "./pages/MyTicketsPage";
-import HelpCenterPage from "./pages/HelpCenterPage";
-import MarketAnalyticsPage from "./pages/MarketAnalyticsPage";
-import TrainerStudentsPage from "./pages/TrainerStudentsPage";
-import TrainerGradingQueuePage from "./pages/TrainerGradingQueuePage";
-import TrainerCoursesPage from "./pages/TrainerCoursesPage";
-import TrainerBatchesPage from "./pages/TrainerBatchesPage";
-import TrainerResultsPage from "./pages/TrainerResultsPage";
-import { CoursePlayerRoute, LessonPlayerRoute, ResourceViewerRoute, LearningPathsRoute } from "./pages/LearningPlayerRoutes";
-import MyAssessments from "./components/learning/MyAssessments";
-import MyCertificates from "./components/learning/MyCertificates";
-import MyProgress from "./components/learning/MyProgress";
-
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
-import QuizAdminGuard from "./components/quiz/QuizAdminGuard";
-import QuizAdminLoginPage from "./pages/quiz/QuizAdminLoginPage";
-import QuizAdminLayout from "./pages/quiz/QuizAdminLayout";
-import QuizDashboardPage from "./pages/quiz/QuizDashboardPage";
-import QuizListPage from "./pages/quiz/QuizListPage";
-import QuizBuilderPage from "./pages/quiz/QuizBuilderPage";
-import QuizHostLivePage from "./pages/quiz/QuizHostLivePage";
-import QuizResultsPage from "./pages/quiz/QuizResultsPage";
-import QuizFinalResultPage from "./pages/quiz/QuizFinalResultPage";
-import QuizJoinPage from "./pages/quiz/QuizJoinPage";
-import QuizPlayPage from "./pages/quiz/QuizPlayPage";
-import QuizUsersPage from "./pages/quiz/QuizUsersPage";
-import QuizSettingsPage from "./pages/quiz/QuizSettingsPage";
-import SurveyListPage from "./pages/quiz/SurveyListPage";
-import SurveyBuilderPage from "./pages/quiz/SurveyBuilderPage";
-import SurveyResultsPage from "./pages/quiz/SurveyResultsPage";
-import SurveySettingsPage from "./pages/quiz/SurveySettingsPage";
-import SurveyLiveHostPage from "./pages/quiz/SurveyLiveHostPage";
-import SurveyLiveJoinPage from "./pages/quiz/SurveyLiveJoinPage";
-import SurveyTakePage from "./pages/quiz/SurveyTakePage";
+// Cloudflare Workers assets serve only the CURRENT build's files — a
+// deploy replaces ./dist outright rather than keeping old chunk files
+// around. A tab left open across a deploy already has the new
+// index.html's JS in memory, but navigating to a route it hasn't loaded
+// yet triggers a dynamic import() for a chunk hash from the OLD build,
+// which now 404s ("Failed to fetch dynamically imported module"). This
+// wrapper retries once via a full reload (which picks up the new
+// index.html + current chunk hashes) instead of that surfacing as a
+// crash; a `sessionStorage` flag stops it from looping if the reload
+// itself doesn't fix it (e.g. a real network outage).
+function lazyWithRetry<T extends { default: ComponentType<any> }>(
+  factory: () => Promise<T>
+): LazyExoticComponent<T["default"]> {
+  return lazy(async () => {
+    const RELOAD_FLAG = "sk-chunk-reload-attempted";
+    try {
+      const module = await factory();
+      sessionStorage.removeItem(RELOAD_FLAG);
+      return module;
+    } catch (error) {
+      if (!sessionStorage.getItem(RELOAD_FLAG)) {
+        sessionStorage.setItem(RELOAD_FLAG, "1");
+        window.location.reload();
+        // Never resolves — the reload navigates away before this matters.
+        return new Promise<T>(() => {});
+      }
+      throw error;
+    }
+  });
+}
 
-import CallingAppGuard from "./components/callingApp/CallingAppGuard";
-import CallingAppLoginPage from "./pages/callingApp/CallingAppLoginPage";
-import CallingAppStandalonePage from "./pages/callingApp/CallingAppStandalonePage";
-import CallingAppEmbeddedPage from "./pages/callingApp/CallingAppEmbeddedPage";
+const Employees = lazyWithRetry(() => import("./pages/Employees"));
+const Training = lazyWithRetry(() => import("./pages/Training"));
+const Courses = lazyWithRetry(() => import("./pages/Courses"));
+const Modules = lazyWithRetry(() => import("./pages/Modules"));
+const Reports = lazyWithRetry(() => import("./pages/Reports"));
+const Settings = lazyWithRetry(() => import("./pages/Settings"));
+const Assessment = lazyWithRetry(() => import("./pages/Assessment"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
+
+const LearningHome = lazyWithRetry(() => import("./components/learning/LearningHome"));
+const MyCourses = lazyWithRetry(() => import("./components/learning/MyCourses"));
+const Videos = lazyWithRetry(() => import("./pages/Videos"));
+const ProjectsPage = lazyWithRetry(() => import("./pages/Projects"));
+const InductionPage = lazyWithRetry(() => import("./pages/InductionPage"));
+const PerformanceTrackerPage = lazyWithRetry(() => import("./pages/PerformanceTrackerPage"));
+const ScriptsPage = lazyWithRetry(() => import("./pages/ScriptsPage"));
+const PerformanceTrackerTvPage = lazyWithRetry(() => import("./pages/PerformanceTrackerTvPage"));
+const BrainstormingPage = lazyWithRetry(() => import("./pages/Brainstorming"));
+const LegalDocumentPage = lazyWithRetry(() => import("./pages/LegalDocumentPage"));
+const ContactUsPage = lazyWithRetry(() => import("./pages/ContactUsPage"));
+const PayLicensePage = lazyWithRetry(() => import("./pages/PayLicensePage"));
+const CertificateViewPage = lazyWithRetry(() => import("./components/certificate/CertificateViewPage"));
+const AttendancePage = lazyWithRetry(() => import("./pages/AttendancePage"));
+const MyTicketsPage = lazyWithRetry(() => import("./pages/MyTicketsPage"));
+const HelpCenterPage = lazyWithRetry(() => import("./pages/HelpCenterPage"));
+const MarketAnalyticsPage = lazyWithRetry(() => import("./pages/MarketAnalyticsPage"));
+const TrainerStudentsPage = lazyWithRetry(() => import("./pages/TrainerStudentsPage"));
+const TrainerGradingQueuePage = lazyWithRetry(() => import("./pages/TrainerGradingQueuePage"));
+const TrainerCoursesPage = lazyWithRetry(() => import("./pages/TrainerCoursesPage"));
+const TrainerBatchesPage = lazyWithRetry(() => import("./pages/TrainerBatchesPage"));
+const TrainerResultsPage = lazyWithRetry(() => import("./pages/TrainerResultsPage"));
+// LearningPlayerRoutes.tsx only has named exports — React.lazy needs a
+// default, so each is remapped via .then() rather than changing that
+// file's export style (it's a small, sensible one-file convention there).
+const CoursePlayerRoute = lazyWithRetry(() => import("./pages/LearningPlayerRoutes").then((m) => ({ default: m.CoursePlayerRoute })));
+const LessonPlayerRoute = lazyWithRetry(() => import("./pages/LearningPlayerRoutes").then((m) => ({ default: m.LessonPlayerRoute })));
+const ResourceViewerRoute = lazyWithRetry(() => import("./pages/LearningPlayerRoutes").then((m) => ({ default: m.ResourceViewerRoute })));
+const LearningPathsRoute = lazyWithRetry(() => import("./pages/LearningPlayerRoutes").then((m) => ({ default: m.LearningPathsRoute })));
+const MyAssessments = lazyWithRetry(() => import("./components/learning/MyAssessments"));
+const MyCertificates = lazyWithRetry(() => import("./components/learning/MyCertificates"));
+const MyProgress = lazyWithRetry(() => import("./components/learning/MyProgress"));
+
+const QuizAdminGuard = lazyWithRetry(() => import("./components/quiz/QuizAdminGuard"));
+const QuizAdminLoginPage = lazyWithRetry(() => import("./pages/quiz/QuizAdminLoginPage"));
+const QuizAdminLayout = lazyWithRetry(() => import("./pages/quiz/QuizAdminLayout"));
+const QuizDashboardPage = lazyWithRetry(() => import("./pages/quiz/QuizDashboardPage"));
+const QuizListPage = lazyWithRetry(() => import("./pages/quiz/QuizListPage"));
+const QuizBuilderPage = lazyWithRetry(() => import("./pages/quiz/QuizBuilderPage"));
+const QuizHostLivePage = lazyWithRetry(() => import("./pages/quiz/QuizHostLivePage"));
+const QuizResultsPage = lazyWithRetry(() => import("./pages/quiz/QuizResultsPage"));
+const QuizFinalResultPage = lazyWithRetry(() => import("./pages/quiz/QuizFinalResultPage"));
+const QuizJoinPage = lazyWithRetry(() => import("./pages/quiz/QuizJoinPage"));
+const QuizPlayPage = lazyWithRetry(() => import("./pages/quiz/QuizPlayPage"));
+const QuizUsersPage = lazyWithRetry(() => import("./pages/quiz/QuizUsersPage"));
+const QuizSettingsPage = lazyWithRetry(() => import("./pages/quiz/QuizSettingsPage"));
+const SurveyListPage = lazyWithRetry(() => import("./pages/quiz/SurveyListPage"));
+const SurveyBuilderPage = lazyWithRetry(() => import("./pages/quiz/SurveyBuilderPage"));
+const SurveyResultsPage = lazyWithRetry(() => import("./pages/quiz/SurveyResultsPage"));
+const SurveySettingsPage = lazyWithRetry(() => import("./pages/quiz/SurveySettingsPage"));
+const SurveyLiveHostPage = lazyWithRetry(() => import("./pages/quiz/SurveyLiveHostPage"));
+const SurveyLiveJoinPage = lazyWithRetry(() => import("./pages/quiz/SurveyLiveJoinPage"));
+const SurveyTakePage = lazyWithRetry(() => import("./pages/quiz/SurveyTakePage"));
+
+const CallingAppGuard = lazyWithRetry(() => import("./components/callingApp/CallingAppGuard"));
+const CallingAppLoginPage = lazyWithRetry(() => import("./pages/callingApp/CallingAppLoginPage"));
+const CallingAppStandalonePage = lazyWithRetry(() => import("./pages/callingApp/CallingAppStandalonePage"));
+const CallingAppEmbeddedPage = lazyWithRetry(() => import("./pages/callingApp/CallingAppEmbeddedPage"));
+
+// Shown during the brief network fetch of a lazy route chunk (near-instant
+// on repeat visits once cached). On a genuinely stalled connection — the
+// request neither completing nor failing, which lazyWithRetry's catch can't
+// help with — this would otherwise spin forever with no way out. After 8s
+// it offers a manual reload instead of leaving the user stuck looking at a
+// spinner indefinitely.
+function RouteLoadingFallback() {
+  const [stuck, setStuck] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setStuck(true), 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, minHeight: "60vh", width: "100%" }}>
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: "50%",
+          border: "3px solid #E2E8F0",
+          borderTopColor: "#1E293B",
+          animation: "spin 0.8s linear infinite",
+        }}
+      />
+      {stuck && (
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: 14, color: "#64748B", marginBottom: 10 }}>This is taking longer than usual.</p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ borderRadius: 10, background: "#0F172A", color: "#fff", fontSize: 14, fontWeight: 600, padding: "8px 20px", border: "none", cursor: "pointer" }}
+          >
+            Reload
+          </button>
+        </div>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
 
 function App() {
   useEffect(() => {
@@ -90,6 +173,7 @@ function App() {
   }, []);
 
   return (
+    <Suspense fallback={<RouteLoadingFallback />}>
     <Routes>
       {/* Public Route */}
       <Route path={ROUTES.HOME} element={<MarketingHomePage />} />
@@ -302,6 +386,7 @@ function App() {
         element={<Navigate to={ROUTES.LOGIN} replace />}
       />
     </Routes>
+    </Suspense>
   );
 }
 

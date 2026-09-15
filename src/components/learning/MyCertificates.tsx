@@ -26,7 +26,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { loadMyCertificates } from '../../services/myCertificate/myCertificateService';
 import { loadMyCourses }      from '../../services/myCourses/myCourseService';
 import { getCurrentUser }     from '../../services/auth/session';
-import { loadCertificateForView } from '../../services/certificate/certificateViewService';
+import { loadCertificateForView, loadCertificatesForView } from '../../services/certificate/certificateViewService';
 import CertificateRenderer from '../certificate/CertificateRenderer';
 import SectionHeroBanner from './SectionHeroBanner';
 import type { MyCertificate, MyCertificateStatus } from '../../types/myCertificate';
@@ -111,18 +111,8 @@ function EmptyState({ search }: { search: string }) {
 // Certificate card (dashboard)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CertificateCard({ certificate, employeeName, onOpen }: { certificate: MyCertificate; employeeName: string; onOpen: () => void }) {
+function CertificateCard({ certificate, employeeName, preview, onOpen }: { certificate: MyCertificate; employeeName: string; preview: CertificateViewData | null; onOpen: () => void }) {
   const isIssued = certificate.status === 'valid';
-  const [preview, setPreview] = useState<CertificateViewData | null>(null);
-
-  useEffect(() => {
-    if (certificate.status === 'pending') return;
-    let cancelled = false;
-    loadCertificateForView(certificate.id)
-      .then((v) => { if (!cancelled) setPreview(v); })
-      .catch(() => { if (!cancelled) setPreview(null); });
-    return () => { cancelled = true; };
-  }, [certificate.id, certificate.status]);
 
   return (
     <button
@@ -525,6 +515,7 @@ function MyCertificates() {
 
   const [certificates, setCertificates] = useState<MyCertificate[]>([]);
   const [courses,      setCourses]      = useState<MyCourse[]>([]);
+  const [previewById,  setPreviewById]  = useState<Map<string, CertificateViewData>>(new Map());
   const [loading,       setLoading]     = useState(true);
   const [error,         setError]       = useState('');
 
@@ -542,9 +533,18 @@ function MyCertificates() {
     setLoading(true);
     setError('');
     Promise.all([loadMyCertificates(user.id), loadMyCourses(user.id)])
-      .then(([certRows, courseRows]) => {
+      .then(async ([certRows, courseRows]) => {
         setCertificates(certRows);
         setCourses(courseRows);
+        // One batched fetch for every card's preview instead of each
+        // CertificateCard independently re-fetching all certificates/
+        // templates/assessments/employees just to resolve its own row.
+        const issuedIds = certRows.filter((c) => c.status !== 'pending').map((c) => c.id);
+        try {
+          setPreviewById(await loadCertificatesForView(issuedIds));
+        } catch (err) {
+          console.error('[MyCertificates] loadCertificatesForView:', err);
+        }
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load certificates.');
@@ -658,6 +658,7 @@ function MyCertificates() {
               key={certificate.id}
               certificate={certificate}
               employeeName={employeeName}
+              preview={previewById.get(certificate.id) ?? null}
               onOpen={() => setActiveCertificateId(certificate.id)}
             />
           ))}

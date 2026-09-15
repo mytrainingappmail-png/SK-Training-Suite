@@ -1213,14 +1213,7 @@ export default function CourseManagement() {
     setLoading(true);
     setBanner("");
     try {
-      const courseData = await loadCourses();
-console.log("Courses:", courseData);
-
-const companyData = await loadCompanies();
-console.log("Companies:", companyData);
-
-const categoryData = await loadCategories();
-console.log("Categories:", categoryData);
+      const [courseData, companyData, categoryData] = await Promise.all([loadCourses(), loadCompanies(), loadCategories()]);
       setCourses(courseData);
       setCompanies(companyData);
       setCategories(categoryData);

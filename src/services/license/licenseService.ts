@@ -189,6 +189,25 @@ export async function loadUsageForCompany(companyId: string): Promise<LicenseUsa
   };
 }
 
+/**
+ * Same result as calling loadUsageForCompany() once per company, but fetches
+ * the platform-wide employees/courses tables exactly ONCE regardless of how
+ * many companies are passed in — the License Management screen used to call
+ * loadUsageForCompany() per licensed company, each one independently
+ * re-fetching both full tables (2×N full-table reads for N companies).
+ */
+export async function loadUsageForCompanies(companyIds: string[]): Promise<Record<string, LicenseUsage>> {
+  const [employees, courses] = await Promise.all([employeeService.getAll(), loadCourses()]);
+  const usageMap: Record<string, LicenseUsage> = {};
+  for (const companyId of companyIds) {
+    usageMap[companyId] = {
+      employeeCount: employees.filter((e) => e.company_id === companyId).length,
+      courseCount: courses.filter((c) => c.company_id === companyId).length,
+    };
+  }
+  return usageMap;
+}
+
 // ── Discount Codes ───────────────────────────────────────────────────────────
 
 export async function loadDiscountCodes(): Promise<DiscountCode[]> {

@@ -23,6 +23,24 @@ export interface CertificateViewData {
 }
 
 export async function loadCertificateForView(certificateId: string): Promise<CertificateViewData> {
+  const map = await loadCertificatesForView([certificateId]);
+  const data = map.get(certificateId);
+  if (!data) throw new Error('Certificate not found.');
+  return data;
+}
+
+/**
+ * Same resolution as loadCertificateForView(), for many certificates at
+ * once — fetches the four backing tables exactly ONCE regardless of how
+ * many certificate ids are passed in. A grid of certificate cards used to
+ * call loadCertificateForView() once per card, each independently
+ * re-fetching all certificates/templates/assessments/employees just to
+ * resolve its own single row.
+ */
+export async function loadCertificatesForView(certificateIds: string[]): Promise<Map<string, CertificateViewData>> {
+  const result = new Map<string, CertificateViewData>();
+  if (certificateIds.length === 0) return result;
+
   const [certificates, templates, assessments, employees] = await Promise.all([
     loadCertificates(),
     loadTemplates(),
@@ -30,19 +48,23 @@ export async function loadCertificateForView(certificateId: string): Promise<Cer
     employeeService.getAll(),
   ]);
 
-  const certificate = certificates.find((c) => c.id === certificateId);
-  if (!certificate) throw new Error('Certificate not found.');
+  const idSet = new Set(certificateIds);
+  const defaultTemplate = templates.find((t) => t.default_template);
 
-  const template =
-    templates.find((t) => t.template_name === certificate.template_name) ??
-    templates.find((t) => t.default_template);
-  if (!template) throw new Error('Certificate template not found.');
+  for (const certificate of certificates) {
+    if (!idSet.has(certificate.id)) continue;
 
-  const employee = employees.find((e) => e.id === certificate.employee_id);
-  const employeeName = employee ? `${employee.first_name} ${employee.last_name}`.trim() : 'Employee';
+    const template = templates.find((t) => t.template_name === certificate.template_name) ?? defaultTemplate;
+    if (!template) continue;
 
-  const assessment = assessments.find((a) => a.id === certificate.assessment_id);
-  const courseName = assessment?.assessment_title ?? '';
+    const employee = employees.find((e) => e.id === certificate.employee_id);
+    const employeeName = employee ? `${employee.first_name} ${employee.last_name}`.trim() : 'Employee';
 
-  return { certificate, template, employeeName, courseName };
+    const assessment = assessments.find((a) => a.id === certificate.assessment_id);
+    const courseName = assessment?.assessment_title ?? '';
+
+    result.set(certificate.id, { certificate, template, employeeName, courseName });
+  }
+
+  return result;
 }

@@ -79,19 +79,19 @@ function Header() {
   }
 
   return (
-    <header className="print:hidden h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8">
+    <header className="print:hidden min-h-20 bg-white border-b border-slate-200 flex items-center justify-between gap-3 py-3 pl-16 pr-4 lg:h-20 lg:py-0 lg:px-8">
 
       {/* Left — page title */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">
+      <div className="min-w-0 flex-1">
+        <h1 className="text-lg lg:text-2xl font-bold text-slate-800 truncate">
           Dashboard
         </h1>
-        <p className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
-          <span>Welcome to {companyName}</span>
+        <p className="text-xs lg:text-sm text-slate-500 flex items-center gap-2 flex-wrap">
+          <span className="truncate">Welcome to {companyName}</span>
           {companyCode && (
             <span
               title="Your company code — used to log in"
-              className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 font-mono text-xs font-semibold text-slate-600"
+              className="hidden sm:inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 font-mono text-xs font-semibold text-slate-600"
             >
               🔑 {companyCode}
             </span>
@@ -100,7 +100,7 @@ function Header() {
       </div>
 
       {/* Right — notifications + profile dropdown */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
 
         {/* Install app (hides itself when not installable / already installed) */}
         <InstallAppButton />

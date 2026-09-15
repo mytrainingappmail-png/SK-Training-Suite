@@ -14,7 +14,7 @@ import {
   suspendCompanyLicense,
   reactivateCompanyLicense,
   removeCompanyLicense,
-  loadUsageForCompany,
+  loadUsageForCompanies,
   daysUntilExpiry,
 } from '../../services/license/licenseService';
 import { loadCompanies, saveCompany, removeCompany } from '../../services/company/companyService';
@@ -137,11 +137,7 @@ function CompanyLicenseManagement() {
         setPlans(planRows);
         setLicenses(licenseRows);
 
-        const usageEntries = await Promise.all(
-          licenseRows.map(async (lic) => [lic.company_id, await loadUsageForCompany(lic.company_id)] as const)
-        );
-        const usageMap: Record<string, LicenseUsage> = {};
-        usageEntries.forEach(([companyId, usage]) => { usageMap[companyId] = usage; });
+        const usageMap = await loadUsageForCompanies(licenseRows.map((lic) => lic.company_id));
         setUsageByCompany(usageMap);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load licenses.'))

@@ -6,13 +6,16 @@ import "./index.css";
 
 import App from "./App";
 import { AuthorizationProvider } from "./context/AuthorizationContext";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthorizationProvider>
-        <App />
-      </AuthorizationProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthorizationProvider>
+          <App />
+        </AuthorizationProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>
 );

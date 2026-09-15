@@ -61,13 +61,16 @@ function NotificationLog() {
       .then(async ([licenseRows, companyRows]) => {
         setLicenses(licenseRows);
         setCompanies(companyRows);
-        const allNotifications = await Promise.all(
-          licenseRows.map((lic) => supabase.from('license_notifications').select('*').eq('company_license_id', lic.id))
-        );
-        const flat: LicenseNotification[] = [];
-        allNotifications.forEach((res) => { if (res.data) flat.push(...res.data); });
-        flat.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
-        setNotifications(flat);
+        if (licenseRows.length === 0) { setNotifications([]); return; }
+        // One batched query instead of one round trip per license row —
+        // this page fired N parallel requests on every load/refresh, N
+        // growing with the number of licensed companies on the platform.
+        const { data } = await supabase
+          .from('license_notifications')
+          .select('*')
+          .in('company_license_id', licenseRows.map((lic) => lic.id))
+          .order('sent_at', { ascending: false });
+        setNotifications(data ?? []);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load notification log.'))
       .finally(() => setLoading(false));

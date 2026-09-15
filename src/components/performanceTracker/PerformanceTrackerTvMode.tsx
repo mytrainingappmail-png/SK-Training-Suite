@@ -35,6 +35,7 @@ export function PerformanceTrackerTvMode() {
   const [reports, setReports] = useState<PtReport[]>([]);
   const [view, setView] = useState<typeof VIEWS[number]>('executives');
   const [tick, setTick] = useState(0);
+  const [loadFailing, setLoadFailing] = useState(false);
 
   const range = useMemo(() => rangeForPeriod('weekly'), []);
 
@@ -48,6 +49,18 @@ export function PerformanceTrackerTvMode() {
     ]).then(([co, emps, tms, tmap, cats, reps]) => {
       if (cancelled) return;
       setCompany(co); setEmployees(emps); setTeams(tms); setTeamMap(tmap); setCategories(cats); setReports(reps);
+      setLoadFailing(false);
+    }).catch((err) => {
+      // This runs unattended on an office TV all day, refreshing every
+      // REFRESH_MS via `tick` — a transient failure here used to leave the
+      // screen silently frozen on stale/empty data forever with nothing
+      // logged anywhere anyone would see. It still shows last-known-good
+      // data (better than a blank screen on a TV nobody can interact with),
+      // but now at least surfaces a small indicator, and the next tick
+      // retries automatically since `tick` stays in the dependency array.
+      if (cancelled) return;
+      console.error('[PerformanceTrackerTvMode] Failed to refresh:', err);
+      setLoadFailing(true);
     });
     return () => { cancelled = true; };
   }, [user?.companyId, range.start, range.end, tick]);
@@ -120,8 +133,15 @@ export function PerformanceTrackerTvMode() {
             <p className="text-sm text-emerald-300">This Week's Leaderboard — updates automatically</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm">
-          <IconTrophy className="h-4 w-4 text-amber-400" />Performance Tracker
+        <div className="flex items-center gap-3">
+          {loadFailing && (
+            <div className="flex items-center gap-2 rounded-full bg-rose-500/20 px-3 py-1.5 text-xs text-rose-300" title="Showing the last successfully loaded data — retrying automatically.">
+              <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-rose-400" />Reconnecting…
+            </div>
+          )}
+          <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm">
+            <IconTrophy className="h-4 w-4 text-amber-400" />Performance Tracker
+          </div>
         </div>
       </div>
 

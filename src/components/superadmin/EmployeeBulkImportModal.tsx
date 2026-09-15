@@ -17,7 +17,7 @@ import type { Branch } from "../../types/branch";
 import type { Department } from "../../types/department";
 import type { Designation } from "../../types/designation";
 
-type Step = "upload" | "preview" | "importing" | "results";
+type Step = "upload" | "preview" | "importing" | "results" | "error";
 
 export default function EmployeeBulkImportModal({
   companies, branches, departments, designations, existingEmployees, onClose, onImported,
@@ -36,6 +36,7 @@ export default function EmployeeBulkImportModal({
   const [parseError, setParseError] = useState("");
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -61,9 +62,20 @@ export default function EmployeeBulkImportModal({
   async function handleConfirm() {
     if (!plan || !companyId) return;
     setStep("importing");
-    const res = await commitImport(companyId, plan);
-    setResult(res);
-    setStep("results");
+    try {
+      const res = await commitImport(companyId, plan);
+      setResult(res);
+      setStep("results");
+    } catch (e) {
+      // commitImport can throw partway through (e.g. a duplicate branch
+      // code, a network blip) — without this catch, the modal was stuck
+      // on the "importing" spinner forever, with its close button hidden
+      // and backdrop-click disabled specifically for that step. Some rows
+      // may already be saved at this point, so refresh the parent list
+      // (via onImported in handleFinish) rather than pretending nothing happened.
+      setImportError(e instanceof Error ? e.message : "The import stopped unexpectedly.");
+      setStep("error");
+    }
   }
 
   function handleFinish() {
@@ -179,6 +191,15 @@ export default function EmployeeBulkImportModal({
             </div>
           )}
 
+          {step === "error" && (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <svg className="h-10 w-10 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+              <p className="text-sm font-semibold text-slate-800">The import stopped partway through</p>
+              <p className="max-w-md text-sm text-slate-500">{importError}</p>
+              <p className="max-w-md text-xs text-slate-400">Some rows may already have been saved before this happened — check the Employees list, then re-upload a CSV with only the remaining rows if needed.</p>
+            </div>
+          )}
+
           {step === "results" && result && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -187,6 +208,15 @@ export default function EmployeeBulkImportModal({
                 <SummaryStat label="Departments created" value={result.createdDepartments} tone="amber" />
                 <SummaryStat label="Designations created" value={result.createdDesignations} tone="amber" />
               </div>
+
+              {result.structureErrors.length > 0 && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                  <p className="mb-1 font-semibold">{result.structureErrors.length} Branch/Department/Designation couldn't be created:</p>
+                  <ul className="list-inside list-disc space-y-0.5">
+                    {result.structureErrors.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
 
               {result.generatedPasswords.length > 0 && (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -230,6 +260,7 @@ export default function EmployeeBulkImportModal({
             </>
           )}
           {step === "results" && <button onClick={handleFinish} className="rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Done</button>}
+          {step === "error" && <button onClick={handleFinish} className="rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Close</button>}
         </div>
       </div>
     </div>
