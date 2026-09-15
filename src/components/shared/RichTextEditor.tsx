@@ -29,6 +29,11 @@ interface RichTextEditorProps {
    * switching which project you're editing) so the editor knows to
    * reload — everyday typing never touches this. */
   resetKey?: string;
+  /** Extra controls rendered at the end of this editor's own toolbar row
+   * (after a divider), e.g. Scripts' platform-operator-only watermark
+   * toggle — kept generic rather than a one-off "watermark" prop so any
+   * future caller can do the same without editing this file again. */
+  toolbarExtra?: React.ReactNode;
 }
 
 const FONT_FAMILIES = ['Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica', 'Courier New', 'Trebuchet MS'];
@@ -45,6 +50,64 @@ const FONT_SIZES = [
 const TEXT_COLORS = ['#0F172A', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777'];
 const HIGHLIGHT_COLORS = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA'];
 const CELL_COLORS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3', '#FFEDD5', '#FFFFFF'];
+const SHAPE_COLORS = ['#1E293B', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED'];
+
+// Word's "Insert > Shapes" gallery, reduced to the set actually useful in
+// training content (diagrams, process flows, callouts) — each entry is an
+// SVG body (viewBox is always "0 0 100 100" unless noted) with `{fill}`/
+// `{stroke}` placeholders swapped for the picked color at insert time.
+// Shapes are inserted as plain <img> (a data: SVG), reusing the editor's
+// existing image pipeline — same drag/resize/max-width behavior as any
+// uploaded picture, no new Tiptap node type needed.
+const SHAPE_GROUPS: { label: string; shapes: { key: string; label: string; viewBox?: string; body: (c: string) => string }[] }[] = [
+  {
+    label: 'Lines & Arrows',
+    shapes: [
+      { key: 'line', label: 'Line', viewBox: '0 0 100 40', body: (c) => `<line x1="5" y1="20" x2="95" y2="20" stroke="${c}" stroke-width="4" stroke-linecap="round"/>` },
+      { key: 'arrow-right', label: 'Arrow Right', viewBox: '0 0 100 60', body: (c) => `<polygon points="5,22 60,22 60,5 95,30 60,55 60,38 5,38" fill="${c}"/>` },
+      { key: 'arrow-left', label: 'Arrow Left', viewBox: '0 0 100 60', body: (c) => `<polygon points="95,22 40,22 40,5 5,30 40,55 40,38 95,38" fill="${c}"/>` },
+      { key: 'arrow-double', label: 'Double Arrow', viewBox: '0 0 100 40', body: (c) => `<polygon points="5,20 22,6 22,15 78,15 78,6 95,20 78,34 78,25 22,25 22,34" fill="${c}"/>` },
+      { key: 'arrow-up', label: 'Arrow Up', viewBox: '0 0 60 100', body: (c) => `<polygon points="22,95 22,40 5,40 30,5 55,40 38,40 38,95" fill="${c}"/>` },
+      { key: 'arrow-down', label: 'Arrow Down', viewBox: '0 0 60 100', body: (c) => `<polygon points="22,5 22,60 5,60 30,95 55,60 38,60 38,5" fill="${c}"/>` },
+    ],
+  },
+  {
+    label: 'Basic Shapes',
+    shapes: [
+      { key: 'rectangle', label: 'Rectangle', body: (c) => `<rect x="8" y="20" width="84" height="60" fill="${c}"/>` },
+      { key: 'rounded-rect', label: 'Rounded Rectangle', body: (c) => `<rect x="8" y="20" width="84" height="60" rx="14" fill="${c}"/>` },
+      { key: 'circle', label: 'Circle', body: (c) => `<circle cx="50" cy="50" r="42" fill="${c}"/>` },
+      { key: 'triangle', label: 'Triangle', body: (c) => `<polygon points="50,8 94,88 6,88" fill="${c}"/>` },
+      { key: 'diamond', label: 'Diamond', body: (c) => `<polygon points="50,4 96,50 50,96 4,50" fill="${c}"/>` },
+      { key: 'pentagon', label: 'Pentagon', body: (c) => `<polygon points="50,4 96,38 78,92 22,92 4,38" fill="${c}"/>` },
+      { key: 'hexagon', label: 'Hexagon', body: (c) => `<polygon points="26,5 74,5 96,50 74,95 26,95 4,50" fill="${c}"/>` },
+      { key: 'star', label: 'Star', body: (c) => `<polygon points="50,4 61,37 96,37 68,58 79,92 50,71 21,92 32,58 4,37 39,37" fill="${c}"/>` },
+      { key: 'plus', label: 'Plus', body: (c) => `<polygon points="38,4 62,4 62,38 96,38 96,62 62,62 62,96 38,96 38,62 4,62 4,38 38,38" fill="${c}"/>` },
+    ],
+  },
+  {
+    label: 'Callouts',
+    shapes: [
+      { key: 'speech-bubble', label: 'Speech Bubble', viewBox: '0 0 100 80', body: (c) => `<path d="M8,10 h84 a6,6 0 0 1 6,6 v38 a6,6 0 0 1 -6,6 h-52 l-16,16 v-16 h-16 a6,6 0 0 1 -6,-6 v-38 a6,6 0 0 1 6,-6 z" fill="${c}"/>` },
+      { key: 'banner', label: 'Banner', viewBox: '0 0 100 60', body: (c) => `<polygon points="4,10 96,10 88,30 96,50 4,50 12,30" fill="${c}"/>` },
+    ],
+  },
+];
+
+// A bare <svg> with no width/height defaults to ~300x150 CSS px in every
+// browser regardless of its viewBox — far too large for a diagram element
+// dropped into running text. Deriving real pixel dimensions from the
+// viewBox (capped at 160px on the longer side) makes it insert at a
+// sensible size; the image extension's own max-width:100% still shrinks
+// it further on a narrow column.
+function shapeDataUri(body: string, viewBox: string): string {
+  const [, , vbW, vbH] = viewBox.split(' ').map(Number);
+  const scale = 160 / Math.max(vbW, vbH);
+  const width = Math.round(vbW * scale);
+  const height = Math.round(vbH * scale);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width}" height="${height}">${body}</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
 
 // The default TableCell extension has no concept of a background
 // color — this extends it with one real attribute that reads/writes
@@ -155,6 +218,9 @@ function IconImage({ className = 'h-4 w-4' }: { className?: string }) {
 function IconTable({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5h16.5A.75.75 0 0 1 21 5.25v13.5a.75.75 0 0 1-.75.75H3.75a.75.75 0 0 1-.75-.75V5.25a.75.75 0 0 1 .75-.75Zm0 5.25h16.5m-16.5 5.25h16.5M9 4.5v15m6-15v15" /></svg>);
 }
+function IconShapes({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="8" cy="8" r="4.25" /><path strokeLinejoin="round" d="M16.25 4.5h5v5h-5z" /><path strokeLinejoin="round" d="m14.5 20.5 4-8 4 8Z" /></svg>);
+}
 function IconAlignLeft({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h10.5m-10.5 5.25h16.5" /></svg>);
 }
@@ -195,12 +261,14 @@ function ToolbarButton({ onClick, title, active, disabled, children }: {
   );
 }
 
-function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey }: RichTextEditorProps) {
+function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra }: RichTextEditorProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showTextColors, setShowTextColors] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
+  const [showShapesMenu, setShowShapesMenu] = useState(false);
+  const [shapeColor, setShapeColor] = useState(SHAPE_COLORS[0]);
 
   const editor = useEditor({
     extensions: [
@@ -256,6 +324,12 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       setUploadingImage(false);
       if (imageInputRef.current) imageInputRef.current.value = '';
     }
+  }
+
+  function insertShape(shape: { viewBox?: string; body: (c: string) => string }, label: string) {
+    const src = shapeDataUri(shape.body(shapeColor), shape.viewBox ?? '0 0 100 100');
+    editor?.chain().focus().setImage({ src, alt: label }).run();
+    setShowShapesMenu(false);
   }
 
   if (!editor) return null;
@@ -410,6 +484,50 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         <ToolbarButton onClick={() => imageInputRef.current?.click()} title="Insert image">
           {uploadingImage ? <IconSpinner /> : <IconImage />}
         </ToolbarButton>
+
+        <div className="relative">
+          <ToolbarButton onClick={() => setShowShapesMenu((v) => !v)} title="Insert shape"><IconShapes /></ToolbarButton>
+          {showShapesMenu && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+              <div className="mb-3 flex items-center gap-1.5">
+                <span className="mr-1 text-xs font-semibold text-slate-400">Color</span>
+                {SHAPE_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setShapeColor(c)}
+                    style={{ backgroundColor: c }}
+                    aria-label={`Shape color ${c}`}
+                    className={`h-5 w-5 rounded-full border-2 transition ${shapeColor === c ? 'border-slate-400' : 'border-transparent'}`}
+                  />
+                ))}
+              </div>
+              {SHAPE_GROUPS.map((group) => (
+                <div key={group.label} className="mb-2 last:mb-0">
+                  <p className="mb-1.5 text-xs font-semibold text-slate-400">{group.label}</p>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {group.shapes.map((s) => (
+                      <button
+                        key={s.key}
+                        onClick={() => insertShape(s, s.label)}
+                        title={s.label}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 p-1 hover:border-indigo-300 hover:bg-indigo-50"
+                      >
+                        <svg viewBox={s.viewBox ?? '0 0 100 100'} className="h-full w-full" dangerouslySetInnerHTML={{ __html: s.body(shapeColor) }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {toolbarExtra && (
+          <>
+            <div className="mx-1 h-5 w-px bg-slate-200" />
+            {toolbarExtra}
+          </>
+        )}
 
       </div>
 

@@ -50,6 +50,14 @@ export interface Course {
   // are never gated by this, regardless of the setting.
   test_compulsory_after_module: boolean;
 
+  // Platform-operator-only (frontend-gated) brand watermark, shown over
+  // this course's WRITTEN/TEXT lesson content only (never video) to any
+  // learner in any company, including one this course was cloned into —
+  // see supabase/migrations/20260915110000_course_watermark.sql.
+  watermark_enabled: boolean;
+
+  watermark_text: string | null;
+
   // Position among sibling courses in the same category — used for admin
   // drag-and-drop reordering, lower numbers appear first.
   display_order: number;
@@ -88,6 +96,8 @@ export const defaultCourseForm: CourseForm = {
   certificate_enabled: false,
   require_completion_before_next: false,
   test_compulsory_after_module: false,
+  watermark_enabled: false,
+  watermark_text: null,
   display_order: 0,
   active: true,
   created_by: "",

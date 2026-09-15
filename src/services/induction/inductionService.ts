@@ -12,7 +12,7 @@ import {
 import type {
   InductionDay, InductionDayForm,
   InductionDaySection, InductionDaySectionForm,
-  InductionAssignment,
+  InductionAssignment, InductionDayCompletion,
 } from '../../types/induction';
 
 export async function loadDays(): Promise<InductionDay[]> {
@@ -57,6 +57,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
     company_id: companyId,
     title: source.title,
     description: source.description,
+    thumbnail_url: source.thumbnail_url,
     display_order: source.display_order,
     active: source.active,
     branch_id: branchId,
@@ -73,6 +74,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
         display_order: s.display_order,
         page_content: s.page_content,
         assessment_id: s.assessment_id,
+        faq_items: s.faq_items,
       })
     )
   );
@@ -116,7 +118,7 @@ export async function reorderSections(orderedIds: string[]): Promise<void> {
   }
 }
 
-export async function loadCompletedDayIds(employeeId: string): Promise<string[]> {
+export async function loadCompletions(employeeId: string): Promise<InductionDayCompletion[]> {
   return getCompletionsForEmployee(employeeId);
 }
 

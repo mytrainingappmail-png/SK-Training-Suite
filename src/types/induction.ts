@@ -8,6 +8,9 @@ export interface InductionDay {
   company_id: string;
   title: string;
   description: string;
+  // Card thumbnail, shown in the employee grid — same shape/role as a
+  // Project's thumbnail_url, so InductionDay cards can reuse ThumbnailCard.
+  thumbnail_url: string | null;
   display_order: number;
   active: boolean;
   // null = shared across every branch (the default). Set = visible only
@@ -28,13 +31,19 @@ export const defaultInductionDayForm: InductionDayForm = {
   company_id: '',
   title: '',
   description: '',
+  thumbnail_url: null,
   display_order: 0,
   active: true,
   branch_id: null,
   source_id: null,
 };
 
-export type InductionSectionType = 'page' | 'test';
+export type InductionSectionType = 'page' | 'test' | 'faq';
+
+export interface InductionFaqItem {
+  question: string;
+  answer: string;
+}
 
 export interface InductionDaySection {
   id: string;
@@ -45,6 +54,7 @@ export interface InductionDaySection {
   display_order: number;
   page_content: string;
   assessment_id: string | null;
+  faq_items: InductionFaqItem[];
   created_at: string;
   updated_at: string;
 }
@@ -59,7 +69,15 @@ export const defaultInductionDaySectionForm: InductionDaySectionForm = {
   display_order: 0,
   page_content: '',
   assessment_id: null,
+  faq_items: [],
 };
+
+// One completed Day, with WHEN it was completed — the next Day's earliest
+// unlock date is derived from this (see inductionDateGate.ts).
+export interface InductionDayCompletion {
+  day_id: string;
+  completed_at: string;
+}
 
 export type InductionAssignmentStatus = 'active' | 'completed';
 

@@ -46,6 +46,30 @@ export async function createCompany(company: CompanyForm): Promise<Company> {
   return data;
 }
 
+// Permanently erases a company and (via 60+ `on delete cascade` foreign
+// keys already in the schema) every row it owns — employees, courses,
+// enrollments, certificates, license/billing history, everything.
+// Irreversible. Two tables reference companies WITHOUT cascade
+// (`assessment_assignments`, `learning_path_enrollments` — both
+// RESTRICT/NO ACTION) and would otherwise make the final delete fail
+// with a raw foreign-key-violation error, so their rows for this company
+// are cleared explicitly first.
+export async function deleteCompany(id: string): Promise<void> {
+  const cleanup = await Promise.all([
+    supabase.from("assessment_assignments").delete().eq("company_id", id),
+    supabase.from("learning_path_enrollments").delete().eq("company_id", id),
+  ]);
+  for (const { error } of cleanup) {
+    if (error) throw error;
+  }
+
+  const { error } = await supabase.from("companies").delete().eq("id", id);
+  if (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
 export async function updateCompany(
   id: string,
   company: Partial<Company>

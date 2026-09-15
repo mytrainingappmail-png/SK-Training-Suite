@@ -110,12 +110,12 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
           <>
             <p className="my-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Cannot be edited after submission — double-check before submitting.</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <NumField label="F2F Meetings Planned" value={f2f} onChange={setF2f} />
-              <NumField label="Site Visits Planned" value={sv} onChange={setSv} />
-              <NumField label="Revisits Planned" value={revisit} onChange={setRevisit} />
-              <NumField label="Total Calls Planned" value={calls} onChange={setCalls} />
-              <NumField label="Connected Calls Target" value={conn} onChange={setConn} />
-              <NumField label="Talk Time Target (mins)" value={talk} onChange={setTalk} />
+              {settings.f2f_enabled && <NumField label="F2F Meetings Planned" value={f2f} onChange={setF2f} />}
+              {settings.sv_enabled && <NumField label="Site Visits Planned" value={sv} onChange={setSv} />}
+              {settings.revisit_enabled && <NumField label="Revisits Planned" value={revisit} onChange={setRevisit} />}
+              {settings.calls_enabled && <NumField label="Total Calls Planned" value={calls} onChange={setCalls} />}
+              {settings.conn_enabled && <NumField label="Connected Calls Target" value={conn} onChange={setConn} />}
+              {settings.talk_enabled && <NumField label="Talk Time Target (mins)" value={talk} onChange={setTalk} />}
             </div>
             {morningFields.length > 0 && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">

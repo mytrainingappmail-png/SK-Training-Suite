@@ -112,6 +112,7 @@ export function AlertsTab({ employees, settings }: { employees: Employee[]; sett
   const [todayReports, setTodayReports] = useState<PtReport[]>([]);
   const [weekReports, setWeekReports] = useState<PtReport[]>([]);
   const [sending, setSending] = useState<'morning' | 'evening' | null>(null);
+  const [sendingOne, setSendingOne] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<Employee | null>(null);
 
@@ -159,6 +160,20 @@ export function AlertsTab({ employees, settings }: { employees: Employee[]; sett
     }
   }
 
+  async function handleSendOne(employee: Employee, kind: 'morning' | 'evening') {
+    if (!user?.id || !user.companyId) return;
+    setSendingOne(employee.id);
+    setMsg(null);
+    try {
+      await sendReminder(user.companyId, user.id, `${user.firstName} ${user.lastName}`.trim(), [employee.id], kind, settings);
+      setMsg(`Reminder sent to ${employeeName(employee)}.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Failed to send.');
+    } finally {
+      setSendingOne(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {msg && <p className="text-xs text-slate-600">{msg}</p>}
@@ -173,7 +188,20 @@ export function AlertsTab({ employees, settings }: { employees: Employee[]; sett
             </button>
           </div>
           <div className="max-h-80 space-y-1.5 overflow-y-auto p-3">
-            {missingMorning.map((e) => <div key={e.id} className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{employeeName(e)}</div>)}
+            {missingMorning.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span>{employeeName(e)}</span>
+                <button
+                  onClick={() => handleSendOne(e, 'morning')}
+                  disabled={sendingOne !== null}
+                  title="Remind this employee only"
+                  className="flex flex-shrink-0 items-center gap-1 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {sendingOne === e.id ? <IconSpinner className="h-3 w-3" /> : <IconBell className="h-3 w-3" />}
+                  Remind
+                </button>
+              </div>
+            ))}
             {missingMorning.length === 0 && <p className="py-8 text-center text-xs text-slate-600">Everyone's submitted today.</p>}
           </div>
         </Card>
@@ -187,7 +215,20 @@ export function AlertsTab({ employees, settings }: { employees: Employee[]; sett
             </button>
           </div>
           <div className="max-h-80 space-y-1.5 overflow-y-auto p-3">
-            {missingEvening.map((e) => <div key={e.id} className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{employeeName(e)}</div>)}
+            {missingEvening.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span>{employeeName(e)}</span>
+                <button
+                  onClick={() => handleSendOne(e, 'evening')}
+                  disabled={sendingOne !== null}
+                  title="Remind this employee only"
+                  className="flex flex-shrink-0 items-center gap-1 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {sendingOne === e.id ? <IconSpinner className="h-3 w-3" /> : <IconBell className="h-3 w-3" />}
+                  Remind
+                </button>
+              </div>
+            ))}
             {missingEvening.length === 0 && <p className="py-8 text-center text-xs text-slate-600">Everyone's submitted today.</p>}
           </div>
         </Card>
@@ -215,7 +256,16 @@ export function AlertsTab({ employees, settings }: { employees: Employee[]; sett
         </div>
       </Card>
 
-      <p className="text-xs text-slate-600">Minimum criteria: {settings.min_f2f}+ F2F, {settings.min_sv}+ site visits, {settings.min_revisit}+ revisits, {settings.min_calls}+ calls, {settings.min_conn}+ connected, {settings.min_talk}+ min talk time.</p>
+      <p className="text-xs text-slate-600">
+        Minimum criteria: {[
+          settings.f2f_enabled && `${settings.min_f2f}+ F2F`,
+          settings.sv_enabled && `${settings.min_sv}+ site visits`,
+          settings.revisit_enabled && `${settings.min_revisit}+ revisits`,
+          settings.calls_enabled && `${settings.min_calls}+ calls`,
+          settings.conn_enabled && `${settings.min_conn}+ connected`,
+          settings.talk_enabled && `${settings.min_talk}+ min talk time`,
+        ].filter(Boolean).join(', ') || 'none set — every metric is turned off in Settings'}.
+      </p>
 
       {assignTarget && <AssignTrainingModal employee={assignTarget} onClose={() => setAssignTarget(null)} />}
     </div>

@@ -1,26 +1,35 @@
 // src/components/learning/Induction.tsx
 //
-// Employee-facing Induction — a simple, SEQUENTIAL day-by-day onboarding
-// program (unlike Projects, which is a flat, unordered list). Day N+1
-// unlocks only once Day N is marked complete AND (if it has a Test
-// section) that test has been passed — reusing the exact same
-// completion/test-gating pattern as Projects, plus one more rule Projects
-// doesn't need: strict day-order locking.
+// Employee-facing Induction — a card grid (same visual language as
+// Projects, via the shared ThumbnailCard) of a SEQUENTIAL day-by-day
+// onboarding program. Day N+1 requires, in order:
+//   1. Day N marked complete (an explicit "I've read this" attestation)
+//   2. Day N's Test (if it has one) passed — attempts are governed by
+//      that Test's own Assessment.maximum_attempts, set in Admin →
+//      Assessments, same as everywhere else in the app
+//   3. Today's calendar date has reached the day AFTER Day N was
+//      completed — so passing every test back-to-back in one sitting
+//      still can't unlock more than one new Day per calendar day.
 
 import { useEffect, useState } from 'react';
 import {
-  loadDays, loadAllSections, loadCompletedDayIds, markComplete, loadMyAssignment,
+  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment,
 } from '../../services/induction/inductionService';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import { getCurrentUser } from '../../services/auth/session';
 import { resolveForBranch } from '../../utils/branchScoping';
+import { isDateUnlocked, nextUnlockDate, formatUnlockDate } from '../../utils/inductionDateGate';
 import SectionHeroBanner from './SectionHeroBanner';
+import ThumbnailCard from '../shared/ThumbnailCard';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
-import type { InductionDay, InductionDaySection } from '../../types/induction';
+import type { InductionDay, InductionDaySection, InductionDayCompletion } from '../../types/induction';
 
 function IconLock({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>);
+}
+function IconClock({ className = 'h-4 w-4' }: { className?: string }) {
+  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>);
 }
 function IconCheck({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>);
@@ -28,11 +37,16 @@ function IconCheck({ className = 'h-4 w-4' }: { className?: string }) {
 function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>);
 }
+function IconChevron({ className = 'h-4 w-4', open }: { className?: string; open: boolean }) {
+  return (<svg className={`${className} transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>);
+}
+
+type DayStatus = 'completed' | 'available' | 'date-locked' | 'locked';
 
 function Skeleton() {
   return (
-    <div className="space-y-3">
-      {[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-100" />)}
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {[1, 2, 3].map((i) => <div key={i} className="h-56 animate-pulse rounded-2xl bg-slate-100" />)}
     </div>
   );
 }
@@ -42,7 +56,7 @@ function Induction() {
   const [hasAssignment, setHasAssignment] = useState<boolean | null>(null);
   const [days, setDays] = useState<InductionDay[]>([]);
   const [sectionsByDay, setSectionsByDay] = useState<Record<string, InductionDaySection[]>>({});
-  const [completedDayIds, setCompletedDayIds] = useState<Set<string>>(new Set());
+  const [completions, setCompletions] = useState<InductionDayCompletion[]>([]);
   const [passedTestIds, setPassedTestIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,6 +64,12 @@ function Induction() {
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
+  const [toast, setToast] = useState('');
+
+  function showToast(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(''), 3200);
+  }
 
   function toggleKey(key: string) {
     setOpenKeys((prev) => {
@@ -63,8 +83,8 @@ function Induction() {
     if (!user?.id) { setError('No active session.'); setLoading(false); return; }
     setLoading(true);
     setError('');
-    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletedDayIds(user.id)])
-      .then(async ([assignment, allDays, allSections, completedIds]) => {
+    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id)])
+      .then(async ([assignment, allDays, allSections, comps]) => {
         setHasAssignment(!!assignment && assignment.status === 'active');
         const scoped = resolveForBranch(allDays, user.branchId || null);
         const active = scoped.filter((d) => d.active).sort((a, b) => a.display_order - b.display_order);
@@ -76,7 +96,7 @@ function Induction() {
         }
         for (const key of Object.keys(grouped)) grouped[key].sort((a, b) => a.display_order - b.display_order);
         setSectionsByDay(grouped);
-        setCompletedDayIds(new Set(completedIds));
+        setCompletions(comps);
 
         const testAssessmentIds = allSections.filter((s) => s.section_type === 'test' && s.assessment_id).map((s) => s.assessment_id!);
         const passed = await getPassedTestIds(user.id, testAssessmentIds);
@@ -88,13 +108,36 @@ function Induction() {
 
   useEffect(() => { loadEverything(); }, [user?.id]);
 
-  function isDayUnlocked(index: number): boolean {
-    if (index === 0) return true;
+  const completionByDay = new Map(completions.map((c) => [c.day_id, c.completed_at]));
+
+  function dayStatus(index: number): DayStatus {
+    const day = days[index];
+    if (completionByDay.has(day.id)) return 'completed';
+    if (index === 0) return 'available';
+
     const prevDay = days[index - 1];
-    if (!completedDayIds.has(prevDay.id)) return false;
+    const prevCompletedAt = completionByDay.get(prevDay.id);
+    if (!prevCompletedAt) return 'locked';
+
     const prevTest = (sectionsByDay[prevDay.id] ?? []).find((s) => s.section_type === 'test');
-    if (prevTest?.assessment_id) return passedTestIds.has(prevTest.assessment_id);
-    return true;
+    if (prevTest?.assessment_id && !passedTestIds.has(prevTest.assessment_id)) return 'locked';
+
+    if (!isDateUnlocked(prevCompletedAt)) return 'date-locked';
+    return 'available';
+  }
+
+  function handleDayClick(index: number) {
+    const status = dayStatus(index);
+    if (status === 'completed' || status === 'available') {
+      setOpenDayId(days[index].id);
+      return;
+    }
+    if (status === 'date-locked') {
+      const prevCompletedAt = completionByDay.get(days[index - 1].id)!;
+      showToast(`Day ${index + 1} unlocks on ${formatUnlockDate(nextUnlockDate(prevCompletedAt))} — one new day at a time, so it actually sinks in.`);
+      return;
+    }
+    showToast(`Complete Day ${index} first to unlock Day ${index + 1}.`);
   }
 
   async function handleMarkComplete(dayId: string) {
@@ -102,7 +145,7 @@ function Induction() {
     setMarking(true);
     try {
       await markComplete(dayId, user.id, user.companyId);
-      setCompletedDayIds((prev) => new Set(prev).add(dayId));
+      loadEverything();
     } finally {
       setMarking(false);
     }
@@ -116,13 +159,13 @@ function Induction() {
   const openDay = days.find((d) => d.id === openDayId) ?? null;
   const openDayIndex = days.findIndex((d) => d.id === openDayId);
   const openSections = openDay ? (sectionsByDay[openDay.id] ?? []) : [];
-  const openCompleted = openDay ? completedDayIds.has(openDay.id) : false;
+  const openCompleted = openDay ? completionByDay.has(openDay.id) : false;
 
   if (loading) {
     return (
       <div className="space-y-6">
         <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program." statLabel="Days" statValue={days.length} />
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"><Skeleton /></div>
+        <Skeleton />
       </div>
     );
   }
@@ -147,7 +190,10 @@ function Induction() {
         </button>
 
         <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
-          <div className="bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-8 text-white">
+          <div
+            className="relative bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-8 text-white"
+            style={openDay.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.75), rgba(124,58,237,.8)), url(${openDay.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+          >
             <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">DAY {dayNumber}</span>
             <h2 className="mt-3 text-2xl font-bold">{openDay.title}</h2>
             {openDay.description && <p className="mt-1 text-sm text-white/80">{openDay.description}</p>}
@@ -161,8 +207,8 @@ function Induction() {
                 const key = `page-${section.id}`;
                 return (
                   <div key={section.id}>
-                    <button onClick={() => toggleKey(key)} className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline">
-                      {openKeys.has(key) ? '▼' : '▶'} {section.title}
+                    <button onClick={() => toggleKey(key)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 hover:underline">
+                      <IconChevron className="h-3.5 w-3.5" open={openKeys.has(key)} /> {section.title}
                     </button>
                     {openKeys.has(key) && (
                       <div
@@ -173,6 +219,30 @@ function Induction() {
                   </div>
                 );
               }
+
+              if (section.section_type === 'faq') {
+                return (
+                  <div key={section.id}>
+                    <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
+                    <div className="space-y-2">
+                      {section.faq_items.map((item, i) => {
+                        const key = `faq-${section.id}-${i}`;
+                        return (
+                          <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                            <button onClick={() => toggleKey(key)} className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-slate-800">
+                              {item.question}
+                              <IconChevron className="h-3.5 w-3.5 flex-shrink-0" open={openKeys.has(key)} />
+                            </button>
+                            {openKeys.has(key) && <p className="mt-2 text-sm text-slate-600">{item.answer}</p>}
+                          </div>
+                        );
+                      })}
+                      {section.faq_items.length === 0 && <p className="text-xs text-slate-400">No questions added yet.</p>}
+                    </div>
+                  </div>
+                );
+              }
+
               // section_type === 'test'
               const passed = section.assessment_id ? passedTestIds.has(section.assessment_id) : false;
               return (
@@ -182,7 +252,7 @@ function Induction() {
                       {openCompleted ? (passed ? '✅ ' : '') : '🔒 '}{section.title}
                     </p>
                     <p className={`text-xs ${openCompleted ? 'text-amber-700' : 'text-slate-400'}`}>
-                      {!openCompleted ? 'Mark this day complete above to unlock the test.' : passed ? 'Passed — the next day is unlocked.' : `Take this test to unlock Day ${dayNumber + 1}.`}
+                      {!openCompleted ? 'Mark this day complete above to unlock the test.' : passed ? 'Passed — the next day unlocks tomorrow.' : `Pass this test, then Day ${dayNumber + 1} opens the day after.`}
                     </p>
                   </div>
                   {section.assessment_id && (
@@ -222,55 +292,57 @@ function Induction() {
             </div>
           </div>
         )}
+
+        {toast && <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">{toast}</div>}
       </>
     );
   }
 
   return (
     <div className="space-y-6">
-      <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program." statLabel="Days" statValue={days.length} />
+      <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program — one day at a time." statLabel="Days" statValue={days.length} />
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
 
-        {!error && days.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-slate-400">
-            No induction days have been added yet.
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {days.map((day, i) => {
-            const unlocked = isDayUnlocked(i);
-            const completed = completedDayIds.has(day.id);
-            return (
-              <button
-                key={day.id}
-                onClick={() => unlocked && setOpenDayId(day.id)}
-                disabled={!unlocked}
-                className={`flex w-full items-center justify-between gap-3 rounded-2xl border-2 p-5 text-left transition ${
-                  !unlocked ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-60' :
-                  completed ? 'border-emerald-200 bg-emerald-50 hover:border-emerald-300' :
-                  'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
-                    completed ? 'bg-emerald-500 text-white' : unlocked ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-400'
-                  }`}>
-                    {completed ? <IconCheck /> : unlocked ? i + 1 : <IconLock />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">Day {i + 1}: {day.title}</p>
-                    {day.description && <p className="mt-0.5 text-xs text-slate-500">{day.description}</p>}
-                  </div>
-                </div>
-                {!unlocked && <span className="flex-shrink-0 text-xs font-semibold text-slate-400">Complete Day {i} first</span>}
-              </button>
-            );
-          })}
+      {!error && days.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-16 text-center text-slate-400">
+          No induction days have been added yet.
         </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {days.map((day, i) => {
+          const status = dayStatus(i);
+          return (
+            <ThumbnailCard
+              key={day.id}
+              title={`Day ${i + 1}: ${day.title}`}
+              subtitle={day.description || undefined}
+              thumbnailUrl={day.thumbnail_url}
+              onClick={() => handleDayClick(i)}
+              cornerTag={
+                status === 'completed' ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white"><IconCheck className="h-3 w-3" /> Completed</span>
+                ) : status === 'date-locked' ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-2.5 py-1 text-[11px] font-bold text-white">
+                    <IconClock className="h-3 w-3" /> Opens {formatUnlockDate(nextUnlockDate(completionByDay.get(days[i - 1]?.id ?? '') ?? ''))}
+                  </span>
+                ) : status === 'locked' ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-white"><IconLock className="h-3 w-3" /> Locked</span>
+                ) : null
+              }
+            >
+              {status !== 'completed' && status !== 'available' && (
+                <p className="text-xs text-slate-400">
+                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : `Complete Day ${i} first.`}
+                </p>
+              )}
+            </ThumbnailCard>
+          );
+        })}
       </div>
+
+      {toast && <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">{toast}</div>}
     </div>
   );
 }

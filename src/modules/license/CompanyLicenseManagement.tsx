@@ -17,7 +17,7 @@ import {
   loadUsageForCompany,
   daysUntilExpiry,
 } from '../../services/license/licenseService';
-import { loadCompanies } from '../../services/company/companyService';
+import { loadCompanies, saveCompany, removeCompany } from '../../services/company/companyService';
 import { sendEmail } from '../../repositories/email/emailRepository';
 import { defaultCompanyLicenseForm } from '../../types/license';
 import type { SubscriptionPlan, CompanyLicense, CompanyLicenseForm } from '../../types/license';
@@ -106,6 +106,22 @@ function CompanyLicenseManagement() {
   const [deleteTarget, setDeleteTarget] = useState<CompanyLicense | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [sendingLinkId, setSendingLinkId] = useState<string | null>(null);
+  // Deactivating blocks every one of that company's employees from
+  // logging in (enforced already in authService.ts) but keeps every row
+  // of their data intact — reversible with one click. Reactivating needs
+  // no extra confirmation; deactivating does, since it's an immediate,
+  // company-wide, user-facing lockout.
+  const [deactivateTarget, setDeactivateTarget] = useState<Company | null>(null);
+  const [togglingCompanyId, setTogglingCompanyId] = useState<string | null>(null);
+  // Permanent delete only ever offered once a company is already
+  // deactivated (a deliberate two-step gate) and only unlocks once the
+  // admin has typed the company's own code back — this is the single
+  // most destructive action in the whole app (60+ tables cascade), so it
+  // gets the strongest confirmation UX in the codebase, matching nothing
+  // less.
+  const [deletePermanentTarget, setDeletePermanentTarget] = useState<Company | null>(null);
+  const [deletePermanentConfirmText, setDeletePermanentConfirmText] = useState('');
+  const [deletingPermanent, setDeletingPermanent] = useState(false);
 
   function showToast(message: string) {
     setToast(message);
@@ -233,6 +249,51 @@ function CompanyLicenseManagement() {
     }
   }
 
+  async function handleReactivateCompany(company: Company) {
+    setTogglingCompanyId(company.id);
+    try {
+      await saveCompany(company.id, { active: true });
+      fetchAll();
+      showToast(`${company.company_name} reactivated — their employees can log in again.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to reactivate company.');
+    } finally {
+      setTogglingCompanyId(null);
+    }
+  }
+
+  async function handleDeactivateConfirm() {
+    if (!deactivateTarget) return;
+    setTogglingCompanyId(deactivateTarget.id);
+    try {
+      await saveCompany(deactivateTarget.id, { active: false });
+      setDeactivateTarget(null);
+      fetchAll();
+      showToast(`${deactivateTarget.company_name} deactivated — their employees can no longer log in. All their data is untouched.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to deactivate company.');
+    } finally {
+      setTogglingCompanyId(null);
+    }
+  }
+
+  async function handleDeletePermanentConfirm() {
+    if (!deletePermanentTarget || deletePermanentConfirmText !== deletePermanentTarget.company_code) return;
+    setDeletingPermanent(true);
+    try {
+      await removeCompany(deletePermanentTarget.id);
+      const name = deletePermanentTarget.company_name;
+      setDeletePermanentTarget(null);
+      setDeletePermanentConfirmText('');
+      fetchAll();
+      showToast(`${name} and all of its data have been permanently deleted.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete company.');
+    } finally {
+      setDeletingPermanent(false);
+    }
+  }
+
   async function handleDeleteConfirm() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -261,6 +322,43 @@ function CompanyLicenseManagement() {
         <PrimaryButton onClick={openCreate} disabled={companiesWithoutLicense.length === 0 && !editingId}>
           <IconPlus className="h-3.5 w-3.5" /> Assign License
         </PrimaryButton>
+      </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="mb-3">
+          <h3 className="text-base font-bold text-slate-900">All Companies</h3>
+          <p className="text-xs text-slate-500">Deactivating a company blocks every one of its employees from logging in — everything else (courses, enrollments, license history) stays exactly as it was, and reactivating undoes it instantly. A deactivated company can also be permanently deleted, which erases everything and cannot be undone.</p>
+        </div>
+        {companies.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-400">No companies yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {companies.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-slate-800">{c.company_name}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                    {c.active ? 'Active' : 'Deactivated'}
+                  </span>
+                </div>
+                {c.active ? (
+                  <SecondaryButton onClick={() => setDeactivateTarget(c)} disabled={togglingCompanyId === c.id}>
+                    {togglingCompanyId === c.id ? <IconSpinner className="h-3.5 w-3.5" /> : null} Deactivate
+                  </SecondaryButton>
+                ) : (
+                  <div className="flex gap-2">
+                    <SecondaryButton onClick={() => handleReactivateCompany(c)} disabled={togglingCompanyId === c.id}>
+                      {togglingCompanyId === c.id ? <IconSpinner className="h-3.5 w-3.5" /> : null} Reactivate
+                    </SecondaryButton>
+                    <DangerButton onClick={() => { setDeletePermanentTarget(c); setDeletePermanentConfirmText(''); }}>
+                      <IconTrash /> Delete Permanently
+                    </DangerButton>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {licenses.length === 0 ? (
@@ -426,6 +524,53 @@ function CompanyLicenseManagement() {
               <SecondaryButton onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</SecondaryButton>
               <DangerButton onClick={handleDeleteConfirm} disabled={deleting}>
                 {deleting ? <IconSpinner className="h-3.5 w-3.5" /> : <IconTrash />} Remove
+              </DangerButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deactivateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setDeactivateTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-1 text-lg font-bold text-slate-900">Deactivate {deactivateTarget.company_name}?</h3>
+            <p className="mb-5 text-sm text-slate-500">Every employee at this company will be blocked from logging in immediately. Nothing is deleted — courses, employees, enrollments, and license history all stay exactly as they are, and you can reactivate any time.</p>
+            <div className="flex justify-end gap-2">
+              <SecondaryButton onClick={() => setDeactivateTarget(null)} disabled={togglingCompanyId === deactivateTarget.id}>Cancel</SecondaryButton>
+              <DangerButton onClick={handleDeactivateConfirm} disabled={togglingCompanyId === deactivateTarget.id}>
+                {togglingCompanyId === deactivateTarget.id ? <IconSpinner className="h-3.5 w-3.5" /> : null} Deactivate
+              </DangerButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletePermanentTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setDeletePermanentTarget(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-1 text-lg font-bold text-red-700">Permanently delete {deletePermanentTarget.company_name}?</h3>
+            <p className="mb-3 text-sm text-slate-600">
+              This erases <strong>everything</strong> this company owns — every employee, course, enrollment, certificate, and its entire license/billing history. This cannot be undone, and there is no "trash" to recover it from.
+            </p>
+            <p className="mb-1 text-sm text-slate-600">
+              Type <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-800">{deletePermanentTarget.company_code}</code> to confirm:
+            </p>
+            <input
+              value={deletePermanentConfirmText}
+              onChange={(e) => setDeletePermanentConfirmText(e.target.value)}
+              placeholder={deletePermanentTarget.company_code}
+              className={`${INPUT_CLS} mb-5 font-mono`}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <SecondaryButton onClick={() => setDeletePermanentTarget(null)} disabled={deletingPermanent}>Cancel</SecondaryButton>
+              <DangerButton
+                onClick={handleDeletePermanentConfirm}
+                disabled={deletingPermanent || deletePermanentConfirmText !== deletePermanentTarget.company_code}
+              >
+                {deletingPermanent ? <IconSpinner className="h-3.5 w-3.5" /> : <IconTrash />} Delete Permanently
               </DangerButton>
             </div>
           </div>

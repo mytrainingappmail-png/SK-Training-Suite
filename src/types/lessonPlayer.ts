@@ -24,4 +24,8 @@ export interface LessonPlayerLesson {
   displayOrder:    number;
   downloadable:    boolean;
   resources:       LessonPlayerResource[];
+  /** Platform-operator-only setting on the parent course — only ever
+   * applied on top of a 'text'-type lesson's content, never video. */
+  watermarkEnabled: boolean;
+  watermarkText:    string;
 }

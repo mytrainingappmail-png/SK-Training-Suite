@@ -72,6 +72,8 @@ interface SBCourse {
   certificate_enabled: boolean;
   require_completion_before_next: boolean;
   test_compulsory_after_module:   boolean;
+  watermark_enabled:   boolean;
+  watermark_text:      string | null;
   modules:             SBModule[] | null;
 }
 
@@ -155,6 +157,8 @@ function normaliseCourse(c: SBCourse, completedIds: Set<string>): CoursePlayerCo
     certificateEnabled: c.certificate_enabled ?? false,
     requireCompletionBeforeNext: c.require_completion_before_next ?? false,
     testCompulsoryAfterModule:   c.test_compulsory_after_module   ?? false,
+    watermarkEnabled:   c.watermark_enabled ?? false,
+    watermarkText:      c.watermark_text    ?? '',
     modules:            (c.modules ?? [])
                           .map((m) => normaliseModule(m, completedIds))
                           .sort((a, b) => a.moduleOrder - b.moduleOrder),
@@ -190,6 +194,8 @@ export async function getCoursePlayerData(
          certificate_enabled,
          require_completion_before_next,
          test_compulsory_after_module,
+         watermark_enabled,
+         watermark_text,
          modules (
            id,
            module_code,
@@ -226,10 +232,16 @@ export async function getCoursePlayerData(
     )
     .eq('id', enrollmentId)
     .eq('employee_id', employeeId)
-    .single();
+    .maybeSingle();
 
   if (enrollErr) throw new Error(enrollErr.message);
-  if (!enrollRow) throw new Error('Enrollment not found.');
+  // The employee_id filter above is a deliberate ownership check — a
+  // course-player link only ever works for the employee it was actually
+  // assigned to (opening someone else's enrollment must never leak their
+  // reading/quiz progress). A mismatched or bogus enrollmentId used to
+  // reach here as `.single()`'s raw Postgrest error ("Cannot coerce the
+  // result to a single JSON object") instead of this clear message.
+  if (!enrollRow) throw new Error("This course link isn't available for your account.");
 
   const row = enrollRow as unknown as SBEnrollmentRow;
   const sbCourse = unwrap(row.courses);

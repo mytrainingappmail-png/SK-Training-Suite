@@ -35,6 +35,9 @@ interface SBLessonRow {
   display_order:    number;
   downloadable:     boolean;
   learning_resources: SBResource[] | null;
+  // Joined through to the parent course purely to read its watermark
+  // setting — nothing else about the course is needed here.
+  modules: { courses: { watermark_enabled: boolean; watermark_text: string | null } | null } | null;
 }
 
 // ── Normalise helpers ─────────────────────────────────────────────────────────
@@ -65,6 +68,8 @@ function normaliseLesson(row: SBLessonRow): LessonPlayerLesson {
     resources: (row.learning_resources ?? [])
       .map(normaliseResource)
       .sort((a, b) => a.displayOrder - b.displayOrder),
+    watermarkEnabled: row.modules?.courses?.watermark_enabled ?? false,
+    watermarkText:    row.modules?.courses?.watermark_text    ?? '',
   };
 }
 
@@ -91,6 +96,9 @@ export async function getLessonById(lessonId: string): Promise<LessonPlayerLesso
          description,
          display_order,
          downloadable
+       ),
+       modules (
+         courses ( watermark_enabled, watermark_text )
        )`
     )
     .eq('id', lessonId)
@@ -123,6 +131,9 @@ export async function getLessonsByModule(moduleId: string): Promise<LessonPlayer
          description,
          display_order,
          downloadable
+       ),
+       modules (
+         courses ( watermark_enabled, watermark_text )
        )`
     )
     .eq('module_id', moduleId)

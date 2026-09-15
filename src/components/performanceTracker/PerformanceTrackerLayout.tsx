@@ -12,7 +12,7 @@ import { useAuthorization } from '../../hooks/useAuthorization';
 import { employeeService } from '../../services/employee/employeeService';
 import { departmentService } from '../../services/department/departmentService';
 import {
-  loadTeams, loadSettings, loadCustomFields, loadEmployeeTeamMap,
+  loadTeams, loadSettings, loadCustomFields, loadEmployeeTeamMap, checkAndRunAutoReminders,
 } from '../../services/performanceTracker/performanceTrackerService';
 import type { Employee } from '../../types/employee';
 import type { Department } from '../../types/department';
@@ -87,6 +87,12 @@ function PerformanceTrackerLayout() {
       setSettings(sett);
       setCustomFields(cfs);
       setTeamMap(tmap);
+
+      // Fire-and-forget: the entire "automatic" mechanism, since this app
+      // has no server-side cron — see checkAndRunAutoReminders' own
+      // comment. Never blocks the UI and never surfaces an error to the
+      // user; it's a background nicety, not a page dependency.
+      if (user.id) checkAndRunAutoReminders(user.companyId, user.id, emps).catch(() => {});
     } finally {
       setLoading(false);
     }

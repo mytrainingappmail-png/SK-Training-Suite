@@ -56,6 +56,9 @@ export interface CoursePlayerCourse {
   requireCompletionBeforeNext: boolean;
   /** Admin toggle — when true, a module's quiz-lesson (if it has one) must be passed before the next module unlocks. */
   testCompulsoryAfterModule: boolean;
+  /** Platform-operator-only toggle — shows a faint brand watermark over this course's 'text'-type lesson content (never video). */
+  watermarkEnabled:   boolean;
+  watermarkText:      string;
   modules:            CoursePlayerModule[];
 }
 

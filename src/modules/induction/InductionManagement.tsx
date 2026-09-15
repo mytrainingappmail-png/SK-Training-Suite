@@ -7,7 +7,7 @@
 // question-builder — Assessments are already managed centrally elsewhere
 // in Admin, so Induction just reuses that.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -37,7 +37,7 @@ import { branchService } from '../../services/branch/branchService';
 import { getCurrentUser } from '../../services/auth/session';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
-import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment } from '../../types/induction';
+import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment, InductionFaqItem } from '../../types/induction';
 import type { Assessment } from '../../types/assessment';
 import type { Employee } from '../../types/employee';
 import type { Branch } from '../../types/branch';
@@ -71,6 +71,9 @@ function IconArrowDown({ className = 'h-3.5 w-3.5' }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
     </svg>
   );
+}
+function IconSpinner({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (<svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z" /></svg>);
 }
 
 function SortableDayRow({
@@ -191,13 +194,15 @@ function InductionManagement() {
   const [toast, setToast] = useState('');
 
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ title: string; description: string; active: boolean }>({ title: '', description: '', active: true });
+  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean }>({ title: '', description: '', thumbnail_url: null, active: true });
   const [savingDay, setSavingDay] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
-  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null } | null>(null);
+  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[] } | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [savingSection, setSavingSection] = useState(false);
 
@@ -261,14 +266,29 @@ function InductionManagement() {
 
   function startNewDay() {
     setEditingDayId('new');
-    setDraft({ title: '', description: '', active: true });
+    setDraft({ title: '', description: '', thumbnail_url: null, active: true });
     setSections([]);
   }
 
   function startEditDay(day: InductionDay) {
     setEditingDayId(day.id);
-    setDraft({ title: day.title, description: day.description, active: day.active });
+    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active });
     fetchSections(day.id);
+  }
+
+  async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingThumb(true);
+    try {
+      const url = await uploadInlineImage(file);
+      setDraft((d) => ({ ...d, thumbnail_url: url }));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to upload thumbnail.');
+    } finally {
+      setUploadingThumb(false);
+    }
   }
 
   async function handleSaveDay() {
@@ -276,12 +296,12 @@ function InductionManagement() {
     setSavingDay(true);
     try {
       if (editingDayId === 'new') {
-        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, display_order: days.length, active: draft.active, branch_id: null, source_id: null });
+        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, branch_id: null, source_id: null });
         showToast('Day added.');
         setEditingDayId(created.id);
         fetchSections(created.id);
       } else if (editingDayId) {
-        await editDay(editingDayId, { title: draft.title, description: draft.description, active: draft.active });
+        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active });
         showToast('Day saved.');
       }
       fetchAll();
@@ -305,12 +325,27 @@ function InductionManagement() {
 
   function startNewSection() {
     setEditingSectionId('new');
-    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null });
+    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [] });
   }
 
   function startEditSection(s: InductionDaySection) {
     setEditingSectionId(s.id);
-    setSectionDraft({ section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id });
+    setSectionDraft({ section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items });
+  }
+
+  function updateFaqItem(index: number, field: keyof InductionFaqItem, value: string) {
+    setSectionDraft((d) => {
+      if (!d) return d;
+      const items = [...d.faq_items];
+      items[index] = { ...items[index], [field]: value };
+      return { ...d, faq_items: items };
+    });
+  }
+  function addFaqItem() {
+    setSectionDraft((d) => (d ? { ...d, faq_items: [...d.faq_items, { question: '', answer: '' }] } : d));
+  }
+  function removeFaqItem(index: number) {
+    setSectionDraft((d) => (d ? { ...d, faq_items: d.faq_items.filter((_, i) => i !== index) } : d));
   }
 
   async function handleSaveSection() {
@@ -322,12 +357,14 @@ function InductionManagement() {
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: sectionDraft.assessment_id,
+          faq_items: sectionDraft.faq_items,
           display_order: sections.length,
         });
       } else if (editingSectionId) {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: sectionDraft.assessment_id,
+          faq_items: sectionDraft.faq_items,
         });
       }
       setEditingSectionId(null);
@@ -424,6 +461,22 @@ function InductionManagement() {
               <label className="mb-1 block text-xs font-semibold text-slate-500">Description (optional)</label>
               <textarea value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} rows={2} className={INPUT_CLS} />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Thumbnail — shown on this Day's card</label>
+              <div className="flex items-center gap-3">
+                {draft.thumbnail_url && <img src={draft.thumbnail_url} alt="" className="h-14 w-14 rounded-xl object-cover" />}
+                <input ref={thumbInputRef} type="file" accept="image/*" onChange={handleThumbnailFileChange} className="hidden" />
+                <button
+                  type="button"
+                  onClick={() => thumbInputRef.current?.click()}
+                  disabled={uploadingThumb}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {uploadingThumb ? <IconSpinner /> : null}
+                  {uploadingThumb ? 'Uploading…' : draft.thumbnail_url ? 'Replace Image' : 'Upload Image'}
+                </button>
+              </div>
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))} />
               Active (visible to employees)
@@ -433,15 +486,17 @@ function InductionManagement() {
           {editingDayId !== 'new' && (
             <div className="mt-6">
               <label className="mb-1 block text-xs font-semibold text-slate-500">
-                Sections — add a Page (training material) or a Test, in the order employees go through them
+                Sections — add a Page, a Test, or an FAQ, in the order employees go through them
               </label>
               <div className="mb-3 space-y-2">
                 {sections.length === 0 && <p className="text-xs text-slate-400">No sections yet — add one below.</p>}
                 {sections.map((s) => (
                   <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
                     <div className="flex items-center gap-3">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {s.section_type === 'test' ? 'Test' : 'Page'}
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                        s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {s.section_type === 'test' ? 'Test' : s.section_type === 'faq' ? 'FAQ' : 'Page'}
                       </span>
                       <p className="text-sm font-semibold text-slate-800">{s.title}</p>
                     </div>
@@ -465,6 +520,7 @@ function InductionManagement() {
                       <select value={sectionDraft.section_type} onChange={(e) => setSectionDraft((d) => d && { ...d, section_type: e.target.value as InductionSectionType })} className={INPUT_CLS}>
                         <option value="page">Page (training material)</option>
                         <option value="test">Test</option>
+                        <option value="faq">FAQ</option>
                       </select>
                     </div>
                   </div>
@@ -484,11 +540,39 @@ function InductionManagement() {
                       <label className="mb-1 block text-xs font-semibold text-slate-500">Assessment</label>
                       <select value={sectionDraft.assessment_id ?? ''} onChange={(e) => setSectionDraft((d) => d && { ...d, assessment_id: e.target.value || null })} className={INPUT_CLS}>
                         <option value="">— Select an assessment —</option>
-                        {assessments.map((a) => <option key={a.id} value={a.id}>{a.assessment_title}</option>)}
+                        {assessments.map((a) => <option key={a.id} value={a.id}>{a.assessment_title} ({a.maximum_attempts} attempt{a.maximum_attempts === 1 ? '' : 's'} allowed)</option>)}
                       </select>
                       <p className="mt-1 text-xs text-slate-400">
-                        Assessments (with their questions) are created in Admin → Assessments — pick one here to attach it to this Day's test.
+                        Assessments (with their questions, passing score, and how many attempts an employee gets) are created in Admin → Assessments — pick one here to attach it to this Day's test. The next Day unlocks once this test is passed.
                       </p>
+                    </div>
+                  )}
+
+                  {sectionDraft.section_type === 'faq' && (
+                    <div className="space-y-3">
+                      {sectionDraft.faq_items.length === 0 && <p className="text-xs text-slate-400">No questions yet — add one below.</p>}
+                      {sectionDraft.faq_items.map((item, i) => (
+                        <div key={i} className="rounded-xl border border-slate-100 p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-500">Question {i + 1}</span>
+                            <button onClick={() => removeFaqItem(i)} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>
+                          </div>
+                          <input
+                            value={item.question}
+                            onChange={(e) => updateFaqItem(i, 'question', e.target.value)}
+                            placeholder="Question"
+                            className={`${INPUT_CLS} mb-2`}
+                          />
+                          <textarea
+                            value={item.answer}
+                            onChange={(e) => updateFaqItem(i, 'answer', e.target.value)}
+                            placeholder="Answer"
+                            rows={2}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                      ))}
+                      <button onClick={addFaqItem} className="text-xs font-semibold text-indigo-600 hover:underline">+ Add Question</button>
                     </div>
                   )}
 
@@ -588,13 +672,20 @@ function InductionManagement() {
               .filter((d) => branchFilter === 'all' || (branchFilter === 'generic' ? !d.branch_id : d.branch_id === branchFilter))
               .map((d, i) => (
               <div key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                <div>
+                <div className="flex items-center gap-3">
+                  {d.thumbnail_url ? (
+                    <img src={d.thumbnail_url} alt="" className="h-10 w-10 flex-shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-slate-100" />
+                  )}
+                  <div>
                   <p className="text-sm font-semibold text-slate-800">Day {i + 1}: {d.title}</p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
                       {branchName(d.branch_id)}
                     </span>
                     {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
+                  </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

@@ -78,6 +78,18 @@ export async function saveSettings(companyId: string, patch: Partial<PtSettings>
   return data;
 }
 
+// The primary key (company_id, kind, run_date) IS the dedupe: this insert
+// either succeeds (nobody has run today's check for this company+kind
+// yet — go ahead) or fails on a duplicate-key conflict (someone already
+// has — including a second browser tab racing this exact moment), never
+// both. Returns whether THIS caller won the claim.
+export async function tryClaimAutoReminderRun(companyId: string, kind: 'morning' | 'evening', runDate: string): Promise<boolean> {
+  const { error } = await supabase.from('pt_auto_reminder_runs').insert({ company_id: companyId, kind, run_date: runDate });
+  if (!error) return true;
+  if (error.code === '23505') return false; // unique_violation — already claimed
+  throw new Error(error.message);
+}
+
 // ── Custom KPI fields ────────────────────────────────────────────────────
 
 export async function getCustomFields(companyId: string): Promise<PtCustomField[]> {
@@ -89,7 +101,7 @@ export async function getCustomFields(companyId: string): Promise<PtCustomField[
 
 export async function createCustomField(
   companyId: string,
-  input: Pick<PtCustomField, 'field_key' | 'label' | 'applies_morning' | 'applies_evening'>
+  input: Pick<PtCustomField, 'field_key' | 'label' | 'applies_morning' | 'applies_evening' | 'counts_toward_score' | 'score_weight' | 'min_threshold'>
 ): Promise<PtCustomField> {
   const { data: existing } = await supabase
     .from('pt_custom_fields').select('sort_order').eq('company_id', companyId).order('sort_order', { ascending: false }).limit(1);
@@ -98,6 +110,11 @@ export async function createCustomField(
     .from('pt_custom_fields').insert({ company_id: companyId, ...input, sort_order: nextSort }).select().single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function updateCustomField(id: string, patch: Partial<PtCustomField>): Promise<void> {
+  const { error } = await supabase.from('pt_custom_fields').update(patch).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteCustomField(id: string): Promise<void> {

@@ -5,6 +5,8 @@ import { loadCompanies } from "../../services/company/companyService";
 import { branchService } from "../../services/branch/branchService";
 import { departmentService } from "../../services/department/departmentService";
 import { designationService } from "../../services/designation/designationService";
+import { generateTemporaryPassword } from "../../utils/passwordGenerator";
+import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 
 import type { Employee, EmployeeForm } from "../../types/employee";
 import type { Company } from "../../types/company";
@@ -34,15 +36,6 @@ const BLANK: EmployeeForm = {
   attendance_location_scope: "all",
   password: "",
 };
-
-function generateTemporaryPassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  let result = "";
-  for (let i = 0; i < 10; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers  (no React, no side-effects)
@@ -814,6 +807,7 @@ type ModalKind =
   | { type: "add" }
   | { type: "edit"; emp: Employee }
   | { type: "delete"; emp: Employee }
+  | { type: "bulk-import" }
   | null;
 
 export default function EmployeeManagement() {
@@ -1003,6 +997,15 @@ export default function EmployeeManagement() {
             className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
           >
             <Spinner spin={loading} />
+          </button>
+          <button
+            onClick={() => openModal({ type: "bulk-import" })}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-95"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Bulk Import (CSV)
           </button>
           <button
             ref={addBtnRef}
@@ -1245,6 +1248,18 @@ export default function EmployeeManagement() {
           busy={deleting}
           onConfirm={handleDelete}
           onCancel={closeModal}
+        />
+      )}
+
+      {modal?.type === "bulk-import" && (
+        <EmployeeBulkImportModal
+          companies={companies}
+          branches={branches}
+          departments={departments}
+          designations={designations}
+          existingEmployees={employees}
+          onClose={closeModal}
+          onImported={() => { load(); }}
         />
       )}
 

@@ -10,6 +10,7 @@ import type {
   PtTeam, PtSettings, PtCustomField, PtCommitment, PtCommitmentForm,
   PtReport, PtReportForm, PtChampionCategory, PtLeaderboardFormula, PtChampionMetricKey,
 } from '../../types/performanceTracker';
+import type { Employee } from '../../types/employee';
 
 export const todayStr = repo.todayStr;
 
@@ -58,7 +59,10 @@ export async function loadCustomFields(companyId: string): Promise<PtCustomField
 
 export async function saveCustomField(
   companyId: string,
-  input: { field_key: string; label: string; applies_morning: boolean; applies_evening: boolean }
+  input: {
+    field_key: string; label: string; applies_morning: boolean; applies_evening: boolean;
+    counts_toward_score?: boolean; score_weight?: number; min_threshold?: number | null;
+  }
 ): Promise<PtCustomField> {
   if (!input.label.trim()) throw new Error('Field label is required.');
   if (!input.field_key.trim()) throw new Error('Field key is required.');
@@ -66,7 +70,14 @@ export async function saveCustomField(
     ...input,
     field_key: input.field_key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'),
     label: input.label.trim(),
+    counts_toward_score: input.counts_toward_score ?? false,
+    score_weight: input.score_weight ?? 0,
+    min_threshold: input.min_threshold ?? null,
   });
+}
+
+export async function editCustomField(id: string, patch: Partial<PtCustomField>): Promise<void> {
+  return repo.updateCustomField(id, patch);
 }
 
 export async function removeCustomField(id: string): Promise<void> {
@@ -161,6 +172,69 @@ export async function sendReminder(
   });
   await sendNotificationNow(notification, employeeIds);
   return employeeIds.length;
+}
+
+// No server-side cron exists anywhere in this app (see the auto-reminder
+// migration's own header comment), so this is the entire mechanism:
+// called once whenever anyone opens Performance Tracker
+// (PerformanceTrackerLayout.tsx), fire-and-forget. It only ever does
+// real work once per company per kind per day — tryClaimAutoReminderRun's
+// unique-key insert is what makes that safe even if two people open the
+// tracker around the same moment.
+export async function checkAndRunAutoReminders(
+  companyId: string,
+  triggeringEmployeeId: string,
+  employees: Employee[],
+): Promise<void> {
+  const settings = await repo.getSettings(companyId);
+  if (!settings.auto_reminder_enabled) return;
+
+  const today = repo.todayStr();
+  const nowHHMMSS = new Date().toTimeString().slice(0, 8);
+  const active = employees.filter((e) => e.active);
+
+  for (const kind of ['morning', 'evening'] as const) {
+    const cutoff = kind === 'morning' ? settings.auto_reminder_morning_cutoff : settings.auto_reminder_evening_cutoff;
+    if (nowHHMMSS < cutoff) continue;
+
+    const claimed = await repo.tryClaimAutoReminderRun(companyId, kind, today);
+    if (!claimed) continue; // already ran today (this session or another)
+
+    const records = kind === 'morning'
+      ? await repo.listCommitmentsForDate(companyId, today)
+      : await repo.listReportsForDate(companyId, today);
+    const missing = active.filter((e) => !records.some((r) => r.employee_id === e.id));
+    if (missing.length === 0) continue;
+
+    await sendReminder(companyId, triggeringEmployeeId, 'Performance Tracker (Auto-Reminder)', missing.map((e) => e.id), kind, settings);
+
+    // Also roll up each missing employee's team leader into one heads-up
+    // notification per leader — resolved via employees.pt_team_id ->
+    // pt_teams.team_leader_employee_id (never done anywhere in this app
+    // before this).
+    const [teamMap, teams] = await Promise.all([repo.getEmployeeTeamMap(companyId), repo.getTeams(companyId)]);
+    const leaderById = new Map(teams.map((t) => [t.id, t.team_leader_employee_id]));
+    const namesByLeader = new Map<string, string[]>();
+    for (const e of missing) {
+      const teamId = teamMap[e.id];
+      const leaderId = teamId ? leaderById.get(teamId) : null;
+      if (!leaderId || leaderId === e.id) continue; // no leader, or the leader IS the missing person
+      const name = `${e.first_name} ${e.last_name}`.trim();
+      namesByLeader.set(leaderId, [...(namesByLeader.get(leaderId) ?? []), name]);
+    }
+    const kindLabel = kind === 'morning' ? 'morning commitment' : 'evening report';
+    for (const [leaderId, names] of namesByLeader) {
+      const notification = await createNotification(companyId, triggeringEmployeeId, {
+        ...defaultNotificationForm,
+        type: 'announcement',
+        title: `${names.length} of your team hasn't submitted today's ${kindLabel}`,
+        message: `${names.join(', ')} — still pending for today. You may want to follow up.`,
+        audience_type: 'employee',
+        created_by_name: 'Performance Tracker (Auto-Reminder)',
+      });
+      await sendNotificationNow(notification, [leaderId]).catch(() => {});
+    }
+  }
 }
 
 // ── Leaderboard math (pure) ──────────────────────────────────────────────

@@ -29,11 +29,28 @@ export interface PtSettings {
   score_booking: number;
   score_conn: number;
   score_talk_per5: number;
+  // The admin's "delete" for a core metric they don't use — a disabled
+  // metric drops out of Score, Achievement %, and the min-criteria gate
+  // for any NEW report (historical data is untouched). Bookings has no
+  // toggle — it always counts.
+  f2f_enabled: boolean;
+  sv_enabled: boolean;
+  revisit_enabled: boolean;
+  calls_enabled: boolean;
+  conn_enabled: boolean;
+  talk_enabled: boolean;
   leaderboard_formula: PtLeaderboardFormula;
   morning_reminder_title: string;
   morning_reminder_message: string;
   evening_reminder_title: string;
   evening_reminder_message: string;
+  // Client-triggered auto-reminder — checked once whenever anyone opens
+  // Performance Tracker (no server cron exists in this app), so it only
+  // actually fires if someone opens the tracker after the cutoff time on
+  // a given day. See pt_auto_reminder_runs for the once-per-day dedupe.
+  auto_reminder_enabled: boolean;
+  auto_reminder_morning_cutoff: string;
+  auto_reminder_evening_cutoff: string;
   updated_at: string;
 }
 
@@ -47,6 +64,12 @@ export interface PtCustomField {
   sort_order: number;
   is_active: boolean;
   created_at: string;
+  // The admin's "add" for a genuinely new SCORED metric — opts this field
+  // into the same Score/min-criteria machinery the 6 core metrics use,
+  // instead of sitting there as purely tracked, inert data.
+  counts_toward_score: boolean;
+  score_weight: number;
+  min_threshold: number | null;
 }
 
 export interface PtCommitment {

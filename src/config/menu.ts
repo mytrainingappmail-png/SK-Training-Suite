@@ -50,6 +50,14 @@ export const MENU: MenuItem[] = [
     group: "Overview",
   },
   {
+    id: "scripts",
+    title: "Scripts",
+    route: ROUTES.SCRIPTS,
+    icon: "file-text",
+    visible: true,
+    group: "Overview",
+  },
+  {
     id: "dashboard",
     title: "Dashboard",
     route: ROUTES.DASHBOARD,

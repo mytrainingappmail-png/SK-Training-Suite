@@ -41,22 +41,46 @@ export function EveningReportTab({ settings, customFields }: { settings: PtSetti
 
   const eveningFields = customFields.filter((f) => f.applies_evening);
 
+  // Mirrors pt_reports_compute_score() exactly (enabled flags + scoreable
+  // custom fields) so this preview never disagrees with what the server
+  // actually stores once submitted.
   const live = useMemo(() => {
-    const score = f2f * settings.score_f2f + sv * settings.score_sv + revisit * settings.score_revisit
-      + bookings * settings.score_booking + conn * settings.score_conn + Math.floor(talk / 5) * settings.score_talk_per5;
+    let score = 0;
+    if (settings.f2f_enabled) score += f2f * settings.score_f2f;
+    if (settings.sv_enabled) score += sv * settings.score_sv;
+    if (settings.revisit_enabled) score += revisit * settings.score_revisit;
+    score += bookings * settings.score_booking;
+    if (settings.conn_enabled) score += conn * settings.score_conn;
+    if (settings.talk_enabled) score += Math.floor(talk / 5) * settings.score_talk_per5;
+    for (const f of eveningFields) {
+      if (!f.counts_toward_score) continue;
+      score += (customValues[f.field_key] ?? 0) * f.score_weight;
+    }
+
     const metrics: { label: string; planned: number; done: number }[] = [];
     if (commitment) {
-      if (commitment.f2f_planned > 0) metrics.push({ label: 'F2F', planned: commitment.f2f_planned, done: f2f });
-      if (commitment.sv_planned > 0) metrics.push({ label: 'Site Visits', planned: commitment.sv_planned, done: sv });
-      if (commitment.calls_planned > 0) metrics.push({ label: 'Calls', planned: commitment.calls_planned, done: calls });
+      if (settings.f2f_enabled && commitment.f2f_planned > 0) metrics.push({ label: 'F2F', planned: commitment.f2f_planned, done: f2f });
+      if (settings.sv_enabled && commitment.sv_planned > 0) metrics.push({ label: 'Site Visits', planned: commitment.sv_planned, done: sv });
+      if (settings.calls_enabled && commitment.calls_planned > 0) metrics.push({ label: 'Calls', planned: commitment.calls_planned, done: calls });
     }
     const achPct = metrics.length
       ? Math.round((metrics.reduce((sum, m) => sum + Math.min((m.done / m.planned) * 100, 150), 0) / metrics.length) * 10) / 10
       : null;
-    const minMet = f2f >= settings.min_f2f && sv >= settings.min_sv && revisit >= settings.min_revisit
-      && calls >= settings.min_calls && conn >= settings.min_conn && talk >= settings.min_talk;
+
+    let minMet = true;
+    if (settings.f2f_enabled && f2f < settings.min_f2f) minMet = false;
+    if (settings.sv_enabled && sv < settings.min_sv) minMet = false;
+    if (settings.revisit_enabled && revisit < settings.min_revisit) minMet = false;
+    if (settings.calls_enabled && calls < settings.min_calls) minMet = false;
+    if (settings.conn_enabled && conn < settings.min_conn) minMet = false;
+    if (settings.talk_enabled && talk < settings.min_talk) minMet = false;
+    for (const f of eveningFields) {
+      if (!f.counts_toward_score || f.min_threshold == null) continue;
+      if ((customValues[f.field_key] ?? 0) < f.min_threshold) minMet = false;
+    }
+
     return { score, achPct, minMet, metrics };
-  }, [f2f, sv, revisit, calls, conn, talk, bookings, settings, commitment]);
+  }, [f2f, sv, revisit, calls, conn, talk, bookings, settings, commitment, eveningFields, customValues]);
 
   async function submit() {
     if (!user?.id || !user.companyId) return;
@@ -114,12 +138,12 @@ export function EveningReportTab({ settings, customFields }: { settings: PtSetti
       {!mine && (
         <>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <NumField label="F2F Meetings Done" value={f2f} onChange={setF2f} />
-            <NumField label="Site Visits Done" value={sv} onChange={setSv} />
-            <NumField label="Revisits Done" value={revisit} onChange={setRevisit} />
-            <NumField label="Total Calls Made" value={calls} onChange={setCalls} />
-            <NumField label="Calls Connected" value={conn} onChange={setConn} />
-            <NumField label="Total Talk Time (mins)" value={talk} onChange={setTalk} />
+            {settings.f2f_enabled && <NumField label="F2F Meetings Done" value={f2f} onChange={setF2f} />}
+            {settings.sv_enabled && <NumField label="Site Visits Done" value={sv} onChange={setSv} />}
+            {settings.revisit_enabled && <NumField label="Revisits Done" value={revisit} onChange={setRevisit} />}
+            {settings.calls_enabled && <NumField label="Total Calls Made" value={calls} onChange={setCalls} />}
+            {settings.conn_enabled && <NumField label="Calls Connected" value={conn} onChange={setConn} />}
+            {settings.talk_enabled && <NumField label="Total Talk Time (mins)" value={talk} onChange={setTalk} />}
             <NumField label="Leads Generated" value={leads} onChange={setLeads} />
             <NumField label="Meetings Fixed" value={meetingsFixed} onChange={setMeetingsFixed} />
             <NumField label="Bookings Generated" value={bookings} onChange={setBookings} />

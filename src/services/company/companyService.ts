@@ -5,6 +5,7 @@ import {
   getCompanies,
   createCompany,
   updateCompany,
+  deleteCompany,
 } from "../../repositories/company/companyRepository";
 
 export async function loadCompany(): Promise<Company | null> {
@@ -24,4 +25,10 @@ export async function saveCompany(
   data: Partial<Company>
 ): Promise<Company> {
   return await updateCompany(id, data);
+}
+
+// Only ever call this after the UI has confirmed the admin means it —
+// permanent, cascades through 60+ tables, cannot be undone.
+export async function removeCompany(id: string): Promise<void> {
+  await deleteCompany(id);
 }

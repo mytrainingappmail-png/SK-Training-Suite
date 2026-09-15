@@ -27,7 +27,7 @@ import {
   convertCourseToModule,
   uploadCourseThumbnail,
 } from "../../services/course/courseService";
-import { loadCompanies } from "../../services/company/companyService";
+import { loadCompanies, loadCompany } from "../../services/company/companyService";
 import { loadCategories } from "../../services/category/categoryService";
 
 import type { Course, CourseForm, CourseLevel } from "../../types/course";
@@ -463,6 +463,8 @@ function CourseModal({
           certificate_enabled: editing.certificate_enabled,
           require_completion_before_next: editing.require_completion_before_next,
           test_compulsory_after_module:   editing.test_compulsory_after_module,
+          watermark_enabled:   editing.watermark_enabled,
+          watermark_text:      editing.watermark_text,
           display_order:       editing.display_order,
           active:              editing.active,
           created_by:          editing.created_by,
@@ -475,9 +477,19 @@ function CourseModal({
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const [uploadingThumb, setUploadingThumb] = useState(false);
   const [thumbError, setThumbError] = useState("");
+  // The watermark toggle is only ever visible on the platform operator's
+  // own account (same is_platform_operator gate as Market Analytics/Live
+  // Quiz) — a client's own courses never show it.
+  const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
   useEffect(() => {
     firstRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    loadCompany()
+      .then((c) => setIsPlatformOperator(c?.is_platform_operator ?? false))
+      .catch(() => setIsPlatformOperator(false));
   }, []);
 
   async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -804,6 +816,36 @@ function CourseModal({
                 </div>
               </label>
             </div>
+
+            {/* Brand watermark — platform-operator-only. Applies to this
+                course's WRITTEN/TEXT lesson content only, never video. */}
+            {isPlatformOperator && (
+              <div className="flex flex-wrap items-start gap-6 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <label className="flex cursor-pointer items-center gap-3">
+                  <Toggle
+                    on={form.watermark_enabled}
+                    onChange={() => field("watermark_enabled", !form.watermark_enabled)}
+                    disabled={saving}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Brand Watermark</p>
+                    <p className="text-xs text-slate-500">Only visible on your own account — shown on this course's written lesson content, not video</p>
+                  </div>
+                </label>
+                {form.watermark_enabled && (
+                  <div className="min-w-[220px] flex-1">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Watermark text</label>
+                    <input
+                      value={form.watermark_text ?? ""}
+                      onChange={(e) => field("watermark_text", e.target.value)}
+                      placeholder="e.g. your brand name"
+                      disabled={saving}
+                      className={CLS_INPUT}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
 

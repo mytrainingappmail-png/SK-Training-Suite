@@ -148,4 +148,13 @@ export const ROUTES = {
   // separate credential), just skips AppLayout's sidebar/header.
   PERFORMANCE_TRACKER_TV: "/performance-tracker/tv",
 
+  // ===========================
+  // Scripts — a standalone, employee-facing section (own sidebar item,
+  // not nested under Projects). Any logged-in user can search/read/
+  // download; only Admin/Super Admin can add or edit (checked inside the
+  // page itself, same as Performance Tracker's own internal role split).
+  // ===========================
+
+  SCRIPTS: "/scripts",
+
 } as const;

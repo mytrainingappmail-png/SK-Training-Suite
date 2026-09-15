@@ -14,6 +14,7 @@ import { loadCompany }                      from '../../services/company/company
 import ThumbnailCard from '../shared/ThumbnailCard';
 import CardPagination from '../shared/CardPagination';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
+import BrandWatermarkOverlay from '../shared/BrandWatermarkOverlay';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type {
   CoursePlayerData,
@@ -195,11 +196,15 @@ function ResourceItem({ resource }: { resource: CoursePlayerResource }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LessonContent({
-  lesson, onLaunchAssignment, onLaunchQuiz,
+  lesson, onLaunchAssignment, onLaunchQuiz, watermarkEnabled, watermarkText,
 }: {
   lesson: CoursePlayerLesson;
   onLaunchAssignment?: (lesson: CoursePlayerLesson) => void;
   onLaunchQuiz?:       (lesson: CoursePlayerLesson) => void;
+  /** Platform-operator-only course setting — only ever true/non-empty for
+   * written/text lessons, never applied to video. */
+  watermarkEnabled?: boolean;
+  watermarkText?:    string;
 }) {
   const primaryDownload = lesson.resources.find((r) => r.downloadable) ?? null;
   const embedId = lesson.lessonType === 'video' ? youtubeEmbedId(lesson.videoUrl) : null;
@@ -233,10 +238,17 @@ function LessonContent({
 
       {/* Text / Reading Material content */}
       {(lesson.lessonType === 'text' || lesson.lessonType === 'document') && lesson.content && (
-        <div
-          className="prose prose-slate max-w-none rounded-2xl border border-slate-200 bg-slate-50 p-6 text-sm leading-relaxed text-slate-700"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content) }}
-        />
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+          {/* Watermark only ever applies to written/text lessons, never a
+              'document' (downloadable-file) lesson or video. */}
+          {lesson.lessonType === 'text' && watermarkEnabled && watermarkText && (
+            <BrandWatermarkOverlay text={watermarkText} />
+          )}
+          <div
+            className="prose prose-slate relative max-w-none p-6 text-sm leading-relaxed text-slate-700"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content) }}
+          />
+        </div>
       )}
 
       {/* Reading Material download button */}
@@ -811,6 +823,8 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   lesson={activeLesson}
                   onLaunchAssignment={handleLaunchAssignment}
                   onLaunchQuiz={handleLaunchQuiz}
+                  watermarkEnabled={data.course.watermarkEnabled}
+                  watermarkText={data.course.watermarkText}
                 />
 
                 {/* navigation footer */}

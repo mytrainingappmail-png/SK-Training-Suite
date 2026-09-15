@@ -28,6 +28,8 @@ function toCourseForm(course: Course): CourseForm {
     certificate_enabled: course.certificate_enabled,
     require_completion_before_next: course.require_completion_before_next,
     test_compulsory_after_module: course.test_compulsory_after_module,
+    watermark_enabled: course.watermark_enabled,
+    watermark_text: course.watermark_text,
     display_order: course.display_order,
     active: course.active,
     created_by: course.created_by,

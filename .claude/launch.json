@@ -12,6 +12,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview"],
       "port": 4173
+    },
+    {
+      "name": "realty-smartz-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "C:/Users/Lenovo/realty-smartz-training", "--", "--port", "5180"],
+      "port": 5180
+    },
+    {
+      "name": "hrms-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "C:/Users/Lenovo/IKB_HRMS_FINAL", "--", "--port", "5190"],
+      "port": 5190
     }
   ]
 }

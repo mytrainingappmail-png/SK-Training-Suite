@@ -25,6 +25,7 @@ import Videos from "./pages/Videos";
 import ProjectsPage from "./pages/Projects";
 import InductionPage from "./pages/InductionPage";
 import PerformanceTrackerPage from "./pages/PerformanceTrackerPage";
+import ScriptsPage from "./pages/ScriptsPage";
 import PerformanceTrackerTvPage from "./pages/PerformanceTrackerTvPage";
 import BrainstormingPage from "./pages/Brainstorming";
 import LegalDocumentPage from "./pages/LegalDocumentPage";
@@ -261,6 +262,7 @@ function App() {
         <Route path={ROUTES.PROJECTS} element={<ProjectsPage />} />
         <Route path={ROUTES.INDUCTION} element={<InductionPage />} />
         <Route path={ROUTES.PERFORMANCE_TRACKER} element={<PerformanceTrackerPage />} />
+        <Route path={ROUTES.SCRIPTS} element={<ScriptsPage />} />
         <Route path={ROUTES.BRAINSTORMING} element={<BrainstormingPage />} />
         <Route path={ROUTES.CERTIFICATE_VIEW} element={<CertificateViewPage />} />
         <Route path={ROUTES.MY_ATTENDANCE} element={<AttendancePage />} />

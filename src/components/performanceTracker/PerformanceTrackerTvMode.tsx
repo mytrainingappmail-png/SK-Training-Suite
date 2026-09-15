@@ -57,10 +57,17 @@ export function PerformanceTrackerTvMode() {
     return () => clearInterval(refresh);
   }, []);
 
+  // Depends on `view` so that ANY change to it — the timer's own tick, or
+  // a manual dot click below — clears and restarts this interval fresh.
+  // Without that dependency, a manual click only changed `view`; this
+  // interval kept counting down on its own original schedule underneath,
+  // so the next auto-rotation could fire almost immediately afterward
+  // (or, from the user's side, a click seemed to do nothing until the
+  // pre-existing timer eventually caught up on its own unrelated clock).
   useEffect(() => {
     const rotate = setInterval(() => setView((v) => VIEWS[(VIEWS.indexOf(v) + 1) % VIEWS.length]), ROTATE_SECONDS * 1000);
     return () => clearInterval(rotate);
-  }, []);
+  }, [view]);
 
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
@@ -175,7 +182,16 @@ export function PerformanceTrackerTvMode() {
       </div>
 
       <div className="mt-8 flex items-center justify-center gap-2">
-        {VIEWS.map((v) => <span key={v} className={`h-1.5 w-10 rounded-full transition-colors ${v === view ? 'bg-emerald-400' : 'bg-white/15'}`} />)}
+        {VIEWS.map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            aria-label={`Show ${v}`}
+            aria-current={v === view}
+            className={`h-1.5 w-10 rounded-full transition-colors ${v === view ? 'bg-emerald-400' : 'bg-white/15 hover:bg-white/30'}`}
+          />
+        ))}
       </div>
     </div>
   );

@@ -34,6 +34,29 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
   );
 }
 
+// A Min-Criteria field the admin can switch off entirely — the "delete a
+// hardcoded field" control. Disabled state greys out the number (still
+// shown, not lost) and the checkbox label doubles as the field name.
+function CriteriaField({ label, enabled, onToggle, value, onChange }: {
+  label: string; enabled: boolean; onToggle: (v: boolean) => void; value: number; onChange: (v: number) => void;
+}) {
+  return (
+    <div className={enabled ? '' : 'opacity-50'}>
+      <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-600">
+        <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} className="h-3.5 w-3.5" />
+        {label}
+      </label>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={!enabled}
+        className={`${ptInputCls} disabled:cursor-not-allowed`}
+      />
+    </div>
+  );
+}
+
 export function SettingsTab({
   settings, onSettingsChange, teams, onTeamsChange, customFields, onCustomFieldsChange, employees, teamMap, onTeamMapChange,
 }: {
@@ -54,6 +77,9 @@ export function SettingsTab({
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldMorning, setNewFieldMorning] = useState(true);
   const [newFieldEvening, setNewFieldEvening] = useState(true);
+  const [newFieldScored, setNewFieldScored] = useState(false);
+  const [newFieldWeight, setNewFieldWeight] = useState(1);
+  const [newFieldMinThreshold, setNewFieldMinThreshold] = useState('');
   const [savingField, setSavingField] = useState(false);
 
   const [categories, setCategories] = useState<PtChampionCategory[]>([]);
@@ -130,9 +156,15 @@ export function SettingsTab({
     try {
       const f = await saveCustomField(user.companyId, {
         field_key: newFieldLabel, label: newFieldLabel, applies_morning: newFieldMorning, applies_evening: newFieldEvening,
+        counts_toward_score: newFieldScored,
+        score_weight: newFieldScored ? newFieldWeight : 0,
+        min_threshold: newFieldScored && newFieldMinThreshold.trim() !== '' ? Number(newFieldMinThreshold) : null,
       });
       onCustomFieldsChange([...customFields, f]);
       setNewFieldLabel('');
+      setNewFieldScored(false);
+      setNewFieldWeight(1);
+      setNewFieldMinThreshold('');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Failed to add field.');
     } finally {
@@ -161,14 +193,14 @@ export function SettingsTab({
 
   return (
     <div className="space-y-4">
-      <SectionCard title="Minimum Daily Criteria" subtitle="An evening report only counts as 'criteria met' once every threshold below is reached.">
+      <SectionCard title="Minimum Daily Criteria" subtitle="An evening report only counts as 'criteria met' once every threshold below is reached. Untick a metric to stop tracking it entirely — it drops out of Score, Achievement %, and this check, and disappears from the Morning/Evening forms.">
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <NumField label="Min F2F" value={draft.min_f2f} onChange={(v) => setDraft((d) => ({ ...d, min_f2f: v }))} />
-          <NumField label="Min Site Visits" value={draft.min_sv} onChange={(v) => setDraft((d) => ({ ...d, min_sv: v }))} />
-          <NumField label="Min Revisits" value={draft.min_revisit} onChange={(v) => setDraft((d) => ({ ...d, min_revisit: v }))} />
-          <NumField label="Min Calls" value={draft.min_calls} onChange={(v) => setDraft((d) => ({ ...d, min_calls: v }))} />
-          <NumField label="Min Connected" value={draft.min_conn} onChange={(v) => setDraft((d) => ({ ...d, min_conn: v }))} />
-          <NumField label="Min Talk (mins)" value={draft.min_talk} onChange={(v) => setDraft((d) => ({ ...d, min_talk: v }))} />
+          <CriteriaField label="F2F" enabled={draft.f2f_enabled} onToggle={(v) => setDraft((d) => ({ ...d, f2f_enabled: v }))} value={draft.min_f2f} onChange={(v) => setDraft((d) => ({ ...d, min_f2f: v }))} />
+          <CriteriaField label="Site Visits" enabled={draft.sv_enabled} onToggle={(v) => setDraft((d) => ({ ...d, sv_enabled: v }))} value={draft.min_sv} onChange={(v) => setDraft((d) => ({ ...d, min_sv: v }))} />
+          <CriteriaField label="Revisits" enabled={draft.revisit_enabled} onToggle={(v) => setDraft((d) => ({ ...d, revisit_enabled: v }))} value={draft.min_revisit} onChange={(v) => setDraft((d) => ({ ...d, min_revisit: v }))} />
+          <CriteriaField label="Calls" enabled={draft.calls_enabled} onToggle={(v) => setDraft((d) => ({ ...d, calls_enabled: v }))} value={draft.min_calls} onChange={(v) => setDraft((d) => ({ ...d, min_calls: v }))} />
+          <CriteriaField label="Connected" enabled={draft.conn_enabled} onToggle={(v) => setDraft((d) => ({ ...d, conn_enabled: v }))} value={draft.min_conn} onChange={(v) => setDraft((d) => ({ ...d, min_conn: v }))} />
+          <CriteriaField label="Talk (mins)" enabled={draft.talk_enabled} onToggle={(v) => setDraft((d) => ({ ...d, talk_enabled: v }))} value={draft.min_talk} onChange={(v) => setDraft((d) => ({ ...d, min_talk: v }))} />
         </div>
       </SectionCard>
 
@@ -210,6 +242,25 @@ export function SettingsTab({
             </div>
           </div>
         </div>
+      </SectionCard>
+
+      <SectionCard title="Auto-Reminders" subtitle="No admin click needed — checked automatically the moment anyone opens Performance Tracker after the times below, once per day per employee. Each missing employee gets reminded, and so does their team leader (set under Sales Teams below).">
+        <label className="mb-4 flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={draft.auto_reminder_enabled} onChange={(e) => setDraft((d) => ({ ...d, auto_reminder_enabled: e.target.checked }))} />
+          Automatically remind employees (and their team leader) who miss the deadline
+        </label>
+        {draft.auto_reminder_enabled && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Remind after (Morning Commitment)</label>
+              <input type="time" value={draft.auto_reminder_morning_cutoff.slice(0, 5)} onChange={(e) => setDraft((d) => ({ ...d, auto_reminder_morning_cutoff: `${e.target.value}:00` }))} className={ptInputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Remind after (Evening Report)</label>
+              <input type="time" value={draft.auto_reminder_evening_cutoff.slice(0, 5)} onChange={(e) => setDraft((d) => ({ ...d, auto_reminder_evening_cutoff: `${e.target.value}:00` }))} className={ptInputCls} />
+            </div>
+          </div>
+        )}
       </SectionCard>
 
       <div className="flex items-center gap-3">
@@ -255,7 +306,7 @@ export function SettingsTab({
         </div>
       </SectionCard>
 
-      <SectionCard title="Custom KPI Fields" subtitle="Extra numeric fields to collect on the Morning/Evening forms — not counted toward Score or Achievement, just tracked.">
+      <SectionCard title="Custom KPI Fields" subtitle="Add a genuinely new field of your own — the admin's 'add' for whatever isn't in the 6 built-in metrics above. Optionally make it count toward Score and the minimum-criteria check, exactly like a built-in one.">
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-slate-600">Field Label</label>
@@ -263,12 +314,37 @@ export function SettingsTab({
           </div>
           <label className="flex items-center gap-1.5 pb-2 text-xs text-slate-700"><input type="checkbox" checked={newFieldMorning} onChange={(e) => setNewFieldMorning(e.target.checked)} />Morning</label>
           <label className="flex items-center gap-1.5 pb-2 text-xs text-slate-700"><input type="checkbox" checked={newFieldEvening} onChange={(e) => setNewFieldEvening(e.target.checked)} />Evening</label>
+        </div>
+        <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg bg-slate-50 p-3">
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+            <input type="checkbox" checked={newFieldScored} onChange={(e) => setNewFieldScored(e.target.checked)} />
+            Count toward Score &amp; minimum-criteria (like a built-in metric)
+          </label>
+          {newFieldScored && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Points / unit</label>
+                <input type="number" value={newFieldWeight} onChange={(e) => setNewFieldWeight(Number(e.target.value))} className={`${ptInputCls} w-28`} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Min required (optional)</label>
+                <input type="number" value={newFieldMinThreshold} onChange={(e) => setNewFieldMinThreshold(e.target.value)} placeholder="—" className={`${ptInputCls} w-28`} />
+              </div>
+            </>
+          )}
           <button onClick={handleAddField} disabled={savingField || !newFieldLabel.trim()} className="flex-shrink-0 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">Add Field</button>
         </div>
         <div className="space-y-1.5">
           {customFields.map((f) => (
             <div key={f.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm">
-              <span className="text-slate-800">{f.label} <span className="text-xs text-slate-600">({[f.applies_morning && 'Morning', f.applies_evening && 'Evening'].filter(Boolean).join(', ')})</span></span>
+              <span className="text-slate-800">
+                {f.label} <span className="text-xs text-slate-600">({[f.applies_morning && 'Morning', f.applies_evening && 'Evening'].filter(Boolean).join(', ')})</span>
+                {f.counts_toward_score && (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    Scored — {f.score_weight} pt/unit{f.min_threshold != null ? `, min ${f.min_threshold}` : ''}
+                  </span>
+                )}
+              </span>
               <button onClick={() => handleDeleteField(f.id)} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>
             </div>
           ))}

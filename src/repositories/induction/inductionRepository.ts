@@ -11,6 +11,7 @@ import type {
   InductionDaySection,
   InductionDaySectionForm,
   InductionAssignment,
+  InductionDayCompletion,
 } from '../../types/induction';
 
 // ── Days ──────────────────────────────────────────────────────────────────────
@@ -87,13 +88,13 @@ export async function deleteSection(id: string): Promise<void> {
 
 // ── Day completion tracking (gates Test sections + the next Day) ────────────
 
-export async function getCompletionsForEmployee(employeeId: string): Promise<string[]> {
+export async function getCompletionsForEmployee(employeeId: string): Promise<InductionDayCompletion[]> {
   const { data, error } = await supabase
     .from('induction_day_completions')
-    .select('day_id')
+    .select('day_id, completed_at')
     .eq('employee_id', employeeId);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => r.day_id);
+  return data ?? [];
 }
 
 export async function markDayComplete(dayId: string, employeeId: string, companyId: string): Promise<void> {
