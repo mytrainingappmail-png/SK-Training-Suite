@@ -147,6 +147,10 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
       is_hidden: false,
       source_label: null,
       options: optionTexts.map((option_text, oi) => ({ option_text, is_correct: oi === correctIndex })),
+      image_url: null,
+      target_x: null,
+      target_y: null,
+      target_radius: null,
     });
   });
 

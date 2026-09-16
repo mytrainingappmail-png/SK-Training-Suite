@@ -51,7 +51,7 @@ export interface Quiz {
   updated_at: string;
 }
 
-export type QuizQuestionType = "mcq" | "truefalse";
+export type QuizQuestionType = "mcq" | "truefalse" | "hotspot";
 
 export interface QuizQuestionOption {
   id: string;
@@ -75,6 +75,11 @@ export interface QuizQuestion {
   /** The source quiz's title when this question arrived via mergeQuizzes — lets a merged quiz's questions later be found and removed by which project they came from. Null for a question created directly. */
   source_label: string | null;
   options: QuizQuestionOption[];
+  /** Only meaningful when type is "hotspot" — the image the trainee taps on, and the one correct spot on it (target_x/target_y/target_radius, all 0-100 as a percent of the image's width/height). */
+  image_url: string | null;
+  target_x: number | null;
+  target_y: number | null;
+  target_radius: number | null;
 }
 
 /** A quiz with its questions/options — the shape the builder edits as one unit. */
@@ -133,6 +138,9 @@ export interface QuizAnswer {
   participant_id: string;
   question_id: string;
   selected_option_id: string | null;
+  /** Only set for a "hotspot" question's answer — where the participant tapped, as a percent (0-100) of the image's width/height. */
+  click_x: number | null;
+  click_y: number | null;
   is_correct: boolean;
   response_time_ms: number;
   answered_at: string;
@@ -192,11 +200,23 @@ export interface PublicQuizQuestion {
   question_index: number;
   total_questions: number;
   options: PublicQuizQuestionOption[];
+  /** Only set for a "hotspot" question — never its target_x/y/radius, which stay server-side until scoring. */
+  image_url: string | null;
 }
 
 export interface SubmitAnswerResult {
   is_correct: boolean;
   correct_option_id: string | null;
+  points_awarded: number;
+  explanation: string | null;
+}
+
+/** Returned by submit_quiz_hotspot_answer — reveals the correct spot only after the tap has already been scored. */
+export interface SubmitHotspotAnswerResult {
+  is_correct: boolean;
+  target_x: number | null;
+  target_y: number | null;
+  target_radius: number | null;
   points_awarded: number;
   explanation: string | null;
 }
@@ -502,20 +522,39 @@ export interface ChampionRow {
   sessions_played: number;
 }
 
-/** One row per option, returned by get_my_answer_review — group client-side by question_index. */
+/** One row per option (mcq/truefalse) or one row total (hotspot), returned by get_my_answer_review — group client-side by question_index. */
 export interface AnswerReviewOptionRow {
   question_index: number;
   question_text: string;
   explanation: string;
-  option_id: string;
-  option_text: string;
-  is_correct: boolean;
-  was_chosen: boolean;
+  type: QuizQuestionType;
+  option_id: string | null;
+  option_text: string | null;
+  is_correct: boolean | null;
+  was_chosen: boolean | null;
+  image_url: string | null;
+  target_x: number | null;
+  target_y: number | null;
+  target_radius: number | null;
+  click_x: number | null;
+  click_y: number | null;
+  hotspot_is_correct: boolean | null;
 }
 
 export interface AnswerReviewQuestion {
   question_index: number;
   question_text: string;
   explanation: string;
+  type: QuizQuestionType;
   options: { option_id: string; option_text: string; is_correct: boolean; was_chosen: boolean }[];
+  /** Only set when type is "hotspot". */
+  hotspot: {
+    image_url: string | null;
+    target_x: number | null;
+    target_y: number | null;
+    target_radius: number | null;
+    click_x: number | null;
+    click_y: number | null;
+    is_correct: boolean | null;
+  } | null;
 }

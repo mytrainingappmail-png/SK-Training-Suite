@@ -39,6 +39,13 @@ export function validateQuestions(questions: QuestionForm[]): SaveQuestionsResul
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     if (!q.question_text.trim()) return { ok: false, error: `Question ${i + 1} has no text.` };
+
+    if (q.type === "hotspot") {
+      if (!q.image_url) return { ok: false, error: `Question ${i + 1} needs an image uploaded.` };
+      if (q.target_x === null || q.target_y === null) return { ok: false, error: `Question ${i + 1} needs the correct spot marked on the image.` };
+      continue;
+    }
+
     const options = q.type === "truefalse" ? q.options.slice(0, 2) : q.options;
     if (options.length < 2) return { ok: false, error: `Question ${i + 1} needs at least 2 options.` };
     if (options.some((o) => !o.option_text.trim())) return { ok: false, error: `Question ${i + 1} has an empty option.` };
@@ -70,6 +77,10 @@ export async function publishQuiz(quizId: string): Promise<void> {
       is_hidden: q.is_hidden,
       source_label: q.source_label,
       options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+      image_url: q.image_url,
+      target_x: q.target_x,
+      target_y: q.target_y,
+      target_radius: q.target_radius,
     }))
   );
   if (!validation.ok) throw new Error(validation.error);
@@ -111,6 +122,10 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
         is_hidden: q.is_hidden,
         source_label: q.source_label,
         options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+        image_url: q.image_url,
+        target_x: q.target_x,
+        target_y: q.target_y,
+        target_radius: q.target_radius,
       }))
     );
   }
@@ -163,6 +178,10 @@ export async function mergeQuizzes(
       // questions" find them again inside the merged result.
       source_label: q.title,
       options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+      image_url: question.image_url,
+      target_x: question.target_x,
+      target_y: question.target_y,
+      target_radius: question.target_radius,
     }))
   );
 

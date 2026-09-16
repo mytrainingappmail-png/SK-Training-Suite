@@ -28,6 +28,11 @@ export interface QuestionForm {
   is_hidden: boolean;
   source_label: string | null;
   options: QuestionOptionForm[];
+  /** Only meaningful when type is "hotspot" — see QuizQuestion for field meanings. */
+  image_url: string | null;
+  target_x: number | null;
+  target_y: number | null;
+  target_radius: number | null;
 }
 
 export async function listQuizzes(companyId: string): Promise<Quiz[]> {
@@ -166,6 +171,10 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
         is_hidden: q.is_hidden,
         source_label: q.source_label,
         display_order: i,
+        image_url: q.image_url,
+        target_x: q.target_x,
+        target_y: q.target_y,
+        target_radius: q.target_radius,
       }))
     )
     .select("id");

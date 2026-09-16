@@ -364,6 +364,22 @@ export default function QuizHostLivePage() {
                 </div>
               </div>
 
+              {currentQuestion.type === "hotspot" && currentQuestion.image_url ? (
+                <div className="relative inline-block max-w-full rounded-xl overflow-hidden border border-slate-800">
+                  <img src={currentQuestion.image_url} alt="" className="block max-w-full h-auto" draggable={false} />
+                  {revealed && currentQuestion.target_x !== null && currentQuestion.target_y !== null && (
+                    <div
+                      className="absolute rounded-full border-2 border-emerald-400 bg-emerald-400/25 -translate-x-1/2 -translate-y-1/2"
+                      style={{
+                        left: `${currentQuestion.target_x}%`,
+                        top: `${currentQuestion.target_y}%`,
+                        width: `${(currentQuestion.target_radius ?? 6) * 2}%`,
+                        aspectRatio: "1 / 1",
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
               <div className="space-y-2">
                 {currentQuestion.options.map((opt, i) => (
                   <div
@@ -380,6 +396,7 @@ export default function QuizHostLivePage() {
                   </div>
                 ))}
               </div>
+              )}
 
               <div className="flex justify-end">
                 <button

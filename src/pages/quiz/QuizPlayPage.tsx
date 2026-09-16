@@ -4,7 +4,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
-import { getCurrentQuestion, submitAnswer, heartbeat } from "../../services/quiz/quizPlayService";
+import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat } from "../../services/quiz/quizPlayService";
+import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
@@ -14,7 +15,7 @@ import { getMyAnswerReview, getMyResult, flagTabSwitch } from "../../repositorie
 import { rankByMarks, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizCertificateButton from "../../components/quiz/QuizCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
-import type { PublicQuizQuestion, SubmitAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
+import type { PublicQuizQuestion, SubmitAnswerResult, SubmitHotspotAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
 const DEFAULT_REVIEW_VISIBLE_SECONDS = 5 * 60;
 
@@ -36,6 +37,8 @@ export default function QuizPlayPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [answered, setAnswered] = useState(false);
   const [feedback, setFeedback] = useState<SubmitAnswerResult | null>(null);
+  const [hotspotFeedback, setHotspotFeedback] = useState<SubmitHotspotAnswerResult | null>(null);
+  const [myTap, setMyTap] = useState<{ x: number; y: number } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [playerSettings, setPlayerSettings] = useState<QuizPlayerSettings | null>(null);
   const [certificate, setCertificate] = useState<QuizCertificate | null>(null);
@@ -125,6 +128,8 @@ export default function QuizPlayPage() {
     setAnswered(false);
     setFeedback(null);
     setSelectedOptionId(null);
+    setHotspotFeedback(null);
+    setMyTap(null);
 
     getCurrentQuestion(sessionId).then((q) => {
       if (cancelled || !q) return;
@@ -154,7 +159,8 @@ export default function QuizPlayPage() {
     tickRef.current = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
-          handleSubmit(null);
+          if (question.type === "hotspot") handleHotspotSubmit(null, null);
+          else handleSubmit(null);
           return 0;
         }
         if (s <= 6 && playerSettings?.sound_enabled !== false) playTone("tick");
@@ -221,6 +227,22 @@ export default function QuizPlayPage() {
     try {
       const result = await submitAnswer(sessionId, question.question_id, optionId, responseTimeMs);
       setFeedback(result);
+      if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
+    } catch {
+      // network hiccup — leave the answer locked, host will still advance the quiz for everyone
+    }
+  }
+
+  async function handleHotspotSubmit(x: number | null, y: number | null) {
+    if (!sessionId || !question || answered) return;
+    setAnswered(true);
+    setMyTap(x !== null && y !== null ? { x, y } : null);
+    if (tickRef.current) clearInterval(tickRef.current);
+
+    const responseTimeMs = Date.now() - questionStartedAt.current;
+    try {
+      const result = await submitHotspotAnswer(sessionId, question.question_id, x, y, responseTimeMs);
+      setHotspotFeedback(result);
       if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
     } catch {
       // network hiccup — leave the answer locked, host will still advance the quiz for everyone
@@ -349,6 +371,25 @@ export default function QuizPlayPage() {
                   <div className="text-sm font-semibold text-white mb-2">
                     Q{q.question_index + 1}. {q.question_text}
                   </div>
+                  {q.type === "hotspot" && q.hotspot ? (
+                    q.hotspot.image_url && (
+                      <div className="-mx-4">
+                        <HotspotPlayer
+                          imageUrl={q.hotspot.image_url}
+                          disabled
+                          onTap={() => {}}
+                          markers={[
+                            ...(q.hotspot.target_x !== null && q.hotspot.target_y !== null
+                              ? [{ x: q.hotspot.target_x, y: q.hotspot.target_y, radius: q.hotspot.target_radius ?? undefined, correct: true }]
+                              : []),
+                            ...(!q.hotspot.is_correct && q.hotspot.click_x !== null && q.hotspot.click_y !== null
+                              ? [{ x: q.hotspot.click_x, y: q.hotspot.click_y, correct: false }]
+                              : []),
+                          ]}
+                        />
+                      </div>
+                    )
+                  ) : (
                   <div className="flex flex-col gap-1.5">
                     {q.options.map((opt) => (
                       <div
@@ -366,6 +407,7 @@ export default function QuizPlayPage() {
                       </div>
                     ))}
                   </div>
+                  )}
                   {q.explanation && <div className="text-xs text-slate-500 mt-2 italic">{q.explanation}</div>}
                 </div>
               ))}
@@ -412,6 +454,25 @@ export default function QuizPlayPage() {
       <div className="flex-1 flex flex-col">
         <div className="px-6 py-8 text-center text-lg font-semibold text-white">{question.question_text}</div>
 
+        {question.type === "hotspot" ? (
+          question.image_url && (
+            <HotspotPlayer
+              imageUrl={question.image_url}
+              disabled={answered}
+              onTap={(x, y) => handleHotspotSubmit(x, y)}
+              markers={
+                hotspotFeedback
+                  ? [
+                      ...(hotspotFeedback.target_x !== null && hotspotFeedback.target_y !== null
+                        ? [{ x: hotspotFeedback.target_x, y: hotspotFeedback.target_y, radius: hotspotFeedback.target_radius ?? undefined, correct: true }]
+                        : []),
+                      ...(!hotspotFeedback.is_correct && myTap ? [{ x: myTap.x, y: myTap.y, correct: false }] : []),
+                    ]
+                  : undefined
+              }
+            />
+          )
+        ) : (
         <div className="px-4 grid grid-cols-1 gap-3">
           {question.options.map((opt, i) => {
             const c = colors[i % colors.length];
@@ -432,18 +493,22 @@ export default function QuizPlayPage() {
             );
           })}
         </div>
+        )}
 
-        {answered && (
+        {answered && (() => {
+          const activeFeedback = question.type === "hotspot" ? hotspotFeedback : feedback;
+          const hasAnswerAttempt = question.type === "hotspot" ? myTap !== null : selectedOptionId !== null;
+          return (
           <div className="text-center mt-6 px-6">
-            {feedback ? (
+            {activeFeedback ? (
               <>
-                <div className="text-3xl mb-1">{feedback.is_correct ? "✅" : selectedOptionId ? "❌" : "⏰"}</div>
+                <div className="text-3xl mb-1">{activeFeedback.is_correct ? "✅" : hasAnswerAttempt ? "❌" : "⏰"}</div>
                 <div className="font-bold text-white">
-                  {feedback.is_correct ? `Correct! +${feedback.points_awarded}` : selectedOptionId ? "Wrong answer" : "Time's up!"}
+                  {activeFeedback.is_correct ? `Correct! +${activeFeedback.points_awarded}` : hasAnswerAttempt ? "Wrong answer" : "Time's up!"}
                 </div>
-                {feedback.explanation && (
+                {activeFeedback.explanation && (
                   <div className="text-sm text-slate-300 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-3 max-w-md mx-auto text-left">
-                    💡 {feedback.explanation}
+                    💡 {activeFeedback.explanation}
                   </div>
                 )}
               </>
@@ -452,7 +517,8 @@ export default function QuizPlayPage() {
             )}
             <div className="text-xs text-slate-500 mt-2">Waiting for the next question…</div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

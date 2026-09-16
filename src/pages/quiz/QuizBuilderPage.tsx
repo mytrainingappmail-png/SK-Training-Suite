@@ -5,6 +5,7 @@ import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { createQuiz, getQuiz, updateQuizMeta, saveQuestions, publishQuiz } from "../../services/quiz/quizService";
 import { buildSampleCsv, parseCsv, csvRowsToQuestions, downloadCsvFile } from "../../services/quiz/quizCsvService";
+import HotspotZoneEditor from "../../components/quiz/HotspotZoneEditor";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
 import type { QuizDifficulty } from "../../types/quiz";
 
@@ -34,6 +35,10 @@ function blankQuestion(): EditableQuestion {
       { option_text: "", is_correct: false },
       { option_text: "", is_correct: false },
     ],
+    image_url: null,
+    target_x: null,
+    target_y: null,
+    target_radius: null,
   };
 }
 
@@ -104,6 +109,10 @@ export default function QuizBuilderPage() {
                 is_hidden: q.is_hidden,
                 source_label: q.source_label,
                 options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+                image_url: q.image_url,
+                target_x: q.target_x,
+                target_y: q.target_y,
+                target_radius: q.target_radius,
               }))
             : [blankQuestion()]
         );
@@ -143,7 +152,9 @@ export default function QuizBuilderPage() {
               ...q,
               type,
               options:
-                type === "truefalse"
+                type === "hotspot"
+                  ? []
+                  : type === "truefalse"
                   ? [
                       { option_text: "True", is_correct: true },
                       { option_text: "False", is_correct: false },
@@ -151,6 +162,12 @@ export default function QuizBuilderPage() {
                   : q.options.length >= 2
                   ? q.options
                   : blankQuestion().options,
+              // Switching away from hotspot: the image/target were only
+              // ever meaningful for that type, so drop them rather than
+              // silently carrying stale data on a now-different question.
+              ...(type !== "hotspot" && q.type === "hotspot"
+                ? { image_url: null, target_x: null, target_y: null, target_radius: null }
+                : {}),
             }
           : q
       )
@@ -552,6 +569,7 @@ export default function QuizBuilderPage() {
                 >
                   <option value="mcq">Multiple Choice</option>
                   <option value="truefalse">True / False</option>
+                  <option value="hotspot">Click-the-Map</option>
                 </select>
                 <input
                   type="number"
@@ -598,6 +616,16 @@ export default function QuizBuilderPage() {
               onChange={(e) => updateQuestion(q.localId, { question_text: e.target.value })}
             />
 
+            {q.type === "hotspot" ? (
+              <HotspotZoneEditor
+                companyId={admin?.company_id ?? ""}
+                imageUrl={q.image_url}
+                targetX={q.target_x}
+                targetY={q.target_y}
+                targetRadius={q.target_radius}
+                onChange={(patch) => updateQuestion(q.localId, patch)}
+              />
+            ) : (
             <div className="space-y-2">
               {q.options.map((opt, oi) => (
                 <div key={oi} className="flex items-center gap-2">
@@ -637,6 +665,7 @@ export default function QuizBuilderPage() {
                 </button>
               )}
             </div>
+            )}
 
             <input
               className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-violet-500"

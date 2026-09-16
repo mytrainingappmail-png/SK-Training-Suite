@@ -28,6 +28,11 @@ interface BackupQuestion {
   is_hidden: boolean;
   source_label: string | null;
   options: BackupOption[];
+  /** Only meaningful when type is "hotspot" — absent in a backup made before this field existed, so all optional. */
+  image_url?: string | null;
+  target_x?: number | null;
+  target_y?: number | null;
+  target_radius?: number | null;
 }
 
 interface BackupQuiz {
@@ -88,6 +93,10 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
           is_hidden: question.is_hidden,
           source_label: question.source_label,
           options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+          image_url: question.image_url,
+          target_x: question.target_x,
+          target_y: question.target_y,
+          target_radius: question.target_radius,
         })),
       };
       return backupQuiz;
@@ -200,7 +209,15 @@ export async function importBackup(
     if (quiz.questions.length > 0) {
       await quizRepo.replaceQuestions(
         created.id,
-        quiz.questions.map((q) => ({ ...q, is_hidden: q.is_hidden ?? false, source_label: q.source_label ?? null }))
+        quiz.questions.map((q) => ({
+          ...q,
+          is_hidden: q.is_hidden ?? false,
+          source_label: q.source_label ?? null,
+          image_url: q.image_url ?? null,
+          target_x: q.target_x ?? null,
+          target_y: q.target_y ?? null,
+          target_radius: q.target_radius ?? null,
+        }))
       );
     }
     quizzesAdded += 1;

@@ -1,7 +1,7 @@
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import * as participantRepo from "../../repositories/quiz/quizParticipantRepository";
 import * as answerRepo from "../../repositories/quiz/quizAnswerRepository";
-import type { PublicQuizQuestion, SubmitAnswerResult } from "../../types/quiz";
+import type { PublicQuizQuestion, SubmitAnswerResult, SubmitHotspotAnswerResult } from "../../types/quiz";
 
 const PLAYER_NAME_KEY = "QUIZ_PLAYER_NAME";
 const PLAYER_CREDENTIALS_KEY = "QUIZ_PLAYER_CREDENTIALS";
@@ -126,6 +126,16 @@ export async function submitAnswer(
   responseTimeMs: number
 ): Promise<SubmitAnswerResult> {
   return answerRepo.submitAnswer(sessionId, questionId, optionId, responseTimeMs);
+}
+
+export async function submitHotspotAnswer(
+  sessionId: string,
+  questionId: string,
+  clickX: number | null,
+  clickY: number | null,
+  responseTimeMs: number
+): Promise<SubmitHotspotAnswerResult> {
+  return answerRepo.submitHotspotAnswer(sessionId, questionId, clickX, clickY, responseTimeMs);
 }
 
 export async function heartbeat(sessionId: string): Promise<void> {
