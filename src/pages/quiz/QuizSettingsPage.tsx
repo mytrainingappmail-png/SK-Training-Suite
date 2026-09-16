@@ -103,6 +103,7 @@ export default function QuizSettingsPage() {
       logoScale: editingDraft.logo_scale,
       watermarkType: editingDraft.watermark_type,
       watermarkText: editingDraft.watermark_text,
+      watermarkImageUrl: editingDraft.watermark_image_url,
       title: editingDraft.title,
       achievementLine: editingDraft.achievement_line,
       signatory1Name: editingDraft.signatory1_name,
@@ -229,6 +230,7 @@ export default function QuizSettingsPage() {
         logo_scale: editingDraft.logo_scale,
         watermark_type: editingDraft.watermark_type,
         watermark_text: editingDraft.watermark_text,
+        watermark_image_url: editingDraft.watermark_image_url,
         title: editingDraft.title,
         achievement_line: editingDraft.achievement_line,
         signatory1_name: editingDraft.signatory1_name,
@@ -982,6 +984,19 @@ export default function QuizSettingsPage() {
                     onChange={(e) => setEditingDraft({ ...editingDraft, watermark_text: e.target.value })}
                     placeholder="e.g. SAMPLE, CONFIDENTIAL, your company name…"
                   />
+                )}
+                {editingDraft.watermark_type === "logo" && (
+                  <div className="mt-3">
+                    <QuizBrandingImageField
+                      label="Watermark Image (optional)"
+                      hint="Leave empty to use the Certificate Logo above as the watermark. Upload here only if you want a different image just for the watermark."
+                      value={editingDraft.watermark_image_url}
+                      kind="cert-watermark-image"
+                      companyId={me.company_id}
+                      onChange={(url) => setEditingDraft({ ...editingDraft, watermark_image_url: url })}
+                      previewClassName="h-16 w-32 object-contain rounded-lg bg-white border border-slate-700"
+                    />
+                  </div>
                 )}
               </div>
             </div>

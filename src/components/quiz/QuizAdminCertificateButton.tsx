@@ -31,6 +31,7 @@ export default function QuizAdminCertificateButton({ participantId, companyId }:
       logoScale: c.cert_logo_scale,
       watermarkType: c.cert_watermark_type,
       watermarkText: c.cert_watermark_text,
+      watermarkImageUrl: c.cert_watermark_image_url,
       title: c.cert_title,
       achievementLine: c.achievement_line,
       signatory1Name: c.signatory1_name,

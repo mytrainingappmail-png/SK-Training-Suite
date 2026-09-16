@@ -15,10 +15,12 @@ export interface CertificateData {
   logoUrl?: string | null;
   logoPosition?: CertLogoPosition | null;
   logoScale?: number | null;
-  /** Independent of logoPosition — "logo" fades the same logo image across the page, "text" draws custom diagonal text (Word-style), "none"/undefined draws nothing. Either way this is in addition to, not instead of, the small positioned logo mark. */
+  /** Independent of logoPosition — "logo" fades an image across the page, "text" draws custom diagonal text (Word-style), "none"/undefined draws nothing. Either way this is in addition to, not instead of, the small positioned logo mark. */
   watermarkType?: CertWatermarkType | null;
   /** Only used when watermarkType is "text". */
   watermarkText?: string | null;
+  /** Only used when watermarkType is "logo" — a dedicated watermark image distinct from logoUrl. Falls back to logoUrl when not set. */
+  watermarkImageUrl?: string | null;
   title: string;
   achievementLine: string;
   signatory1Name?: string | null;
@@ -511,10 +513,11 @@ function drawPhoto(ctx: CanvasRenderingContext2D, frame: CertPhotoFrame, image: 
 }
 
 export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, template: CertTemplate, data: CertificateData): Promise<void> {
-  const [sig1ImageRaw, sig2ImageRaw, logoImageRaw, photoImage] = await Promise.all([
+  const [sig1ImageRaw, sig2ImageRaw, logoImageRaw, watermarkImageRaw, photoImage] = await Promise.all([
     loadImage(data.signatory1ImageUrl),
     loadImage(data.signatory2ImageUrl),
     loadImage(data.logoUrl),
+    loadImage(data.watermarkImageUrl),
     loadImage(data.photoEnabled ? data.photoUrl : null),
   ]);
   const sig1Image = sig1ImageRaw ? trimTransparentEdges(sig1ImageRaw) : null;
@@ -524,6 +527,10 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   // smaller and off-center than the bounding box suggests, in both the
   // small positioned mark and the background watermark.
   const logoImage = logoImageRaw ? trimTransparentEdges(logoImageRaw) : null;
+  // A dedicated watermark image (distinct from the small corner logo)
+  // takes priority when the admin has uploaded one; otherwise this falls
+  // back to the logo itself, exactly matching the pre-existing behavior.
+  const watermarkImage = (watermarkImageRaw ? trimTransparentEdges(watermarkImageRaw) : null) ?? logoImage;
 
   canvas.width = WIDTH * RENDER_SCALE;
   canvas.height = HEIGHT * RENDER_SCALE;
@@ -547,18 +554,22 @@ export async function renderCertificateToCanvas(canvas: HTMLCanvasElement, templ
   // it. Drawn first, low opacity, so everything else sits on top of it.
   // A "Picture watermark or Text watermark" choice, the same idea Word's
   // own watermark dialog offers.
-  if (logoImage && data.watermarkType === "logo") {
+  if (watermarkImage && data.watermarkType === "logo") {
+    // logoScale intentionally still governs this size even when a
+    // separate watermark image is in use — it's the one "how big" control
+    // already on this screen, and duplicating it per-image would just be
+    // one more setting for the same visual effect.
     const maxSize = 480 * logoPct;
-    const scale = Math.min(maxSize / logoImage.width, maxSize / logoImage.height);
-    const w = logoImage.width * scale;
-    const h = logoImage.height * scale;
+    const scale = Math.min(maxSize / watermarkImage.width, maxSize / watermarkImage.height);
+    const w = watermarkImage.width * scale;
+    const h = watermarkImage.height * scale;
     ctx.save();
     // 0.07 read as "not showing at all" in practice, especially for a
     // multi-color logo — this is the same "washed out" strength Word's
     // own picture-watermark preset uses, clearly visible without
     // fighting the text on top of it.
     ctx.globalAlpha = 0.16;
-    ctx.drawImage(logoImage, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h);
+    ctx.drawImage(watermarkImage, WIDTH / 2 - w / 2, HEIGHT / 2 - h / 2, w, h);
     ctx.restore();
   } else if (data.watermarkType === "text" && data.watermarkText) {
     ctx.save();

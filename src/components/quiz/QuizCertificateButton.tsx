@@ -28,6 +28,7 @@ export default function QuizCertificateButton({ cert }: { cert: QuizCertificate 
         logoScale: cert.cert_logo_scale,
         watermarkType: cert.cert_watermark_type,
         watermarkText: cert.cert_watermark_text,
+        watermarkImageUrl: cert.cert_watermark_image_url,
         title: cert.cert_title,
         achievementLine: cert.achievement_line,
         signatory1Name: cert.signatory1_name,

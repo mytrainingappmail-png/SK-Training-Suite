@@ -291,10 +291,12 @@ export interface CertTemplateDraft {
   logo_url: string | null;
   logo_position: CertLogoPosition;
   logo_scale: number;
-  /** Independent of logo_position — an optional full-page background watermark, either the logo image faded out or custom diagonal text (Word-style), on top of (not instead of) the small positioned logo mark. */
+  /** Independent of logo_position — an optional full-page background watermark, either an image faded out or custom diagonal text (Word-style), on top of (not instead of) the small positioned logo mark. */
   watermark_type: CertWatermarkType;
   /** Only used when watermark_type is "text". */
   watermark_text: string | null;
+  /** Only used when watermark_type is "logo" — a separate image just for the watermark, distinct from logo_url (the small corner mark). Falls back to logo_url when not set, so existing templates keep working unchanged. */
+  watermark_image_url: string | null;
   title: string;
   achievement_line: string;
   signatory1_name: string | null;
@@ -378,6 +380,7 @@ export interface QuizCertificate {
   cert_logo_scale: number;
   cert_watermark_type: CertWatermarkType;
   cert_watermark_text: string | null;
+  cert_watermark_image_url: string | null;
   cert_title: string;
   achievement_line: string;
   signatory1_name: string | null;
