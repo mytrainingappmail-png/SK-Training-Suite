@@ -45,14 +45,50 @@ export async function getSession(sessionId: string, client: SupabaseClient = sup
   return data;
 }
 
-export async function updateSessionPhase(
-  sessionId: string,
-  patch: Partial<Pick<QuizSession, "phase" | "current_question_index" | "started_at" | "ended_at" | "question_started_at">>
-): Promise<void> {
-  const { error } = await supabaseQuiz.from("quiz_sessions").update(patch).eq("id", sessionId);
+// ── Server-clock-authoritative session timing ───────────────────────────────
+// question_started_at must never be stamped by a client's own Date.now() —
+// the auto-advance safety net (quiz_participant_heartbeat) checks expiry
+// against the DATABASE's clock, so a start-time written by a client with
+// any clock drift makes a question look like it started earlier (or later)
+// than it really did. These RPCs let the database set its own "now".
 
+export async function startQuizSessionNow(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("start_quiz_session", { p_session_id: sessionId });
   if (error) {
-    console.error("[quizSessionRepository] updateSessionPhase:", error);
+    console.error("[quizSessionRepository] startQuizSessionNow:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function advanceQuizSessionNow(sessionId: string): Promise<"question" | "ended"> {
+  const { data, error } = await supabaseQuiz.rpc("advance_quiz_session", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizSessionRepository] advanceQuizSessionNow:", error);
+    throw new Error(error.message);
+  }
+  return data as "question" | "ended";
+}
+
+export async function pauseQuizSessionNow(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("pause_quiz_session", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizSessionRepository] pauseQuizSessionNow:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function resumeQuizSessionNow(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("resume_quiz_session", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizSessionRepository] resumeQuizSessionNow:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function endQuizSessionNow(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("end_quiz_session", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizSessionRepository] endQuizSessionNow:", error);
     throw new Error(error.message);
   }
 }

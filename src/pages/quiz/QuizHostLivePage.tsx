@@ -137,7 +137,7 @@ export default function QuizHostLivePage() {
       if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.phase, session?.current_question_index]);
+  }, [session?.phase, session?.current_question_index, session?.question_started_at]);
 
   // Live "X of Y answered" — subscribes to new quiz_answers rows for this
   // session and counts the ones matching whichever question is current,

@@ -35,43 +35,24 @@ export async function launchSession(
 }
 
 export async function startQuiz(sessionId: string): Promise<void> {
-  await sessionRepo.updateSessionPhase(sessionId, {
-    phase: "question",
-    current_question_index: 0,
-    started_at: new Date().toISOString(),
-    question_started_at: new Date().toISOString(),
-  });
+  await sessionRepo.startQuizSessionNow(sessionId);
 }
 
-/** Advances to the next question, or ends the session when the current one was the last. */
-export async function advanceQuestion(sessionId: string, totalQuestions: number): Promise<"question" | "ended"> {
-  const session = await sessionRepo.getSession(sessionId);
-  if (!session) throw new Error("Session not found.");
-
-  const nextIndex = session.current_question_index + 1;
-  if (nextIndex >= totalQuestions) {
-    await endSession(sessionId);
-    return "ended";
-  }
-
-  await sessionRepo.updateSessionPhase(sessionId, {
-    phase: "question",
-    current_question_index: nextIndex,
-    question_started_at: new Date().toISOString(),
-  });
-  return "question";
+/** Advances to the next question, or ends the session when the current one was the last — totalQuestions is no longer taken on faith from the caller, the RPC resolves it itself from the session's own question_order. */
+export async function advanceQuestion(sessionId: string, _totalQuestions?: number): Promise<"question" | "ended"> {
+  return sessionRepo.advanceQuizSessionNow(sessionId);
 }
 
 export async function pauseSession(sessionId: string): Promise<void> {
-  await sessionRepo.updateSessionPhase(sessionId, { phase: "paused" });
+  await sessionRepo.pauseQuizSessionNow(sessionId);
 }
 
 export async function resumeSession(sessionId: string): Promise<void> {
-  await sessionRepo.updateSessionPhase(sessionId, { phase: "question" });
+  await sessionRepo.resumeQuizSessionNow(sessionId);
 }
 
 export async function endSession(sessionId: string): Promise<void> {
-  await sessionRepo.updateSessionPhase(sessionId, { phase: "ended", ended_at: new Date().toISOString() });
+  await sessionRepo.endQuizSessionNow(sessionId);
 }
 
 export { getSession, getSessionResults, listSessionsForQuiz, listSessionsForCompany } from "../../repositories/quiz/quizSessionRepository";

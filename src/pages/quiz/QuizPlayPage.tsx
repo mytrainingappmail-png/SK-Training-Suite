@@ -152,6 +152,29 @@ export default function QuizPlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, session?.phase, session?.current_question_index]);
 
+  // Re-syncs the countdown (without touching answered/feedback) whenever
+  // question_started_at itself changes for the SAME question — e.g. a
+  // resume that shifts it forward. Deliberately separate from the effect
+  // above: that one also resets answered/feedback, which is correct for a
+  // genuinely NEW question but would wrongly clear an already-submitted
+  // answer if it re-ran just because the timer baseline moved. Matters
+  // most for a device that missed the pause/resume's realtime events
+  // entirely (was disconnected) and only catches up via a fresh session
+  // fetch on reconnect, where phase/current_question_index can land back
+  // on the same values that were already cached — the effect above
+  // wouldn't re-run for that, leaving this device's own countdown racing
+  // ahead of the real, server-tracked time and submitting "no answer"
+  // early even though time technically remained.
+  useEffect(() => {
+    if (!sessionId || !session || session.phase !== "question" || !question || answered) return;
+    questionStartedAt.current = Date.now();
+    const elapsedSec = session.question_started_at
+      ? Math.floor((Date.now() - new Date(session.question_started_at).getTime()) / 1000)
+      : 0;
+    setSecondsLeft(Math.max(0, question.timer_seconds - Math.max(0, elapsedSec)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.question_started_at]);
+
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
     if (!question || answered) return;
