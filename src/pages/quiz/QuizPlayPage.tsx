@@ -30,7 +30,7 @@ export default function QuizPlayPage() {
   const navigate = useNavigate();
   const locationState = (location.state as LocationState | null) ?? {};
 
-  const { session, participants } = useQuizSessionRealtime(sessionId ?? null, supabaseQuizPlayer);
+  const { session, participants, connected } = useQuizSessionRealtime(sessionId ?? null, supabaseQuizPlayer);
 
   const [participantId, setParticipantId] = useState<string | null>(locationState.participantId ?? null);
   const [question, setQuestion] = useState<PublicQuizQuestion | null>(null);
@@ -262,6 +262,7 @@ export default function QuizPlayPage() {
         <div className="h-8 w-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
         <div className="text-lg font-semibold text-white">Waiting for trainer to start…</div>
         <div className="text-sm text-slate-400">{locationState.quizTitle}</div>
+        {!connected && <div className="text-xs font-bold text-red-400 animate-pulse">⚠ Reconnecting…</div>}
       </div>
     );
   }
@@ -433,6 +434,11 @@ export default function QuizPlayPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
+      {!connected && (
+        <div className="bg-red-500 text-white text-center text-xs font-bold py-1.5 animate-pulse">
+          ⚠ Reconnecting… you may be behind — hold on
+        </div>
+      )}
       {justReconnected && (
         <div className="bg-amber-400 text-amber-950 text-center text-xs font-bold py-1.5">
           🔄 Reconnected — you're on Question {question.question_index + 1} of {question.total_questions}

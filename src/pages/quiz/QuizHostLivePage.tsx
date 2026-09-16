@@ -28,7 +28,7 @@ const PRESENCE_STALE_MS = 12000;
 export default function QuizHostLivePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { session, participants } = useQuizSessionRealtime(sessionId ?? null);
+  const { session, participants, connected } = useQuizSessionRealtime(sessionId ?? null);
   const canEdit = canEditQuizContent();
   const admin = getCurrentQuizAdmin();
 
@@ -274,6 +274,12 @@ export default function QuizHostLivePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {!connected && (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-red-400 animate-pulse" title="Live connection dropped — reconnecting automatically">
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+              Reconnecting…
+            </span>
+          )}
           <span className="text-xs text-slate-400">PIN:</span>
           <span className="font-mono font-bold text-amber-400 tracking-widest text-lg">{session.pin}</span>
         </div>
@@ -352,7 +358,7 @@ export default function QuizHostLivePage() {
                     <span className="ml-3 text-emerald-400">{answeredCount}/{participants.length} answered</span>
                   </div>
                   <div className="font-semibold mt-1" style={{ fontSize: `${1.125 * scale}rem` }}>
-                    {currentQuestion.question_text}
+                    {quiz.shuffle_questions_per_participant ? "🕵️ Anti-cheat mode is on" : currentQuestion.question_text}
                   </div>
                 </div>
                 <div
@@ -364,7 +370,11 @@ export default function QuizHostLivePage() {
                 </div>
               </div>
 
-              {currentQuestion.type === "hotspot" && currentQuestion.image_url ? (
+              {quiz.shuffle_questions_per_participant ? (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400">
+                  Every employee has their own shuffled question right now — there's no single "current question" to show here. The count above and the leaderboard still update live.
+                </div>
+              ) : currentQuestion.type === "hotspot" && currentQuestion.image_url ? (
                 <div className="relative inline-block max-w-full rounded-xl overflow-hidden border border-slate-800">
                   <img src={currentQuestion.image_url} alt="" className="block max-w-full h-auto" draggable={false} />
                   {revealed && currentQuestion.target_x !== null && currentQuestion.target_y !== null && (

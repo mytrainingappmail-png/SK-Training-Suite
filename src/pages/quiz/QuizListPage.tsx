@@ -21,6 +21,8 @@ export default function QuizListPage() {
   const [merging, setMerging] = useState(false);
   const [mergeTitle, setMergeTitle] = useState("");
   const [showMergeForm, setShowMergeForm] = useState(false);
+  const [mergeMode, setMergeMode] = useState<"new" | "existing">("new");
+  const [mergeTargetId, setMergeTargetId] = useState("");
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function refresh() {
@@ -124,14 +126,24 @@ export default function QuizListPage() {
   }
 
   async function handleMerge() {
-    if (!admin || selected.size < 2) return;
+    if (!admin) return;
+    if (mergeMode === "new" && selected.size < 2) return;
+    if (mergeMode === "existing" && (selected.size < 1 || !mergeTargetId)) return;
     setMerging(true);
     setError("");
     try {
       const titles = quizzes.filter((q) => selected.has(q.id)).map((q) => q.title);
-      await mergeQuizzes([...selected], admin.company_id, admin.id, mergeTitle || titles.join(" + "));
+      await mergeQuizzes(
+        [...selected],
+        admin.company_id,
+        admin.id,
+        mergeTitle || titles.join(" + "),
+        mergeMode === "existing" ? mergeTargetId : undefined
+      );
       setSelected(new Set());
       setMergeTitle("");
+      setMergeTargetId("");
+      setMergeMode("new");
       setShowMergeForm(false);
       refresh();
     } catch (e) {
@@ -273,14 +285,12 @@ export default function QuizListPage() {
           {!showMergeForm ? (
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm text-white font-semibold flex-1">{selected.size} quiz{selected.size === 1 ? "" : "zes"} selected</span>
-              {selected.size >= 2 && (
-                <button
-                  onClick={() => setShowMergeForm(true)}
-                  className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
-                >
-                  🔗 Merge Selected
-                </button>
-              )}
+              <button
+                onClick={() => setShowMergeForm(true)}
+                className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
+              >
+                🔗 Merge / Add
+              </button>
               <button
                 onClick={handleBulkDelete}
                 disabled={bulkDeleting}
@@ -297,29 +307,75 @@ export default function QuizListPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                New quiz title
-              </label>
-              <input
-                autoFocus
-                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-                placeholder={quizzes.filter((q) => selected.has(q.id)).map((q) => q.title).join(" + ")}
-                value={mergeTitle}
-                onChange={(e) => setMergeTitle(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMergeMode("new")}
+                  className={`flex-1 text-xs font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                    mergeMode === "new" ? "border-violet-500 bg-violet-500/10 text-violet-300" : "border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  🆕 Create New Quiz
+                </button>
+                <button
+                  onClick={() => setMergeMode("existing")}
+                  className={`flex-1 text-xs font-semibold rounded-lg px-3 py-2 border-2 transition-colors ${
+                    mergeMode === "existing" ? "border-violet-500 bg-violet-500/10 text-violet-300" : "border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  ➕ Add Into Existing Quiz
+                </button>
+              </div>
+
+              {mergeMode === "new" ? (
+                <>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                    New quiz title
+                  </label>
+                  <input
+                    autoFocus
+                    className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                    placeholder={quizzes.filter((q) => selected.has(q.id)).map((q) => q.title).join(" + ")}
+                    value={mergeTitle}
+                    onChange={(e) => setMergeTitle(e.target.value)}
+                  />
+                  {selected.size < 2 && <p className="text-[11px] text-amber-400">Select at least 2 quizzes to create a new merged quiz.</p>}
+                </>
+              ) : (
+                <>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                    Add the {selected.size} selected quiz{selected.size === 1 ? "" : "zes"} into…
+                  </label>
+                  <select
+                    className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                    value={mergeTargetId}
+                    onChange={(e) => setMergeTargetId(e.target.value)}
+                  >
+                    <option value="">Choose the destination quiz…</option>
+                    {quizzes
+                      .filter((q) => !selected.has(q.id))
+                      .map((q) => (
+                        <option key={q.id} value={q.id}>{q.title}</option>
+                      ))}
+                  </select>
+                  <p className="text-[11px] text-slate-500">
+                    That quiz's own questions stay as-is — this only adds the selected quizzes' questions into it. Its title/settings are untouched.
+                  </p>
+                </>
+              )}
+
               <div className="flex gap-2 justify-end">
                 <button
-                  onClick={() => setShowMergeForm(false)}
+                  onClick={() => { setShowMergeForm(false); setMergeMode("new"); setMergeTargetId(""); }}
                   className="text-xs text-slate-400 hover:text-white px-3 py-2"
                 >
                   Cancel
                 </button>
                 <button
-                  disabled={merging}
+                  disabled={merging || (mergeMode === "new" ? selected.size < 2 : selected.size < 1 || !mergeTargetId)}
                   onClick={handleMerge}
                   className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
                 >
-                  {merging ? "Merging…" : "🔗 Create Merged Quiz"}
+                  {merging ? "Working…" : mergeMode === "new" ? "🔗 Create Merged Quiz" : "➕ Add Into Quiz"}
                 </button>
               </div>
             </div>

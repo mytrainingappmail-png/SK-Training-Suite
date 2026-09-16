@@ -44,6 +44,8 @@ export interface Quiz {
   improve_threshold_pct: number;
   shuffle_options: boolean;
   shuffle_questions: boolean;
+  /** Anti-cheat — independent of shuffle_questions. Each participant gets their OWN deterministic order of the same question set (like shuffle_options already does per-participant), so looking at a neighbor's screen shows a different question at the same "Q3 of 10". When on, there's no longer one "current question" for the whole session, so the host/TV screen can't show its content — see QuizHostLivePage. */
+  shuffle_questions_per_participant: boolean;
   /** Off for practice/ungraded quizzes — no certificate is offered regardless of score. */
   issue_certificate: boolean;
   status: QuizStatus;
@@ -74,6 +76,8 @@ export interface QuizQuestion {
   is_hidden: boolean;
   /** The source quiz's title when this question arrived via mergeQuizzes — lets a merged quiz's questions later be found and removed by which project they came from. Null for a question created directly. */
   source_label: string | null;
+  /** The specific original question this one was copied from via mergeQuizzes — lets it be re-synced later if the original changes. Null for a question created directly, or if the original was since deleted. */
+  source_question_id: string | null;
   options: QuizQuestionOption[];
   /** Only meaningful when type is "hotspot" — the image the trainee taps on, and the one correct spot on it (target_x/target_y/target_radius, all 0-100 as a percent of the image's width/height). */
   image_url: string | null;

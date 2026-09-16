@@ -45,6 +45,8 @@ interface BackupQuiz {
   improve_threshold_pct: number;
   shuffle_options: boolean;
   shuffle_questions: boolean;
+  /** Absent in a backup made before this setting existed — restore defaults it to false. */
+  shuffle_questions_per_participant?: boolean;
   issue_certificate: boolean;
   status: QuizStatus;
   questions: BackupQuestion[];
@@ -82,6 +84,7 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
         improve_threshold_pct: q.improve_threshold_pct,
         shuffle_options: q.shuffle_options,
         shuffle_questions: q.shuffle_questions,
+        shuffle_questions_per_participant: q.shuffle_questions_per_participant,
         issue_certificate: q.issue_certificate,
         status: q.status,
         questions: (full?.questions ?? []).map((question) => ({
@@ -203,6 +206,7 @@ export async function importBackup(
       improve_threshold_pct: quiz.improve_threshold_pct,
       shuffle_options: quiz.shuffle_options,
       shuffle_questions: quiz.shuffle_questions ?? false,
+      shuffle_questions_per_participant: quiz.shuffle_questions_per_participant ?? false,
       issue_certificate: quiz.issue_certificate ?? true,
     });
 
@@ -213,6 +217,11 @@ export async function importBackup(
           ...q,
           is_hidden: q.is_hidden ?? false,
           source_label: q.source_label ?? null,
+          // Never carried across a backup/restore — the id it would point
+          // to belongs to a different database state (or doesn't exist at
+          // all in the restoring company), so re-linking it here would be
+          // meaningless at best and a dangling/wrong reference at worst.
+          source_question_id: null,
           image_url: q.image_url ?? null,
           target_x: q.target_x ?? null,
           target_y: q.target_y ?? null,

@@ -76,6 +76,7 @@ export async function publishQuiz(quizId: string): Promise<void> {
       explanation: q.explanation,
       is_hidden: q.is_hidden,
       source_label: q.source_label,
+      source_question_id: q.source_question_id,
       options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
       image_url: q.image_url,
       target_x: q.target_x,
@@ -107,6 +108,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     improve_threshold_pct: source.improve_threshold_pct,
     shuffle_options: source.shuffle_options,
     shuffle_questions: source.shuffle_questions,
+    shuffle_questions_per_participant: source.shuffle_questions_per_participant,
     issue_certificate: source.issue_certificate,
   });
 
@@ -121,6 +123,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
         explanation: q.explanation,
         is_hidden: q.is_hidden,
         source_label: q.source_label,
+        source_question_id: q.source_question_id,
         options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
         image_url: q.image_url,
         target_x: q.target_x,
@@ -133,13 +136,85 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
   return created;
 }
 
-/** Combines every question from the selected quizzes (in the order given) into one new draft quiz. */
+function toMergedQuestionForm(q: { title: string }, question: QuizWithQuestions["questions"][number]): QuestionForm {
+  return {
+    question_text: question.question_text,
+    type: question.type,
+    timer_seconds: question.timer_seconds,
+    marks: question.marks,
+    explanation: question.explanation,
+    is_hidden: question.is_hidden,
+    // Tags every question with the quiz it came FROM (not the merged
+    // quiz being built) — this is what later lets "remove Project X's
+    // questions" find them again inside the merged result.
+    source_label: q.title,
+    // The specific original row, for the "🔄 Sync from source" resync
+    // feature — lets a later edit to the original be pulled into this copy.
+    source_question_id: question.id,
+    options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    image_url: question.image_url,
+    target_x: question.target_x,
+    target_y: question.target_y,
+    target_radius: question.target_radius,
+  };
+}
+
+/** Preserves an existing question exactly as-is when it's carried forward into a replaceQuestions() call (merging more projects into an already-merged quiz shouldn't touch what's already there). */
+function toCarriedQuestionForm(question: QuizWithQuestions["questions"][number]): QuestionForm {
+  return {
+    question_text: question.question_text,
+    type: question.type,
+    timer_seconds: question.timer_seconds,
+    marks: question.marks,
+    explanation: question.explanation,
+    is_hidden: question.is_hidden,
+    source_label: question.source_label,
+    source_question_id: question.source_question_id,
+    options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    image_url: question.image_url,
+    target_x: question.target_x,
+    target_y: question.target_y,
+    target_radius: question.target_radius,
+  };
+}
+
+/**
+ * Combines every question from the selected quizzes (in the order given).
+ * Without targetQuizId: creates a brand-new draft quiz (needs 2+ sources).
+ * With targetQuizId: appends into that EXISTING quiz instead — its own
+ * questions are kept as-is, its title/settings are untouched, and only 1+
+ * source is needed since the target itself is effectively "one side."
+ * This is what lets an admin build up ONE cumulative merged test over
+ * multiple merge operations instead of getting a brand-new quiz (and a
+ * brand-new "remove a merged-in project" list) every single time.
+ */
 export async function mergeQuizzes(
   quizIds: string[],
   companyId: string,
   createdBy: string | null,
-  title: string
+  title: string,
+  targetQuizId?: string
 ): Promise<Quiz> {
+  if (targetQuizId) {
+    if (quizIds.length < 1) throw new Error("Select at least one quiz to add.");
+
+    const [target, ...sources] = await Promise.all([
+      quizRepo.getQuizWithQuestions(targetQuizId),
+      ...quizIds.map((id) => quizRepo.getQuizWithQuestions(id)),
+    ]);
+    if (!target) throw new Error("Could not load the destination quiz.");
+    const found = sources.filter((q): q is QuizWithQuestions => q !== null);
+    if (found.length === 0) throw new Error("Could not load the selected quizzes.");
+
+    const carried = target.questions.map(toCarriedQuestionForm);
+    const added = found.flatMap((q) => q.questions.map((question) => toMergedQuestionForm(q, question)));
+    await quizRepo.replaceQuestions(targetQuizId, [...carried, ...added]);
+
+    // Bumps updated_at and hands back a fresh Quiz row — nothing about the
+    // target's own title/settings is changed, only its question set.
+    return quizRepo.updateQuizMeta(targetQuizId, {});
+  }
+
   if (quizIds.length < 2) throw new Error("Select at least two quizzes to merge.");
 
   const sources = await Promise.all(quizIds.map((id) => quizRepo.getQuizWithQuestions(id)));
@@ -162,32 +237,43 @@ export async function mergeQuizzes(
     improve_threshold_pct: Math.round(found.reduce((sum, q) => sum + q.improve_threshold_pct, 0) / found.length),
     shuffle_options: found.some((q) => q.shuffle_options),
     shuffle_questions: found.some((q) => q.shuffle_questions),
+    shuffle_questions_per_participant: found.some((q) => q.shuffle_questions_per_participant),
     issue_certificate: found.every((q) => q.issue_certificate),
   });
 
-  const mergedQuestions = found.flatMap((q) =>
-    q.questions.map((question) => ({
-      question_text: question.question_text,
-      type: question.type,
-      timer_seconds: question.timer_seconds,
-      marks: question.marks,
-      explanation: question.explanation,
-      is_hidden: question.is_hidden,
-      // Tags every question with the quiz it came FROM (not the merged
-      // quiz being built) — this is what later lets "remove Project X's
-      // questions" find them again inside the merged result.
-      source_label: q.title,
-      options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
-      image_url: question.image_url,
-      target_x: question.target_x,
-      target_y: question.target_y,
-      target_radius: question.target_radius,
-    }))
-  );
+  const mergedQuestions = found.flatMap((q) => q.questions.map((question) => toMergedQuestionForm(q, question)));
 
   if (mergedQuestions.length > 0) {
     await quizRepo.replaceQuestions(created.id, mergedQuestions);
   }
 
   return created;
+}
+
+/** Just the syncable content fields — deliberately excludes source_label/source_question_id/is_hidden, which are the merged copy's own identity within its quiz, not content to overwrite. */
+export type ResyncedQuestionContent = Pick<QuestionForm, "question_text" | "type" | "timer_seconds" | "marks" | "explanation" | "options" | "image_url" | "target_x" | "target_y" | "target_radius">;
+
+/**
+ * Fetches the current content of a merged question's original source
+ * question, for the builder's "🔄 Sync from source" button — the caller
+ * merges this into local state (same edit-then-Save flow as everything
+ * else in the builder), it does not write to the database itself.
+ * Returns null if the source question no longer exists (deleted since the
+ * merge, or its whole quiz was removed).
+ */
+export async function resyncQuestionFromSource(sourceQuestionId: string): Promise<ResyncedQuestionContent | null> {
+  const source = await quizRepo.getQuestionById(sourceQuestionId);
+  if (!source) return null;
+  return {
+    question_text: source.question_text,
+    type: source.type,
+    timer_seconds: source.timer_seconds,
+    marks: source.marks,
+    explanation: source.explanation,
+    options: source.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    image_url: source.image_url,
+    target_x: source.target_x,
+    target_y: source.target_y,
+    target_radius: source.target_radius,
+  };
 }

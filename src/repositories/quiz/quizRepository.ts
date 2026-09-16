@@ -11,6 +11,7 @@ export interface QuizForm {
   improve_threshold_pct: number;
   shuffle_options: boolean;
   shuffle_questions: boolean;
+  shuffle_questions_per_participant: boolean;
   issue_certificate: boolean;
 }
 
@@ -27,6 +28,8 @@ export interface QuestionForm {
   explanation: string;
   is_hidden: boolean;
   source_label: string | null;
+  /** See QuizQuestion — the original question this was copied from via merge, if any. */
+  source_question_id: string | null;
   options: QuestionOptionForm[];
   /** Only meaningful when type is "hotspot" — see QuizQuestion for field meanings. */
   image_url: string | null;
@@ -80,6 +83,26 @@ export async function getQuizWithQuestions(quizId: string): Promise<QuizWithQues
   }));
 
   return { ...quiz, questions: sortedQuestions };
+}
+
+/** One question + its options, straight from the DB — used by the "sync from source" resync feature to fetch the current state of a merged question's original. */
+export async function getQuestionById(questionId: string): Promise<QuizQuestion | null> {
+  const { data, error } = await supabaseQuiz
+    .from("quiz_questions")
+    .select("*, options:quiz_question_options(*)")
+    .eq("id", questionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[quizRepository] getQuestionById:", error);
+    throw new Error(error.message);
+  }
+  if (!data) return null;
+
+  return {
+    ...data,
+    options: (data.options ?? []).slice().sort((a: { display_order: number }, b: { display_order: number }) => a.display_order - b.display_order),
+  };
 }
 
 export async function createQuiz(companyId: string, createdBy: string | null, form: QuizForm): Promise<Quiz> {
@@ -170,6 +193,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
         explanation: q.explanation,
         is_hidden: q.is_hidden,
         source_label: q.source_label,
+        source_question_id: q.source_question_id,
         display_order: i,
         image_url: q.image_url,
         target_x: q.target_x,

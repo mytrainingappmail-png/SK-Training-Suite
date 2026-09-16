@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
-import { createQuiz, getQuiz, updateQuizMeta, saveQuestions, publishQuiz } from "../../services/quiz/quizService";
+import { createQuiz, getQuiz, updateQuizMeta, saveQuestions, publishQuiz, resyncQuestionFromSource } from "../../services/quiz/quizService";
 import { buildSampleCsv, parseCsv, csvRowsToQuestions, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import HotspotZoneEditor from "../../components/quiz/HotspotZoneEditor";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
@@ -29,6 +29,7 @@ function blankQuestion(): EditableQuestion {
     explanation: "",
     is_hidden: false,
     source_label: null,
+    source_question_id: null,
     options: [
       { option_text: "", is_correct: true },
       { option_text: "", is_correct: false },
@@ -52,6 +53,7 @@ const DEFAULT_FORM: QuizForm = {
   improve_threshold_pct: 40,
   shuffle_options: false,
   shuffle_questions: false,
+  shuffle_questions_per_participant: false,
   issue_certificate: true,
 };
 
@@ -67,6 +69,8 @@ export default function QuizBuilderPage() {
   const [savedQuizId, setSavedQuizId] = useState<string | null>(quizId ?? null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [resyncingId, setResyncingId] = useState<string | null>(null);
+  const [resyncError, setResyncError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
@@ -95,6 +99,7 @@ export default function QuizBuilderPage() {
           improve_threshold_pct: quiz.improve_threshold_pct,
           shuffle_options: quiz.shuffle_options,
           shuffle_questions: quiz.shuffle_questions,
+          shuffle_questions_per_participant: quiz.shuffle_questions_per_participant,
           issue_certificate: quiz.issue_certificate,
         });
         setQuestions(
@@ -108,6 +113,7 @@ export default function QuizBuilderPage() {
                 explanation: q.explanation,
                 is_hidden: q.is_hidden,
                 source_label: q.source_label,
+                source_question_id: q.source_question_id,
                 options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
                 image_url: q.image_url,
                 target_x: q.target_x,
@@ -212,6 +218,24 @@ export default function QuizBuilderPage() {
       };
       return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
     });
+  }
+
+  /** Pulls the CURRENT content of a merged question's original into this local copy — same edit-then-Save flow as any other change, so nothing is written until Save/Publish is clicked afterward. */
+  async function handleResync(localId: string, sourceQuestionId: string) {
+    setResyncingId(localId);
+    setResyncError("");
+    try {
+      const content = await resyncQuestionFromSource(sourceQuestionId);
+      if (!content) {
+        setResyncError("The original question no longer exists — it may have been deleted.");
+        return;
+      }
+      updateQuestion(localId, content);
+    } catch (e) {
+      setResyncError(e instanceof Error ? e.message : "Sync failed.");
+    } finally {
+      setResyncingId(null);
+    }
   }
 
   const MIN_OPTIONS = 2;
@@ -368,6 +392,9 @@ export default function QuizBuilderPage() {
           {notice}
         </div>
       )}
+      {resyncError && (
+        <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{resyncError}</div>
+      )}
 
       {/* Settings */}
       <fieldset disabled={!canEdit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
@@ -452,6 +479,20 @@ export default function QuizBuilderPage() {
             onChange={(e) => setForm({ ...form, shuffle_questions: e.target.checked })}
           />
           Shuffle question order for each session
+        </label>
+        <label className="flex items-start gap-2 text-sm text-slate-300 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={form.shuffle_questions_per_participant}
+            onChange={(e) => setForm({ ...form, shuffle_questions_per_participant: e.target.checked })}
+          />
+          <span>
+            🕵️ Anti-cheat: different question order for every employee
+            <span className="block text-xs text-slate-500 mt-0.5">
+              Each device gets its own shuffled order of the same questions — copying a neighbor's screen won't help. When on, the host/TV screen shows progress only, not which specific question is live (there isn't just one anymore).
+            </span>
+          </span>
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
@@ -550,6 +591,16 @@ export default function QuizBuilderPage() {
                   <span title="Came in via merge" className="text-[10px] font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/30 rounded-full px-2 py-0.5">
                     📎 {q.source_label}
                   </span>
+                )}
+                {q.source_question_id && (
+                  <button
+                    onClick={() => handleResync(q.localId, q.source_question_id as string)}
+                    disabled={resyncingId === q.localId}
+                    title="Pull the latest content from the original question — overwrites this copy's text/options/image below. Click Save/Publish afterward to keep it."
+                    className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 hover:bg-emerald-500/20 disabled:opacity-50"
+                  >
+                    {resyncingId === q.localId ? "Syncing…" : "🔄 Sync from source"}
+                  </button>
                 )}
                 <button
                   onClick={() => toggleHidden(q.localId)}

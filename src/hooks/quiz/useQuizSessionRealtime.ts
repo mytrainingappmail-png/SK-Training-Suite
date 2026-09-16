@@ -22,27 +22,40 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
   const [session, setSession] = useState<QuizSession | null>(null);
   const [participants, setParticipants] = useState<QuizParticipant[]>([]);
   const [loading, setLoading] = useState(true);
+  // True once the channel has connected at least once; false while it's
+  // disconnected/reconnecting. A dropped connection (phone locks, backgrounds,
+  // a network blip) used to leave this screen silently frozen on whatever
+  // it last knew — the host keeps advancing while this device never finds
+  // out, which is exactly the "host and employee see different questions"
+  // symptom this was built to fix.
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
       setSession(null);
       setParticipants([]);
       setLoading(false);
+      setConnected(false);
       return;
     }
 
     let cancelled = false;
+    let hasConnectedOnce = false;
     setLoading(true);
 
-    Promise.all([getSession(sessionId, client), listParticipants(sessionId, client)])
-      .then(([s, p]) => {
-        if (cancelled) return;
-        setSession(s);
-        setParticipants(p);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    function refetchAll() {
+      Promise.all([getSession(sessionId as string, client), listParticipants(sessionId as string, client)])
+        .then(([s, p]) => {
+          if (cancelled) return;
+          setSession(s);
+          setParticipants(p);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+
+    refetchAll();
 
     const channel = client
       .channel(`quiz-session-${sessionId}`)
@@ -67,7 +80,20 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (cancelled) return;
+        if (status === "SUBSCRIBED") {
+          setConnected(true);
+          // Re-fetch on every (re)connect, not just the first one — any
+          // postgres_changes event missed while disconnected is gone for
+          // good, so the only reliable way back to the true current state
+          // is to ask for it fresh rather than trust the next diff.
+          if (hasConnectedOnce) refetchAll();
+          hasConnectedOnce = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setConnected(false);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -75,5 +101,5 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
     };
   }, [sessionId, client]);
 
-  return { session, participants, loading };
+  return { session, participants, loading, connected };
 }

@@ -146,6 +146,7 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
       explanation: idx.explanation >= 0 ? (r[idx.explanation] ?? "").trim() : "",
       is_hidden: false,
       source_label: null,
+      source_question_id: null,
       options: optionTexts.map((option_text, oi) => ({ option_text, is_correct: oi === correctIndex })),
       image_url: null,
       target_x: null,
