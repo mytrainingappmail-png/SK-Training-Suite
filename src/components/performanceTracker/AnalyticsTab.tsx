@@ -47,6 +47,14 @@ export function AnalyticsTab({ employees, departments }: { employees: Employee[]
     daysFiled: reps.length,
   })).sort((a, b) => b.avgAchievement - a.avgAchievement), [byEmp, empById]);
 
+  // With fewer than ~10 people who've filed a report, a plain top-5/bottom-5
+  // slice shows the SAME people in both cards (just reordered) — exclude
+  // whoever's already in Top 5 from the "Needs Attention" list instead of
+  // just re-slicing from the other end.
+  const top5 = perEmployee.slice(0, 5);
+  const topIds = new Set(top5.map((p) => p.empId));
+  const bottom5 = [...perEmployee].reverse().filter((p) => !topIds.has(p.empId)).slice(0, 5);
+
   const deptChart = useMemo(() => {
     const byDept = new Map<string, number[]>();
     for (const [empId, reps] of byEmp.entries()) {
@@ -105,7 +113,7 @@ export function AnalyticsTab({ employees, departments }: { employees: Employee[]
         <Card>
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Top 5 Performers</div>
           <div className="p-2">
-            {perEmployee.slice(0, 5).map((p) => (
+            {top5.map((p) => (
               <div key={p.empId} className="flex items-center justify-between px-3 py-2 text-sm">
                 <span className="font-medium text-slate-800">{p.name}</span>
                 <span className="font-mono font-semibold text-emerald-700">{p.avgAchievement}%</span>
@@ -117,13 +125,14 @@ export function AnalyticsTab({ employees, departments }: { employees: Employee[]
         <Card>
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Needs Attention (Bottom 5)</div>
           <div className="p-2">
-            {[...perEmployee].slice(-5).reverse().map((p) => (
+            {bottom5.map((p) => (
               <div key={p.empId} className="flex items-center justify-between px-3 py-2 text-sm">
                 <span className="font-medium text-slate-800">{p.name}</span>
                 <span className="font-mono font-semibold text-rose-600">{p.avgAchievement}%</span>
               </div>
             ))}
             {perEmployee.length === 0 && <p className="py-8 text-center text-xs text-slate-500">No data yet.</p>}
+            {perEmployee.length > 0 && bottom5.length === 0 && <p className="py-8 text-center text-xs text-slate-500">Not enough separate data yet — everyone who's filed is already in Top Performers.</p>}
           </div>
         </Card>
       </div>

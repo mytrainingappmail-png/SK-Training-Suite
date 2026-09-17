@@ -193,6 +193,18 @@ export async function checkAndRunAutoReminders(
   const nowHHMMSS = new Date().toTimeString().slice(0, 8);
   const active = employees.filter((e) => e.active);
 
+  // Fetched at most once total (not once per kind) — morning and evening
+  // both need the exact same team/leader map, and most calls into this
+  // function need neither (cutoff not reached yet, or nothing missing).
+  let leaderLookup: { teamMap: Record<string, string | null>; leaderById: Map<string, string | null> } | null = null;
+  async function getLeaderLookup() {
+    if (!leaderLookup) {
+      const [teamMap, teams] = await Promise.all([repo.getEmployeeTeamMap(companyId), repo.getTeams(companyId)]);
+      leaderLookup = { teamMap, leaderById: new Map(teams.map((t) => [t.id, t.team_leader_employee_id])) };
+    }
+    return leaderLookup;
+  }
+
   for (const kind of ['morning', 'evening'] as const) {
     const cutoff = kind === 'morning' ? settings.auto_reminder_morning_cutoff : settings.auto_reminder_evening_cutoff;
     if (nowHHMMSS < cutoff) continue;
@@ -212,8 +224,7 @@ export async function checkAndRunAutoReminders(
     // notification per leader — resolved via employees.pt_team_id ->
     // pt_teams.team_leader_employee_id (never done anywhere in this app
     // before this).
-    const [teamMap, teams] = await Promise.all([repo.getEmployeeTeamMap(companyId), repo.getTeams(companyId)]);
-    const leaderById = new Map(teams.map((t) => [t.id, t.team_leader_employee_id]));
+    const { teamMap, leaderById } = await getLeaderLookup();
     const namesByLeader = new Map<string, string[]>();
     for (const e of missing) {
       const teamId = teamMap[e.id];
@@ -223,7 +234,7 @@ export async function checkAndRunAutoReminders(
       namesByLeader.set(leaderId, [...(namesByLeader.get(leaderId) ?? []), name]);
     }
     const kindLabel = kind === 'morning' ? 'morning commitment' : 'evening report';
-    for (const [leaderId, names] of namesByLeader) {
+    await Promise.all(Array.from(namesByLeader.entries()).map(async ([leaderId, names]) => {
       const notification = await createNotification(companyId, triggeringEmployeeId, {
         ...defaultNotificationForm,
         type: 'announcement',
@@ -233,7 +244,7 @@ export async function checkAndRunAutoReminders(
         created_by_name: 'Performance Tracker (Auto-Reminder)',
       });
       await sendNotificationNow(notification, [leaderId]).catch(() => {});
-    }
+    }));
   }
 }
 

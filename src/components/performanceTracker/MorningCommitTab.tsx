@@ -25,6 +25,7 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
 
   const [f2f, setF2f] = useState(0);
   const [sv, setSv] = useState(0);
+  const [plannedSite, setPlannedSite] = useState('');
   const [revisit, setRevisit] = useState(0);
   const [calls, setCalls] = useState(0);
   const [conn, setConn] = useState(0);
@@ -58,8 +59,8 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
     try {
       await submitCommitment({
         company_id: user.companyId, employee_id: user.id, work_date: today,
-        f2f_planned: f2f, sv_planned: sv, revisit_planned: revisit,
-        calls_planned: calls, conn_target: conn, talk_target: talk,
+        f2f_planned: f2f, sv_planned: sv, planned_site: sv > 0 ? (plannedSite.trim() || null) : null,
+        revisit_planned: revisit, calls_planned: calls, conn_target: conn, talk_target: talk,
         remarks: remarks || null, custom_values: customValues,
       });
       await load();
@@ -105,6 +106,7 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
               <div><p className="font-mono text-lg font-bold">{mine.sv_planned}</p><p className="text-[11px] text-slate-500">Site Visits</p></div>
               <div><p className="font-mono text-lg font-bold">{mine.calls_planned}</p><p className="text-[11px] text-slate-500">Calls</p></div>
             </div>
+            {mine.planned_site && <p className="pt-1 text-center text-xs text-slate-600">📍 {mine.planned_site}</p>}
           </div>
         ) : (
           <>
@@ -112,6 +114,15 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
             <div className="grid gap-3 sm:grid-cols-2">
               {settings.f2f_enabled && <NumField label="F2F Meetings Planned" value={f2f} onChange={setF2f} />}
               {settings.sv_enabled && <NumField label="Site Visits Planned" value={sv} onChange={setSv} />}
+              {settings.sv_enabled && sv > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Planned Site / Location</label>
+                  <input
+                    type="text" value={plannedSite} onChange={(e) => setPlannedSite(e.target.value)}
+                    placeholder="e.g. Sector 104, Dwarka Expressway" className={`mt-1 ${ptInputCls}`}
+                  />
+                </div>
+              )}
               {settings.revisit_enabled && <NumField label="Revisits Planned" value={revisit} onChange={setRevisit} />}
               {settings.calls_enabled && <NumField label="Total Calls Planned" value={calls} onChange={setCalls} />}
               {settings.conn_enabled && <NumField label="Connected Calls Target" value={conn} onChange={setConn} />}

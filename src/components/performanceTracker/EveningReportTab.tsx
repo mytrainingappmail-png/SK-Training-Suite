@@ -122,6 +122,7 @@ export function EveningReportTab({ settings, customFields }: { settings: PtSetti
             <div><p className="font-mono text-lg font-bold">{mine.bookings}</p><p className="text-[11px] text-slate-500">Bookings</p></div>
             <div>{mine.min_criteria_met ? <Badge tone="active">✓ Met</Badge> : <Badge tone="rejected">✗ Not Met</Badge>}</div>
           </div>
+          <p className="text-[11px] text-slate-400">Achievement % is based on F2F, Site Visits and Calls only — Revisits, Connected Calls and Talk Time are tracked but don't factor into it.</p>
           {mine.manager_comment && (
             <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Manager Feedback</p>
@@ -165,6 +166,7 @@ export function EveningReportTab({ settings, customFields }: { settings: PtSetti
               <span className="text-xs font-semibold text-slate-700">Live Auto-Calculated Performance</span>
               <Badge tone="info">Live</Badge>
             </div>
+            <p className="mb-3 text-[11px] text-slate-500">"Achievement" per metric only shows for F2F, Site Visits and Calls (the ones counted in your overall Achievement %) — Revisits/Connected/Talk still count toward Score and Min Criteria below, just not Achievement %.</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {live.metrics.map((m) => {
                 const pct = Math.round((m.done / m.planned) * 100);

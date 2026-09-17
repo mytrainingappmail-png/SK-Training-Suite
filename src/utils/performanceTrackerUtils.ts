@@ -6,8 +6,19 @@
 
 import type { PtReport } from '../types/performanceTracker';
 
+// Deliberately NOT `d.toISOString().slice(0, 10)` — that reads the UTC
+// calendar date, not the local one. For a positive UTC offset (e.g. IST,
+// UTC+5:30) that's flat-out wrong for any Date built from local Y/M/D
+// components (new Date(y, m, d) is local midnight, which is still the
+// PREVIOUS day in UTC — permanently off by one, not just near midnight),
+// and even for "new Date() right now" it's wrong for the first ~5:30
+// hours of every local day. Reading the Date object's own local
+// getFullYear/getMonth/getDate never crosses that UTC boundary.
 export function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export interface RangeBucket { label: string; start: string; end: string }
@@ -40,6 +51,12 @@ export function weekRange(ref = new Date()): PeriodRange {
     start: dstr, end: dstr,
   }));
   return { start: days[0], end: days[6], days, buckets };
+}
+
+/** This week's Saturday–Sunday (weekRange's own Mon-based days[5]/days[6]) — the "weekend plan" quick filter. */
+export function weekendRange(ref = new Date()): { start: string; end: string } {
+  const wr = weekRange(ref);
+  return { start: wr.days[5], end: wr.days[6] };
 }
 
 export function monthRange(ref = new Date()): PeriodRange {
@@ -102,22 +119,6 @@ export function periodLabel(period: PtPeriod, range: PeriodRange, ref = new Date
     case 'yearly': return String(ref.getFullYear());
     default: return `${range.start} to ${range.end}`;
   }
-}
-
-export function csvDownload(filename: string, rows: (string | number)[][]) {
-  const csv = rows
-    .map((row) => row.map((cell) => {
-      const s = String(cell ?? '');
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    }).join(','))
-    .join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /** Average achievement% across a set of reports, ignoring nulls (no commitment that day). */

@@ -79,6 +79,9 @@ export interface PtCommitment {
   work_date: string;
   f2f_planned: number;
   sv_planned: number;
+  // Where — freeform, only meaningful alongside sv_planned > 0. Lets a
+  // report answer "who's going where" for site visits, not just "how many".
+  planned_site: string | null;
   revisit_planned: number;
   calls_planned: number;
   conn_target: number;

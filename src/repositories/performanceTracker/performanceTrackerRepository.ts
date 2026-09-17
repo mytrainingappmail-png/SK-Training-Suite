@@ -8,7 +8,19 @@ import type {
   PtReport, PtReportForm, PtChampionCategory,
 } from '../../types/performanceTracker';
 
-export const todayStr = () => new Date().toISOString().slice(0, 10);
+// Local calendar date, not UTC — `new Date().toISOString().slice(0, 10)`
+// reads the UTC date, which is still "yesterday" for the first ~5:30 hours
+// of every IST day (UTC+5:30), corrupting the "one commitment/report per
+// day" logic that depends on this for exactly that window. Kept in sync
+// with the identical fix in src/utils/performanceTrackerUtils.ts's fmtDate
+// (this repository layer deliberately doesn't import from utils/).
+export const todayStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 // ── Teams ────────────────────────────────────────────────────────────────
 
