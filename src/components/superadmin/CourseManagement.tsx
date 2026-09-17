@@ -29,6 +29,7 @@ import {
 } from "../../services/course/courseService";
 import { loadCompanies, loadCompany } from "../../services/company/companyService";
 import { loadCategories } from "../../services/category/categoryService";
+import CourseBulkImportModal from "./CourseBulkImportModal";
 
 import type { Course, CourseForm, CourseLevel } from "../../types/course";
 import type { Company } from "../../types/company";
@@ -1160,6 +1161,7 @@ type ModalKind =
   | { type: "delete"; course: Course }
   | { type: "reorder" }
   | { type: "convert"; course: Course }
+  | { type: "bulk-import" }
   | null;
 
 export default function CourseManagement() {
@@ -1354,6 +1356,15 @@ export default function CourseManagement() {
           >
             <IconGrip className="h-4 w-4" />
             Reorder Courses
+          </button>
+          <button
+            onClick={() => openModal({ type: "bulk-import" })}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-95"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Bulk Import (CSV)
           </button>
           <button
             ref={addBtnRef}
@@ -1608,6 +1619,17 @@ export default function CourseManagement() {
           saving={reordering}
           onReorder={handleReorderCourses}
           onClose={closeModal}
+        />
+      )}
+
+      {/* Bulk import (CSV) */}
+      {modal?.type === "bulk-import" && (
+        <CourseBulkImportModal
+          companies={companies}
+          categories={categories}
+          courses={courses}
+          onClose={closeModal}
+          onImported={load}
         />
       )}
 
