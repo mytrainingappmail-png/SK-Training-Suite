@@ -25,6 +25,11 @@ export const HELP_CATEGORIES: { value: string; label: string }[] = [
   { value: "employees", label: "Employees & Roles" },
   { value: "settings", label: "Settings & Theme" },
   { value: "reports", label: "Reports" },
+  { value: "live_quiz", label: "Live Quiz" },
+  { value: "exams", label: "Exams" },
+  { value: "surveys", label: "Surveys" },
+  { value: "performance_tracker", label: "Performance Tracker" },
+  { value: "calling_app", label: "Calling App" },
   { value: "support", label: "Notifications & Support" },
   { value: "general", label: "General" },
 ];

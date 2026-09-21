@@ -8,6 +8,7 @@ import { HELP_CATEGORIES } from '../../types/helpArticle';
 import type { HelpArticle, HelpArticleStatus } from '../../types/helpArticle';
 import { ROUTES } from '../../constants/routes';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { buildHelpGuideHtml, downloadHtmlFile, printHtml } from '../../utils/helpGuideExport';
 
 const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
@@ -215,6 +216,20 @@ function HelpCenter() {
 
       <div className="flex flex-wrap items-center gap-2">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the guide…" className={`${INPUT_CLS} max-w-md`} />
+        <button
+          onClick={() => downloadHtmlFile('user-guide.html', buildHelpGuideHtml(visibleArticles.filter((a) => a.status === 'published'), 'User Guide', 'RealTrainer'))}
+          className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/70 hover:bg-slate-50"
+          title="Download the whole guide as one file you can keep, share or print"
+        >
+          ⬇ Download guide
+        </button>
+        <button
+          onClick={() => { if (!printHtml(buildHelpGuideHtml(visibleArticles.filter((a) => a.status === 'published'), 'User Guide', 'RealTrainer'))) setError('Please allow pop-ups to save the guide as a PDF.'); }}
+          className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/70 hover:bg-slate-50"
+          title="Opens the print dialog — choose Save as PDF"
+        >
+          🖨 Save as PDF
+        </button>
         {isOperator && (
           <button onClick={() => setEditingArticle('new')} className="ml-auto rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm" style={{ backgroundColor: '#0F172A' }}>
             + New Article
@@ -271,12 +286,20 @@ function HelpCenter() {
                     <span className="text-xs font-semibold uppercase tracking-wide text-indigo-500">{categoryLabel(selected.category)}</span>
                     <h2 className="mt-1 text-xl font-bold text-slate-900">{selected.title}</h2>
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => downloadHtmlFile(`${selected.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.html`, buildHelpGuideHtml([selected], selected.title, 'RealTrainer'))}
+                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                    >
+                      ⬇ Download
+                    </button>
                   {isOperator && (
-                    <div className="flex gap-2">
+                    <>
                       <button onClick={() => setEditingArticle(selected)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">Edit</button>
                       <button onClick={() => setDeleteTarget(selected)} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Delete</button>
-                    </div>
+                    </>
                   )}
+                  </div>
                 </div>
                 <div className="prose prose-slate max-w-none text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.content_html) }} />
                 <div className="mt-6 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">

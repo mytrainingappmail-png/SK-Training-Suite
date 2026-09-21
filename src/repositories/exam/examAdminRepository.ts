@@ -97,6 +97,17 @@ export async function getExamQuestionStats(sessionId: string): Promise<ExamQuest
   return (data as ExamQuestionStat[] | null) ?? [];
 }
 
+export async function getExamSessionFolder(sessionId: string): Promise<string | null> {
+  const { data, error } = await supabaseQuiz.rpc("get_exam_session_folder", { p_session_id: sessionId });
+  if (error) fail("getExamSessionFolder", error);
+  return (data as string | null) ?? null;
+}
+
+export async function moveExamSessionToFolder(sessionId: string, folderId: string | null): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("move_exam_session_to_folder", { p_session_id: sessionId, p_folder_id: folderId });
+  if (error) fail("moveExamSessionToFolder", error);
+}
+
 export async function listExamSessions(quizId: string): Promise<ExamSession[]> {
   const { data, error } = await supabaseQuiz
     .from("exam_sessions")

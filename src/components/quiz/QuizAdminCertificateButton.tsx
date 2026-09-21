@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 
-import { issueCertificateForParticipant, updateCertificatePhoto } from "../../repositories/quiz/quizCertificateRepository";
+import { issueCertificateForParticipant, updateCertificatePhoto, issueExamCertificate, updateExamCertificatePhoto } from "../../repositories/quiz/quizCertificateRepository";
 import { uploadBrandingImage } from "../../repositories/quiz/quizBrandingUploadRepository";
 import { renderCertificateToCanvas, downloadCanvasAsPng } from "../../services/quiz/quizCertificateRenderer";
 import type { QuizCertificate } from "../../types/quiz";
 
 /** Lets the HOST hand out a certificate straight from the TV/live screen — the trainee doesn't need their own device. */
-export default function QuizAdminCertificateButton({ participantId, companyId }: { participantId: string; companyId: string }) {
+export default function QuizAdminCertificateButton({ participantId, companyId, kind = "live" }: { participantId: string; companyId: string; kind?: "live" | "exam" }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [cert, setCert] = useState<QuizCertificate | null>(null);
@@ -59,7 +59,7 @@ export default function QuizAdminCertificateButton({ participantId, companyId }:
     setLoading(true);
     setError("");
     try {
-      const issued = await issueCertificateForParticipant(participantId);
+      const issued = await (kind === "exam" ? issueExamCertificate(participantId) : issueCertificateForParticipant(participantId));
       setCert(issued);
       await renderAndDownload(issued);
     } catch (err) {
@@ -78,7 +78,7 @@ export default function QuizAdminCertificateButton({ participantId, companyId }:
     setError("");
     try {
       const { url } = await uploadBrandingImage(companyId, "candidate-photo", file);
-      await updateCertificatePhoto(cert.id, url);
+      await (kind === "exam" ? updateExamCertificatePhoto(cert.id, url) : updateCertificatePhoto(cert.id, url));
       const updated = { ...cert, candidate_photo_url: url };
       setCert(updated);
       await renderAndDownload(updated);

@@ -30,6 +30,29 @@ import type {
   CallingAppBatchPerformance,
 } from "../../types/callingApp";
 
+/** Supabase caps every SELECT at 1000 rows, silently. A company with a few thousand leads or
+ * call logs would otherwise see a truncated list - wrong dashboard counts, missing leads, an
+ * incomplete duplicate scan - with no error. This pages through the whole result. */
+const PAGE = 1000;
+async function fetchAllRows<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const all: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    all.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return all;
+}
+
+/** Big id/mobile lists go in the URL of an `in()` filter, which breaks past a few hundred values. */
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export async function listDispositions(client: SupabaseClient, companyId: string): Promise<CallingAppDisposition[]> {
   const { data, error } = await client
     .from("calling_app_dispositions")
@@ -99,13 +122,30 @@ export async function createCallList(client: SupabaseClient, companyId: string, 
 }
 
 export async function listContacts(client: SupabaseClient, companyId: string): Promise<CallingAppContact[]> {
-  const { data, error } = await client
-    .from("calling_app_contacts")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAllRows<CallingAppContact>((from, to) =>
+    client.from("calling_app_contacts").select("*").eq("company_id", companyId)
+      .order("created_at", { ascending: false }).order("id").range(from, to));
+}
+
+/** Bulk import: a few round trips per 500 rows instead of one per row. Rows come back in input order. */
+export async function createContactsBulk(client: SupabaseClient, companyId: string, listId: string | null, forms: CallingAppContactForm[]): Promise<CallingAppContact[]> {
+  const created: CallingAppContact[] = [];
+  for (const part of chunk(forms, 500)) {
+    const { data, error } = await client
+      .from("calling_app_contacts")
+      .insert(part.map((f) => ({ ...f, company_id: companyId, list_id: listId })))
+      .select();
+    if (error) throw new Error(error.message);
+    created.push(...(data ?? []));
+  }
+  return created;
+}
+
+export async function upsertCustomFieldValuesBulk(client: SupabaseClient, values: { contact_id: string; field_def_id: string; value_text: string }[]): Promise<void> {
+  for (const part of chunk(values, 500)) {
+    const { error } = await client.from("calling_app_custom_field_values").upsert(part, { onConflict: "contact_id,field_def_id" });
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function createContact(client: SupabaseClient, companyId: string, listId: string | null, form: CallingAppContactForm): Promise<CallingAppContact> {
@@ -149,13 +189,9 @@ export async function upsertCustomFieldValue(client: SupabaseClient, contactId: 
 }
 
 export async function listCallLogs(client: SupabaseClient, companyId: string): Promise<CallingAppCallLog[]> {
-  const { data, error } = await client
-    .from("calling_app_call_logs")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("called_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAllRows<CallingAppCallLog>((from, to) =>
+    client.from("calling_app_call_logs").select("*").eq("company_id", companyId)
+      .order("called_at", { ascending: false }).order("id").range(from, to));
 }
 
 /** Logs the call AND updates the contact's disposition/remarks/attempt
@@ -201,13 +237,17 @@ export async function logCall(
  * anyway — that choice is always the admin's, never automatic). */
 export async function findDuplicateMobiles(client: SupabaseClient, companyId: string, mobiles: string[]): Promise<DuplicateMobileMatch[]> {
   if (mobiles.length === 0) return [];
-  const { data, error } = await client
-    .from("calling_app_contacts")
-    .select("id, mobile_no, name, assigned_to")
-    .eq("company_id", companyId)
-    .in("mobile_no", mobiles);
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  const data: { id: string; mobile_no: string; name: string; assigned_to: string | null }[] = [];
+  for (const part of chunk(Array.from(new Set(mobiles)), 150)) {
+    const { data: rows, error } = await client
+      .from("calling_app_contacts")
+      .select("id, mobile_no, name, assigned_to")
+      .eq("company_id", companyId)
+      .in("mobile_no", part);
+    if (error) throw new Error(error.message);
+    data.push(...(rows ?? []));
+  }
+  return data.map((row) => ({
     mobile_no: row.mobile_no,
     existingContactId: row.id,
     existingName: row.name,
@@ -220,17 +260,32 @@ export async function findDuplicateMobiles(client: SupabaseClient, companyId: st
  * batch in upload order), optionally narrowed to one list. No limit
  * unless the caller passes one — the pool itself has no size cap. */
 export async function getUnassignedContacts(client: SupabaseClient, companyId: string, listId?: string, limit?: number): Promise<CallingAppContact[]> {
-  let query = client
-    .from("calling_app_contacts")
-    .select("*")
-    .eq("company_id", companyId)
-    .is("assigned_to", null)
-    .order("created_at", { ascending: true });
+  const build = (from: number, to: number) => {
+    let query = client
+      .from("calling_app_contacts")
+      .select("*")
+      .eq("company_id", companyId)
+      .is("assigned_to", null)
+      .order("created_at", { ascending: true })
+      .order("id");
+    if (listId) query = query.eq("list_id", listId);
+    return query.range(from, to);
+  };
+  if (limit) {
+    const { data, error } = await build(0, Math.min(limit, PAGE) - 1);
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  }
+  return fetchAllRows<CallingAppContact>(build);
+}
+
+/** Cheap head-count of the pool - the Distribute box only needs the number, not every lead. */
+export async function countUnassignedContacts(client: SupabaseClient, companyId: string, listId?: string): Promise<number> {
+  let query = client.from("calling_app_contacts").select("id", { count: "exact", head: true }).eq("company_id", companyId).is("assigned_to", null);
   if (listId) query = query.eq("list_id", listId);
-  if (limit) query = query.limit(limit);
-  const { data, error } = await query;
+  const { count, error } = await query;
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return count ?? 0;
 }
 
 /** Hands a specific batch of contacts to one employee in one go —
@@ -238,21 +293,31 @@ export async function getUnassignedContacts(client: SupabaseClient, companyId: s
  * kitna diya" reportable afterwards. Also notifies the employee, same as
  * an automatic top-up would — a manual and an automatic distribution
  * should feel identical from the receiving agent's side. */
-export async function distributeContacts(client: SupabaseClient, contactIds: string[], assignTo: string, assignedBy: string, companyId: string): Promise<void> {
-  if (contactIds.length === 0) return;
-  const { error } = await client
-    .from("calling_app_contacts")
-    .update({ assigned_to: assignTo, assigned_by: assignedBy, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .in("id", contactIds);
-  if (error) throw new Error(error.message);
+export async function distributeContacts(client: SupabaseClient, contactIds: string[], assignTo: string, assignedBy: string, companyId: string): Promise<number> {
+  if (contactIds.length === 0) return 0;
+  let given = 0;
+  for (const part of chunk(contactIds, 100)) {
+    // "is assigned_to null" makes this safe when two people distribute at once: a lead someone
+    // else already handed out is left alone instead of being silently taken from them.
+    const { data, error } = await client
+      .from("calling_app_contacts")
+      .update({ assigned_to: assignTo, assigned_by: assignedBy, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .in("id", part)
+      .is("assigned_to", null)
+      .select("id");
+    if (error) throw new Error(error.message);
+    given += data?.length ?? 0;
+  }
+  if (given === 0) return 0;
 
   const { error: notifyError } = await client.from("calling_app_notifications").insert({
     company_id: companyId,
     recipient_admin_id: assignTo,
     kind: "leads_assigned",
-    message: `${contactIds.length} new lead(s) have been given to you.`,
+    message: `${given} new lead(s) have been given to you.`,
   });
   if (notifyError) throw new Error(notifyError.message);
+  return given;
 }
 
 // ── Settings (auto-distribution on/off + batch size) ────────────────────
@@ -309,13 +374,9 @@ export async function recallContacts(client: SupabaseClient, fromAdminId: string
 // ── Batch performance ("who completed their data in how much time") ─────
 
 export async function listBatchPerformance(client: SupabaseClient, companyId: string): Promise<CallingAppBatchPerformance[]> {
-  const { data, error } = await client
-    .from("calling_app_batch_performance")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("assigned_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAllRows<CallingAppBatchPerformance>((from, to) =>
+    client.from("calling_app_batch_performance").select("*").eq("company_id", companyId)
+      .order("assigned_at", { ascending: false }).range(from, to));
 }
 
 // ── Registered mobile number ────────────────────────────────────────────
@@ -344,15 +405,12 @@ export function buildMasterSheetSummary(lists: CallingAppCallList[], contacts: C
  * lists uploaded before this feature existed). Oldest entry first in
  * each group. */
 export async function findDuplicateGroups(client: SupabaseClient, companyId: string): Promise<DuplicateContactGroup[]> {
-  const { data, error } = await client
-    .from("calling_app_contacts")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<CallingAppContact>((from, to) =>
+    client.from("calling_app_contacts").select("*").eq("company_id", companyId)
+      .order("created_at", { ascending: true }).order("id").range(from, to));
 
   const byMobile = new Map<string, CallingAppContact[]>();
-  (data ?? []).forEach((c) => {
+  data.forEach((c) => {
     const list = byMobile.get(c.mobile_no) ?? [];
     list.push(c);
     byMobile.set(c.mobile_no, list);
@@ -369,8 +427,10 @@ export async function findDuplicateGroups(client: SupabaseClient, companyId: str
 export async function removeDuplicateContacts(client: SupabaseClient, groups: DuplicateContactGroup[]): Promise<number> {
   const idsToDelete = groups.flatMap((g) => g.entries.slice(1).map((c) => c.id));
   if (idsToDelete.length === 0) return 0;
-  const { error } = await client.from("calling_app_contacts").delete().in("id", idsToDelete);
-  if (error) throw new Error(error.message);
+  for (const part of chunk(idsToDelete, 100)) {
+    const { error } = await client.from("calling_app_contacts").delete().in("id", part);
+    if (error) throw new Error(error.message);
+  }
   return idsToDelete.length;
 }
 
@@ -382,13 +442,9 @@ export async function markProspect(client: SupabaseClient, contactId: string, is
 }
 
 export async function listHandoffs(client: SupabaseClient, companyId: string): Promise<CallingAppHandoff[]> {
-  const { data, error } = await client
-    .from("calling_app_handoffs")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAllRows<CallingAppHandoff>((from, to) =>
+    client.from("calling_app_handoffs").select("*").eq("company_id", companyId)
+      .order("created_at", { ascending: false }).order("id").range(from, to));
 }
 
 /** Requests a handoff — the recipient must accept before ownership
@@ -421,13 +477,9 @@ export async function declineHandoff(client: SupabaseClient, handoffId: string, 
 // ── Break tracking ───────────────────────────────────────────────────
 
 export async function listBreaks(client: SupabaseClient, companyId: string): Promise<CallingAppBreak[]> {
-  const { data, error } = await client
-    .from("calling_app_breaks")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("started_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAllRows<CallingAppBreak>((from, to) =>
+    client.from("calling_app_breaks").select("*").eq("company_id", companyId)
+      .order("started_at", { ascending: false }).order("id").range(from, to));
 }
 
 /** The one-active-break-per-admin rule is enforced by a partial unique

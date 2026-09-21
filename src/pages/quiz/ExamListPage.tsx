@@ -5,6 +5,7 @@ import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz, duplicateQuiz } from "../../services/quiz/quizService";
 import { createExamSession, listExamSessions } from "../../repositories/exam/examAdminRepository";
+import { listFoldersForCompany } from "../../repositories/quiz/quizResultFolderRepository";
 import type { Quiz } from "../../types/quiz";
 import type { ExamSession } from "../../types/exam";
 
@@ -30,6 +31,7 @@ export default function ExamListPage() {
   const [error, setError] = useState("");
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ExamSession[]>([]);
+  const [folderNames, setFolderNames] = useState<Record<string, string>>({});
 
   const [startTarget, setStartTarget] = useState<Quiz | null>(null);
   const [durationText, setDurationText] = useState("60");
@@ -70,6 +72,7 @@ export default function ExamListPage() {
     setSessions([]);
     try {
       setSessions(await listExamSessions(quizId));
+      if (admin) setFolderNames(Object.fromEntries((await listFoldersForCompany(admin.company_id)).map((f) => [f.id, f.name])));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load sessions.");
     }
@@ -204,7 +207,7 @@ export default function ExamListPage() {
                           className="flex items-center justify-between gap-3 text-xs bg-slate-800/60 hover:bg-slate-800 rounded-lg px-3 py-2"
                         >
                           <span className="text-slate-200">{new Date(s.created_at).toLocaleString()}</span>
-                          <span className="text-slate-500">PIN {s.pin}</span>
+                          <span className="text-slate-500">PIN {s.pin}{s.folder_id && folderNames[s.folder_id] ? ` · 📁 ${folderNames[s.folder_id]}` : ""}</span>
                           <span className={s.finished_at ? "text-slate-400" : "text-emerald-400"}>{sessionLabel(s)}{s.results_released ? " · results shared" : ""}</span>
                         </Link>
                       ))}

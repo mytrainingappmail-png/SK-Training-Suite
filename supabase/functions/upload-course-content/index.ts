@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     // live lookup against the `employees` table.
     const { data: employee, error: employeeError } = await admin
       .from('employees')
-      .select('id, active')
+      .select('id, active, company_id')
       .eq('id', employeeId)
       .single();
 
@@ -87,9 +87,24 @@ Deno.serve(async (req) => {
       return json({ error: 'Invalid media kind.' }, 400);
     }
 
+    // Storage quota: refuse the upload up front if it would push the company past its plan's
+    // storage allowance (or exceeds the platform's per-file limit). Limits live in the database
+    // (storage_settings + subscription_plans.max_storage_gb), not in this code.
+    const { data: check, error: checkError } = await admin
+      .rpc('storage_check_upload', { p_company: employee.company_id, p_bytes: file.size })
+      .single();
+    if (checkError) {
+      return json({ error: checkError.message }, 500);
+    }
+    if (check && !(check as { ok: boolean }).ok) {
+      return json({ error: (check as { reason: string }).reason }, 413);
+    }
+
     const folder = FOLDER_BY_KIND[kind];
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const uniquePrefix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // Path stays images|videos|documents/... so the Storage Manager keeps listing it; the owning
+    // company is recorded in storage_file_owners for the usage report.
     const path = `${folder}/${uniquePrefix}-${safeName}`;
 
     const { error: uploadError } = await admin.storage
@@ -99,6 +114,8 @@ Deno.serve(async (req) => {
     if (uploadError) {
       return json({ error: uploadError.message }, 500);
     }
+
+    await admin.from('storage_file_owners').upsert({ bucket_id: MEDIA_BUCKET, name: path, company_id: employee.company_id, uploaded_by: employee.id });
 
     const { data: publicUrlData } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
 

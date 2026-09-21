@@ -191,8 +191,12 @@ function UploadModal({
       setRows(result.rows);
       setErrors(result.errors);
 
-      const matches = await dataRepo.findDuplicateMobiles(identity.client, identity.admin.company_id, result.rows.map((r) => r.form.mobile_no));
-      setDuplicates(new Map(matches.map((m) => [m.mobile_no, m.existingName])));
+      try {
+        const matches = await dataRepo.findDuplicateMobiles(identity.client, identity.admin.company_id, result.rows.map((r) => r.form.mobile_no));
+        setDuplicates(new Map(matches.map((m) => [m.mobile_no, m.existingName])));
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Could not check for duplicate numbers.", false);
+      }
     });
   }
 
@@ -203,12 +207,11 @@ function UploadModal({
     setUploading(true);
     try {
       const list = await dataRepo.createCallList(identity.client, identity.admin.company_id, listName || fileName, rowsToImport.length, identity.admin.id);
-      for (const r of rowsToImport) {
-        const contact = await dataRepo.createContact(identity.client, identity.admin.company_id, list.id, r.form);
-        for (const cfv of r.customFieldValues) {
-          await dataRepo.upsertCustomFieldValue(identity.client, contact.id, cfv.field_def_id, cfv.value_text);
-        }
-      }
+      const created = await dataRepo.createContactsBulk(identity.client, identity.admin.company_id, list.id, rowsToImport.map((r) => r.form));
+      await dataRepo.upsertCustomFieldValuesBulk(
+        identity.client,
+        rowsToImport.flatMap((r, i) => r.customFieldValues.map((cfv) => ({ contact_id: created[i].id, field_def_id: cfv.field_def_id, value_text: cfv.value_text }))),
+      );
       showToast(`Uploaded ${rowsToImport.length} contacts.`);
       onDone();
       onClose();
@@ -316,6 +319,19 @@ export function CallingAppSheetTab({
     });
   }, [contacts, viewMine, admin.id, dispositionFilter, search]);
 
+  // "Today's follow-ups": my leads whose next-call time has come (overdue first), so nothing promised to a
+  // prospect is forgotten. Logging a new call re-sets or clears the time, which removes it from here.
+  const followUps = useMemo(() => {
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const now = Date.now();
+    return contacts
+      .filter((c) => c.assigned_to === admin.id && c.next_call_at && new Date(c.next_call_at) <= endOfToday)
+      .sort((a, b) => new Date(a.next_call_at!).getTime() - new Date(b.next_call_at!).getTime())
+      .map((c) => ({ contact: c, overdue: new Date(c.next_call_at!).getTime() < now }));
+  }, [contacts, admin.id]);
+  const [followUpsOpen, setFollowUpsOpen] = useState(true);
+
   async function handleAssign(contact: CallingAppContact, assignTo: string) {
     await dataRepo.updateContact(identity.client, contact.id, { assigned_to: assignTo || null });
     onChanged();
@@ -358,6 +374,36 @@ export function CallingAppSheetTab({
           )}
         </div>
       </div>
+
+      {followUps.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
+          <button onClick={() => setFollowUpsOpen((v) => !v)} className="flex w-full items-center justify-between text-left">
+            <span className="text-sm font-bold text-amber-900">
+              ⏰ Follow-ups due today
+              <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{followUps.length}</span>
+              {followUps.some((f) => f.overdue) && <span className="ml-2 text-xs font-semibold text-red-600">{followUps.filter((f) => f.overdue).length} overdue</span>}
+            </span>
+            <span className="text-amber-700">{followUpsOpen ? "▲" : "▼"}</span>
+          </button>
+          {followUpsOpen && (
+            <div className="mt-3 space-y-2">
+              {followUps.map(({ contact: c, overdue }) => (
+                <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-800">{c.name}</p>
+                    <p className="text-xs text-slate-600">
+                      {c.mobile_no} · <span className={overdue ? "font-semibold text-red-600" : "text-amber-700"}>{overdue ? "Overdue · " : ""}{new Date(c.next_call_at!).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    </p>
+                    {c.remarks && <p className="truncate text-xs text-slate-500">“{c.remarks}”</p>}
+                  </div>
+                  <a href={`tel:${c.mobile_no}`} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">📞 Dial</a>
+                  <button onClick={() => setCallTarget(c)} className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">Call &amp; Log</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div className="rounded-2xl border border-slate-100 bg-white px-4 py-10 text-center text-sm text-slate-600 shadow-sm">

@@ -18,6 +18,7 @@ export interface ExamSession {
   finished_at: string | null;
   results_released: boolean;
   results_released_at: string | null;
+  folder_id?: string | null;
   created_at: string;
 }
 

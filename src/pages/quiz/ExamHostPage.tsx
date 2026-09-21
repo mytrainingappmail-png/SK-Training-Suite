@@ -2,10 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
+import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
+import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
+import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
+import type { QuizResultFolder } from "../../types/quiz";
 import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
-  startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls,
+  getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls,
 } from "../../repositories/exam/examAdminRepository";
 import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat } from "../../types/exam";
 
@@ -47,6 +51,37 @@ export default function ExamHostPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [markInputs, setMarkInputs] = useState<Record<string, { marks: string; comment: string }>>({});
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const admin = getCurrentQuizAdmin();
+  const [folders, setFolders] = useState<QuizResultFolder[]>([]);
+  const [folderId, setFolderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!admin || !sessionId) return;
+    void (async () => {
+      try {
+        setFolders(await listFoldersForCompany(admin.company_id));
+        setFolderId(await getExamSessionFolder(sessionId));
+      } catch { /* folders are optional - the page works without them */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  async function changeFolder(value: string) {
+    try {
+      let target: string | null = value === "" ? null : value;
+      if (value === "__new__") {
+        const name = prompt("Name for the new folder (e.g. Batch 12 - Induction):")?.trim();
+        if (!name || !admin) return;
+        const created = await createFolder(admin.company_id, name, admin.id);
+        setFolders((f) => [created, ...f]);
+        target = created.id;
+      }
+      await moveExamSessionToFolder(sessionId, target);
+      setFolderId(target);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not move to the folder.");
+    }
+  }
 
   const clockOffsetMs = useRef(0);
 
@@ -297,6 +332,18 @@ export default function ExamHostPage() {
             <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <h2 className="text-sm font-bold">Results</h2>
               <div className="flex gap-2 flex-wrap">
+                {canEditQuizContent() && (
+                  <select
+                    value={folderId ?? ""}
+                    onChange={(e) => void changeFolder(e.target.value)}
+                    title="Save this result in a Batch Record folder"
+                    className="text-xs font-semibold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5"
+                  >
+                    <option value="">📁 No folder</option>
+                    {folders.map((f) => <option key={f.id} value={f.id}>📁 {f.name}</option>)}
+                    <option value="__new__">＋ New folder…</option>
+                  </select>
+                )}
                 <button onClick={exportCsv} className="text-xs font-semibold text-slate-200 border border-slate-700 hover:bg-slate-800 rounded-lg px-3 py-1.5">⬇ Download CSV</button>
                 <button
                   onClick={() => { if (!session.results_released && pendingTotal > 0 && !confirm(`${pendingTotal} written answer(s) are still unmarked and will show as 0. Share results anyway?`)) return; void act(() => releaseExamResults(sessionId, !session.results_released)); }}
@@ -331,7 +378,7 @@ export default function ExamHostPage() {
                         <td className="py-2 pr-3 font-mono text-xs">{pctOf(r)}%</td>
                         <td className="py-2 pr-3"><span className={`text-xs font-bold rounded-full px-2 py-0.5 ${pass ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{pass ? "Pass" : "Fail"}</span></td>
                         <td className="py-2 pr-3 text-xs">{r.pending_written > 0 ? <span className="text-amber-300">{r.pending_written} to mark</span> : <span className="text-slate-500">—</span>}</td>
-                        <td className="py-2 text-right"><button onClick={() => void openDetail(r)} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View / mark</button></td>
+                        <td className="py-2 text-right whitespace-nowrap">{pass && admin && r.pending_written === 0 && <span className="mr-2 inline-block align-middle"><QuizAdminCertificateButton kind="exam" participantId={r.participant_id} companyId={admin.company_id} /></span>}<button onClick={() => void openDetail(r)} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View / mark</button></td>
                       </tr>
                     );
                   })}

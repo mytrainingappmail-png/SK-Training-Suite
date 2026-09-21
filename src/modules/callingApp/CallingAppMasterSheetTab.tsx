@@ -138,8 +138,12 @@ function UploadToMasterSheet({
       const result = parseContactsCsv(text, fieldDefs);
       setRows(result.rows);
       setErrors(result.errors);
-      const matches = await dataRepo.findDuplicateMobiles(identity.client, identity.admin.company_id, result.rows.map((r) => r.form.mobile_no));
-      setDuplicates(new Map(matches.map((m) => [m.mobile_no, m.existingName])));
+      try {
+        const matches = await dataRepo.findDuplicateMobiles(identity.client, identity.admin.company_id, result.rows.map((r) => r.form.mobile_no));
+        setDuplicates(new Map(matches.map((m) => [m.mobile_no, m.existingName])));
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Could not check for duplicate numbers.", false);
+      }
     });
   }
 
@@ -153,12 +157,11 @@ function UploadToMasterSheet({
       // Sheet pool rather than any one employee's sheet. No row-count
       // limit either; every parsed row is inserted.
       const list = await dataRepo.createCallList(identity.client, identity.admin.company_id, listName || fileName, rowsToImport.length, identity.admin.id);
-      for (const r of rowsToImport) {
-        const contact = await dataRepo.createContact(identity.client, identity.admin.company_id, list.id, r.form);
-        for (const cfv of r.customFieldValues) {
-          await dataRepo.upsertCustomFieldValue(identity.client, contact.id, cfv.field_def_id, cfv.value_text);
-        }
-      }
+      const created = await dataRepo.createContactsBulk(identity.client, identity.admin.company_id, list.id, rowsToImport.map((r) => r.form));
+      await dataRepo.upsertCustomFieldValuesBulk(
+        identity.client,
+        rowsToImport.flatMap((r, i) => r.customFieldValues.map((cfv) => ({ contact_id: created[i].id, field_def_id: cfv.field_def_id, value_text: cfv.value_text }))),
+      );
       showToast(`${rowsToImport.length} contacts added to the Master Sheet.`);
       setOpen(false);
       setFileName("");
@@ -472,7 +475,7 @@ function DistributePanel({
   const [poolCount, setPoolCount] = useState<number | null>(null);
 
   useEffect(() => {
-    dataRepo.getUnassignedContacts(identity.client, identity.admin.company_id, listId || undefined).then((c) => setPoolCount(c.length));
+    dataRepo.countUnassignedContacts(identity.client, identity.admin.company_id, listId || undefined).then(setPoolCount).catch(() => setPoolCount(null));
   }, [identity.client, identity.admin.company_id, listId]);
 
   function toggleAdmin(id: string) {
@@ -495,8 +498,7 @@ function DistributePanel({
       for (const adminId of selectedAdmins) {
         const batch = await dataRepo.getUnassignedContacts(identity.client, identity.admin.company_id, listId || undefined, perEmployee);
         if (batch.length === 0) break;
-        await dataRepo.distributeContacts(identity.client, batch.map((c) => c.id), adminId, identity.admin.id, identity.admin.company_id);
-        totalGiven += batch.length;
+        totalGiven += await dataRepo.distributeContacts(identity.client, batch.map((c) => c.id), adminId, identity.admin.id, identity.admin.company_id);
       }
       showToast(`Distributed ${totalGiven} contacts across ${selectedAdmins.size} employee(s).`);
       setSelectedAdmins(new Set());

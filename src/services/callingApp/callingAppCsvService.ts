@@ -40,14 +40,20 @@ export function parseContactsCsv(text: string, fieldDefs: CallingAppCustomFieldD
   const fieldCols = fieldDefs.map((f) => ({ def: f, colIndex: col(f.label) }));
 
   const parsed: ParsedContactRow[] = [];
+  const seenMobiles = new Set<string>();
   rows.slice(1).forEach((r, i) => {
     const rowNum = i + 2;
     const name = (r[idx.name] ?? "").trim();
-    const mobile = (r[idx.mobile] ?? "").trim();
+    const mobile = normalizeMobile((r[idx.mobile] ?? "").trim());
     if (!name || !mobile) {
       errors.push(`Row ${rowNum}: needs both Name and Mobile — skipped.`);
       return;
     }
+    if (seenMobiles.has(mobile)) {
+      errors.push(`Row ${rowNum}: ${mobile} appears earlier in this same file — skipped.`);
+      return;
+    }
+    seenMobiles.add(mobile);
 
     parsed.push({
       form: {
@@ -68,6 +74,14 @@ export function parseContactsCsv(text: string, fieldDefs: CallingAppCustomFieldD
   });
 
   return { rows: parsed, errors };
+}
+
+/** "98765 43210", "+91-98765-43210" and "9876543210" are the same person - store them the same way
+ * so duplicate detection actually catches them. Only strips separators and an Indian +91/91 prefix. */
+export function normalizeMobile(raw: string): string {
+  let m = raw.replace(/[\s\-().]/g, "");
+  if (/^\+?91\d{10}$/.test(m)) m = m.replace(/^\+?91/, "");
+  return m;
 }
 
 export function exportContactsCsv(

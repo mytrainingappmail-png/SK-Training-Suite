@@ -82,7 +82,14 @@ export async function uploadContentMedia(
 
   if (error) {
     console.error('[contentEditorRepository] uploadContentMedia:', error);
-    throw new Error(error.message);
+    // The function explains WHY it refused (storage full, file too big) in its JSON body -
+    // show that instead of the generic "non-2xx status code".
+    let message = error.message;
+    try {
+      const body = await (error as { context?: Response }).context?.json();
+      if (body?.error) message = String(body.error);
+    } catch { /* keep the generic message */ }
+    throw new Error(message);
   }
 
   if (!data) {

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ROUTES } from "../../constants/routes";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listSessionsForCompany, deleteSession } from "../../repositories/quiz/quizSessionRepository";
@@ -10,6 +12,9 @@ import {
   renameFolder,
   deleteFolder,
   moveSessionToFolder,
+  listFolderExamSessions,
+  removeExamSessionFromFolder,
+  type FolderExamSession,
 } from "../../repositories/quiz/quizResultFolderRepository";
 import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
@@ -29,6 +34,7 @@ export default function QuizFinalResultPage() {
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [allResults, setAllResults] = useState<QuizSessionResultRow[]>([]);
   const [folders, setFolders] = useState<QuizResultFolder[]>([]);
+  const [examSessions, setExamSessions] = useState<FolderExamSession[]>([]);
   const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,8 +57,10 @@ export default function QuizFinalResultPage() {
       getCompanySessionResults(admin.company_id),
       getSettings(admin.company_id),
       listFoldersForCompany(admin.company_id),
+      listFolderExamSessions(admin.company_id).catch(() => [] as FolderExamSession[]),
     ])
-      .then(([s, r, settings, f]) => {
+      .then(([s, r, settings, f, ex]) => {
+        setExamSessions(ex);
         setSessions(s.filter((x) => x.phase === "ended"));
         setAllResults(r);
         setCertEligibility(settings.cert_eligibility);
@@ -209,6 +217,7 @@ export default function QuizFinalResultPage() {
           <div className="space-y-3">
             {folders.map((f) => {
               const folderSessions = sessions.filter((s) => s.folder_id === f.id);
+              const folderExams = examSessions.filter((x) => x.folder_id === f.id);
               const folderRows = allResults.filter((r) => r.folder_id === f.id);
               const isFolderOpen = expandedFolder === f.id;
               const isRenaming = renamingFolderId === f.id;
@@ -246,7 +255,7 @@ export default function QuizFinalResultPage() {
                         <span className="text-lg">📁</span>
                         <span className="font-semibold text-sm text-white">{f.name}</span>
                         <span className="text-xs text-slate-500">
-                          {folderSessions.length} session{folderSessions.length === 1 ? "" : "s"}
+                          {folderSessions.length + folderExams.length} session{folderSessions.length + folderExams.length === 1 ? "" : "s"}
                         </span>
                         <span className="text-slate-500 ml-auto">{isFolderOpen ? "▲" : "▼"}</span>
                       </button>
@@ -284,8 +293,26 @@ export default function QuizFinalResultPage() {
                           </button>
                         </div>
                       )}
-                      {folderSessions.length === 0 ? (
-                        <div className="text-xs text-slate-500 text-center py-4">Empty — move a session in from Results.</div>
+                      {folderExams.map((x) => (
+                        <div key={x.id} className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-violet-500/15 text-violet-300">Exam</span>
+                          <Link to={ROUTES.QUIZ_ADMIN_EXAM_HOST.replace(":sessionId", x.id)} className="flex-1 min-w-0 text-sm text-white hover:text-violet-200 truncate">
+                            {x.title}
+                            <span className="text-xs text-slate-500 ml-2">{new Date(x.created_at).toLocaleDateString()} · {x.joined} employee{x.joined === 1 ? "" : "s"}{x.finished_at ? "" : " · running"}</span>
+                          </Link>
+                          {canEdit && (
+                            <button
+                              onClick={() => { void (async () => { setFolderBusy(true); try { await removeExamSessionFromFolder(x.id); refresh(); } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setFolderBusy(false); } })(); }}
+                              disabled={folderBusy}
+                              className="text-xs font-semibold text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 disabled:opacity-40 shrink-0"
+                            >
+                              ↩ Remove
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {folderSessions.length === 0 && folderExams.length === 0 ? (
+                        <div className="text-xs text-slate-500 text-center py-4">Empty — move a session in from Results (Live Quiz) or from the exam's results page (Exams).</div>
                       ) : (
                         folderSessions.map((s) => {
                           const rows = allResults.filter((r) => r.session_id === s.id);

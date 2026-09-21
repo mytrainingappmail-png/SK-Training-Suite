@@ -89,6 +89,8 @@ function UsageBar({ label, used, max }: { label: string; used: number; max: numb
   );
 }
 
+import StorageOverviewCard from './StorageOverviewCard';
+
 function CompanyLicenseManagement() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -319,6 +321,8 @@ function CompanyLicenseManagement() {
           <IconPlus className="h-3.5 w-3.5" /> Assign License
         </PrimaryButton>
       </div>
+
+      <StorageOverviewCard />
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="mb-3">
