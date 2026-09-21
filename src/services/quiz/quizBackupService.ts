@@ -11,7 +11,10 @@ import * as quizRepo from "../../repositories/quiz/quizRepository";
 import { listCategories, createCategory } from "../../repositories/quiz/quizCategoryRepository";
 import { listRoster, addRosterEntry } from "../../repositories/quiz/quizRosterRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
-import type { QuizDifficulty, QuizStatus, QuizQuestionType, QuizSettings } from "../../types/quiz";
+import type { QuizDifficulty, QuizStatus, QuizQuestionType, QuizSettings, CertTemplateDraft } from "../../types/quiz";
+import * as surveyRepo from "../../repositories/survey/surveyRepository";
+import type { SurveySettings } from "../../types/survey";
+import { listCertTemplateDrafts, createCertTemplateDraft, setActiveCertTemplateDraft } from "../../repositories/quiz/quizCertTemplatesRepository";
 
 const BACKUP_VERSION = 1;
 
@@ -57,6 +60,13 @@ interface BackupQuiz {
   questions: BackupQuestion[];
 }
 
+interface BackupSurvey {
+  title: string;
+  description: string;
+  status: "draft" | "published" | "closed";
+  questions: surveyRepo.SurveyQuestionForm[];
+}
+
 export interface QuizBackup {
   version: number;
   exported_at: string;
@@ -64,15 +74,43 @@ export interface QuizBackup {
   roster: { employee_code: string; name: string; phone: string; active: boolean }[];
   quizzes: BackupQuiz[];
   settings: Omit<QuizSettings, "company_id" | "updated_at">;
+  /** Absent in a backup made before surveys/certificates were included. */
+  surveys?: BackupSurvey[];
+  survey_settings?: Omit<SurveySettings, "company_id" | "updated_at">;
+  cert_templates?: CertTemplateDraft[];
 }
 
 export async function exportBackup(companyId: string): Promise<QuizBackup> {
-  const [categories, roster, quizzes, settings] = await Promise.all([
+  const [categories, roster, quizzes, settings, surveyList, surveySettings, certTemplates] = await Promise.all([
     listCategories(companyId),
     listRoster(companyId),
     quizRepo.listQuizzes(companyId),
     getSettings(companyId),
+    surveyRepo.listSurveys(companyId),
+    surveyRepo.getSurveySettings(companyId),
+    listCertTemplateDrafts(companyId),
   ]);
+
+  const surveys: BackupSurvey[] = await Promise.all(
+    surveyList.map(async (s) => {
+      const full = await surveyRepo.getSurveyWithQuestions(s.id);
+      return {
+        title: s.title,
+        description: s.description ?? "",
+        status: s.status,
+        questions: (full?.questions ?? []).map((q) => ({
+          question_text: q.question_text,
+          type: q.type,
+          required: q.required,
+          scale_min: q.scale_min,
+          scale_max: q.scale_max,
+          time_limit_seconds: q.time_limit_seconds ?? null,
+          options: q.options.map((o) => ({ option_text: o.option_text, sentiment: o.sentiment })),
+        })),
+      };
+    })
+  );
+  const { company_id: _surveyCompany, updated_at: _surveyUpdated, ...surveySettingsRest } = surveySettings;
 
   const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
 
@@ -123,6 +161,9 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
     roster: roster.map((r) => ({ employee_code: r.employee_code, name: r.name, phone: r.phone, active: r.active })),
     quizzes: fullQuizzes,
     settings: settingsRest,
+    surveys,
+    survey_settings: surveySettingsRest,
+    cert_templates: certTemplates,
   };
 }
 
@@ -158,6 +199,9 @@ export function parseBackupFile(text: string): QuizBackup {
     roster: backup.roster ?? [],
     quizzes: backup.quizzes ?? [],
     settings: backup.settings ?? ({} as QuizBackup["settings"]),
+    surveys: backup.surveys ?? [],
+    survey_settings: backup.survey_settings,
+    cert_templates: backup.cert_templates ?? [],
   };
 }
 
@@ -169,6 +213,8 @@ export interface RestoreResult {
   categoriesAdded: number;
   rosterAdded: number;
   quizzesAdded: number;
+  surveysAdded: number;
+  certTemplatesAdded: number;
 }
 
 /** Always additive — existing categories/roster entries (matched by name/employee_code) are left untouched, quizzes are always inserted as new rows (as drafts, so nothing goes live unreviewed). */
@@ -243,9 +289,29 @@ export async function importBackup(
     quizzesAdded += 1;
   }
 
+  let surveysAdded = 0;
+  for (const survey of backup.surveys ?? []) {
+    const created = await surveyRepo.createSurvey(companyId, createdBy, { title: survey.title, description: survey.description, closes_at: null });
+    await surveyRepo.replaceSurveyQuestions(created.id, survey.questions);
+    surveysAdded += 1;
+  }
+
+  let certTemplatesAdded = 0;
+  const existingTemplateNames = new Set((await listCertTemplateDrafts(companyId)).map((t) => t.name.trim().toLowerCase()));
+  for (const tpl of backup.cert_templates ?? []) {
+    if (existingTemplateNames.has(tpl.name.trim().toLowerCase())) continue;
+    const created = await createCertTemplateDraft(companyId, tpl.name, tpl);
+    if (options.restoreSettings && tpl.is_active) await setActiveCertTemplateDraft(created.id);
+    existingTemplateNames.add(tpl.name.trim().toLowerCase());
+    certTemplatesAdded += 1;
+  }
+
   if (options.restoreSettings && backup.settings) {
     await saveSettings(companyId, backup.settings);
   }
+  if (options.restoreSettings && backup.survey_settings) {
+    await surveyRepo.saveSurveySettings(companyId, backup.survey_settings);
+  }
 
-  return { categoriesAdded, rosterAdded, quizzesAdded };
+  return { categoriesAdded, rosterAdded, quizzesAdded, surveysAdded, certTemplatesAdded };
 }

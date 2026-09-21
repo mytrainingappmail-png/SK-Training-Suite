@@ -314,7 +314,7 @@ export default function QuizSettingsPage() {
       const backup = await exportBackup(me.company_id);
       const stamp = new Date().toISOString().slice(0, 10);
       downloadBackupFile(`live-quiz-backup-${stamp}.json`, backup);
-      setBackupMessage(`Exported ${backup.quizzes.length} quiz(zes), ${backup.categories.length} categor(ies), ${backup.roster.length} roster entries.`);
+      setBackupMessage(`Exported ${backup.quizzes.length} quiz(zes)/exam(s), ${backup.surveys?.length ?? 0} survey(s), ${backup.cert_templates?.length ?? 0} certificate design(s), ${backup.categories.length} categor(ies), ${backup.roster.length} roster entries.`);
     } catch (e) {
       setBackupError(e instanceof Error ? e.message : "Could not export backup.");
     } finally {
@@ -337,7 +337,7 @@ export default function QuizSettingsPage() {
         const backup = parseBackupFile(String(reader.result ?? ""));
         const result = await importBackup(me.company_id, me.id, backup, { restoreSettings });
         setBackupMessage(
-          `Restored ${result.quizzesAdded} quiz(zes) (as drafts), ${result.categoriesAdded} new categor(ies), ${result.rosterAdded} new roster entries.`
+          `Restored ${result.quizzesAdded} quiz(zes)/exam(s) and ${result.surveysAdded} survey(s) (as drafts), ${result.certTemplatesAdded} certificate design(s), ${result.categoriesAdded} new categor(ies), ${result.rosterAdded} new roster entries.`
         );
       } catch (e) {
         setBackupError(e instanceof Error ? e.message : "Could not restore this backup.");

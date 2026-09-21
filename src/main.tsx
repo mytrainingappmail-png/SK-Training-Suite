@@ -7,6 +7,7 @@ import "./index.css";
 import App from "./App";
 import { AuthorizationProvider } from "./context/AuthorizationContext";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
+import UpdatePrompt from "./components/shared/UpdatePrompt";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <AuthorizationProvider>
           <App />
+          <UpdatePrompt />
         </AuthorizationProvider>
       </BrowserRouter>
     </ErrorBoundary>

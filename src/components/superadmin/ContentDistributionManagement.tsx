@@ -9,6 +9,8 @@ import { loadCompanies, loadCompany } from "../../services/company/companyServic
 import { getAllCourses } from "../../repositories/course/courseRepository";
 import { getVideos } from "../../repositories/videoLibraryContent/videoLibraryContentRepository";
 import { loadProjects } from "../../services/realEstateProject/realEstateProjectService";
+import { loadDays } from "../../services/induction/inductionService";
+import type { InductionDay } from "../../types/induction";
 import { pushContentToCompany } from "../../services/contentDistribution/contentDistributionService";
 import type { Company } from "../../types/company";
 import type { Course } from "../../types/course";
@@ -28,6 +30,9 @@ function ContentDistributionManagement() {
 
   const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set());
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [inductionDays, setInductionDays] = useState<InductionDay[]>([]);
+  const [selectedDayIds, setSelectedDayIds] = useState<Set<string>>(new Set());
+  const [pushToAll, setPushToAll] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
 
   const [pushing, setPushing] = useState(false);
@@ -44,11 +49,12 @@ function ContentDistributionManagement() {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load companies."))
       .finally(() => setLoadingCompanies(false));
 
-    Promise.all([getAllCourses(), getVideos(), loadProjects()])
-      .then(([c, v, p]) => {
+    Promise.all([getAllCourses(), getVideos(), loadProjects(), loadDays()])
+      .then(([c, v, p, d]) => {
         setCourses(c);
         setVideos(v);
         setProjects(p);
+        setInductionDays(d);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load your content."))
       .finally(() => setLoadingContent(false));
@@ -61,7 +67,7 @@ function ContentDistributionManagement() {
   }, [companies, companySearch]);
 
   const activeCompany = companies.find((c) => c.id === activeCompanyId) ?? null;
-  const totalSelected = selectedCourseIds.size + selectedVideoIds.size + selectedProjectIds.size;
+  const totalSelected = selectedCourseIds.size + selectedVideoIds.size + selectedProjectIds.size + selectedDayIds.size;
 
   function toggle(set: Set<string>, setter: (s: Set<string>) => void, id: string) {
     const next = new Set(set);
@@ -71,7 +77,41 @@ function ContentDistributionManagement() {
   }
 
   async function handlePush() {
-    if (!activeCompanyId || !activeCompany || totalSelected === 0) return;
+    if (totalSelected === 0) return;
+    if (pushToAll) {
+      if (companies.length === 0) return;
+      if (!confirm(`Send a copy of the ${totalSelected} selected item(s) to ALL ${companies.length} other companies? Sending the same item twice creates a duplicate.`)) return;
+      setPushing(true);
+      setError("");
+      setSuccessMsg("");
+      const selection = {
+        courseIds: Array.from(selectedCourseIds),
+        videoIds: Array.from(selectedVideoIds),
+        projectIds: Array.from(selectedProjectIds),
+        inductionDayIds: Array.from(selectedDayIds),
+      };
+      const done: string[] = [];
+      const failed: string[] = [];
+      for (const c of companies) {
+        try {
+          await pushContentToCompany(c.id, c.company_code, selection);
+          done.push(c.company_name);
+        } catch (err) {
+          failed.push(`${c.company_name} (${err instanceof Error ? err.message : "failed"})`);
+        }
+      }
+      if (done.length > 0) setSuccessMsg(`Sent to ${done.length} company(ies): ${done.join(", ")}.`);
+      if (failed.length > 0) setError(`Not sent to: ${failed.join("; ")}`);
+      if (failed.length === 0) {
+        setSelectedCourseIds(new Set());
+        setSelectedVideoIds(new Set());
+        setSelectedProjectIds(new Set());
+        setSelectedDayIds(new Set());
+      }
+      setPushing(false);
+      return;
+    }
+    if (!activeCompanyId || !activeCompany) return;
     setPushing(true);
     setError("");
     setSuccessMsg("");
@@ -80,13 +120,15 @@ function ContentDistributionManagement() {
         courseIds: Array.from(selectedCourseIds),
         videoIds: Array.from(selectedVideoIds),
         projectIds: Array.from(selectedProjectIds),
+        inductionDayIds: Array.from(selectedDayIds),
       });
       setSuccessMsg(
-        `Pushed ${result.courses} course(s), ${result.videos} video(s), ${result.projects} project(s) to ${activeCompany?.company_name}.`
+        `Pushed ${result.courses} course(s), ${result.videos} video(s), ${result.projects} project(s), ${result.inductionDays} induction day(s) to ${activeCompany?.company_name}.`
       );
       setSelectedCourseIds(new Set());
       setSelectedVideoIds(new Set());
       setSelectedProjectIds(new Set());
+      setSelectedDayIds(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Push failed.");
     } finally {
@@ -101,7 +143,7 @@ function ContentDistributionManagement() {
       <div>
         <h2 className="text-lg font-bold text-slate-800">Content Distribution</h2>
         <p className="text-sm text-slate-500">
-          Push a copy of your own courses, videos, or projects into another company. Once pushed, it's their own
+          Push a copy of your own courses (training modules), induction days, videos, or projects into one company or all of them at once. Once pushed, it's their own
           copy — they can edit or delete it freely, and it never links back to yours.
         </p>
       </div>
@@ -113,6 +155,10 @@ function ContentDistributionManagement() {
         {/* Company picker */}
         <div className="rounded-2xl bg-white p-4 shadow-sm lg:sticky lg:top-6 lg:h-fit">
           <p className="mb-3 text-sm font-bold text-slate-800">Push To</p>
+          <label className={`mb-3 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${pushToAll ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200" : "bg-slate-50 text-slate-700"}`}>
+            <input type="checkbox" checked={pushToAll} onChange={(e) => setPushToAll(e.target.checked)} />
+            All other companies ({companies.length})
+          </label>
           <input
             value={companySearch}
             onChange={(e) => setCompanySearch(e.target.value)}
@@ -138,14 +184,14 @@ function ContentDistributionManagement() {
 
         {/* Content picker */}
         <div className="space-y-4">
-          {!activeCompany ? (
+          {!activeCompany && !pushToAll ? (
             <div className="rounded-2xl bg-white p-6 text-center text-sm text-slate-400 shadow-sm">Select a company.</div>
           ) : loadingContent ? (
             <div className="rounded-2xl bg-white p-6 text-center text-sm text-slate-400 shadow-sm">Loading your content…</div>
           ) : (
             <>
               <div className="flex items-center justify-between rounded-2xl bg-white px-5 py-3 shadow-sm">
-                <span className="text-sm font-semibold text-slate-800">Pushing to {activeCompany.company_name}</span>
+                <span className="text-sm font-semibold text-slate-800">{pushToAll ? `Pushing to ALL ${companies.length} other companies` : `Pushing to ${activeCompany?.company_name}`}</span>
                 <button
                   onClick={handlePush}
                   disabled={pushing || totalSelected === 0}
@@ -172,6 +218,22 @@ function ContentDistributionManagement() {
                     </label>
                   ))}
                   {courses.length === 0 && <p className="px-5 py-4 text-center text-xs text-slate-400">No courses yet.</p>}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white shadow-sm">
+                <div className="border-b border-slate-100 px-5 py-3">
+                  <h3 className="text-sm font-bold text-slate-800">Induction Days ({inductionDays.length})</h3>
+                  <p className="text-xs text-slate-400">Copied with their pages. A Test section keeps its place but needs an Assessment attached by the receiving company.</p>
+                </div>
+                <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+                  {inductionDays.map((d, i) => (
+                    <label key={d.id} className="flex cursor-pointer items-center gap-3 px-5 py-3 text-sm hover:bg-slate-50">
+                      <input type="checkbox" checked={selectedDayIds.has(d.id)} onChange={() => toggle(selectedDayIds, setSelectedDayIds, d.id)} />
+                      <span className="flex-1 truncate text-slate-700">Day {i + 1}: {d.title}</span>
+                    </label>
+                  ))}
+                  {inductionDays.length === 0 && <p className="px-5 py-4 text-center text-xs text-slate-400">No induction days yet.</p>}
                 </div>
               </div>
 

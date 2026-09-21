@@ -162,16 +162,47 @@ async function cloneRealEstateProject(projectId: string, targetCompanyId: string
   }
 }
 
+// An Induction Day copies with all its Page / FAQ sections. A Test section's linked Assessment belongs to
+// the source company, so the copy keeps the section but the target admin re-attaches an Assessment.
+async function cloneInductionDay(dayId: string, targetCompanyId: string): Promise<void> {
+  const { data: day, error: dayError } = await supabase.from("induction_days").select("*").eq("id", dayId).single();
+  if (dayError) throw new Error(dayError.message);
+
+  const { data: sections, error: sectionsError } = await supabase
+    .from("induction_day_sections")
+    .select("*")
+    .eq("day_id", dayId)
+    .order("display_order", { ascending: true });
+  if (sectionsError) throw new Error(sectionsError.message);
+
+  const newDayId = crypto.randomUUID();
+  const { id: _id, created_at: _c, updated_at: _u, company_id: _cid, branch_id: _bid, source_id: _sid, ...dayRest } = day;
+  const { error: insertDayError } = await supabase
+    .from("induction_days")
+    .insert({ ...dayRest, id: newDayId, company_id: targetCompanyId, branch_id: null, source_id: null });
+  if (insertDayError) throw new Error(insertDayError.message);
+
+  for (const section of sections ?? []) {
+    const { id: _sId, created_at: _sc, updated_at: _su, company_id: _scid, day_id: _sday, assessment_id: _said, ...sectionRest } = section;
+    const { error: insertSectionError } = await supabase
+      .from("induction_day_sections")
+      .insert({ ...sectionRest, id: crypto.randomUUID(), company_id: targetCompanyId, day_id: newDayId, assessment_id: null });
+    if (insertSectionError) throw new Error(insertSectionError.message);
+  }
+}
+
 export interface PushSelection {
   courseIds: string[];
   videoIds: string[];
   projectIds: string[];
+  inductionDayIds?: string[];
 }
 
 export interface PushResult {
   courses: number;
   videos: number;
   projects: number;
+  inductionDays: number;
 }
 
 export async function pushContentToCompany(
@@ -189,9 +220,13 @@ export async function pushContentToCompany(
   for (const projectId of selection.projectIds) {
     await cloneRealEstateProject(projectId, targetCompanyId);
   }
+  for (const dayId of selection.inductionDayIds ?? []) {
+    await cloneInductionDay(dayId, targetCompanyId);
+  }
   return {
     courses: selection.courseIds.length,
     videos: selection.videoIds.length,
     projects: selection.projectIds.length,
+    inductionDays: selection.inductionDayIds?.length ?? 0,
   };
 }
