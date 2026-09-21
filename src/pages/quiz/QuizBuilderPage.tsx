@@ -6,6 +6,9 @@ import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/qui
 import { createQuiz, getQuiz, updateQuizMeta, saveQuestions, publishQuiz, resyncQuestionFromSource } from "../../services/quiz/quizService";
 import { buildSampleCsv, parseCsv, csvRowsToQuestions, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import HotspotZoneEditor from "../../components/quiz/HotspotZoneEditor";
+import HotspotBulkMarker from "../../components/quiz/HotspotBulkMarker";
+import { effectiveZones, legacyFromZones } from "../../components/quiz/hotspotZones";
+import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
 import type { QuizDifficulty } from "../../types/quiz";
 
@@ -40,6 +43,7 @@ function blankQuestion(): EditableQuestion {
     target_x: null,
     target_y: null,
     target_radius: null,
+    hotspot_zones: null,
   };
 }
 
@@ -55,16 +59,33 @@ const DEFAULT_FORM: QuizForm = {
   shuffle_questions: false,
   shuffle_questions_per_participant: false,
   issue_certificate: true,
+  mode: "live",
+  exam_duration_minutes: null,
 };
 
-export default function QuizBuilderPage() {
+// An exam starts with the anti-cheat shuffles ON (each person's question and
+// option order differs) and a one-hour paper — all editable.
+const DEFAULT_EXAM_FORM: QuizForm = {
+  ...DEFAULT_FORM,
+  difficulty: "Medium",
+  passing_score_pct: 60,
+  shuffle_options: true,
+  shuffle_questions_per_participant: true,
+  mode: "exam",
+  exam_duration_minutes: 60,
+};
+
+export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "exam" } = {}) {
+  const isExam = mode === "exam";
+  const listRoute = isExam ? ROUTES.QUIZ_ADMIN_EXAMS : ROUTES.QUIZ_ADMIN_QUIZZES;
+  const editRoute = isExam ? ROUTES.QUIZ_ADMIN_EXAM_EDIT : ROUTES.QUIZ_ADMIN_BUILDER_EDIT;
   const admin = getCurrentQuizAdmin();
   const navigate = useNavigate();
   const { quizId } = useParams<{ quizId: string }>();
   const isNew = !quizId;
   const canEdit = canEditQuizContent();
 
-  const [form, setForm] = useState<QuizForm>(DEFAULT_FORM);
+  const [form, setForm] = useState<QuizForm>(isExam ? DEFAULT_EXAM_FORM : DEFAULT_FORM);
   const [questions, setQuestions] = useState<EditableQuestion[]>([blankQuestion()]);
   const [savedQuizId, setSavedQuizId] = useState<string | null>(quizId ?? null);
   const [loading, setLoading] = useState(!isNew);
@@ -76,9 +97,10 @@ export default function QuizBuilderPage() {
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [csvImportedCount, setCsvImportedCount] = useState<number | null>(null);
   const [removeSourceChoice, setRemoveSourceChoice] = useState("");
+  const [bulkMarkImage, setBulkMarkImage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isNew && !canEdit) navigate(ROUTES.QUIZ_ADMIN_QUIZZES, { replace: true });
+    if (isNew && !canEdit) navigate(listRoute, { replace: true });
   }, [isNew, canEdit, navigate]);
 
   useEffect(() => {
@@ -101,6 +123,8 @@ export default function QuizBuilderPage() {
           shuffle_questions: quiz.shuffle_questions,
           shuffle_questions_per_participant: quiz.shuffle_questions_per_participant,
           issue_certificate: quiz.issue_certificate,
+          mode: quiz.mode,
+          exam_duration_minutes: quiz.exam_duration_minutes,
         });
         setQuestions(
           quiz.questions.length > 0
@@ -119,6 +143,7 @@ export default function QuizBuilderPage() {
                 target_x: q.target_x,
                 target_y: q.target_y,
                 target_radius: q.target_radius,
+                hotspot_zones: q.hotspot_zones,
               }))
             : [blankQuestion()]
         );
@@ -158,7 +183,7 @@ export default function QuizBuilderPage() {
               ...q,
               type,
               options:
-                type === "hotspot"
+                type === "hotspot" || type === "written"
                   ? []
                   : type === "truefalse"
                   ? [
@@ -172,7 +197,7 @@ export default function QuizBuilderPage() {
               // ever meaningful for that type, so drop them rather than
               // silently carrying stale data on a now-different question.
               ...(type !== "hotspot" && q.type === "hotspot"
-                ? { image_url: null, target_x: null, target_y: null, target_radius: null }
+                ? { image_url: null, target_x: null, target_y: null, target_radius: null, hotspot_zones: null }
                 : {}),
             }
           : q
@@ -285,6 +310,23 @@ export default function QuizBuilderPage() {
     return map;
   }, new Map<string, number>());
 
+  // Map questions sharing the exact same image — candidates for the one-screen
+  // "mark them all" tool (only worth offering when there are at least two).
+  const bulkGroups = (() => {
+    const byImage = new Map<string, { localId: string; label: string; zones: HotspotZone[] }[]>();
+    for (const q of questions) {
+      if (q.type !== "hotspot" || !q.image_url) continue;
+      const list = byImage.get(q.image_url) ?? [];
+      list.push({ localId: q.localId, label: q.question_text, zones: effectiveZones(q) });
+      byImage.set(q.image_url, list);
+    }
+    return [...byImage.entries()].filter(([, items]) => items.length >= 2).map(([imageUrl, items]) => ({ imageUrl, items }));
+  })();
+
+  function handleBulkZonesChange(localId: string, zones: HotspotZone[]) {
+    updateQuestion(localId, { hotspot_zones: zones.length > 0 ? zones : null, ...legacyFromZones(zones) });
+  }
+
   function handleDownloadSampleCsv() {
     downloadCsvFile("live-quiz-sample.csv", buildSampleCsv());
   }
@@ -370,19 +412,19 @@ export default function QuizBuilderPage() {
 
   async function handleSaveDraft() {
     const id = await persist(false);
-    if (id && isNew) navigate(ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", id), { replace: true });
+    if (id && isNew) navigate(editRoute.replace(":quizId", id), { replace: true });
   }
 
   async function handlePublish() {
     const id = await persist(true);
-    if (id && isNew) navigate(ROUTES.QUIZ_ADMIN_BUILDER_EDIT.replace(":quizId", id), { replace: true });
+    if (id && isNew) navigate(editRoute.replace(":quizId", id), { replace: true });
   }
 
   if (loading) return <div className="text-slate-500 text-sm">Loading…</div>;
 
   return (
     <div className="space-y-8 pb-16">
-      <h1 className="text-xl font-bold text-white">{isNew ? "Create New Quiz" : "Edit Quiz"}</h1>
+      <h1 className="text-xl font-bold text-white">{isNew ? (isExam ? "Create New Exam" : "Create New Quiz") : isExam ? "Edit Exam" : "Edit Quiz"}</h1>
 
       {error && (
         <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
@@ -430,6 +472,20 @@ export default function QuizBuilderPage() {
               <option>Hard</option>
             </select>
           </div>
+          {isExam ? (
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Paper time (min)</label>
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                value={form.exam_duration_minutes ?? ""}
+                onChange={(e) => setForm({ ...form, exam_duration_minutes: e.target.value ? Number(e.target.value) : null })}
+                placeholder="60"
+              />
+            </div>
+          ) : (
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Timer (s)</label>
             <input
@@ -441,6 +497,7 @@ export default function QuizBuilderPage() {
               onChange={(e) => setForm({ ...form, default_timer_seconds: Number(e.target.value) })}
             />
           </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Pass %</label>
             <input
@@ -470,8 +527,9 @@ export default function QuizBuilderPage() {
             checked={form.shuffle_options}
             onChange={(e) => setForm({ ...form, shuffle_options: e.target.checked })}
           />
-          Shuffle answer order for each player
+          {isExam ? "Shuffle the options of each question differently for every employee" : "Shuffle answer order for each player"}
         </label>
+        {!isExam && (
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
@@ -480,6 +538,7 @@ export default function QuizBuilderPage() {
           />
           Shuffle question order for each session
         </label>
+        )}
         <label className="flex items-start gap-2 text-sm text-slate-300 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
           <input
             type="checkbox"
@@ -490,7 +549,9 @@ export default function QuizBuilderPage() {
           <span>
             🕵️ Anti-cheat: different question order for every employee
             <span className="block text-xs text-slate-500 mt-0.5">
-              Each device gets its own shuffled order of the same questions — copying a neighbor's screen won't help. When on, the host/TV screen shows progress only, not which specific question is live (there isn't just one anymore).
+              {isExam
+                ? "Every employee gets the same paper, but in their own order — copying a neighbor's screen won't help."
+                : "Each device gets its own shuffled order of the same questions — copying a neighbor's screen won't help. When on, the host/TV screen shows progress only, not which specific question is live (there isn't just one anymore)."}
             </span>
           </span>
         </label>
@@ -582,11 +643,31 @@ export default function QuizBuilderPage() {
           </div>
         )}
 
+        {canEdit && bulkGroups.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 bg-slate-900/60 border border-dashed border-slate-700 rounded-xl px-3 py-2.5">
+            {bulkGroups.map((g) => (
+              <button
+                key={g.imageUrl}
+                onClick={() => setBulkMarkImage(g.imageUrl)}
+                className="text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-amber-950 rounded-lg px-3 py-1.5"
+              >
+                🗺 Mark all {g.items.length} map questions on one screen ({g.items.filter((i) => i.zones.length > 0).length} done)
+              </button>
+            ))}
+            <span className="text-xs text-slate-500">Questions sharing the same map image can all be marked in one place.</span>
+          </div>
+        )}
+
         {questions.map((q, qi) => (
           <div key={q.localId} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
+                {q.type === "hotspot" && effectiveZones(q).length === 0 && (
+                  <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
+                    ⚠ {q.image_url ? "Area not marked" : "Image needed"}
+                  </span>
+                )}
                 {q.source_label && (
                   <span title="Came in via merge" className="text-[10px] font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/30 rounded-full px-2 py-0.5">
                     📎 {q.source_label}
@@ -621,7 +702,9 @@ export default function QuizBuilderPage() {
                   <option value="mcq">Multiple Choice</option>
                   <option value="truefalse">True / False</option>
                   <option value="hotspot">Click-the-Map</option>
+                  {isExam && <option value="written">Written answer</option>}
                 </select>
+                {!isExam && (
                 <input
                   type="number"
                   min={5}
@@ -635,7 +718,8 @@ export default function QuizBuilderPage() {
                     updateQuestion(q.localId, { timer_seconds: e.target.value ? Number(e.target.value) : null })
                   }
                 />
-                {q.timer_seconds !== null && (
+                )}
+                {!isExam && q.timer_seconds !== null && (
                   <button
                     onClick={() => resetQuestionTimer(q.localId)}
                     title="Reset to the default timer above"
@@ -667,13 +751,15 @@ export default function QuizBuilderPage() {
               onChange={(e) => updateQuestion(q.localId, { question_text: e.target.value })}
             />
 
-            {q.type === "hotspot" ? (
+            {q.type === "written" ? (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-3 text-xs text-slate-400">
+                ✍️ Employees type their answer and/or attach photos of a handwritten one. You mark it by hand after the exam. Put the model answer in the box below — only you see it.
+              </div>
+            ) : q.type === "hotspot" ? (
               <HotspotZoneEditor
                 companyId={admin?.company_id ?? ""}
                 imageUrl={q.image_url}
-                targetX={q.target_x}
-                targetY={q.target_y}
-                targetRadius={q.target_radius}
+                zones={effectiveZones(q)}
                 onChange={(patch) => updateQuestion(q.localId, patch)}
               />
             ) : (
@@ -720,7 +806,7 @@ export default function QuizBuilderPage() {
 
             <input
               className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-violet-500"
-              placeholder="Explanation (optional, shown after answering)"
+              placeholder={isExam ? "Model answer / explanation (optional, only you see it)" : "Explanation (optional, shown after answering)"}
               value={q.explanation}
               onChange={(e) => updateQuestion(q.localId, { explanation: e.target.value })}
             />
@@ -747,6 +833,15 @@ export default function QuizBuilderPage() {
       </div>
       ) : (
         <div className="text-xs text-slate-500 text-right">👁 View only — you don't have permission to edit quizzes.</div>
+      )}
+
+      {bulkMarkImage && (
+        <HotspotBulkMarker
+          imageUrl={bulkMarkImage}
+          items={bulkGroups.find((g) => g.imageUrl === bulkMarkImage)?.items ?? []}
+          onZonesChange={handleBulkZonesChange}
+          onClose={() => setBulkMarkImage(null)}
+        />
       )}
     </div>
   );

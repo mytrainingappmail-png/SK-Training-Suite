@@ -8,6 +8,8 @@
 // to interpret it.
 
 import { useRef, useState } from "react";
+import type { HotspotZone } from "../../types/quiz";
+import { ZoneOverlay } from "./hotspotZones";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -27,9 +29,11 @@ interface Props {
   onTap: (xPct: number, yPct: number) => void;
   /** Shown once the tap has been scored — the correct spot, and (if wrong) where the trainee actually tapped. */
   markers?: RevealMarker[];
+  /** The correct area(s), drawn once the tap has been scored. */
+  zones?: HotspotZone[];
 }
 
-export default function HotspotPlayer({ imageUrl, disabled, onTap, markers }: Props) {
+export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zones }: Props) {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragState = useRef<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(null);
@@ -94,27 +98,32 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers }: Pr
           className="absolute inset-0 flex items-center justify-center"
           style={{ cursor: disabled ? "default" : zoom > MIN_ZOOM ? "grab" : "crosshair" }}
         >
-          <img
-            ref={imgRef}
-            src={imageUrl}
-            alt="Tap the correct spot"
-            draggable={false}
-            className="max-w-full max-h-full pointer-events-none"
-            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: dragState.current ? "none" : "transform 0.15s ease-out" }}
-          />
-          {markers?.map((m, i) => (
-            <div
-              key={i}
-              className={`absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 ${
-                m.correct ? "border-2 border-emerald-400 bg-emerald-400/25" : "border-2 border-red-400 bg-red-400/30"
-              }`}
-              style={
-                m.radius
-                  ? { left: `${m.x}%`, top: `${m.y}%`, width: `${m.radius * 2}%`, aspectRatio: "1 / 1" }
-                  : { left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20 }
-              }
+          {/* Image + answer overlays share one wrapper so the correct area and the
+              tap marker stay glued to the image itself — through zoom and pan, and
+              regardless of the image being letterboxed inside its box. */}
+          <div
+            className="relative"
+            style={{ lineHeight: 0, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: dragState.current ? "none" : "transform 0.15s ease-out" }}
+          >
+            <img
+              ref={imgRef}
+              src={imageUrl}
+              alt="Tap the correct spot"
+              draggable={false}
+              className="block pointer-events-none"
+              style={{ maxWidth: "100%", maxHeight: "50vh" }}
             />
-          ))}
+            {zones && zones.length > 0 && <ZoneOverlay zones={zones} tone="correct" />}
+            {markers?.map((m, i) => (
+              <div
+                key={i}
+                className={`absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 ${
+                  m.correct ? "border-2 border-emerald-400 bg-emerald-400/25" : "border-2 border-red-400 bg-red-400/30"
+                }`}
+                style={{ left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20 }}
+              />
+            ))}
+          </div>
         </div>
 
         <div className="absolute bottom-3 right-3 flex flex-col gap-2">

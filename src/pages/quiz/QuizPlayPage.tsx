@@ -6,6 +6,7 @@ import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat } from "../../services/quiz/quizPlayService";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
+import { effectiveZones } from "../../components/quiz/hotspotZones";
 import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
@@ -52,6 +53,11 @@ export default function QuizPlayPage() {
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endedHandled = useRef(false);
+  // The question index this device last showed — lets a pause/resume (phase
+  // goes question -> paused -> question, index unchanged) or a reconnect
+  // re-fetch the SAME question without wiping the answer the employee
+  // already gave, which used to make it look like the question repeated.
+  const shownIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -125,11 +131,15 @@ export default function QuizPlayPage() {
     }
 
     let cancelled = false;
-    setAnswered(false);
-    setFeedback(null);
-    setSelectedOptionId(null);
-    setHotspotFeedback(null);
-    setMyTap(null);
+    const isNewQuestion = shownIndexRef.current !== session.current_question_index;
+    shownIndexRef.current = session.current_question_index;
+    if (isNewQuestion) {
+      setAnswered(false);
+      setFeedback(null);
+      setSelectedOptionId(null);
+      setHotspotFeedback(null);
+      setMyTap(null);
+    }
 
     getCurrentQuestion(sessionId).then((q) => {
       if (cancelled || !q) return;
@@ -143,7 +153,7 @@ export default function QuizPlayPage() {
         ? Math.floor((Date.now() - new Date(session.question_started_at).getTime()) / 1000)
         : 0;
       setSecondsLeft(Math.max(0, q.timer_seconds - Math.max(0, elapsedSec)));
-      if (playerSettings?.sound_enabled !== false) playTone("pop");
+      if (isNewQuestion && playerSettings?.sound_enabled !== false) playTone("pop");
     });
 
     return () => {
@@ -402,10 +412,8 @@ export default function QuizPlayPage() {
                           imageUrl={q.hotspot.image_url}
                           disabled
                           onTap={() => {}}
+                          zones={effectiveZones({ hotspot_zones: q.hotspot.hotspot_zones, target_x: q.hotspot.target_x, target_y: q.hotspot.target_y, target_radius: q.hotspot.target_radius })}
                           markers={[
-                            ...(q.hotspot.target_x !== null && q.hotspot.target_y !== null
-                              ? [{ x: q.hotspot.target_x, y: q.hotspot.target_y, radius: q.hotspot.target_radius ?? undefined, correct: true }]
-                              : []),
                             ...(!q.hotspot.is_correct && q.hotspot.click_x !== null && q.hotspot.click_y !== null
                               ? [{ x: q.hotspot.click_x, y: q.hotspot.click_y, correct: false }]
                               : []),
@@ -489,16 +497,8 @@ export default function QuizPlayPage() {
               imageUrl={question.image_url}
               disabled={answered}
               onTap={(x, y) => handleHotspotSubmit(x, y)}
-              markers={
-                hotspotFeedback
-                  ? [
-                      ...(hotspotFeedback.target_x !== null && hotspotFeedback.target_y !== null
-                        ? [{ x: hotspotFeedback.target_x, y: hotspotFeedback.target_y, radius: hotspotFeedback.target_radius ?? undefined, correct: true }]
-                        : []),
-                      ...(!hotspotFeedback.is_correct && myTap ? [{ x: myTap.x, y: myTap.y, correct: false }] : []),
-                    ]
-                  : undefined
-              }
+              zones={hotspotFeedback ? effectiveZones(hotspotFeedback) : undefined}
+              markers={hotspotFeedback && !hotspotFeedback.is_correct && myTap ? [{ x: myTap.x, y: myTap.y, correct: false }] : undefined}
             />
           )
         ) : (

@@ -105,6 +105,15 @@ export const ROUTES = {
   QUIZ_JOIN: "/quiz/join",
   QUIZ_PLAY: "/quiz/play/:sessionId",
 
+  // Exams - a paper-style test (whole paper on one screen, one clock for the
+  // whole paper) inside the same quiz-admin shell. Employees join by PIN.
+  QUIZ_ADMIN_EXAMS: "/quiz-admin/exams",
+  QUIZ_ADMIN_EXAM_NEW: "/quiz-admin/exams/new",
+  QUIZ_ADMIN_EXAM_EDIT: "/quiz-admin/exams/:quizId",
+  QUIZ_ADMIN_EXAM_HOST: "/quiz-admin/exams/session/:sessionId",
+  EXAM_JOIN: "/exam",
+  EXAM_PAPER: "/exam/:sessionId",
+
   // Survey — opinion-gathering, no score, inside the same quiz-admin
   // shell. Taking a survey is public/anonymous, no join/sign-in step.
   QUIZ_ADMIN_SURVEYS: "/quiz-admin/surveys",

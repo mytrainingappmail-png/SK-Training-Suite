@@ -4,29 +4,46 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import type { SurveySession, SurveySessionParticipant } from "../../types/survey";
 
-function randomPin(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+export interface SurveyStartOptions {
+  /** Total time once the survey is open; omit/null for no limit. */
+  timeLimitSeconds?: number | null;
+  /** Open this many seconds from now (lobby countdown until then). */
+  startInSeconds?: number | null;
+  /** Or open at this exact moment. Wins over startInSeconds. */
+  startAt?: Date | null;
 }
 
-/** Same "generate, insert, retry on collision" pattern as Quiz's own createSession — PINs only need to be unique among currently-active sessions. `timeLimitSeconds` is optional — omit (or pass null) for no time limit. */
-export async function createSurveySession(surveyId: string, companyId: string, hostAdminId: string, timeLimitSeconds?: number | null): Promise<SurveySession> {
-  const expiresAt = timeLimitSeconds ? new Date(Date.now() + timeLimitSeconds * 1000).toISOString() : null;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const pin = randomPin();
-    const { data, error } = await supabaseQuiz
-      .from("survey_sessions")
-      .insert({ survey_id: surveyId, company_id: companyId, host_admin_id: hostAdminId, pin, time_limit_seconds: timeLimitSeconds ?? null, expires_at: expiresAt })
-      .select()
-      .single();
-
-    if (!error) return data;
-    if (error.code !== "23505") {
-      console.error("[surveyLiveRepository] createSurveySession:", error);
-      throw new Error(error.message);
-    }
+/** Everything time-related is computed by the DATABASE clock inside the RPC (never this browser's), including the PIN allocation. */
+export async function createSurveySession(surveyId: string, options: SurveyStartOptions = {}): Promise<SurveySession> {
+  const { data, error } = await supabaseQuiz.rpc("create_survey_session", {
+    p_survey_id: surveyId,
+    p_time_limit_seconds: options.timeLimitSeconds ?? null,
+    p_start_in_seconds: options.startInSeconds ?? null,
+    p_start_at: options.startAt ? options.startAt.toISOString() : null,
+  });
+  if (error) {
+    console.error("[surveyLiveRepository] createSurveySession:", error);
+    throw new Error(error.message);
   }
-  throw new Error("Could not allocate a unique PIN after several attempts. Please try again.");
+  const row = (data as SurveySession[] | null)?.[0];
+  if (!row) throw new Error("Could not start the session.");
+  return row;
+}
+
+export async function startSurveySessionNow(sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("start_survey_session_now", { p_session_id: sessionId });
+  if (error) {
+    console.error("[surveyLiveRepository] startSurveySessionNow:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function extendSurveySession(sessionId: string, addSeconds: number): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("extend_survey_session", { p_session_id: sessionId, p_add_seconds: addSeconds });
+  if (error) {
+    console.error("[surveyLiveRepository] extendSurveySession:", error);
+    throw new Error(error.message);
+  }
 }
 
 export async function getSurveySession(sessionId: string): Promise<SurveySession | null> {

@@ -39,7 +39,12 @@ export default function SurveySettingsPage() {
     setSaving(true);
     setMessage("");
     try {
-      await saveSurveySettings(me.company_id, { option_font_size: settings.option_font_size, option_colors: settings.option_colors });
+      await saveSurveySettings(me.company_id, {
+        option_font_size: settings.option_font_size,
+        option_colors: settings.option_colors,
+        duration_presets: settings.duration_presets,
+        default_duration_minutes: settings.default_duration_minutes,
+      });
       setMessage("Saved.");
     } finally {
       setSaving(false);
@@ -98,6 +103,40 @@ export default function SurveySettingsPage() {
             ))}
           </div>
           <button onClick={addColor} className="mt-3 text-xs font-semibold text-violet-300 hover:text-violet-200">+ Add Color</button>
+        </div>
+
+        <div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">⏱ Live Session Duration</div>
+          <p className="text-xs text-slate-500 mb-2">The quick-pick buttons shown when you start a live session (minutes, comma-separated) — the host can still type any other value there.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white w-56"
+              value={settings.duration_presets.join(", ")}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  duration_presets: e.target.value
+                    .split(",")
+                    .map((v) => Math.round(Number(v.trim())))
+                    .filter((n) => Number.isFinite(n) && n > 0 && n <= 1440),
+                })
+              }
+              placeholder="2, 5, 10, 15, 30"
+            />
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              Default
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                className="w-20 rounded-lg bg-slate-800 border border-slate-700 px-2 py-2 text-sm text-white"
+                value={settings.default_duration_minutes ?? ""}
+                onChange={(e) => setSettings({ ...settings, default_duration_minutes: e.target.value ? Number(e.target.value) : null })}
+                placeholder="none"
+              />
+              min (empty = no limit)
+            </label>
+          </div>
         </div>
 
         {message && <div className="text-sm text-emerald-300">{message}</div>}

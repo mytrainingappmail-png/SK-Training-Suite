@@ -26,6 +26,8 @@ export interface SurveyQuestionForm {
   required: boolean;
   scale_min: number | null;
   scale_max: number | null;
+  /** Optional per-question countdown in seconds; null = no limit. */
+  time_limit_seconds: number | null;
   options: { option_text: string; sentiment: SurveySentiment }[];
 }
 
@@ -135,6 +137,7 @@ export async function replaceSurveyQuestions(surveyId: string, questions: Survey
         required: q.required,
         scale_min: q.type === "scale" ? q.scale_min : null,
         scale_max: q.type === "scale" ? q.scale_max : null,
+        time_limit_seconds: q.time_limit_seconds,
         display_order: i,
       }))
     )
@@ -331,6 +334,8 @@ const DEFAULT_SETTINGS: Omit<SurveySettings, "company_id" | "updated_at"> = {
     { box: "#DB2777", font: "#FFFFFF" },
     { box: "#0891B2", font: "#FFFFFF" },
   ],
+  duration_presets: [2, 5, 10, 15, 30],
+  default_duration_minutes: 5,
 };
 
 export async function getSurveySettings(companyId: string): Promise<SurveySettings> {

@@ -48,12 +48,22 @@ export interface Quiz {
   shuffle_questions_per_participant: boolean;
   /** Off for practice/ungraded quizzes — no certificate is offered regardless of score. */
   issue_certificate: boolean;
+  /** "live" = the Live Quiz (one question at a time, everyone together); "exam" = a paper-style test (see the Exams tab). */
+  mode: "live" | "exam";
+  /** Exams only — the default length of the whole paper, pre-filled when the exam is started. */
+  exam_duration_minutes: number | null;
   status: QuizStatus;
   created_at: string;
   updated_at: string;
 }
 
-export type QuizQuestionType = "mcq" | "truefalse" | "hotspot";
+/** One correct area on a hotspot image, all in 0-100 "percent of the image" space. A tap inside ANY zone of a question is correct. */
+export type HotspotZone =
+  | { shape: "circle"; x: number; y: number; r: number }
+  | { shape: "rect"; x: number; y: number; w: number; h: number }
+  | { shape: "poly"; points: [number, number][] };
+
+export type QuizQuestionType = "mcq" | "truefalse" | "hotspot" | "written";
 
 export interface QuizQuestionOption {
   id: string;
@@ -84,6 +94,8 @@ export interface QuizQuestion {
   target_x: number | null;
   target_y: number | null;
   target_radius: number | null;
+  /** All correct areas (any shape, any number). Null/empty on older questions, which fall back to the single target_x/y/radius circle above. */
+  hotspot_zones: HotspotZone[] | null;
 }
 
 /** A quiz with its questions/options — the shape the builder edits as one unit. */
@@ -223,6 +235,7 @@ export interface SubmitHotspotAnswerResult {
   target_radius: number | null;
   points_awarded: number;
   explanation: string | null;
+  hotspot_zones: HotspotZone[] | null;
 }
 
 export interface OptionColor {
@@ -546,6 +559,7 @@ export interface AnswerReviewOptionRow {
   click_x: number | null;
   click_y: number | null;
   hotspot_is_correct: boolean | null;
+  hotspot_zones: HotspotZone[] | null;
 }
 
 export interface AnswerReviewQuestion {
@@ -563,5 +577,6 @@ export interface AnswerReviewQuestion {
     click_x: number | null;
     click_y: number | null;
     is_correct: boolean | null;
+    hotspot_zones: HotspotZone[] | null;
   } | null;
 }

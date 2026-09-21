@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
-import { listSurveys, setSurveyStatus, deleteSurvey } from "../../repositories/survey/surveyRepository";
+import { listSurveys, setSurveyStatus, deleteSurvey, getSurveySettings } from "../../repositories/survey/surveyRepository";
 import { createSurveySession } from "../../repositories/survey/surveyLiveRepository";
 import type { Survey } from "../../types/survey";
 
@@ -18,8 +18,23 @@ export default function SurveyListPage() {
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [launchTarget, setLaunchTarget] = useState<Survey | null>(null);
-  const [selectedMinutes, setSelectedMinutes] = useState<number | null>(5);
+  const [durationText, setDurationText] = useState("5"); // minutes; empty = no limit
+  const [presets, setPresets] = useState<number[]>([2, 5, 10, 15, 30]);
+  const [startMode, setStartMode] = useState<"now" | "in" | "at">("now");
+  const [startInMinutes, setStartInMinutes] = useState("5");
+  const [startAtLocal, setStartAtLocal] = useState("");
   const [launching, setLaunching] = useState(false);
+
+  // Duration presets/default come from Survey Settings, not the code.
+  useEffect(() => {
+    if (!admin) return;
+    getSurveySettings(admin.company_id)
+      .then((s) => {
+        setPresets(s.duration_presets?.length ? s.duration_presets : [2, 5, 10, 15, 30]);
+        setDurationText(s.default_duration_minutes ? String(s.default_duration_minutes) : "");
+      })
+      .catch(() => {});
+  }, [admin]);
 
   function refresh() {
     if (!admin) return;
@@ -70,7 +85,26 @@ export default function SurveyListPage() {
     setLaunching(true);
     setError("");
     try {
-      const session = await createSurveySession(launchTarget.id, admin.company_id, admin.id, selectedMinutes ? selectedMinutes * 60 : null);
+      const minutes = durationText.trim() ? Number(durationText) : null;
+      if (minutes !== null && (!Number.isFinite(minutes) || minutes < 1 / 6 || minutes > 1440)) {
+        throw new Error("Enter a duration between 10 seconds and 24 hours (in minutes), or leave it empty for no limit.");
+      }
+      let startInSeconds: number | null = null;
+      let startAt: Date | null = null;
+      if (startMode === "in") {
+        const m = Number(startInMinutes);
+        if (!Number.isFinite(m) || m <= 0) throw new Error("Enter how many minutes from now the survey should start.");
+        startInSeconds = Math.round(m * 60);
+      } else if (startMode === "at") {
+        if (!startAtLocal) throw new Error("Pick the date and time the survey should start.");
+        startAt = new Date(startAtLocal);
+        if (Number.isNaN(startAt.getTime())) throw new Error("That start date/time isn't valid.");
+      }
+      const session = await createSurveySession(launchTarget.id, {
+        timeLimitSeconds: minutes === null ? null : Math.round(minutes * 60),
+        startInSeconds,
+        startAt,
+      });
       setLaunchTarget(null);
       navigate(ROUTES.QUIZ_ADMIN_SURVEY_LIVE_HOST.replace(":surveyId", launchTarget.id).replace(":sessionId", session.id));
     } catch (e) {
@@ -170,7 +204,8 @@ export default function SurveyListPage() {
                   <button
                     onClick={() => {
                       setLaunchTarget(s);
-                      setSelectedMinutes(5);
+                      setStartMode("now");
+                      setError("");
                     }}
                     className="text-xs font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg px-2.5 py-1.5"
                     title="Short-time mode — PIN join, names visible to the host"
@@ -197,28 +232,68 @@ export default function SurveyListPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <h3 className="text-sm font-bold text-white mb-1">Go Live: {launchTarget.title}</h3>
-            <p className="text-xs text-slate-400 mb-4">Set a time limit, or leave it open-ended — everyone gets a live countdown once they join.</p>
+            <p className="text-xs text-slate-400 mb-4">Set how long the survey stays open once it starts, and when it should start. Everyone gets a live countdown.</p>
 
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { label: "No limit", value: null },
-                { label: "2 min", value: 2 },
-                { label: "5 min", value: 5 },
-                { label: "10 min", value: 10 },
-                { label: "15 min", value: 15 },
-                { label: "30 min", value: 30 },
-              ].map((opt) => (
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Duration (minutes)</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                onClick={() => setDurationText("")}
+                className={`text-xs font-semibold rounded-lg px-2.5 py-1.5 border-2 ${durationText === "" ? "border-red-500 bg-red-500/10 text-red-300" : "border-slate-700 text-slate-300 hover:border-slate-600"}`}
+              >
+                No limit
+              </button>
+              {presets.map((m) => (
                 <button
-                  key={opt.label}
-                  onClick={() => setSelectedMinutes(opt.value)}
-                  className={`text-xs font-semibold rounded-lg px-2 py-2 border-2 ${
-                    selectedMinutes === opt.value ? "border-red-500 bg-red-500/10 text-red-300" : "border-slate-700 text-slate-300 hover:border-slate-600"
-                  }`}
+                  key={m}
+                  onClick={() => setDurationText(String(m))}
+                  className={`text-xs font-semibold rounded-lg px-2.5 py-1.5 border-2 ${durationText === String(m) ? "border-red-500 bg-red-500/10 text-red-300" : "border-slate-700 text-slate-300 hover:border-slate-600"}`}
                 >
-                  {opt.label}
+                  {m} min
                 </button>
               ))}
             </div>
+            <input
+              type="number"
+              min={0.5}
+              step="any"
+              value={durationText}
+              onChange={(e) => setDurationText(e.target.value)}
+              placeholder="or type any number of minutes"
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white mb-4"
+            />
+
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Start</label>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {([["now", "Now"], ["in", "In X min"], ["at", "At a time"]] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setStartMode(mode)}
+                  className={`text-xs font-semibold rounded-lg px-2 py-2 border-2 ${startMode === mode ? "border-red-500 bg-red-500/10 text-red-300" : "border-slate-700 text-slate-300 hover:border-slate-600"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {startMode === "in" && (
+              <input
+                type="number"
+                min={0.5}
+                step="any"
+                value={startInMinutes}
+                onChange={(e) => setStartInMinutes(e.target.value)}
+                placeholder="minutes from now"
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white mb-2"
+              />
+            )}
+            {startMode === "at" && (
+              <input
+                type="datetime-local"
+                value={startAtLocal}
+                onChange={(e) => setStartAtLocal(e.target.value)}
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white mb-2"
+              />
+            )}
+            <div className="mb-4" />
 
             {error && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3">{error}</div>}
 

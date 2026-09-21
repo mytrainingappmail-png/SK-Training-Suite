@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import SurveyQuestionsForm from "../../components/survey/SurveyQuestionsForm";
-import { joinSurveySession, submitSurveySessionResponse } from "../../repositories/survey/surveyPublicRepository";
+import { joinSurveySession, submitSurveySessionResponse, getSurveySessionQuestions } from "../../repositories/survey/surveyPublicRepository";
 import type { JoinedSurveySession, SurveyAnswerInput } from "../../types/survey";
 
 function formatCountdown(seconds: number): string {
@@ -24,14 +24,45 @@ export default function SurveyLiveJoinPage() {
   const [submitted, setSubmitted] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [autoSubmitSignal, setAutoSubmitSignal] = useState(0);
+  const [opensInSeconds, setOpensInSeconds] = useState(0);
   const autoSubmitted = useRef(false);
+  const fetchingQuestions = useRef(false);
+
+  // Lobby: until the survey opens (by the DATABASE's clock, corrected for
+  // this device's own clock offset) show a countdown, then fetch the
+  // questions — retrying every second until the server says it's open.
+  useEffect(() => {
+    if (!session || session.is_open) return;
+    const opensAtMs = new Date(session.opens_at).getTime();
+
+    async function tick() {
+      const nowMs = Date.now() + session!.clock_offset_ms;
+      const left = Math.max(0, Math.ceil((opensAtMs - nowMs) / 1000));
+      setOpensInSeconds(left);
+      if (left === 0 && !fetchingQuestions.current) {
+        fetchingQuestions.current = true;
+        try {
+          const fresh = await getSurveySessionQuestions(session!.participant_id);
+          if (fresh && fresh.is_open) setSession(fresh);
+        } catch {
+          /* keep waiting — next tick retries */
+        } finally {
+          fetchingQuestions.current = false;
+        }
+      }
+    }
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [session]);
 
   useEffect(() => {
-    if (!session?.expires_at) return;
+    if (!session?.expires_at || !session.is_open) return;
     const expiresAtMs = new Date(session.expires_at).getTime();
 
     function tick() {
-      const secondsLeft = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+      const secondsLeft = Math.max(0, Math.round((expiresAtMs - (Date.now() + session!.clock_offset_ms)) / 1000));
       setRemainingSeconds(secondsLeft);
       if (secondsLeft === 0 && !autoSubmitted.current) {
         autoSubmitted.current = true;
@@ -42,7 +73,7 @@ export default function SurveyLiveJoinPage() {
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [session?.expires_at]);
+  }, [session?.expires_at, session?.is_open]);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +83,7 @@ export default function SurveyLiveJoinPage() {
     try {
       const result = await joinSurveySession(pin.trim(), name.trim());
       if (!result) {
-        setError("This survey has no questions yet — check with the host.");
+        setError("Could not join — check the PIN with the host.");
         return;
       }
       setSession(result);
@@ -76,6 +107,32 @@ export default function SurveyLiveJoinPage() {
           <div className="text-4xl mb-3">🎉</div>
           <h1 className="text-lg font-bold text-white mb-1">Thanks, {name}!</h1>
           <p className="text-sm text-slate-400">Your response is in.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (session && !session.is_open) {
+    const m = Math.floor(opensInSeconds / 60);
+    const s = opensInSeconds % 60;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+        <div className="max-w-sm w-full text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
+          <div className="h-2.5 w-2.5 rounded-full bg-amber-400 mx-auto mb-3 animate-pulse" />
+          <h1 className="text-lg font-bold text-white mb-1">{session.title}</h1>
+          <p className="text-xs text-slate-400 mb-5">You're in, {name}. The survey opens soon — stay on this screen.</p>
+          <p className="text-4xl font-mono font-black text-amber-400">{m}:{String(s).padStart(2, "0")}</p>
+          <p className="text-[11px] text-slate-500 mt-2">until it starts</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (session && session.is_open && session.questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+        <div className="max-w-sm text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
+          <p className="text-sm text-slate-300">This survey has no questions yet — check with the host.</p>
         </div>
       </div>
     );

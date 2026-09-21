@@ -6,6 +6,7 @@
 // same principle used for the legacy InfraMantra data recovery earlier: it's
 // far safer to end up with a duplicate than to silently wipe live data.
 
+import type { HotspotZone } from "../../types/quiz";
 import * as quizRepo from "../../repositories/quiz/quizRepository";
 import { listCategories, createCategory } from "../../repositories/quiz/quizCategoryRepository";
 import { listRoster, addRosterEntry } from "../../repositories/quiz/quizRosterRepository";
@@ -33,6 +34,7 @@ interface BackupQuestion {
   target_x?: number | null;
   target_y?: number | null;
   target_radius?: number | null;
+  hotspot_zones?: HotspotZone[] | null;
 }
 
 interface BackupQuiz {
@@ -48,6 +50,9 @@ interface BackupQuiz {
   /** Absent in a backup made before this setting existed — restore defaults it to false. */
   shuffle_questions_per_participant?: boolean;
   issue_certificate: boolean;
+  /** Absent in a backup made before Exams existed - treated as a Live Quiz. */
+  mode?: "live" | "exam";
+  exam_duration_minutes?: number | null;
   status: QuizStatus;
   questions: BackupQuestion[];
 }
@@ -86,6 +91,8 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
         shuffle_questions: q.shuffle_questions,
         shuffle_questions_per_participant: q.shuffle_questions_per_participant,
         issue_certificate: q.issue_certificate,
+        mode: q.mode,
+        exam_duration_minutes: q.exam_duration_minutes,
         status: q.status,
         questions: (full?.questions ?? []).map((question) => ({
           question_text: question.question_text,
@@ -100,6 +107,7 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
           target_x: question.target_x,
           target_y: question.target_y,
           target_radius: question.target_radius,
+          hotspot_zones: question.hotspot_zones,
         })),
       };
       return backupQuiz;
@@ -208,6 +216,8 @@ export async function importBackup(
       shuffle_questions: quiz.shuffle_questions ?? false,
       shuffle_questions_per_participant: quiz.shuffle_questions_per_participant ?? false,
       issue_certificate: quiz.issue_certificate ?? true,
+      mode: quiz.mode ?? "live",
+      exam_duration_minutes: quiz.exam_duration_minutes ?? null,
     });
 
     if (quiz.questions.length > 0) {
@@ -226,6 +236,7 @@ export async function importBackup(
           target_x: q.target_x ?? null,
           target_y: q.target_y ?? null,
           target_radius: q.target_radius ?? null,
+          hotspot_zones: q.hotspot_zones ?? null,
         }))
       );
     }

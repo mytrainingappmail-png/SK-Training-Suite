@@ -152,6 +152,7 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
       target_x: null,
       target_y: null,
       target_radius: null,
+      hotspot_zones: null,
     });
   });
 

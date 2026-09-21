@@ -25,6 +25,10 @@ export interface SurveySettings {
   company_id: string;
   option_font_size: number;
   option_colors: { box: string; font: string }[];
+  /** Quick-pick durations (minutes) offered when launching a live session - admin-editable, not hardcoded. */
+  duration_presets: number[];
+  /** Pre-selected duration (minutes) in the launch dialog; null = no limit. */
+  default_duration_minutes: number | null;
   updated_at: string;
 }
 
@@ -36,6 +40,8 @@ export interface SurveyQuestion {
   required: boolean;
   scale_min: number | null;
   scale_max: number | null;
+  /** Optional per-question countdown, in seconds (5-3600). Null = no limit for this question. */
+  time_limit_seconds: number | null;
   display_order: number;
 }
 
@@ -73,6 +79,8 @@ export interface SurveySession {
   pin: string;
   status: SurveySessionStatus;
   started_at: string;
+  /** When the survey actually opens to joiners - later than started_at if the host scheduled a delayed start. Until then joiners wait in a lobby. */
+  opens_at: string;
   ended_at: string | null;
   /** Set once at launch, never changes for the life of the session — null means no time limit. */
   time_limit_seconds: number | null;
@@ -103,6 +111,7 @@ export interface PublicSurveyRow {
   required: boolean;
   scale_min: number | null;
   scale_max: number | null;
+  time_limit_seconds: number | null;
   question_order: number;
   option_id: string | null;
   option_text: string | null;
@@ -110,9 +119,17 @@ export interface PublicSurveyRow {
 }
 
 /** Same shape as PublicSurveyRow, plus the participant_id join_survey_session hands back — needed on every subsequent submit call. */
-export interface JoinSurveySessionRow extends PublicSurveyRow {
+export interface JoinSurveySessionRow extends Omit<PublicSurveyRow, "question_id" | "question_text" | "type" | "required" | "question_order"> {
   participant_id: string;
+  opens_at: string;
   expires_at: string | null;
+  /** The database clock at the moment of this response - lets the client correct for its own wrong clock. */
+  server_now: string;
+  question_id: string | null;
+  question_text: string | null;
+  type: SurveyQuestionType | null;
+  required: boolean | null;
+  question_order: number | null;
 }
 
 export interface PublicSurveyQuestion {
@@ -122,6 +139,7 @@ export interface PublicSurveyQuestion {
   required: boolean;
   scale_min: number | null;
   scale_max: number | null;
+  time_limit_seconds: number | null;
   options: { option_id: string; option_text: string }[];
 }
 
@@ -134,7 +152,12 @@ export interface PublicSurvey {
 
 export interface JoinedSurveySession extends PublicSurvey {
   participant_id: string;
+  opens_at: string;
   expires_at: string | null;
+  /** server_now minus the browser's Date.now() at receipt - add to Date.now() to get the true current time. */
+  clock_offset_ms: number;
+  /** False until opens_at has passed - questions stay empty until then. */
+  is_open: boolean;
 }
 
 /** One entry per question the respondent answered — only the field(s) relevant to that question's type need to be set. */

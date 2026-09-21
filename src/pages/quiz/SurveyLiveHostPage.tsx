@@ -3,7 +3,9 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getSurveyWithQuestions, fetchSessionResults, buildResultsCsv, downloadCsvFile } from "../../repositories/survey/surveyRepository";
-import { getSurveySession, listSessionParticipants, endSurveySession } from "../../repositories/survey/surveyLiveRepository";
+import { getSurveySession, listSessionParticipants, endSurveySession, startSurveySessionNow, extendSurveySession } from "../../repositories/survey/surveyLiveRepository";
+import { measureClockOffset } from "../../lib/serverClock";
+import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import type { SurveyWithQuestions, SurveySession, SurveySessionParticipant, SurveyResults } from "../../types/survey";
 
 const POLL_MS = 4000;
@@ -25,6 +27,11 @@ export default function SurveyLiveHostPage() {
   const [ending, setEnding] = useState(false);
   const [copied, setCopied] = useState<"link" | "pin" | "both" | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [opensInSeconds, setOpensInSeconds] = useState(0);
+  const [starting, setStarting] = useState(false);
+  const [extendText, setExtendText] = useState("5");
+  const [actionError, setActionError] = useState("");
+  const clockOffsetMs = useRef(0);
   const autoEnded = useRef(false);
 
   async function refresh() {
@@ -33,6 +40,12 @@ export default function SurveyLiveHostPage() {
     setSession(sess);
     setParticipants(parts);
   }
+
+  // Deadlines are stamped by the database — measure how far this browser's
+  // clock is from it so a wrong device clock can't end the session early/late.
+  useEffect(() => {
+    measureClockOffset(supabaseQuiz).then((o) => { clockOffsetMs.current = o; });
+  }, []);
 
   useEffect(() => {
     if (!surveyId || !sessionId) return;
@@ -47,16 +60,24 @@ export default function SurveyLiveHostPage() {
   }, [session?.status, sessionId]);
 
   useEffect(() => {
-    if (session?.status !== "active" || !session.expires_at) {
+    if (session?.status !== "active") {
       setRemainingSeconds(null);
+      setOpensInSeconds(0);
       return;
     }
-    const expiresAtMs = new Date(session.expires_at).getTime();
+    const opensAtMs = new Date(session.opens_at).getTime();
+    const expiresAtMs = session.expires_at ? new Date(session.expires_at).getTime() : null;
 
     function tick() {
-      const secondsLeft = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+      const nowMs = Date.now() + clockOffsetMs.current;
+      setOpensInSeconds(Math.max(0, Math.ceil((opensAtMs - nowMs) / 1000)));
+      if (expiresAtMs === null) {
+        setRemainingSeconds(null);
+        return;
+      }
+      const secondsLeft = Math.max(0, Math.round((expiresAtMs - nowMs) / 1000));
       setRemainingSeconds(secondsLeft);
-      if (secondsLeft === 0 && !autoEnded.current) {
+      if (secondsLeft === 0 && nowMs >= opensAtMs && !autoEnded.current) {
         autoEnded.current = true;
         handleEnd();
       }
@@ -66,7 +87,39 @@ export default function SurveyLiveHostPage() {
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.status, session?.expires_at]);
+  }, [session?.status, session?.opens_at, session?.expires_at]);
+
+  async function handleStartNow() {
+    if (!sessionId) return;
+    setStarting(true);
+    setActionError("");
+    try {
+      await startSurveySessionNow(sessionId);
+      autoEnded.current = false;
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Could not start.");
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  async function handleExtend() {
+    if (!sessionId) return;
+    const minutes = Number(extendText);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setActionError("Enter how many minutes to add.");
+      return;
+    }
+    setActionError("");
+    try {
+      await extendSurveySession(sessionId, Math.round(minutes * 60));
+      autoEnded.current = false;
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Could not extend.");
+    }
+  }
 
   async function loadResults() {
     if (!sessionId || !survey) return;
@@ -123,11 +176,43 @@ export default function SurveyLiveHostPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-300 mb-1">Enter PIN</p>
           <p className="text-5xl font-mono font-black tracking-[0.2em] text-amber-400 mb-4">{session.pin}</p>
 
-          {remainingSeconds !== null && (
-            <p className={`text-sm font-mono font-bold mb-4 ${remainingSeconds <= 30 ? "text-red-400 animate-pulse" : "text-slate-300"}`}>
-              ⏱ {formatCountdown(remainingSeconds)} remaining
-            </p>
+          {opensInSeconds > 0 ? (
+            <div className="mb-4">
+              <p className="text-sm font-mono font-bold text-amber-300 mb-2">⏳ Starts in {formatCountdown(opensInSeconds)}</p>
+              <button
+                onClick={handleStartNow}
+                disabled={starting}
+                className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
+              >
+                {starting ? "Starting…" : "▶ Start now"}
+              </button>
+              <p className="text-[11px] text-slate-400 mt-1">Employees who join now wait in a lobby until it opens.</p>
+            </div>
+          ) : (
+            remainingSeconds !== null && (
+              <div className="mb-4">
+                <p className={`text-sm font-mono font-bold mb-2 ${remainingSeconds <= 30 ? "text-red-400 animate-pulse" : "text-slate-300"}`}>
+                  ⏱ {formatCountdown(remainingSeconds)} remaining
+                </p>
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
+                  Add
+                  <input
+                    type="number"
+                    min={0.5}
+                    step="any"
+                    value={extendText}
+                    onChange={(e) => setExtendText(e.target.value)}
+                    className="w-16 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1 text-white text-center"
+                  />
+                  min
+                  <button onClick={handleExtend} className="font-semibold text-violet-200 border border-violet-500/40 hover:bg-violet-500/10 rounded-lg px-3 py-1">
+                    + Extend time
+                  </button>
+                </div>
+              </div>
+            )
           )}
+          {actionError && <p className="text-xs text-red-300 mb-3">{actionError}</p>}
 
           <div className="flex flex-wrap justify-center gap-2">
             <button

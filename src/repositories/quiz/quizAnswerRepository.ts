@@ -127,6 +127,7 @@ export async function getMyAnswerReview(sessionId: string): Promise<AnswerReview
                 click_x: r.click_x,
                 click_y: r.click_y,
                 is_correct: r.hotspot_is_correct,
+                hotspot_zones: r.hotspot_zones,
               }
             : null,
       });

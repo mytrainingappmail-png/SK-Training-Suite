@@ -53,7 +53,7 @@ function saveCredentials(creds: PlayerCredentials): void {
  * localStorage, so a device that joins many quizzes over time still only
  * ever creates ONE auth user, not one per join.
  */
-async function ensureParticipantSession(): Promise<void> {
+export async function ensureParticipantSession(): Promise<void> {
   const { data } = await supabaseQuizPlayer.auth.getSession();
   if (data.session) return;
 

@@ -17,6 +17,7 @@ export default function QuizListPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [merging, setMerging] = useState(false);
   const [mergeTitle, setMergeTitle] = useState("");
@@ -28,7 +29,7 @@ export default function QuizListPage() {
   function refresh() {
     if (!admin) return;
     setLoading(true);
-    listQuizzes(admin.company_id).then(setQuizzes).finally(() => setLoading(false));
+    listQuizzes(admin.company_id).then((all) => setQuizzes(all.filter((q) => q.mode !== "exam"))).finally(() => setLoading(false));
   }
 
   useEffect(refresh, [admin]);
@@ -131,15 +132,17 @@ export default function QuizListPage() {
     if (mergeMode === "existing" && (selected.size < 1 || !mergeTargetId)) return;
     setMerging(true);
     setError("");
+    setNotice("");
     try {
       const titles = quizzes.filter((q) => selected.has(q.id)).map((q) => q.title);
-      await mergeQuizzes(
+      const merged = await mergeQuizzes(
         [...selected],
         admin.company_id,
         admin.id,
         mergeTitle || titles.join(" + "),
         mergeMode === "existing" ? mergeTargetId : undefined
       );
+      setNotice(merged.skippedDuplicates > 0 ? `Merged. ${merged.skippedDuplicates} question(s) were skipped because an identical question was already in the quiz.` : "");
       setSelected(new Set());
       setMergeTitle("");
       setMergeTargetId("");
@@ -189,6 +192,9 @@ export default function QuizListPage() {
 
       {error && (
         <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
+      )}
+      {notice && (
+        <div className="text-sm text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">{notice}</div>
       )}
 
       {loading ? (

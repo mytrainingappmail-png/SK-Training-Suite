@@ -102,6 +102,10 @@ const QuizJoinPage = lazyWithRetry(() => import("./pages/quiz/QuizJoinPage"));
 const QuizPlayPage = lazyWithRetry(() => import("./pages/quiz/QuizPlayPage"));
 const QuizUsersPage = lazyWithRetry(() => import("./pages/quiz/QuizUsersPage"));
 const QuizSettingsPage = lazyWithRetry(() => import("./pages/quiz/QuizSettingsPage"));
+const ExamListPage = lazyWithRetry(() => import("./pages/quiz/ExamListPage"));
+const ExamHostPage = lazyWithRetry(() => import("./pages/quiz/ExamHostPage"));
+const ExamJoinPage = lazyWithRetry(() => import("./pages/quiz/ExamJoinPage"));
+const ExamPaperPage = lazyWithRetry(() => import("./pages/quiz/ExamPaperPage"));
 const SurveyListPage = lazyWithRetry(() => import("./pages/quiz/SurveyListPage"));
 const SurveyBuilderPage = lazyWithRetry(() => import("./pages/quiz/SurveyBuilderPage"));
 const SurveyResultsPage = lazyWithRetry(() => import("./pages/quiz/SurveyResultsPage"));
@@ -192,6 +196,9 @@ function App() {
         <Route path={ROUTES.QUIZ_ADMIN_QUIZZES} element={<QuizListPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_BUILDER_NEW} element={<QuizBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_BUILDER_EDIT} element={<QuizBuilderPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_EXAMS} element={<ExamListPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_EXAM_NEW} element={<QuizBuilderPage mode="exam" />} />
+        <Route path={ROUTES.QUIZ_ADMIN_EXAM_EDIT} element={<QuizBuilderPage mode="exam" />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEYS} element={<SurveyListPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_BUILDER_NEW} element={<SurveyBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEY_BUILDER_EDIT} element={<SurveyBuilderPage />} />
@@ -206,9 +213,12 @@ function App() {
       {/* Host Live renders its own full-bleed screen without QuizAdminLayout's nav chrome */}
       <Route element={<QuizAdminGuard><Outlet /></QuizAdminGuard>}>
         <Route path={ROUTES.QUIZ_ADMIN_HOST} element={<QuizHostLivePage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_EXAM_HOST} element={<ExamHostPage />} />
       </Route>
       <Route path={ROUTES.QUIZ_JOIN} element={<QuizJoinPage />} />
       <Route path={ROUTES.QUIZ_PLAY} element={<QuizPlayPage />} />
+      <Route path={ROUTES.EXAM_JOIN} element={<ExamJoinPage />} />
+      <Route path={ROUTES.EXAM_PAPER} element={<ExamPaperPage />} />
       <Route path={ROUTES.SURVEY_TAKE} element={<SurveyTakePage />} />
       <Route path={ROUTES.SURVEY_LIVE_JOIN} element={<SurveyLiveJoinPage />} />
 

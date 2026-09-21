@@ -1,5 +1,5 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
-import type { Quiz, QuizQuestion, QuizWithQuestions } from "../../types/quiz";
+import type { Quiz, QuizQuestion, QuizWithQuestions, HotspotZone } from "../../types/quiz";
 
 export interface QuizForm {
   title: string;
@@ -13,6 +13,8 @@ export interface QuizForm {
   shuffle_questions: boolean;
   shuffle_questions_per_participant: boolean;
   issue_certificate: boolean;
+  mode: Quiz["mode"];
+  exam_duration_minutes: number | null;
 }
 
 export interface QuestionOptionForm {
@@ -36,6 +38,7 @@ export interface QuestionForm {
   target_x: number | null;
   target_y: number | null;
   target_radius: number | null;
+  hotspot_zones: HotspotZone[] | null;
 }
 
 export async function listQuizzes(companyId: string): Promise<Quiz[]> {
@@ -199,6 +202,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
         target_x: q.target_x,
         target_y: q.target_y,
         target_radius: q.target_radius,
+        hotspot_zones: q.hotspot_zones && q.hotspot_zones.length > 0 ? q.hotspot_zones : null,
       }))
     )
     .select("id");

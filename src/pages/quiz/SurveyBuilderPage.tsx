@@ -31,6 +31,7 @@ function blankQuestion(): EditableSurveyQuestion {
     required: true,
     scale_min: 1,
     scale_max: 5,
+    time_limit_seconds: null,
     options: [
       { option_text: "", sentiment: "positive" },
       { option_text: "", sentiment: "negative" },
@@ -86,6 +87,7 @@ export default function SurveyBuilderPage() {
                 required: q.required,
                 scale_min: q.scale_min ?? 1,
                 scale_max: q.scale_max ?? 5,
+                time_limit_seconds: q.time_limit_seconds,
                 options: q.options.map((o) => ({ option_text: o.option_text, sentiment: o.sentiment })),
               }))
             : [blankQuestion()]
@@ -152,6 +154,9 @@ export default function SurveyBuilderPage() {
       if (!q.question_text.trim()) return `Question ${i + 1} has no text.`;
       if ((q.type === "single_choice" || q.type === "multi_choice") && q.options.filter((o) => o.option_text.trim()).length < 2) {
         return `Question ${i + 1} needs at least 2 options.`;
+      }
+      if (q.time_limit_seconds !== null && (q.time_limit_seconds < 5 || q.time_limit_seconds > 3600)) {
+        return `Question ${i + 1}'s time limit must be between 5 and 3600 seconds (or empty for none).`;
       }
       if (q.type === "scale" && (q.scale_min == null || q.scale_max == null || q.scale_max <= q.scale_min)) {
         return `Question ${i + 1}'s scale range is invalid.`;
@@ -270,6 +275,18 @@ export default function SurveyBuilderPage() {
                     <option key={t} value={t}>{TYPE_LABELS[t]}</option>
                   ))}
                 </select>
+                <label className="flex items-center gap-1 text-xs text-slate-300" title="Optional countdown for this question. Empty = no limit. When it runs out the respondent moves on automatically.">
+                  ⏱
+                  <input
+                    type="number"
+                    min={5}
+                    max={3600}
+                    placeholder="sec"
+                    className="w-16 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
+                    value={q.time_limit_seconds ?? ""}
+                    onChange={(e) => updateQuestion(q.localId, { time_limit_seconds: e.target.value ? Number(e.target.value) : null })}
+                  />
+                </label>
                 <label className="flex items-center gap-1 text-xs text-slate-300">
                   <input type="checkbox" checked={q.required} onChange={(e) => updateQuestion(q.localId, { required: e.target.checked })} />
                   Required
