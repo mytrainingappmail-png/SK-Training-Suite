@@ -234,6 +234,7 @@ export default function MarketingHomePage() {
   const [planFeatures, setPlanFeatures] = useState<PublicPlanFeature[]>([]);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "six_month" | "yearly">("monthly");
   const [openTip, setOpenTip] = useState<string | null>(null);
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -422,6 +423,14 @@ export default function MarketingHomePage() {
             <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3 md:items-start">
               {plans.map((p, i) => {
                 const featured = plans.length >= 3 && i === 1;
+                const moduleItems = planFeatures.filter((pf) => pf.plan_id === p.id);
+                const textItems = p.features.split(",").map((f) => f.trim()).filter(Boolean);
+                const ALWAYS_SHOWN = 5; // employees + courses count as 2 of these
+                const totalCount = 2 + moduleItems.length + textItems.length;
+                const expanded = expandedPlan === p.id;
+                const moduleShowCount = expanded ? moduleItems.length : Math.max(0, ALWAYS_SHOWN - 2);
+                const textShowCount = expanded ? textItems.length : Math.max(0, ALWAYS_SHOWN - 2 - moduleItems.length);
+                const hiddenCount = totalCount - 2 - moduleShowCount - textShowCount;
                 return (
                   <div
                     key={p.id}
@@ -463,7 +472,7 @@ export default function MarketingHomePage() {
                         <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs">📚</span>
                         Up to {p.max_courses.toLocaleString()} courses
                       </li>
-                      {planFeatures.filter((pf) => pf.plan_id === p.id).map((pf) => (
+                      {moduleItems.slice(0, moduleShowCount).map((pf) => (
                         <li key={pf.module_key} className="relative flex items-start gap-2.5">
                           <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-600">✓</span>
                           <span className="flex-1">{pf.label}</span>
@@ -484,13 +493,22 @@ export default function MarketingHomePage() {
                           )}
                         </li>
                       ))}
-                      {p.features.split(",").filter(Boolean).map((f) => (
+                      {textItems.slice(0, textShowCount).map((f) => (
                         <li key={f} className="flex items-center gap-2.5">
                           <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-600">✓</span>
-                          {f.trim()}
+                          {f}
                         </li>
                       ))}
                     </ul>
+                    {(hiddenCount > 0 || expanded) && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedPlan(expanded ? null : p.id)}
+                        className="mt-2 text-left text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                      >
+                        {expanded ? "Show less ▲" : `+ ${hiddenCount} more benefit${hiddenCount === 1 ? "" : "s"} · Read more ▼`}
+                      </button>
+                    )}
                     <a
                       href="#get-started"
                       className={`mt-6 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${
