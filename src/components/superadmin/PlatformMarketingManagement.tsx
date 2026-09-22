@@ -539,6 +539,8 @@ export default function PlatformMarketingManagement() {
       const updated = await saveMarketingSettings(settings.id, {
         logo_url: settings.logo_url,
         logo_scale: settings.logo_scale,
+        brand_name: settings.brand_name,
+        brand_tagline: settings.brand_tagline,
         hero_title: settings.hero_title,
         hero_subtitle: settings.hero_subtitle,
         hero_cta_label: settings.hero_cta_label,
@@ -750,6 +752,21 @@ export default function PlatformMarketingManagement() {
           Everything shown on the public homepage (before anyone logs in) — fully white-label, nothing hardcoded.
         </p>
       </div>
+
+      <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Header Brand</h3>
+          <p className="mt-1 text-xs text-slate-400">Shown in the top-left, next to the logo, on every page — this is your product's name, not necessarily your registered company name (that goes under Contact &amp; Footer below).</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FL label="Brand Name">
+            <input value={settings.brand_name} onChange={(e) => field("brand_name", e.target.value)} placeholder="RealTrainer" className={CLS_INPUT} />
+          </FL>
+          <FL label="Tagline">
+            <input value={settings.brand_tagline ?? ""} onChange={(e) => field("brand_tagline", e.target.value)} placeholder="Sales training built for real estate teams." className={CLS_INPUT} />
+          </FL>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-400">Logo</h3>
@@ -1035,10 +1052,10 @@ export default function PlatformMarketingManagement() {
           <FL label="Contact Phone">
             <input value={settings.contact_phone ?? ""} onChange={(e) => field("contact_phone", e.target.value)} className={CLS_INPUT} />
           </FL>
-          <FL label="Company Name (footer)">
+          <FL label="Company Name (footer)" hint="Your actual registered business name — shown in the footer only, separate from the Header Brand above.">
             <input value={settings.footer_company_name ?? ""} onChange={(e) => field("footer_company_name", e.target.value)} className={CLS_INPUT} />
           </FL>
-          <FL label="Tagline" hint="Shown under the logo in the header, and in the footer.">
+          <FL label="Tagline (footer)">
             <input value={settings.footer_tagline ?? ""} onChange={(e) => field("footer_tagline", e.target.value)} className={CLS_INPUT} />
           </FL>
           <FL label="Copyright Text">

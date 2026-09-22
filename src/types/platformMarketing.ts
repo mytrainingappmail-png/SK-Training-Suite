@@ -6,6 +6,9 @@
 export interface PlatformMarketingSettings {
   id: string;
   logo_url: string | null;
+  /** Product brand shown in the header, next to the logo — e.g. "RealTrainer". Separate from footer_company_name, which is the operator's actual registered business name. */
+  brand_name: string;
+  brand_tagline: string | null;
   hero_title: string;
   hero_subtitle: string;
   hero_cta_label: string;

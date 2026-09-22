@@ -277,6 +277,7 @@ export default function MarketingHomePage() {
   }
 
   const companyName = settings?.footer_company_name?.trim() || "Training Suite";
+  const brandName = settings?.brand_name?.trim() || "RealTrainer";
   // Design controls (Admin -> Marketing Website -> Design) as CSS custom properties on the
   // page's root element — every accent/background color below reads these instead of a
   // hardcoded Tailwind color, and they cascade to nested components (QueryForm) for free.
@@ -304,14 +305,14 @@ export default function MarketingHomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
             {settings?.logo_url ? (
-              <img src={settings.logo_url} alt={companyName} className="w-auto object-contain" style={{ height: `${logoHeight}px` }} />
+              <img src={settings.logo_url} alt={brandName} className="w-auto object-contain" style={{ height: `${logoHeight}px` }} />
             ) : (
               <div className="rounded-lg" style={{ backgroundImage: accentGradient, height: `${logoHeight}px`, width: `${logoHeight}px` }} />
             )}
             <div className="leading-tight">
-              <span className="block text-lg font-bold tracking-tight">{companyName}</span>
-              {settings?.footer_tagline && (
-                <span className="block text-[11px] font-medium text-slate-500">{settings.footer_tagline}</span>
+              <span className="block text-lg font-bold tracking-tight">{brandName}</span>
+              {settings?.brand_tagline && (
+                <span className="block text-[11px] font-medium text-slate-500">{settings.brand_tagline}</span>
               )}
             </div>
           </div>
