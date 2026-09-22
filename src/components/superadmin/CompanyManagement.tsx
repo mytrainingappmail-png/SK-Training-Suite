@@ -8,6 +8,8 @@ import {
 } from "../../services/company/companyService";
 import { uploadImage } from "../../services/contentEditor/contentEditorService";
 import { invalidateBrandingCache } from "../../services/branding/brandingService";
+import { listCompanyLogoAssets, addCompanyLogoAsset, removeCompanyLogoAsset } from "../../repositories/company/companyLogoAssetRepository";
+import type { CompanyLogoAsset } from "../../repositories/company/companyLogoAssetRepository";
 
 type ImageFieldKey = "logo" | "login_logo_url" | "app_icon_url" | "favicon";
 
@@ -175,6 +177,92 @@ function SidebarOrderEditor({
   );
 }
 
+const ASSET_TARGET_LABEL: Record<ImageFieldKey, string> = {
+  logo: "Company Logo",
+  login_logo_url: "Login Page Image",
+  app_icon_url: "App Icon",
+  favicon: "Favicon",
+};
+
+function LogoLibrary({
+  assets,
+  onUse,
+  onDelete,
+  onAddClick,
+  uploading,
+  busyId,
+}: {
+  assets: CompanyLogoAsset[];
+  onUse: (asset: CompanyLogoAsset, field: ImageFieldKey) => void;
+  onDelete: (id: string) => void;
+  onAddClick: () => void;
+  uploading: boolean;
+  busyId: string | null;
+}) {
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  return (
+    <div className="mt-8 border-t pt-6">
+      <div className="mb-1 flex items-center justify-between">
+        <h3 className="text-base font-bold text-slate-800">Logo Library</h3>
+        <button
+          type="button"
+          onClick={onAddClick}
+          disabled={uploading}
+          className="rounded-xl border px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {uploading ? "Uploading…" : "+ Store a Logo File"}
+        </button>
+      </div>
+      <p className="mb-5 text-sm text-slate-500">
+        Keep every version of your actual logo here — different sizes, formats, an old one you might want back. Pick any of them for Company Logo, Login Image, App Icon or Favicon above without re-uploading.
+      </p>
+      {assets.length === 0 ? (
+        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-slate-400">No logos stored yet — click "Store a Logo File" to add your first one.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          {assets.map((a) => (
+            <div key={a.id} className="relative rounded-xl border bg-white p-3">
+              <img src={a.url} alt="" className="h-20 w-full rounded-lg object-contain bg-slate-50 p-1" />
+              <div className="relative mt-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenMenuId(openMenuId === a.id ? null : a.id)}
+                  className="w-full rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                >
+                  Use as…
+                </button>
+                {openMenuId === a.id && (
+                  <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border bg-white py-1 shadow-lg">
+                    {(Object.keys(ASSET_TARGET_LABEL) as ImageFieldKey[]).map((field) => (
+                      <button
+                        key={field}
+                        type="button"
+                        onClick={() => { onUse(a, field); setOpenMenuId(null); }}
+                        className="block w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                      >
+                        {ASSET_TARGET_LABEL[field]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => onDelete(a.id)}
+                disabled={busyId === a.id}
+                className="mt-1.5 w-full text-center text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
+              >
+                {busyId === a.id ? "…" : "Delete"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CompanyManagement() {
   const [company, setCompany] = useState<Company | null>(null);
 
@@ -183,6 +271,11 @@ function CompanyManagement() {
   const [saving, setSaving] = useState(false);
   const [uploadingField, setUploadingField] = useState<ImageFieldKey | null>(null);
 
+  const [logoAssets, setLogoAssets] = useState<CompanyLogoAsset[]>([]);
+  const [uploadingLibrary, setUploadingLibrary] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     async function fetchCompany() {
       const data = await loadCompany();
@@ -190,10 +283,52 @@ function CompanyManagement() {
       setCompany(data);
 
       setLoading(false);
+      if (data) listCompanyLogoAssets(data.id).then(setLogoAssets).catch(() => setLogoAssets([]));
     }
 
     fetchCompany();
   }, []);
+
+  async function handleLibraryFileSelected(file: File) {
+    if (!company) return;
+    setUploadingLibrary(true);
+    try {
+      const { url } = await uploadImage(file);
+      const created = await addCompanyLogoAsset(company.id, url);
+      setLogoAssets((prev) => [created, ...prev]);
+    } catch (error) {
+      console.error(error);
+      alert("❌ Failed to store logo.");
+    } finally {
+      setUploadingLibrary(false);
+    }
+  }
+
+  async function handleUseAsset(asset: CompanyLogoAsset, field: ImageFieldKey) {
+    if (!company) return;
+    const updated = { ...company, [field]: asset.url };
+    try {
+      await saveCompany(company.id, updated);
+      setCompany(updated);
+      invalidateBrandingCache();
+    } catch (error) {
+      console.error(error);
+      alert("❌ Failed to apply logo.");
+    }
+  }
+
+  async function handleDeleteAsset(id: string) {
+    setDeletingAssetId(id);
+    try {
+      await removeCompanyLogoAsset(id);
+      setLogoAssets((prev) => prev.filter((a) => a.id !== id));
+    } catch (error) {
+      console.error(error);
+      alert("❌ Failed to delete.");
+    } finally {
+      setDeletingAssetId(null);
+    }
+  }
 
   async function handleSave() {
     if (!company) return;
@@ -509,6 +644,26 @@ function CompanyManagement() {
           />
         </div>
       </div>
+
+      <LogoLibrary
+        assets={logoAssets}
+        onUse={handleUseAsset}
+        onDelete={handleDeleteAsset}
+        onAddClick={() => libraryInputRef.current?.click()}
+        uploading={uploadingLibrary}
+        busyId={deletingAssetId}
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp,.gif,.svg"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) handleLibraryFileSelected(f);
+        }}
+      />
 
       <div className="mt-8 border-t pt-6">
         <h3 className="mb-1 text-base font-bold text-slate-800">Super Admin Console Colors</h3>
