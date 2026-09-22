@@ -705,6 +705,21 @@ function CompanyManagement() {
       />
 
       <div className="mt-8 border-t pt-6">
+        <h3 className="mb-1 text-base font-bold text-slate-800">Storage</h3>
+        <p className="mb-3 text-sm text-slate-500">
+          A brochure PDF sits in storage permanently and counts toward your plan's storage limit — a Google Drive (or any) link doesn't. Project Brochures always offer "Paste Link"; this controls whether "Upload PDF" is offered too.
+        </p>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={company.brochure_pdf_upload_enabled}
+            onChange={(e) => setCompany({ ...company, brochure_pdf_upload_enabled: e.target.checked })}
+          />
+          Allow uploading brochure PDFs (off = link-only, saves storage)
+        </label>
+      </div>
+
+      <div className="mt-8 border-t pt-6">
         <h3 className="mb-1 text-base font-bold text-slate-800">Super Admin Console Colors</h3>
         <p className="mb-5 text-sm text-slate-500">
           Choose the background, button, and border colors for your own Super Admin Console — every other company keeps their own.

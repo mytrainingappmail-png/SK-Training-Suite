@@ -92,6 +92,11 @@ export interface Company {
   // means "use the built-in order" (Sidebar.tsx's fallback).
   sidebar_menu_order: string[] | null;
 
+  // Real Estate Project brochures: a PDF upload sits in storage forever, counting against the
+  // plan's quota; a Google Drive (or any) link costs nothing. Off by default — a company
+  // starts link-only, and turns uploads back on deliberately if it wants them.
+  brochure_pdf_upload_enabled: boolean;
+
   created_at: string;
 
   updated_at: string;

@@ -42,6 +42,7 @@ import {
   saveQuestion as saveQuestionSvc, removeQuestion as removeQuestionSvc,
 } from '../../services/question/questionService';
 import { getCurrentUser } from '../../services/auth/session';
+import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
 import type { RealEstateProjectSection, RealEstateProjectSectionForm, ProjectSectionFaqItem } from '../../types/realEstateProjectSection';
@@ -257,8 +258,9 @@ function RealEstateProjectManagement() {
 
   const [brochureTitleDraft, setBrochureTitleDraft] = useState('');
   const [brochureLinkDraft, setBrochureLinkDraft] = useState('');
-  const [brochureMode, setBrochureMode] = useState<'upload' | 'link'>('upload');
+  const [brochureMode, setBrochureMode] = useState<'upload' | 'link'>('link');
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
+  const [pdfUploadEnabled, setPdfUploadEnabled] = useState(false);
 
   const [sections, setSections] = useState<RealEstateProjectSection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<RealEstateProjectSectionForm | null>(null);
@@ -284,8 +286,13 @@ function RealEstateProjectManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadProjects(), loadAllBrochures(), branchService.getAll()])
-      .then(([p, b, br]) => { setProjects(p); setBrochures(b); setBranches(br); })
+    Promise.all([loadProjects(), loadAllBrochures(), branchService.getAll(), loadCompany()])
+      .then(([p, b, br, company]) => {
+        setProjects(p);
+        setBrochures(b);
+        setBranches(br);
+        setPdfUploadEnabled(company?.brochure_pdf_upload_enabled ?? false);
+      })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
   }
@@ -753,16 +760,18 @@ function RealEstateProjectManagement() {
                   ))}
                 </div>
 
-                <div className="mb-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBrochureMode('upload')}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                      brochureMode === 'upload' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Upload PDF
-                  </button>
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {pdfUploadEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setBrochureMode('upload')}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        brochureMode === 'upload' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Upload PDF
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setBrochureMode('link')}
@@ -773,6 +782,10 @@ function RealEstateProjectManagement() {
                     Paste Link (Google Drive, etc.)
                   </button>
                 </div>
+                <p className="mb-2 text-[11px] text-slate-400">
+                  💡 A Google Drive link is free — an uploaded PDF stays in storage forever and counts toward your plan's limit. Prefer the link when you can.
+                  {!pdfUploadEnabled && ' PDF upload is currently turned off for your company (Admin → Company → Storage).'}
+                </p>
 
                 <input
                   value={brochureTitleDraft}
@@ -781,7 +794,7 @@ function RealEstateProjectManagement() {
                   className={`${INPUT_CLS} mb-2`}
                 />
 
-                {brochureMode === 'upload' ? (
+                {brochureMode === 'upload' && pdfUploadEnabled ? (
                   <div className="flex gap-2">
                     <input ref={brochureInputRef} type="file" accept="application/pdf" onChange={handleBrochureFileChange} className="hidden" />
                     <button

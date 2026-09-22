@@ -36,6 +36,7 @@ import { employeeService } from '../../services/employee/employeeService';
 import { branchService } from '../../services/branch/branchService';
 import { getCurrentUser } from '../../services/auth/session';
 import RichTextEditor from '../../components/shared/RichTextEditor';
+import ImageEditModal from '../../components/shared/ImageEditModal';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
 import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment, InductionFaqItem } from '../../types/induction';
 import type { Assessment } from '../../types/assessment';
@@ -200,6 +201,7 @@ function InductionManagement() {
   const [reordering, setReordering] = useState(false);
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [pendingThumbFile, setPendingThumbFile] = useState<File | null>(null);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[] } | null>(null);
@@ -276,10 +278,16 @@ function InductionManagement() {
     fetchSections(day.id);
   }
 
-  async function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleThumbnailFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    // Opens the resize/frame editor first — never uploads the raw picked file as-is.
+    setPendingThumbFile(file);
+  }
+
+  async function handleThumbnailEdited(file: File) {
+    setPendingThumbFile(null);
     setUploadingThumb(true);
     try {
       const url = await uploadInlineImage(file);
@@ -493,6 +501,16 @@ function InductionManagement() {
                   {uploadingThumb ? 'Uploading…' : draft.thumbnail_url ? 'Replace Image' : 'Upload Image'}
                 </button>
               </div>
+              {pendingThumbFile && (
+                <ImageEditModal
+                  file={pendingThumbFile}
+                  frames={['rectangle', 'rounded', 'square']}
+                  defaultFrame="rounded"
+                  title="Resize & Frame Thumbnail"
+                  onCancel={() => setPendingThumbFile(null)}
+                  onConfirm={handleThumbnailEdited}
+                />
+              )}
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))} />

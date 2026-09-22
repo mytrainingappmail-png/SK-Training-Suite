@@ -19,6 +19,7 @@ import ImageExtension from '@tiptap/extension-image';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useEffect, useRef, useState } from 'react';
+import ImageEditModal from './ImageEditModal';
 
 interface RichTextEditorProps {
   value: string;
@@ -264,6 +265,7 @@ function ToolbarButton({ onClick, title, active, disabled, children }: {
 function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra }: RichTextEditorProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [showTextColors, setShowTextColors] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
@@ -311,9 +313,17 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey, editor]);
 
-  async function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !editor) return;
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    if (!file) return;
+    // Opens the resize/frame editor first — the raw picked file is never uploaded as-is.
+    setPendingImageFile(file);
+  }
+
+  async function handleEditedImageConfirm(file: File) {
+    setPendingImageFile(null);
+    if (!editor) return;
     setUploadingImage(true);
     try {
       const url = await onImageUpload(file);
@@ -322,7 +332,6 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       // Upload failed — nothing inserted.
     } finally {
       setUploadingImage(false);
-      if (imageInputRef.current) imageInputRef.current.value = '';
     }
   }
 
@@ -532,6 +541,15 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       </div>
 
       <EditorContent editor={editor} />
+
+      {pendingImageFile && (
+        <ImageEditModal
+          file={pendingImageFile}
+          title="Resize & Frame Photo"
+          onCancel={() => setPendingImageFile(null)}
+          onConfirm={handleEditedImageConfirm}
+        />
+      )}
     </div>
   );
 }
