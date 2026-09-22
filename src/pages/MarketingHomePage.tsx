@@ -122,7 +122,13 @@ function SidebarTicker({
 function TickerSidebar({ updates, industryNews }: { updates: PlatformMarketingUpdate[]; industryNews: PlatformMarketingIndustryNews[] }) {
   if (updates.length === 0 && industryNews.length === 0) return null;
   return (
-    <div className="fixed right-6 top-20 z-30 hidden space-y-4 lg:block">
+    // Anchoring this to the raw viewport edge (right-6) drifts far from the actual centered
+    // content on a wide screen — the content stays capped at max-w-6xl, but the ticker would
+    // keep hugging the browser's edge, opening a huge gap between them (or, on some in-between
+    // widths, sitting awkwardly close). Clamping `right` to track where the page's own
+    // 1600px-wide frame would end keeps a constant, small gap next to the content at every
+    // screen size instead — the fixed 24px offset only applies below that width.
+    <div className="fixed top-20 z-30 hidden space-y-4 lg:block" style={{ right: "max(1.5rem, calc((100vw - 1600px) / 2 + 1.5rem))" }}>
       <SidebarTicker
         animationName="marketing-updates-scroll"
         dotColorClass="bg-emerald-400"
