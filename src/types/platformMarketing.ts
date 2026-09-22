@@ -18,6 +18,22 @@ export interface PlatformMarketingSettings {
   whatsapp_default_message: string;
   contact_email: string | null;
   contact_phone: string | null;
+  /** Design controls — a hex color and an alignment/toggle the platform operator sets themselves, no code change needed. */
+  accent_from: string;
+  accent_to: string;
+  hero_bg_from: string;
+  hero_bg_to: string;
+  hero_align: "left" | "center";
+  about_bg_from: string;
+  about_bg_to: string;
+  about_text_light: boolean;
+  /** 50-300, a percentage relative to the default header logo size. */
+  logo_scale: number;
+  /** Optional cover photo behind the hero text (a color overlay from hero_bg_from/to keeps text legible). */
+  hero_image_url: string | null;
+  /** Optional portrait shown above the About Us title — e.g. the founder's own photo. */
+  about_photo_url: string | null;
+  about_photo_frame: "circle" | "square" | "rounded_square" | "hexagon" | "oval" | "polaroid";
   updated_at: string;
 }
 

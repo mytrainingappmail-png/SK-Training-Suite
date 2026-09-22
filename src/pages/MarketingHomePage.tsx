@@ -30,6 +30,18 @@ import type {
   InquirySource,
 } from "../types/platformMarketing";
 
+/** Matches CertPhotoFrame's naming (src/types/quiz.ts) for one consistent vocabulary across the app. Pure CSS — no canvas needed here. */
+function aboutPhotoFrameClass(frame: string): string {
+  switch (frame) {
+    case "square": return "rounded-none";
+    case "rounded_square": return "rounded-2xl";
+    case "hexagon": return "rounded-none [clip-path:polygon(25%_0%,75%_0%,100%_50%,75%_100%,25%_100%,0%_50%)]";
+    case "oval": return "rounded-full !h-24 !w-36 sm:!h-28 sm:!w-40";
+    case "polaroid": return "rounded-sm";
+    default: return "rounded-full";
+  }
+}
+
 interface TickerItem {
   id: string;
   title: string;
@@ -181,8 +193,9 @@ function QueryForm({ whatsappHref }: { whatsappHref: string | null }) {
             type="button"
             onClick={() => setSource(opt.value)}
             className={`flex-1 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition ${
-              source === opt.value ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+              source === opt.value ? "text-white" : "border-slate-200 text-slate-500 hover:border-slate-300"
             }`}
+            style={source === opt.value ? { backgroundImage: "linear-gradient(to right, var(--rt-accent-from), var(--rt-accent-to))", borderColor: "transparent" } : undefined}
           >
             {opt.label}
           </button>
@@ -202,7 +215,8 @@ function QueryForm({ whatsappHref }: { whatsappHref: string | null }) {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50"
+        className="w-full rounded-xl px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:opacity-90 disabled:opacity-50"
+        style={{ backgroundImage: "linear-gradient(to right, var(--rt-accent-from), var(--rt-accent-to))" }}
       >
         {submitting ? "Sending…" : source === "trial" ? "Request Free Trial →" : "Send Message →"}
       </button>
@@ -263,20 +277,36 @@ export default function MarketingHomePage() {
   }
 
   const companyName = settings?.footer_company_name?.trim() || "Training Suite";
+  // Design controls (Admin -> Marketing Website -> Design) as CSS custom properties on the
+  // page's root element — every accent/background color below reads these instead of a
+  // hardcoded Tailwind color, and they cascade to nested components (QueryForm) for free.
+  const designVars: React.CSSProperties = {
+    ["--rt-accent-from" as string]: settings?.accent_from || "#4F46E5",
+    ["--rt-accent-to" as string]: settings?.accent_to || "#7C3AED",
+  };
+  const accentGradient = "linear-gradient(to right, var(--rt-accent-from), var(--rt-accent-to))";
+  const accentColor = "var(--rt-accent-from)";
+  const heroFrom = settings?.hero_bg_from || "#1E1B4B";
+  const heroTo = settings?.hero_bg_to || "#020617";
+  const aboutFrom = settings?.about_bg_from || "#020617";
+  const aboutTo = settings?.about_bg_to || "#1E1B4B";
+  const heroAlign = settings?.hero_align === "left" ? "left" : "center";
+  const aboutLight = settings?.about_text_light !== false;
+  const logoHeight = 36 * ((settings?.logo_scale || 100) / 100);
   const whatsappHref = settings?.whatsapp_number
     ? `https://wa.me/${settings.whatsapp_number.replace(/\D/g, "")}?text=${encodeURIComponent(settings.whatsapp_default_message || "Hi, I would like to know more.")}`
     : null;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 lg:pr-80">
+    <div className="min-h-screen bg-white text-slate-900 lg:pr-80" style={designVars}>
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
             {settings?.logo_url ? (
-              <img src={settings.logo_url} alt={companyName} className="h-9 w-9 object-contain" />
+              <img src={settings.logo_url} alt={companyName} className="w-auto object-contain" style={{ height: `${logoHeight}px` }} />
             ) : (
-              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600" />
+              <div className="rounded-lg" style={{ backgroundImage: accentGradient, height: `${logoHeight}px`, width: `${logoHeight}px` }} />
             )}
             <div className="leading-tight">
               <span className="block text-lg font-bold tracking-tight">{companyName}</span>
@@ -304,22 +334,32 @@ export default function MarketingHomePage() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-indigo-950 via-slate-950 to-slate-950 px-6 py-24 text-white">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: "radial-gradient(circle at 20% 20%, #6366F1 0%, transparent 40%), radial-gradient(circle at 80% 60%, #A855F7 0%, transparent 40%)",
-          }}
-        />
-        <div className="relative mx-auto max-w-3xl text-center">
+      <section
+        className="relative overflow-hidden bg-cover bg-center px-6 py-24 text-white"
+        style={{
+          backgroundImage: settings?.hero_image_url
+            ? `linear-gradient(to bottom, ${heroFrom}cc, ${heroTo}e6), url(${settings.hero_image_url})`
+            : `linear-gradient(to bottom, ${heroFrom}, ${heroTo})`,
+        }}
+      >
+        {!settings?.hero_image_url && (
+          <div
+            className="pointer-events-none absolute inset-0 opacity-20"
+            style={{
+              backgroundImage: "radial-gradient(circle at 20% 20%, #6366F1 0%, transparent 40%), radial-gradient(circle at 80% 60%, #A855F7 0%, transparent 40%)",
+            }}
+          />
+        )}
+        <div className={`relative mx-auto max-w-3xl ${heroAlign === "left" ? "text-left" : "text-center"}`}>
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
             {settings?.hero_title}
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-slate-300">{settings?.hero_subtitle}</p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
+          <p className={`mt-5 max-w-xl text-lg text-slate-300 ${heroAlign === "left" ? "" : "mx-auto"}`}>{settings?.hero_subtitle}</p>
+          <div className={`mt-9 flex flex-wrap items-center gap-4 ${heroAlign === "left" ? "justify-start" : "justify-center"}`}>
             <a
               href="#get-started"
-              className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-violet-400"
+              className="rounded-xl px-7 py-3.5 text-sm font-bold text-white shadow-lg transition hover:opacity-90"
+              style={{ backgroundImage: accentGradient }}
             >
               {settings?.hero_cta_label} →
             </a>
@@ -333,11 +373,32 @@ export default function MarketingHomePage() {
       {/* About — dark navy band, matching the hero, so the page reads as a
           deliberate light/dark rhythm rather than one long white scroll. */}
       {settings?.about_content_html && (
-        <section id="about" className="bg-gradient-to-b from-slate-950 via-indigo-950/40 to-slate-950 px-6 py-20 text-white">
+        <section
+          id="about"
+          className={`px-6 py-20 ${aboutLight ? "text-white" : "text-slate-900"}`}
+          style={{ backgroundImage: `linear-gradient(to bottom, ${aboutFrom}, ${aboutTo})` }}
+        >
           <div className="mx-auto max-w-3xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight text-white">{settings.about_title}</h2>
+            {settings.about_photo_url && (
+              settings.about_photo_frame === "polaroid" ? (
+                <div className="mx-auto mb-6 w-fit -rotate-2 rounded-sm bg-white p-2.5 pb-5 shadow-xl">
+                  <img src={settings.about_photo_url} alt="" className="h-28 w-28 object-cover sm:h-32 sm:w-32" />
+                </div>
+              ) : (
+                <img
+                  src={settings.about_photo_url}
+                  alt=""
+                  className={`mx-auto mb-6 h-28 w-28 object-cover ring-4 sm:h-32 sm:w-32 ${aboutPhotoFrameClass(settings.about_photo_frame)} ${aboutLight ? "ring-white/10" : "ring-black/5"}`}
+                />
+              )
+            )}
+            <h2 className={`text-center text-3xl font-bold tracking-tight ${aboutLight ? "text-white" : "text-slate-900"}`}>{settings.about_title}</h2>
             <div
-              className="prose prose-invert prose-slate prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white mx-auto mt-8 max-w-none"
+              className={`prose mx-auto mt-8 max-w-none ${
+                aboutLight
+                  ? "prose-invert prose-slate prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white"
+                  : "prose-slate prose-headings:text-slate-900 prose-p:text-slate-700 prose-li:text-slate-700 prose-strong:text-slate-900"
+              }`}
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(settings.about_content_html) }}
             />
           </div>
@@ -348,7 +409,7 @@ export default function MarketingHomePage() {
       {features.length > 0 && (
         <section id="why-us" className="bg-gradient-to-b from-indigo-50 via-indigo-50/40 to-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Why Choose Us</p>
+            <p className="text-center text-sm font-bold uppercase tracking-widest" style={{ color: accentColor }}>Why Choose Us</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Everything you need, built in</h2>
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {features.map((f) => (
@@ -372,7 +433,7 @@ export default function MarketingHomePage() {
       {testimonials.length > 0 && (
         <section id="testimonials" className="px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Testimonials</p>
+            <p className="text-center text-sm font-bold uppercase tracking-widest" style={{ color: accentColor }}>Testimonials</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">What Our Customers Say</h2>
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {testimonials.map((t) => (
@@ -397,7 +458,7 @@ export default function MarketingHomePage() {
       {plans.length > 0 && (
         <section id="pricing" className="bg-gradient-to-b from-violet-50 via-violet-50/40 to-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Pricing</p>
+            <p className="text-center text-sm font-bold uppercase tracking-widest" style={{ color: accentColor }}>Pricing</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Simple, Transparent Pricing</h2>
             <div className="mt-6 flex justify-center">
               <div className="inline-flex flex-wrap justify-center rounded-xl border-2 border-slate-200 bg-white p-1">
@@ -410,10 +471,9 @@ export default function MarketingHomePage() {
                     key={cycle}
                     onClick={() => setBillingCycle(cycle)}
                     className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                      billingCycle === cycle
-                        ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
+                      billingCycle === cycle ? "text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
                     }`}
+                    style={billingCycle === cycle ? { backgroundImage: accentGradient } : undefined}
                   >
                     {label}
                   </button>
@@ -436,12 +496,13 @@ export default function MarketingHomePage() {
                     key={p.id}
                     className={`relative flex flex-col rounded-2xl border-2 bg-white p-7 transition hover:-translate-y-0.5 ${
                       featured
-                        ? "border-indigo-500 shadow-xl shadow-indigo-500/15 md:scale-105"
+                        ? "shadow-xl shadow-indigo-500/15 md:scale-105"
                         : "border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md"
                     }`}
+                    style={featured ? { borderColor: accentColor } : undefined}
                   >
                     {featured && (
-                      <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-md">
+                      <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-md" style={{ backgroundImage: accentGradient }}>
                         Most Popular
                       </span>
                     )}
@@ -504,7 +565,8 @@ export default function MarketingHomePage() {
                       <button
                         type="button"
                         onClick={() => setExpandedPlan(expanded ? null : p.id)}
-                        className="mt-2 text-left text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                        className="mt-2 text-left text-xs font-semibold hover:opacity-80"
+                        style={{ color: accentColor }}
                       >
                         {expanded ? "Show less ▲" : `+ ${hiddenCount} more benefit${hiddenCount === 1 ? "" : "s"} · Read more ▼`}
                       </button>
@@ -512,10 +574,9 @@ export default function MarketingHomePage() {
                     <a
                       href="#get-started"
                       className={`mt-6 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${
-                        featured
-                          ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-500 hover:to-violet-500"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
+                        featured ? "text-white shadow-lg shadow-indigo-500/25 hover:opacity-90" : "bg-slate-900 text-white hover:bg-slate-800"
                       }`}
+                      style={featured ? { backgroundImage: accentGradient } : undefined}
                     >
                       Get Started
                     </a>

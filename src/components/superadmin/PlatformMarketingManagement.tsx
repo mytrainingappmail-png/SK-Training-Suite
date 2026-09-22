@@ -38,6 +38,19 @@ import type {
 const CLS_INPUT =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:bg-slate-50";
 
+/** A labeled hex-color swatch + native color picker + text input, so a non-technical admin can either click-pick a color or paste a hex code. */
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">{label}</label>
+      <div className="flex items-center gap-2">
+        <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"} onChange={(e) => onChange(e.target.value)} className="h-10 w-12 cursor-pointer rounded-lg border border-slate-200 bg-white p-1" />
+        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="#4F46E5" className={`${CLS_INPUT} font-mono`} />
+      </div>
+    </div>
+  );
+}
+
 function FL({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
@@ -496,6 +509,10 @@ export default function PlatformMarketingManagement() {
   const [message, setMessage] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingHeroImage, setUploadingHeroImage] = useState(false);
+  const heroImageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAboutPhoto, setUploadingAboutPhoto] = useState(false);
+  const aboutPhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadMarketingIndustryNews(), loadInquiries()])
@@ -521,11 +538,23 @@ export default function PlatformMarketingManagement() {
     try {
       const updated = await saveMarketingSettings(settings.id, {
         logo_url: settings.logo_url,
+        logo_scale: settings.logo_scale,
         hero_title: settings.hero_title,
         hero_subtitle: settings.hero_subtitle,
         hero_cta_label: settings.hero_cta_label,
+        hero_image_url: settings.hero_image_url,
+        hero_align: settings.hero_align,
+        hero_bg_from: settings.hero_bg_from,
+        hero_bg_to: settings.hero_bg_to,
         about_title: settings.about_title,
         about_content_html: settings.about_content_html,
+        about_photo_url: settings.about_photo_url,
+        about_photo_frame: settings.about_photo_frame,
+        about_bg_from: settings.about_bg_from,
+        about_bg_to: settings.about_bg_to,
+        about_text_light: settings.about_text_light,
+        accent_from: settings.accent_from,
+        accent_to: settings.accent_to,
         footer_company_name: settings.footer_company_name,
         footer_tagline: settings.footer_tagline,
         footer_copyright_text: settings.footer_copyright_text,
@@ -552,6 +581,32 @@ export default function PlatformMarketingManagement() {
       field("logo_url", url);
     } finally {
       setUploadingLogo(false);
+    }
+  }
+
+  async function handleHeroImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !settings) return;
+    setUploadingHeroImage(true);
+    try {
+      const url = await uploadToCourseContent(file, "images/platform-marketing", "hero-banner");
+      field("hero_image_url", url);
+    } finally {
+      setUploadingHeroImage(false);
+    }
+  }
+
+  async function handleAboutPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !settings) return;
+    setUploadingAboutPhoto(true);
+    try {
+      const url = await uploadToCourseContent(file, "images/platform-marketing", "about-photo");
+      field("about_photo_url", url);
+    } finally {
+      setUploadingAboutPhoto(false);
     }
   }
 
@@ -698,7 +753,7 @@ export default function PlatformMarketingManagement() {
 
       <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-400">Logo</h3>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           {settings.logo_url && (
             <img src={settings.logo_url} alt="" className="h-16 w-16 rounded-xl object-contain ring-1 ring-slate-200" />
           )}
@@ -711,6 +766,11 @@ export default function PlatformMarketingManagement() {
           >
             {uploadingLogo ? "Uploading…" : settings.logo_url ? "Replace Logo" : "Upload Logo"}
           </button>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">Size</label>
+            <input type="range" min={50} max={300} step={10} value={settings.logo_scale} onChange={(e) => field("logo_scale", Number(e.target.value))} className="w-32" />
+            <span className="w-10 text-sm text-slate-500">{settings.logo_scale}%</span>
+          </div>
         </div>
       </section>
 
@@ -725,6 +785,32 @@ export default function PlatformMarketingManagement() {
         <FL label="Call-to-action button text">
           <input value={settings.hero_cta_label} onChange={(e) => field("hero_cta_label", e.target.value)} className={CLS_INPUT} />
         </FL>
+        <FL label="Text alignment">
+          <div className="flex gap-2">
+            {(["center", "left"] as const).map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => field("hero_align", a)}
+                className={`rounded-lg border-2 px-4 py-2 text-sm font-semibold capitalize transition ${settings.hero_align === a ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </FL>
+        <FL label="Banner photo (optional)" hint="Shown behind the headline, tinted with the background colors below so the text stays readable. Leave empty for a plain color background. Best size: wide, at least 1600×900px (16:9) — JPG, under ~1MB so it loads fast.">
+          <div className="flex flex-wrap items-center gap-3">
+            {settings.hero_image_url && <img src={settings.hero_image_url} alt="" className="h-16 w-28 rounded-lg object-cover ring-1 ring-slate-200" />}
+            <input ref={heroImageInputRef} type="file" accept="image/*" onChange={handleHeroImageChange} className="hidden" />
+            <button type="button" onClick={() => heroImageInputRef.current?.click()} disabled={uploadingHeroImage} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {uploadingHeroImage ? "Uploading…" : settings.hero_image_url ? "Replace Banner" : "Upload Banner"}
+            </button>
+            {settings.hero_image_url && (
+              <button type="button" onClick={() => field("hero_image_url", null)} className="text-sm font-semibold text-red-600 hover:underline">Remove</button>
+            )}
+          </div>
+        </FL>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -732,6 +818,43 @@ export default function PlatformMarketingManagement() {
         <FL label="Section title">
           <input value={settings.about_title} onChange={(e) => field("about_title", e.target.value)} className={CLS_INPUT} />
         </FL>
+        <FL label="Photo (optional)" hint="Your own photo, or a team photo — shown above the title, e.g. a founder portrait. Best size: square (1:1), at least 500×500px, face centered — works best for every frame shape below.">
+          <div className="flex flex-wrap items-center gap-3">
+            {settings.about_photo_url && (
+              <img src={settings.about_photo_url} alt="" className={`h-16 w-16 object-cover ring-1 ring-slate-200 ${settings.about_photo_frame === "hexagon" ? "rounded-none [clip-path:polygon(25%_0%,75%_0%,100%_50%,75%_100%,25%_100%,0%_50%)]" : settings.about_photo_frame === "square" ? "rounded-none" : settings.about_photo_frame === "rounded_square" || settings.about_photo_frame === "polaroid" ? "rounded-lg" : "rounded-full"}`} />
+            )}
+            <input ref={aboutPhotoInputRef} type="file" accept="image/*" onChange={handleAboutPhotoChange} className="hidden" />
+            <button type="button" onClick={() => aboutPhotoInputRef.current?.click()} disabled={uploadingAboutPhoto} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {uploadingAboutPhoto ? "Uploading…" : settings.about_photo_url ? "Replace Photo" : "Upload Photo"}
+            </button>
+            {settings.about_photo_url && (
+              <button type="button" onClick={() => field("about_photo_url", null)} className="text-sm font-semibold text-red-600 hover:underline">Remove</button>
+            )}
+          </div>
+        </FL>
+        {settings.about_photo_url && (
+          <FL label="Photo frame">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { v: "circle", l: "Circle" },
+                { v: "oval", l: "Oval" },
+                { v: "rounded_square", l: "Rounded Square" },
+                { v: "square", l: "Square" },
+                { v: "hexagon", l: "Hexagon" },
+                { v: "polaroid", l: "Polaroid" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => field("about_photo_frame", opt.v)}
+                  className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${settings.about_photo_frame === opt.v ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                >
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+          </FL>
+        )}
         <FL label="Content">
           <RichTextEditor
             value={settings.about_content_html}
@@ -741,6 +864,40 @@ export default function PlatformMarketingManagement() {
             resetKey={settings.id}
           />
         </FL>
+        <FL label="Text color">
+          <div className="flex gap-2">
+            {([{ v: true, l: "Light text (for a dark background)" }, { v: false, l: "Dark text (for a light background)" }] as const).map((opt) => (
+              <button
+                key={String(opt.v)}
+                type="button"
+                onClick={() => field("about_text_light", opt.v)}
+                className={`rounded-lg border-2 px-4 py-2 text-sm font-semibold transition ${settings.about_text_light === opt.v ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+              >
+                {opt.l}
+              </button>
+            ))}
+          </div>
+        </FL>
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Design — Colors &amp; Backgrounds</h3>
+          <p className="mt-1 text-xs text-slate-400">Changes the page's look everywhere at once — buttons, badges, and the Hero/About section backgrounds. No code, just pick a color.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <ColorField label="Accent color (buttons, badges, links)" value={settings.accent_from} onChange={(v) => field("accent_from", v)} />
+          <ColorField label="Accent color — gradient end" value={settings.accent_to} onChange={(v) => field("accent_to", v)} />
+          <ColorField label="Hero background — top" value={settings.hero_bg_from} onChange={(v) => field("hero_bg_from", v)} />
+          <ColorField label="Hero background — bottom" value={settings.hero_bg_to} onChange={(v) => field("hero_bg_to", v)} />
+          <ColorField label="About section background — top" value={settings.about_bg_from} onChange={(v) => field("about_bg_from", v)} />
+          <ColorField label="About section background — bottom" value={settings.about_bg_to} onChange={(v) => field("about_bg_to", v)} />
+        </div>
+        <div className="flex flex-wrap gap-3 rounded-xl bg-slate-50 p-4">
+          <div className="h-16 flex-1 min-w-[120px] rounded-lg" style={{ backgroundImage: `linear-gradient(to right, ${settings.accent_from}, ${settings.accent_to})` }} title="Accent preview" />
+          <div className="h-16 flex-1 min-w-[120px] rounded-lg" style={{ backgroundImage: `linear-gradient(to bottom, ${settings.hero_bg_from}, ${settings.hero_bg_to})` }} title="Hero preview" />
+          <div className="h-16 flex-1 min-w-[120px] rounded-lg" style={{ backgroundImage: `linear-gradient(to bottom, ${settings.about_bg_from}, ${settings.about_bg_to})` }} title="About preview" />
+        </div>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
