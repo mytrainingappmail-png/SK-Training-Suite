@@ -57,8 +57,8 @@ export default defineConfig(({ mode }) => {
         registerType: 'prompt',
         includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
         manifest: {
-          name: brandOverrideName || 'SK Training Suite',
-          short_name: brandOverrideName || 'SK Training',
+          name: brandOverrideName || 'RealTrainer',
+          short_name: brandOverrideName || 'RealTrainer',
           description: 'Enterprise Learning Management Platform',
           theme_color: '#0F172A',
           background_color: '#0F172A',
