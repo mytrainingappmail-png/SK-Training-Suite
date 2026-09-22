@@ -47,6 +47,16 @@ function ImageUploadField({
         >
           {uploading ? "Uploading…" : value ? "Replace Image" : "Upload Image"}
         </button>
+        {value && (
+          <button
+            type="button"
+            onClick={() => downloadLogoFile(value)}
+            className="rounded-xl border px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            title="Download this file"
+          >
+            ⬇
+          </button>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -177,6 +187,28 @@ function SidebarOrderEditor({
   );
 }
 
+/** Fetches the file first (not a plain <a download> on the storage URL) so it reliably saves
+ * to disk — full quality, original format — rather than the browser just opening it in a new
+ * tab, which cross-origin download links don't always avoid. */
+async function downloadLogoFile(url: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const ext = (url.split(".").pop() || "png").split("?")[0];
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `logo.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (error) {
+    console.error(error);
+    alert("❌ Could not download this file.");
+  }
+}
+
 const ASSET_TARGET_LABEL: Record<ImageFieldKey, string> = {
   logo: "Company Logo",
   login_logo_url: "Login Page Image",
@@ -224,6 +256,13 @@ function LogoLibrary({
           {assets.map((a) => (
             <div key={a.id} className="relative rounded-xl border bg-white p-3">
               <img src={a.url} alt="" className="h-20 w-full rounded-lg object-contain bg-slate-50 p-1" />
+              <button
+                type="button"
+                onClick={() => downloadLogoFile(a.url)}
+                className="mt-2 w-full rounded-lg border px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ⬇ Download
+              </button>
               <div className="relative mt-2">
                 <button
                   type="button"
