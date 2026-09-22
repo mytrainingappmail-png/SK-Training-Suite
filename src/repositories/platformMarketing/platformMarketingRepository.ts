@@ -7,6 +7,7 @@ import type {
   PlatformMarketingTestimonial,
   PlatformMarketingTestimonialForm,
   PublicSubscriptionPlan,
+  PublicPlanFeature,
   PlatformMarketingInquiry,
   PlatformMarketingInquiryForm,
   PlatformMarketingUpdate,
@@ -166,6 +167,16 @@ export async function getPublicSubscriptionPlans(): Promise<PublicSubscriptionPl
     return [];
   }
   return (data as PublicSubscriptionPlan[] | null) ?? [];
+}
+
+/** Public, pre-auth — every active plan's included features (module key/label/description), for the (i) explanation on each pricing card. */
+export async function getPublicPlanFeatures(): Promise<PublicPlanFeature[]> {
+  const { data, error } = await supabase.rpc("get_public_plan_features");
+  if (error) {
+    console.error("[platformMarketingRepository] getPublicPlanFeatures:", error);
+    return [];
+  }
+  return (data as PublicPlanFeature[] | null) ?? [];
 }
 
 /** Public, pre-auth — anyone can submit; RLS forbids reading any inquiry

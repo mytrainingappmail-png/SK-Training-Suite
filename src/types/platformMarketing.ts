@@ -111,7 +111,20 @@ export interface PublicSubscriptionPlan {
   max_certificates_per_month: number;
   price_monthly: number;
   price_yearly: number;
+  yearly_discount_pct: number;
+  price_six_month: number | null;
+  six_month_discount_pct: number | null;
   features: string;
+}
+
+/** One included feature (a module the plan turns on), with its explanation — via get_public_plan_features(). */
+export interface PublicPlanFeature {
+  plan_id: string;
+  module_key: string;
+  label: string;
+  description: string;
+  is_addon: boolean;
+  display_order: number;
 }
 
 export type InquirySource = "trial" | "query";

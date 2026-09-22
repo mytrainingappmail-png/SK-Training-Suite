@@ -39,7 +39,11 @@ function validatePlanForm(form: SubscriptionPlanForm): void {
   if (!form.plan_code.trim()) throw new Error('Plan code is required.');
   if (form.max_employees < 1) throw new Error('Max employees must be at least 1.');
   if (form.max_courses < 1) throw new Error('Max courses must be at least 1.');
-  if (form.price_monthly < 0 || form.price_yearly < 0) throw new Error('Price cannot be negative.');
+  if (form.price_monthly < 0) throw new Error('Price cannot be negative.');
+  if (form.yearly_discount_pct < 0 || form.yearly_discount_pct > 100) throw new Error('Yearly discount must be between 0 and 100%.');
+  if (form.six_month_discount_pct !== null && (form.six_month_discount_pct < 0 || form.six_month_discount_pct > 100)) {
+    throw new Error('6-month discount must be between 0 and 100%.');
+  }
 }
 
 export async function saveNewPlan(form: SubscriptionPlanForm): Promise<SubscriptionPlan> {

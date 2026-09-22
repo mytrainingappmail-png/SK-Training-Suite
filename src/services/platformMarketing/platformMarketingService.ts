@@ -60,6 +60,10 @@ export async function loadPublicPricing() {
   return repo.getPublicSubscriptionPlans();
 }
 
+export async function loadPublicPlanFeatures() {
+  return repo.getPublicPlanFeatures();
+}
+
 export async function submitInquiry(form: PlatformMarketingInquiryForm) {
   if (!form.name.trim()) throw new Error("Name is required.");
   if (!form.phone?.trim() && !form.email?.trim()) throw new Error("Please provide a phone number or email so we can reach you.");

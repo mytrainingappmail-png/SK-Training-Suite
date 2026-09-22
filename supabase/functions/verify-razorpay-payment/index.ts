@@ -84,6 +84,8 @@ serve(async (req) => {
     const newEnd = new Date(baseDate);
     if (license.billing_cycle === "yearly") {
       newEnd.setFullYear(newEnd.getFullYear() + 1);
+    } else if (license.billing_cycle === "six_month") {
+      newEnd.setMonth(newEnd.getMonth() + 6);
     } else {
       newEnd.setMonth(newEnd.getMonth() + 1);
     }

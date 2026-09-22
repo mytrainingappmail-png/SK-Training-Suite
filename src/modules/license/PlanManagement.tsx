@@ -45,6 +45,10 @@ function DangerButton({ onClick, disabled, children }: { onClick?: () => void; d
 }
 const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
+function money(n: number): string {
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
+}
+
 function Skeleton() {
   return (<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <div key={i} className="h-64 animate-pulse rounded-2xl bg-slate-100" />)}</div>);
 }
@@ -126,7 +130,8 @@ function PlanManagement() {
       max_storage_gb: plan.max_storage_gb,
       max_certificates_per_month: plan.max_certificates_per_month,
       price_monthly: plan.price_monthly,
-      price_yearly: plan.price_yearly,
+      yearly_discount_pct: plan.yearly_discount_pct,
+      six_month_discount_pct: plan.six_month_discount_pct,
       features: plan.features,
       active: plan.active,
     });
@@ -227,8 +232,15 @@ function PlanManagement() {
                 <p>🏆 {plan.max_certificates_per_month} certs/month</p>
               </div>
               <div className="mb-4">
-                <p className="text-xl font-bold text-slate-900">₹{plan.price_monthly.toLocaleString()}<span className="text-xs font-normal text-slate-400">/mo</span></p>
-                <p className="text-xs text-slate-400">or ₹{plan.price_yearly.toLocaleString()}/yr</p>
+                <p className="text-xl font-bold text-slate-900">{money(plan.price_monthly)}<span className="text-xs font-normal text-slate-400">/mo</span></p>
+                <p className="text-xs text-slate-400">
+                  or {money(plan.price_yearly)}/yr{plan.yearly_discount_pct > 0 && <span className="ml-1 font-semibold text-emerald-600">save {plan.yearly_discount_pct}%</span>}
+                </p>
+                {plan.six_month_discount_pct !== null && plan.price_six_month !== null && (
+                  <p className="text-xs text-slate-400">
+                    or {money(plan.price_six_month)}/6mo<span className="ml-1 font-semibold text-emerald-600">save {plan.six_month_discount_pct}%</span>
+                  </p>
+                )}
               </div>
               <div className="mt-auto flex gap-2">
                 <SecondaryButton onClick={() => openEdit(plan)} className="flex-1">Edit</SecondaryButton>
@@ -277,15 +289,42 @@ function PlanManagement() {
                   <input type="number" min={1} value={form.max_certificates_per_month} onChange={(e) => setForm((f) => ({ ...f, max_certificates_per_month: Number(e.target.value) }))} className={INPUT_CLS} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">Price / Month (₹)</label>
-                  <input type="number" min={0} value={form.price_monthly} onChange={(e) => setForm((f) => ({ ...f, price_monthly: Number(e.target.value) }))} className={INPUT_CLS} />
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Price / Month (₹)</label>
+                <input type="number" min={0} value={form.price_monthly} onChange={(e) => setForm((f) => ({ ...f, price_monthly: Number(e.target.value) }))} className={INPUT_CLS} />
+                <p className="mt-1 text-[11px] text-slate-400">Yearly (and 6-month, if offered) prices below are always calculated from this — there's nowhere to type them separately, so they can never fall out of sync.</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-600">Annual billing discount</label>
+                  <p className="text-xs font-bold text-slate-800">{money(form.price_monthly * 12 * (1 - form.yearly_discount_pct / 100))}<span className="font-normal text-slate-400">/yr</span></p>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">Price / Year (₹)</label>
-                  <input type="number" min={0} value={form.price_yearly} onChange={(e) => setForm((f) => ({ ...f, price_yearly: Number(e.target.value) }))} className={INPUT_CLS} />
+                <div className="mt-1.5 flex items-center gap-2">
+                  <input type="number" min={0} max={100} value={form.yearly_discount_pct} onChange={(e) => setForm((f) => ({ ...f, yearly_discount_pct: Number(e.target.value) }))} className={`${INPUT_CLS} w-24`} />
+                  <span className="text-xs text-slate-500">% off {money(form.price_monthly)} × 12 = {money(form.price_monthly * 12)}</span>
                 </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={form.six_month_discount_pct !== null}
+                    onChange={(e) => setForm((f) => ({ ...f, six_month_discount_pct: e.target.checked ? 10 : null }))}
+                    className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-400"
+                  />
+                  Offer 6-month billing
+                </label>
+                {form.six_month_discount_pct !== null && (
+                  <>
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <input type="number" min={0} max={100} value={form.six_month_discount_pct} onChange={(e) => setForm((f) => ({ ...f, six_month_discount_pct: Number(e.target.value) }))} className={`${INPUT_CLS} w-24`} />
+                        <span className="text-xs text-slate-500">% off {money(form.price_monthly)} × 6 = {money(form.price_monthly * 6)}</span>
+                      </div>
+                      <p className="text-xs font-bold text-slate-800">{money(form.price_monthly * 6 * (1 - form.six_month_discount_pct / 100))}<span className="font-normal text-slate-400">/6mo</span></p>
+                    </div>
+                  </>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-500">Features (comma-separated)</label>

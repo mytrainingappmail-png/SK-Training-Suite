@@ -7,7 +7,7 @@ export interface PublicLicensePaymentInfo {
   plan_id: string;
   plan_name: string;
   amount_in_rupees: number;
-  billing_cycle: "monthly" | "yearly";
+  billing_cycle: "monthly" | "six_month" | "yearly";
   status: string;
 }
 

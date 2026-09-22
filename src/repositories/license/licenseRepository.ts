@@ -25,7 +25,12 @@ export async function createPlan(form: SubscriptionPlanForm): Promise<Subscripti
   const { data, error } = await supabase.from('subscription_plans').insert(form).select().maybeSingle();
   if (error) throw new Error(error.message);
   if (data) return data;
-  return { id: '', created_at: '', updated_at: '', ...form };
+  return {
+    id: '', created_at: '', updated_at: '',
+    price_yearly: form.price_monthly * 12 * (1 - form.yearly_discount_pct / 100),
+    price_six_month: form.six_month_discount_pct === null ? null : form.price_monthly * 6 * (1 - form.six_month_discount_pct / 100),
+    ...form,
+  };
 }
 
 export async function updatePlan(id: string, form: Partial<SubscriptionPlanForm>): Promise<SubscriptionPlan> {

@@ -14,6 +14,7 @@ import {
   loadMarketingUpdates,
   loadMarketingIndustryNews,
   loadPublicPricing,
+  loadPublicPlanFeatures,
   submitInquiry,
 } from "../services/platformMarketing/platformMarketingService";
 import { ROUTES } from "../constants/routes";
@@ -25,6 +26,7 @@ import type {
   PlatformMarketingUpdate,
   PlatformMarketingIndustryNews,
   PublicSubscriptionPlan,
+  PublicPlanFeature,
   InquirySource,
 } from "../types/platformMarketing";
 
@@ -229,21 +231,31 @@ export default function MarketingHomePage() {
   const [updates, setUpdates] = useState<PlatformMarketingUpdate[]>([]);
   const [industryNews, setIndustryNews] = useState<PlatformMarketingIndustryNews[]>([]);
   const [plans, setPlans] = useState<PublicSubscriptionPlan[]>([]);
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [planFeatures, setPlanFeatures] = useState<PublicPlanFeature[]>([]);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "six_month" | "yearly">("monthly");
+  const [openTip, setOpenTip] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadMarketingIndustryNews(), loadPublicPricing()])
-      .then(([s, f, t, u, n, p]) => {
+    Promise.all([loadMarketingSettings(), loadMarketingFeatures(), loadMarketingTestimonials(), loadMarketingUpdates(), loadMarketingIndustryNews(), loadPublicPricing(), loadPublicPlanFeatures()])
+      .then(([s, f, t, u, n, p, pf]) => {
         setSettings(s);
         setFeatures(f);
         setTestimonials(t);
         setUpdates(u);
         setIndustryNews(n);
         setPlans(p);
+        setPlanFeatures(pf);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!openTip) return;
+    const close = () => setOpenTip(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openTip]);
 
   if (loading) {
     return <div className="min-h-screen bg-slate-950" />;
@@ -387,18 +399,22 @@ export default function MarketingHomePage() {
             <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">Pricing</p>
             <h2 className="mt-2 text-center text-3xl font-bold tracking-tight text-slate-900">Simple, Transparent Pricing</h2>
             <div className="mt-6 flex justify-center">
-              <div className="inline-flex rounded-xl border-2 border-slate-200 bg-white p-1">
-                {(["monthly", "yearly"] as const).map((cycle) => (
+              <div className="inline-flex flex-wrap justify-center rounded-xl border-2 border-slate-200 bg-white p-1">
+                {([
+                  ["monthly", "Monthly"],
+                  ...(plans.some((p) => p.six_month_discount_pct !== null) ? [["six_month", "6 Months"]] as const : []),
+                  ["yearly", "Yearly"],
+                ] as const).map(([cycle, label]) => (
                   <button
                     key={cycle}
                     onClick={() => setBillingCycle(cycle)}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                       billingCycle === cycle
                         ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    {cycle}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -422,12 +438,22 @@ export default function MarketingHomePage() {
                     )}
                     <h3 className="text-lg font-bold text-slate-900">{p.plan_name}</h3>
                     {p.description && <p className="mt-1 text-sm text-slate-600">{p.description}</p>}
-                    <div className="mt-5">
-                      <span className="text-3xl font-extrabold text-slate-900">
-                        ₹{(billingCycle === "monthly" ? p.price_monthly : p.price_yearly).toLocaleString()}
-                      </span>
-                      <span className="text-sm text-slate-600">/{billingCycle === "monthly" ? "mo" : "yr"}</span>
-                    </div>
+                    {(() => {
+                      const usingCycle = billingCycle === "six_month" && p.six_month_discount_pct === null ? "monthly" : billingCycle;
+                      const shown = usingCycle === "yearly" ? p.price_yearly : usingCycle === "six_month" ? (p.price_six_month ?? p.price_monthly * 6) : p.price_monthly;
+                      const suffix = usingCycle === "yearly" ? "yr" : usingCycle === "six_month" ? "6mo" : "mo";
+                      const discountPct = usingCycle === "yearly" ? p.yearly_discount_pct : usingCycle === "six_month" ? p.six_month_discount_pct ?? 0 : 0;
+                      return (
+                        <div className="mt-5">
+                          <span className="text-3xl font-extrabold text-slate-900">₹{shown.toLocaleString()}</span>
+                          <span className="text-sm text-slate-600">/{suffix}</span>
+                          {discountPct > 0 && <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">Save {discountPct}%</span>}
+                          {billingCycle === "six_month" && p.six_month_discount_pct === null && (
+                            <p className="mt-1 text-xs text-slate-400">6-month billing isn't offered on this plan — showing the monthly price.</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <ul className="mt-5 flex-1 space-y-2.5 text-sm text-slate-700">
                       <li className="flex items-center gap-2.5">
                         <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs">👥</span>
@@ -437,6 +463,27 @@ export default function MarketingHomePage() {
                         <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs">📚</span>
                         Up to {p.max_courses.toLocaleString()} courses
                       </li>
+                      {planFeatures.filter((pf) => pf.plan_id === p.id).map((pf) => (
+                        <li key={pf.module_key} className="relative flex items-start gap-2.5">
+                          <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-600">✓</span>
+                          <span className="flex-1">{pf.label}</span>
+                          {pf.description && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setOpenTip(openTip === pf.module_key ? null : pf.module_key); }}
+                              className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 hover:bg-slate-200"
+                              aria-label={`What is ${pf.label}?`}
+                            >
+                              i
+                            </button>
+                          )}
+                          {openTip === pf.module_key && pf.description && (
+                            <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-6 z-20 w-56 rounded-xl bg-slate-900 p-3 text-xs leading-relaxed text-white shadow-xl">
+                              {pf.description}
+                            </div>
+                          )}
+                        </li>
+                      ))}
                       {p.features.split(",").filter(Boolean).map((f) => (
                         <li key={f} className="flex items-center gap-2.5">
                           <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-600">✓</span>

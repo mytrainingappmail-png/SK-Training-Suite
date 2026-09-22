@@ -14,14 +14,21 @@ export interface SubscriptionPlan {
   max_storage_gb: number;
   max_certificates_per_month: number;
   price_monthly: number;
+  /** Always derived (monthly x 12 x (1 - yearly_discount_pct/100)) — never write this directly, see yearly_discount_pct. */
   price_yearly: number;
+  /** 0-100. The admin's only yearly input; price_yearly is computed from this, never typed in. */
+  yearly_discount_pct: number;
+  /** null = the plan does not offer 6-month billing. Otherwise 0-100, same computed relationship as yearly_discount_pct. */
+  six_month_discount_pct: number | null;
+  /** Always derived, null when six_month_discount_pct is null. */
+  price_six_month: number | null;
   features: string;
   active: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export type SubscriptionPlanForm = Omit<SubscriptionPlan, 'id' | 'created_at' | 'updated_at'>;
+export type SubscriptionPlanForm = Omit<SubscriptionPlan, 'id' | 'created_at' | 'updated_at' | 'price_yearly' | 'price_six_month'>;
 
 /** Which app_modules a plan includes — see supabase/migrations/20260726410000_plan_modules.sql. Assigning this plan to a company (or changing an existing license's plan) applies this set as that company's module overrides. */
 export interface PlanModule {
@@ -39,20 +46,28 @@ export const defaultPlanForm: SubscriptionPlanForm = {
   max_storage_gb: 5,
   max_certificates_per_month: 10,
   price_monthly: 0,
-  price_yearly: 0,
+  yearly_discount_pct: 0,
+  six_month_discount_pct: null,
   features: '',
   active: true,
 };
 
 export const DEFAULT_PLANS: SubscriptionPlanForm[] = [
-  { plan_name: 'Trial', plan_code: 'trial', description: '14-day free trial.', max_employees: 5, max_courses: 3, max_storage_gb: 1, max_certificates_per_month: 5, price_monthly: 0, price_yearly: 0, features: 'Basic course authoring,Up to 5 employees,Email support', active: true },
-  { plan_name: 'Basic', plan_code: 'basic', description: 'For small teams getting started.', max_employees: 25, max_courses: 20, max_storage_gb: 10, max_certificates_per_month: 50, price_monthly: 2999, price_yearly: 29999, features: 'Course authoring,Assessments,Certificates,Email support', active: true },
-  { plan_name: 'Professional', plan_code: 'professional', description: 'For growing organizations.', max_employees: 100, max_courses: 100, max_storage_gb: 50, max_certificates_per_month: 250, price_monthly: 9999, price_yearly: 99999, features: 'Everything in Basic,Learning Paths,Reports & Analytics,Priority support', active: true },
-  { plan_name: 'Enterprise', plan_code: 'enterprise', description: 'For large enterprises with custom needs.', max_employees: 1000, max_courses: 1000, max_storage_gb: 500, max_certificates_per_month: 5000, price_monthly: 29999, price_yearly: 299999, features: 'Everything in Professional,Custom branding,Dedicated support,SLA', active: true },
+  { plan_name: 'Trial', plan_code: 'trial', description: '14-day free trial.', max_employees: 5, max_courses: 3, max_storage_gb: 1, max_certificates_per_month: 5, price_monthly: 0, yearly_discount_pct: 0, six_month_discount_pct: null, features: 'Basic course authoring,Up to 5 employees,Email support', active: true },
+  { plan_name: 'Basic', plan_code: 'basic', description: 'For small teams getting started.', max_employees: 25, max_courses: 20, max_storage_gb: 10, max_certificates_per_month: 50, price_monthly: 2999, yearly_discount_pct: 17, six_month_discount_pct: 10, features: 'Course authoring,Assessments,Certificates,Email support', active: true },
+  { plan_name: 'Professional', plan_code: 'professional', description: 'For growing organizations.', max_employees: 100, max_courses: 100, max_storage_gb: 50, max_certificates_per_month: 250, price_monthly: 9999, yearly_discount_pct: 20, six_month_discount_pct: 10, features: 'Everything in Basic,Learning Paths,Reports & Analytics,Priority support', active: true },
+  { plan_name: 'Enterprise', plan_code: 'enterprise', description: 'For large enterprises with custom needs.', max_employees: 1000, max_courses: 1000, max_storage_gb: 500, max_certificates_per_month: 5000, price_monthly: 29999, yearly_discount_pct: 20, six_month_discount_pct: 10, features: 'Everything in Professional,Custom branding,Dedicated support,SLA', active: true },
 ];
 
 export type LicenseStatus = 'active' | 'grace_period' | 'expired' | 'suspended';
-export type BillingCycle = 'monthly' | 'yearly';
+export type BillingCycle = 'monthly' | 'six_month' | 'yearly';
+
+/** Amount due for one cycle of a plan — the single place this is computed, so every screen (License Management, the public Pay page, WhatsApp payment links) agrees. Falls back to 6x monthly if a plan hasn't set a 6-month price. */
+export function planAmountForCycle(plan: Pick<SubscriptionPlan, 'price_monthly' | 'price_yearly' | 'price_six_month'>, cycle: BillingCycle): number {
+  if (cycle === 'yearly') return plan.price_yearly;
+  if (cycle === 'six_month') return plan.price_six_month ?? plan.price_monthly * 6;
+  return plan.price_monthly;
+}
 
 export interface CompanyLicense {
   id: string;

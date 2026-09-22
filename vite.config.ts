@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -10,17 +10,20 @@ import { VitePWA } from 'vite-plugin-pwa'
 // the same VITE_BRAND_OVERRIDE_* vars used elsewhere are set (e.g. the
 // Realty Smartz demo deployment) — production, with no overrides set,
 // builds byte-identical to before.
-function dynamicHtmlBranding(): Plugin {
+function dynamicHtmlBranding(env: Record<string, string>): Plugin {
   return {
     name: 'dynamic-html-branding',
     transformIndexHtml(html) {
-      const name = process.env.VITE_BRAND_OVERRIDE_NAME?.trim();
-      const logo = process.env.VITE_BRAND_OVERRIDE_LOGO_URL?.trim();
+      const name = env.VITE_BRAND_OVERRIDE_NAME?.trim();
+      const logo = env.VITE_BRAND_OVERRIDE_LOGO_URL?.trim();
       if (!name && !logo) return html;
 
       let out = html;
       if (name) {
         out = out.replace(/<title>.*?<\/title>/, `<title>${name}</title>`);
+        // iOS "Add to Home Screen" reads this meta tag ahead of the manifest name — without
+        // rewriting it too, an installed icon on iPhone would still say "SK Training".
+        out = out.replace(/<meta name="apple-mobile-web-app-title" content=".*?" \/>/, `<meta name="apple-mobile-web-app-title" content="${name}" />`);
         out = out.replace(
           '</head>',
           `    <meta property="og:title" content="${name}" />\n    <meta property="og:description" content="${name} — a full learning management platform for training, assessments, and certification." />\n  </head>`
@@ -34,56 +37,61 @@ function dynamicHtmlBranding(): Plugin {
   };
 }
 
-// The "Install app" prompt (browser PWA install) reads name/icons from this
-// manifest, not from the in-app branding — same override vars, same
-// unchanged-when-unset fallback as the HTML title/OG tags above.
-const brandOverrideName = process.env.VITE_BRAND_OVERRIDE_NAME?.trim();
-const brandOverrideIcon192 = process.env.VITE_BRAND_OVERRIDE_ICON_192_URL?.trim();
-const brandOverrideIcon512 = process.env.VITE_BRAND_OVERRIDE_ICON_512_URL?.trim();
+// defineConfig's function form is required here so loadEnv can read .env BEFORE the plugins
+// array is built — the plain object form only exposes VITE_-prefixed vars to client code via
+// import.meta.env, never to this file's own process.env, so the override vars above and the
+// manifest name/icons below would silently never apply from a local .env (only from a real
+// shell/CI environment variable) without this.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const brandOverrideName = env.VITE_BRAND_OVERRIDE_NAME?.trim();
+  const brandOverrideIcon192 = env.VITE_BRAND_OVERRIDE_ICON_192_URL?.trim();
+  const brandOverrideIcon512 = env.VITE_BRAND_OVERRIDE_ICON_512_URL?.trim();
 
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    dynamicHtmlBranding(),
-    VitePWA({
-      registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
-      manifest: {
-        name: brandOverrideName || 'SK Training Suite',
-        short_name: brandOverrideName || 'SK Training',
-        description: 'Enterprise Learning Management Platform',
-        theme_color: '#0F172A',
-        background_color: '#0F172A',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: brandOverrideIcon192 || 'icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: brandOverrideIcon512 || 'icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: brandOverrideIcon512 || 'icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-        navigateFallback: '/index.html',
-        runtimeCaching: [],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-      },
-    }),
-  ],
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      dynamicHtmlBranding(env),
+      VitePWA({
+        registerType: 'prompt',
+        includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
+        manifest: {
+          name: brandOverrideName || 'SK Training Suite',
+          short_name: brandOverrideName || 'SK Training',
+          description: 'Enterprise Learning Management Platform',
+          theme_color: '#0F172A',
+          background_color: '#0F172A',
+          display: 'standalone',
+          orientation: 'portrait',
+          scope: '/',
+          start_url: '/',
+          icons: [
+            {
+              src: brandOverrideIcon192 || 'icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+            },
+            {
+              src: brandOverrideIcon512 || 'icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+            },
+            {
+              src: brandOverrideIcon512 || 'icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+          navigateFallback: '/index.html',
+          runtimeCaching: [],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        },
+      }),
+    ],
+  };
 })
