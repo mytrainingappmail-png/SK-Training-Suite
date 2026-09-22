@@ -27,7 +27,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   loadDays, saveDay, editDay, removeDay, reorderDays,
-  loadSectionsForDay, saveSection, editSection, removeSection,
+  loadSectionsForDay, saveSection, editSection, removeSection, reorderSections,
   loadAssignments, assignEmployee, markAssignmentComplete, reactivateAssignment, removeAssignment,
   cloneDayToBranch,
 } from '../../services/induction/inductionService';
@@ -378,6 +378,23 @@ function InductionManagement() {
     }
   }
 
+  async function handleMoveSection(id: string, direction: 'up' | 'down') {
+    const index = sections.findIndex((s) => s.id === id);
+    const swapWith = direction === 'up' ? index - 1 : index + 1;
+    if (index === -1 || swapWith < 0 || swapWith >= sections.length) return;
+
+    const reordered = [...sections];
+    [reordered[index], reordered[swapWith]] = [reordered[swapWith], reordered[index]];
+    setSections(reordered);
+
+    try {
+      await reorderSections(reordered.map((s) => s.id));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to reorder sections.');
+      if (editingDayId && editingDayId !== 'new') fetchSections(editingDayId);
+    }
+  }
+
   async function handleDeleteSection(id: string) {
     if (!editingDayId || editingDayId === 'new') return;
     try {
@@ -490,9 +507,27 @@ function InductionManagement() {
               </label>
               <div className="mb-3 space-y-2">
                 {sections.length === 0 && <p className="text-xs text-slate-400">No sections yet — add one below.</p>}
-                {sections.map((s) => (
+                {sections.map((s, i) => (
                   <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
                     <div className="flex items-center gap-3">
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          onClick={() => handleMoveSection(s.id, 'up')}
+                          disabled={i === 0}
+                          aria-label="Move up"
+                          className="flex h-5 w-5 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onClick={() => handleMoveSection(s.id, 'down')}
+                          disabled={i === sections.length - 1}
+                          aria-label="Move down"
+                          className="flex h-5 w-5 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                      </div>
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                         s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'
                       }`}>
