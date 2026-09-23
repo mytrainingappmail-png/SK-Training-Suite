@@ -7,6 +7,7 @@
 // fixes the fragility from the previous contentEditable-only version.
 
 import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import { Table, TableView, type TableOptions } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
@@ -18,6 +19,7 @@ import Underline from '@tiptap/extension-underline';
 import ImageExtension from '@tiptap/extension-image';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
+import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useState } from 'react';
 import ImageEditModal from './ImageEditModal';
 
@@ -35,6 +37,55 @@ interface RichTextEditorProps {
    * toggle — kept generic rather than a one-off "watermark" prop so any
    * future caller can do the same without editing this file again. */
   toolbarExtra?: React.ReactNode;
+  /** Namespaces the local-only autosave draft (see the "Draft recovery" section below).
+   * Optional — every existing caller keeps working with no changes; when omitted, the page
+   * path + resetKey stand in, which is unique enough in practice. */
+  storageKey?: string;
+}
+
+// ── Draft recovery ───────────────────────────────────────────────────────────
+// Nothing here ever reaches the server — it's purely a same-browser safety net against a
+// crashed tab or an accidental close mid-edit, for every screen that uses this editor
+// (Induction pages, course/project descriptions, About Us, legal documents, scripts...).
+// A debounced copy of the HTML goes to localStorage while typing; on mount, if a saved
+// draft differs from what the server actually returned, the person is offered it back
+// (never applied silently — an old draft silently overwriting real content would be worse
+// than the problem this solves). The draft is cleared once its editing session ends
+// (resetKey changes) or the person explicitly discards it.
+interface DraftRecord {
+  html: string;
+  savedAt: number;
+}
+const DRAFT_MAX_AGE_MS = 48 * 60 * 60 * 1000; // an autosave older than this is more likely stale than useful
+const DRAFT_SAVE_DEBOUNCE_MS = 1500;
+
+function draftStorageKey(key: string): string {
+  return `rte-draft:${key}`;
+}
+function readDraft(key: string): DraftRecord | null {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(key));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftRecord;
+    if (!parsed.html || Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) return null;
+    return parsed;
+  } catch {
+    return null; // private-browsing / storage disabled — draft recovery just quietly doesn't happen
+  }
+}
+function writeDraft(key: string, html: string) {
+  try {
+    localStorage.setItem(draftStorageKey(key), JSON.stringify({ html, savedAt: Date.now() } satisfies DraftRecord));
+  } catch {
+    // storage full/disabled — same graceful no-op
+  }
+}
+function clearDraft(key: string) {
+  try {
+    localStorage.removeItem(draftStorageKey(key));
+  } catch {
+    // ignore
+  }
 }
 
 const FONT_FAMILIES = ['Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Helvetica', 'Courier New', 'Trebuchet MS'];
@@ -262,7 +313,7 @@ function ToolbarButton({ onClick, title, active, disabled, children }: {
   );
 }
 
-function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra }: RichTextEditorProps) {
+function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra, storageKey }: RichTextEditorProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
@@ -271,6 +322,14 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
   const [showTableMenu, setShowTableMenu] = useState(false);
   const [showShapesMenu, setShowShapesMenu] = useState(false);
   const [shapeColor, setShapeColor] = useState(SHAPE_COLORS[0]);
+
+  // Page path + resetKey is unique enough across this app's screens without every existing
+  // caller needing to pass storageKey explicitly.
+  const effectiveDraftKey = storageKey ?? `${typeof window !== 'undefined' ? window.location.pathname : ''}:${resetKey ?? 'default'}`;
+  const [availableDraft, setAvailableDraft] = useState<DraftRecord | null>(null);
+  const [draftDismissed, setDraftDismissed] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -288,9 +347,19 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       TableRow,
       TableHeader,
       TableCellWithColor,
+      CharacterCount,
     ],
     content: value || '',
-    onUpdate: ({ editor: e }) => onChange(e.getHTML()),
+    onUpdate: ({ editor: e }) => {
+      const html = e.getHTML();
+      onChange(html);
+      // Debounced local-only autosave — never sent anywhere, just a same-browser safety net.
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+      draftSaveTimer.current = setTimeout(() => {
+        writeDraft(effectiveDraftKey, html);
+        setDraftSavedAt(Date.now());
+      }, DRAFT_SAVE_DEBOUNCE_MS);
+    },
     // Without this, TipTap v3 only re-renders the toolbar on content
     // changes, not on pure selection moves (clicking into a different
     // cell, moving the cursor) — so button active/disabled states and
@@ -302,6 +371,34 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       },
     },
   });
+
+  // A fresh editing session (a new resetKey) — check whether a leftover draft from an
+  // earlier crashed/closed session exists for THIS key and differs from what the server
+  // actually gave us, and clear out anything left over from whatever session came before.
+  useEffect(() => {
+    setDraftDismissed(false);
+    setDraftSavedAt(null);
+    const found = readDraft(effectiveDraftKey);
+    setAvailableDraft(found && found.html !== (value || '') ? found : null);
+    return () => {
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+      clearDraft(effectiveDraftKey);
+    };
+    // Only re-run when we actually move to a different editing session, not on every
+    // keystroke (value/effectiveDraftKey would otherwise fire this constantly).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  function handleRestoreDraft() {
+    if (!editor || !availableDraft) return;
+    editor.commands.setContent(availableDraft.html, { emitUpdate: true });
+    setAvailableDraft(null);
+  }
+  function handleDiscardDraft() {
+    clearDraft(effectiveDraftKey);
+    setAvailableDraft(null);
+    setDraftDismissed(true);
+  }
 
   // Load different content only when resetKey changes (switching
   // which project is being edited) — never on every keystroke, which
@@ -356,6 +453,37 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         .rte-content img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; }
         .rte-content p.is-editor-empty:first-child::before { color: #94A3B8; content: attr(data-placeholder); float: left; pointer-events: none; height: 0; }
       `}</style>
+
+      {availableDraft && !draftDismissed && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span>We found unsaved changes from earlier in this browser — want them back?</span>
+          <span className="flex gap-2">
+            <button type="button" onClick={handleRestoreDraft} className="rounded-lg bg-amber-600 px-2.5 py-1 font-semibold text-white hover:bg-amber-700">Restore</button>
+            <button type="button" onClick={handleDiscardDraft} className="rounded-lg px-2.5 py-1 font-semibold text-amber-700 hover:bg-amber-100">Discard</button>
+          </span>
+        </div>
+      )}
+
+      {editor && (
+        <BubbleMenu editor={editor} className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+          <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold"><IconBold /></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Italic"><IconItalic /></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')} title="Underline"><IconUnderline /></ToolbarButton>
+          <div className="mx-0.5 h-5 w-px bg-slate-200" />
+          {TEXT_COLORS.slice(0, 5).map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={`Color: ${c}`}
+              onClick={() => editor.chain().focus().setColor(c).run()}
+              className="h-5 w-5 flex-shrink-0 rounded-full ring-1 ring-inset ring-slate-200"
+              style={{ backgroundColor: c }}
+            />
+          ))}
+          <div className="mx-0.5 h-5 w-px bg-slate-200" />
+          <ToolbarButton onClick={() => editor.chain().focus().unsetColor().unsetMark('highlight').run()} title="Clear formatting">✕</ToolbarButton>
+        </BubbleMenu>
+      )}
 
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1 rounded-t-xl border-b border-slate-100 bg-white p-2">
 
@@ -541,6 +669,13 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       </div>
 
       <EditorContent editor={editor} />
+
+      <div className="flex items-center justify-between gap-2 rounded-b-xl border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-400">
+        <span>
+          {editor.storage.characterCount.words().toLocaleString()} words · {editor.storage.characterCount.characters().toLocaleString()} characters
+        </span>
+        {draftSavedAt && <span>Saved locally {new Date(draftSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+      </div>
 
       {pendingImageFile && (
         <ImageEditModal
