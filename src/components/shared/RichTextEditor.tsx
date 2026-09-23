@@ -441,7 +441,13 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
   if (!editor) return null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    // Its own scroll box (not the surrounding page/modal's) — `sticky` only pins relative to
+    // whichever ancestor actually scrolls, and that varies across every screen this editor is
+    // used on (some scroll the whole page, some scroll inside a modal, some have an ancestor
+    // with a transform that breaks sticky's containing block entirely). Giving the editor a
+    // bounded height and scrolling internally makes the toolbar reliably stay put everywhere,
+    // independent of whatever page happens to be hosting it.
+    <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-slate-200 bg-white">
       <style>{`
         .rte-content { padding: 1rem; font-size: 0.875rem; color: #334155; min-height: ${minHeight}px; }
         .rte-content ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
