@@ -96,6 +96,7 @@ export default function QuizHostLivePage() {
       ? (session.question_order.map((id) => quiz.questions.find((q) => q.id === id)).filter(Boolean) as typeof quiz.questions)
       : quiz?.questions ?? [];
   const totalQuestions = orderedQuestions.length;
+  const totalMarks = orderedQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
   const currentQuestion = session ? orderedQuestions[session.current_question_index] ?? null : null;
 
   const REVEAL_PAUSE_MS = 2500;
@@ -355,7 +356,7 @@ export default function QuizHostLivePage() {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold">
-                    Q{session.current_question_index + 1} of {totalQuestions}
+                    Q{session.current_question_index + 1} of {totalQuestions} <span className="text-slate-500">· {totalMarks} marks total</span>
                     <span className="ml-3 text-emerald-400">{answeredCount}/{participants.length} answered</span>
                   </div>
                   <div className="font-semibold mt-1" style={{ fontSize: `${1.125 * scale}rem` }}>
@@ -483,7 +484,7 @@ export default function QuizHostLivePage() {
 
                   {/* All Participants with grade + integrity */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                    <div className="text-sm font-bold text-white mb-3">👥 All Participants — ranked by marks</div>
+                    <div className="text-sm font-bold text-white mb-3">👥 All Participants — ranked by marks <span className="text-slate-500 font-normal">(out of {totalMarks} total)</span></div>
                     <div className="space-y-1.5">
                       {rankByMarks(participants).map((p, i) => {
                           const grade = participantGrade(p.correct_count, totalQuestions, quiz);
@@ -493,7 +494,7 @@ export default function QuizHostLivePage() {
                               <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[i] ?? `#${i + 1}`}</span>
                               <span className="flex-1 truncate">{p.display_name}</span>
                               <span className="text-xs text-slate-400">
-                                {p.correct_count}/{totalQuestions} · {pct}%
+                                {p.correct_count}/{totalMarks} marks · {pct}%
                               </span>
                               {p.tab_switch_count > 0 && (
                                 <span
