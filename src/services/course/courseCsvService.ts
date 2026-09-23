@@ -369,6 +369,9 @@ export async function commitImport(companyId: string, plan: ImportPlan): Promise
         test_compulsory_after_module: false,
         watermark_enabled: false,
         watermark_text: null,
+        watermark_orientation: 'diagonal',
+        watermark_opacity: 8,
+        no_copy: false,
         display_order: 0,
         // Draft until an admin has added content/thumbnail and reviewed it —
         // never visible to employees straight out of a CSV import.

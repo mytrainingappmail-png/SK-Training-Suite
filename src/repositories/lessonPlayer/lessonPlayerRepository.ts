@@ -37,7 +37,10 @@ interface SBLessonRow {
   learning_resources: SBResource[] | null;
   // Joined through to the parent course purely to read its watermark
   // setting — nothing else about the course is needed here.
-  modules: { courses: { watermark_enabled: boolean; watermark_text: string | null } | null } | null;
+  modules: { courses: {
+    watermark_enabled: boolean; watermark_text: string | null;
+    watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean;
+  } | null } | null;
 }
 
 // ── Normalise helpers ─────────────────────────────────────────────────────────
@@ -70,6 +73,9 @@ function normaliseLesson(row: SBLessonRow): LessonPlayerLesson {
       .sort((a, b) => a.displayOrder - b.displayOrder),
     watermarkEnabled: row.modules?.courses?.watermark_enabled ?? false,
     watermarkText:    row.modules?.courses?.watermark_text    ?? '',
+    watermarkOrientation: row.modules?.courses?.watermark_orientation ?? 'diagonal',
+    watermarkOpacity: row.modules?.courses?.watermark_opacity ?? 8,
+    noCopy: row.modules?.courses?.no_copy ?? false,
   };
 }
 
@@ -98,7 +104,7 @@ export async function getLessonById(lessonId: string): Promise<LessonPlayerLesso
          downloadable
        ),
        modules (
-         courses ( watermark_enabled, watermark_text )
+         courses ( watermark_enabled, watermark_text, watermark_orientation, watermark_opacity, no_copy )
        )`
     )
     .eq('id', lessonId)
@@ -133,7 +139,7 @@ export async function getLessonsByModule(moduleId: string): Promise<LessonPlayer
          downloadable
        ),
        modules (
-         courses ( watermark_enabled, watermark_text )
+         courses ( watermark_enabled, watermark_text, watermark_orientation, watermark_opacity, no_copy )
        )`
     )
     .eq('module_id', moduleId)

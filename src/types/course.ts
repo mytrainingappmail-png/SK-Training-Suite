@@ -58,6 +58,14 @@ export interface Course {
 
   watermark_text: string | null;
 
+  watermark_orientation: 'horizontal' | 'vertical' | 'diagonal';
+
+  watermark_opacity: number;
+
+  // Same operator-only gate — disables right-click/selection/copy on this course's written
+  // lesson content.
+  no_copy: boolean;
+
   // Position among sibling courses in the same category — used for admin
   // drag-and-drop reordering, lower numbers appear first.
   display_order: number;
@@ -98,6 +106,9 @@ export const defaultCourseForm: CourseForm = {
   test_compulsory_after_module: false,
   watermark_enabled: false,
   watermark_text: null,
+  watermark_orientation: 'diagonal',
+  watermark_opacity: 8,
+  no_copy: false,
   display_order: 0,
   active: true,
   created_by: "",

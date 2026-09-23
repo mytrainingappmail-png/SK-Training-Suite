@@ -28,4 +28,7 @@ export interface LessonPlayerLesson {
    * applied on top of a 'text'-type lesson's content, never video. */
   watermarkEnabled: boolean;
   watermarkText:    string;
+  watermarkOrientation: 'horizontal' | 'vertical' | 'diagonal';
+  watermarkOpacity: number;
+  noCopy: boolean;
 }

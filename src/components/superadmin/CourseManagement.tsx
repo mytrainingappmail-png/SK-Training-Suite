@@ -466,6 +466,9 @@ function CourseModal({
           test_compulsory_after_module:   editing.test_compulsory_after_module,
           watermark_enabled:   editing.watermark_enabled,
           watermark_text:      editing.watermark_text,
+          watermark_orientation: editing.watermark_orientation,
+          watermark_opacity:   editing.watermark_opacity,
+          no_copy:             editing.no_copy,
           display_order:       editing.display_order,
           active:              editing.active,
           created_by:          editing.created_by,
@@ -834,15 +837,54 @@ function CourseModal({
                   </div>
                 </label>
                 {form.watermark_enabled && (
-                  <div className="min-w-[220px] flex-1">
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Watermark text</label>
-                    <input
-                      value={form.watermark_text ?? ""}
-                      onChange={(e) => field("watermark_text", e.target.value)}
-                      placeholder="e.g. your brand name"
-                      disabled={saving}
-                      className={CLS_INPUT}
-                    />
+                  <div className="min-w-[220px] flex-1 space-y-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Watermark text</label>
+                      <input
+                        value={form.watermark_text ?? ""}
+                        onChange={(e) => field("watermark_text", e.target.value)}
+                        placeholder="e.g. your brand name"
+                        disabled={saving}
+                        className={CLS_INPUT}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Direction</label>
+                        <div className="flex gap-1">
+                          {(["horizontal", "diagonal", "vertical"] as const).map((o) => (
+                            <button
+                              key={o}
+                              type="button"
+                              disabled={saving}
+                              onClick={() => field("watermark_orientation", o)}
+                              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold capitalize transition ${
+                                form.watermark_orientation === o ? "bg-indigo-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-1 items-center gap-2">
+                        <span className="text-xs text-slate-500">Light</span>
+                        <input
+                          type="range"
+                          min={3}
+                          max={40}
+                          value={form.watermark_opacity}
+                          disabled={saving}
+                          onChange={(e) => field("watermark_opacity", Number(e.target.value))}
+                          className="flex-1"
+                        />
+                        <span className="text-xs text-slate-500">Dark</span>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input type="checkbox" checked={form.no_copy} disabled={saving} onChange={(e) => field("no_copy", e.target.checked)} />
+                      Disable copy &amp; right-click on written lesson content
+                    </label>
                   </div>
                 )}
               </div>

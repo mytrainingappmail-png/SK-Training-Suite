@@ -74,6 +74,9 @@ interface SBCourse {
   test_compulsory_after_module:   boolean;
   watermark_enabled:   boolean;
   watermark_text:      string | null;
+  watermark_orientation: 'horizontal' | 'vertical' | 'diagonal';
+  watermark_opacity:   number;
+  no_copy:             boolean;
   modules:             SBModule[] | null;
 }
 
@@ -159,6 +162,9 @@ function normaliseCourse(c: SBCourse, completedIds: Set<string>): CoursePlayerCo
     testCompulsoryAfterModule:   c.test_compulsory_after_module   ?? false,
     watermarkEnabled:   c.watermark_enabled ?? false,
     watermarkText:      c.watermark_text    ?? '',
+    watermarkOrientation: c.watermark_orientation ?? 'diagonal',
+    watermarkOpacity:   c.watermark_opacity ?? 8,
+    noCopy:             c.no_copy ?? false,
     modules:            (c.modules ?? [])
                           .map((m) => normaliseModule(m, completedIds))
                           .sort((a, b) => a.moduleOrder - b.moduleOrder),
@@ -196,6 +202,9 @@ export async function getCoursePlayerData(
          test_compulsory_after_module,
          watermark_enabled,
          watermark_text,
+         watermark_orientation,
+         watermark_opacity,
+         no_copy,
          modules (
            id,
            module_code,

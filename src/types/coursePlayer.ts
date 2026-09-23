@@ -59,6 +59,9 @@ export interface CoursePlayerCourse {
   /** Platform-operator-only toggle — shows a faint brand watermark over this course's 'text'-type lesson content (never video). */
   watermarkEnabled:   boolean;
   watermarkText:      string;
+  watermarkOrientation: 'horizontal' | 'vertical' | 'diagonal';
+  watermarkOpacity:   number;
+  noCopy:             boolean;
   modules:            CoursePlayerModule[];
 }
 
