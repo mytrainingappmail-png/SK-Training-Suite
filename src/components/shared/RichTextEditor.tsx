@@ -441,13 +441,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
   if (!editor) return null;
 
   return (
-    // Its own scroll box (not the surrounding page/modal's) — `sticky` only pins relative to
-    // whichever ancestor actually scrolls, and that varies across every screen this editor is
-    // used on (some scroll the whole page, some scroll inside a modal, some have an ancestor
-    // with a transform that breaks sticky's containing block entirely). Giving the editor a
-    // bounded height and scrolling internally makes the toolbar reliably stay put everywhere,
-    // independent of whatever page happens to be hosting it.
-    <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white">
       <style>{`
         .rte-content { padding: 1rem; font-size: 0.875rem; color: #334155; min-height: ${minHeight}px; }
         .rte-content ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
@@ -491,7 +485,11 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         </BubbleMenu>
       )}
 
-      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1 rounded-t-xl border-b border-slate-100 bg-white p-2">
+      {/* Never scrolls away — it's a normal-flow sibling of the scrolling content box below,
+          not a `sticky` element inside it, which is what let a dropdown here (Table, Colors)
+          spill out and be visible below the toolbar instead of getting clipped at the
+          content box's edge. */}
+      <div className="flex flex-wrap items-center gap-1 rounded-t-xl border-b border-slate-100 bg-white p-2">
 
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)"><IconUndo /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)"><IconRedo /></ToolbarButton>
@@ -674,7 +672,9 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
 
       </div>
 
-      <EditorContent editor={editor} />
+      <div className="max-h-[70vh] overflow-y-auto">
+        <EditorContent editor={editor} />
+      </div>
 
       <div className="flex items-center justify-between gap-2 rounded-b-xl border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-400">
         <span>
