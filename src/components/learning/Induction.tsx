@@ -18,6 +18,7 @@ import {
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import { getCurrentUser } from '../../services/auth/session';
 import { resolveForBranch } from '../../utils/branchScoping';
+import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import { isDateUnlocked, nextUnlockDate, formatUnlockDate } from '../../utils/inductionDateGate';
 import SectionHeroBanner from './SectionHeroBanner';
 import ThumbnailCard from '../shared/ThumbnailCard';
@@ -211,10 +212,14 @@ function Induction() {
                       <IconChevron className="h-3.5 w-3.5" open={openKeys.has(key)} /> {section.title}
                     </button>
                     {openKeys.has(key) && (
-                      <div
-                        className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
-                      />
+                      <div className="relative">
+                        <div
+                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
+                          {...noCopyProps(section.no_copy)}
+                        />
+                        <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
+                      </div>
                     )}
                   </div>
                 );

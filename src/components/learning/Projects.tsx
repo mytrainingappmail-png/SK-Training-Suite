@@ -18,6 +18,7 @@ import { loadProjectsForEmployee } from '../../services/projects/projectsService
 import { loadCompletedProjectIds, markProjectComplete } from '../../services/realEstateProject/realEstateProjectService';
 import { getCurrentUser } from '../../services/auth/session';
 import SectionHeroBanner from './SectionHeroBanner';
+import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
@@ -176,10 +177,14 @@ function ProjectDetailCard({
                       {openKeys.has(key) ? '▼' : '▶'} {section.title}
                     </button>
                     {openKeys.has(key) && (
-                      <div
-                        className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
-                      />
+                      <div className="relative">
+                        <div
+                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
+                          {...noCopyProps(section.no_copy)}
+                        />
+                        <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
+                      </div>
                     )}
                   </div>
                 );

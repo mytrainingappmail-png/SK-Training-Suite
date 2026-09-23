@@ -75,6 +75,11 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
         page_content: s.page_content,
         assessment_id: s.assessment_id,
         faq_items: s.faq_items,
+        watermark_enabled: s.watermark_enabled,
+        watermark_text: s.watermark_text,
+        watermark_orientation: s.watermark_orientation,
+        watermark_opacity: s.watermark_opacity,
+        no_copy: s.no_copy,
       })
     )
   );

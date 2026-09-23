@@ -22,6 +22,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useState } from 'react';
 import ImageEditModal from './ImageEditModal';
+import ContentWatermark, { noCopyProps, type WatermarkConfig } from './ContentWatermark';
 
 interface RichTextEditorProps {
   value: string;
@@ -41,6 +42,14 @@ interface RichTextEditorProps {
    * Optional — every existing caller keeps working with no changes; when omitted, the page
    * path + resetKey stand in, which is unique enough in practice. */
   storageKey?: string;
+  /** Content-protection controls (watermark + disable copy/right-click) in the toolbar — pass
+   * both `watermark`/`onWatermarkChange` to show them. The caller decides whether to offer
+   * this at all (e.g. only when the current admin's company is_platform_operator), so
+   * ordinary companies never see it. */
+  watermark?: WatermarkConfig;
+  onWatermarkChange?: (config: WatermarkConfig) => void;
+  noCopy?: boolean;
+  onNoCopyChange?: (value: boolean) => void;
 }
 
 // ── Draft recovery ───────────────────────────────────────────────────────────
@@ -313,7 +322,9 @@ function ToolbarButton({ onClick, title, active, disabled, children }: {
   );
 }
 
-function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra, storageKey }: RichTextEditorProps) {
+function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra, storageKey, watermark, onWatermarkChange, noCopy, onNoCopyChange }: RichTextEditorProps) {
+  const [showProtectMenu, setShowProtectMenu] = useState(false);
+  const showProtectControl = !!watermark && !!onWatermarkChange;
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
@@ -663,6 +674,69 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           )}
         </div>
 
+        {showProtectControl && (
+          <>
+            <div className="mx-1 h-5 w-px bg-slate-200" />
+            <div className="relative">
+              <ToolbarButton onClick={() => setShowProtectMenu((v) => !v)} active={watermark!.enabled || !!noCopy} title="Protect this content (watermark, disable copying)">
+                🔒
+              </ToolbarButton>
+              {showProtectMenu && (
+                <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Content Protection</p>
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={watermark!.enabled} onChange={(e) => onWatermarkChange!({ ...watermark!, enabled: e.target.checked })} />
+                    Watermark
+                  </label>
+                  {watermark!.enabled && (
+                    <div className="mb-3 space-y-2 border-l-2 border-slate-100 pl-3">
+                      <input
+                        value={watermark!.text ?? ''}
+                        onChange={(e) => onWatermarkChange!({ ...watermark!, text: e.target.value })}
+                        placeholder="Watermark text (e.g. your company name)"
+                        className="w-full rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+                      />
+                      <div className="flex gap-1.5">
+                        {(['horizontal', 'diagonal', 'vertical'] as const).map((o) => (
+                          <button
+                            key={o}
+                            type="button"
+                            onClick={() => onWatermarkChange!({ ...watermark!, orientation: o })}
+                            className={`flex-1 rounded-lg px-2 py-1 text-[11px] font-semibold capitalize transition ${
+                              watermark!.orientation === o ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {o}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500">Light</span>
+                        <input
+                          type="range"
+                          min={3}
+                          max={40}
+                          value={watermark!.opacity}
+                          onChange={(e) => onWatermarkChange!({ ...watermark!, opacity: Number(e.target.value) })}
+                          className="flex-1"
+                        />
+                        <span className="text-[11px] text-slate-500">Dark</span>
+                      </div>
+                    </div>
+                  )}
+                  {onNoCopyChange && (
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={!!noCopy} onChange={(e) => onNoCopyChange(e.target.checked)} />
+                      Disable copy &amp; right-click
+                    </label>
+                  )}
+                  <p className="mt-2 text-[11px] text-slate-400">Stays on this content even if it's cloned to another company — only your own account can change it.</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {toolbarExtra && (
           <>
             <div className="mx-1 h-5 w-px bg-slate-200" />
@@ -672,8 +746,9 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
 
       </div>
 
-      <div className="max-h-[70vh] overflow-y-auto">
-        <EditorContent editor={editor} />
+      <div className="relative max-h-[70vh] overflow-y-auto">
+        <EditorContent editor={editor} {...(showProtectControl ? noCopyProps(!!noCopy) : {})} />
+        {showProtectControl && <ContentWatermark config={watermark!} />}
       </div>
 
       <div className="flex items-center justify-between gap-2 rounded-b-xl border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-400">

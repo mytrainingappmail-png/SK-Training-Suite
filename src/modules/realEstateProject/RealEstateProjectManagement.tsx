@@ -43,6 +43,7 @@ import {
 } from '../../services/question/questionService';
 import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
+import type { WatermarkConfig } from '../../components/shared/ContentWatermark';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
 import type { RealEstateProjectSection, RealEstateProjectSectionForm, ProjectSectionFaqItem } from '../../types/realEstateProjectSection';
@@ -261,6 +262,7 @@ function RealEstateProjectManagement() {
   const [brochureMode, setBrochureMode] = useState<'upload' | 'link'>('link');
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
   const [pdfUploadEnabled, setPdfUploadEnabled] = useState(false);
+  const [isOperator, setIsOperator] = useState(false);
 
   const [sections, setSections] = useState<RealEstateProjectSection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<RealEstateProjectSectionForm | null>(null);
@@ -292,6 +294,7 @@ function RealEstateProjectManagement() {
         setBrochures(b);
         setBranches(br);
         setPdfUploadEnabled(company?.brochure_pdf_upload_enabled ?? false);
+        setIsOperator(company?.is_platform_operator ?? false);
       })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
@@ -495,6 +498,11 @@ function RealEstateProjectManagement() {
       page_content: s.page_content,
       assessment_id: s.assessment_id,
       faq_items: s.faq_items,
+      watermark_enabled: s.watermark_enabled,
+      watermark_text: s.watermark_text,
+      watermark_orientation: s.watermark_orientation,
+      watermark_opacity: s.watermark_opacity,
+      no_copy: s.no_copy,
     });
     resetTestState();
     if (s.section_type === 'test' && s.assessment_id) {
@@ -911,6 +919,12 @@ function RealEstateProjectManagement() {
                         onImageUpload={uploadInlineImage}
                         minHeight={220}
                         resetKey={editingSectionId ?? 'new-section'}
+                        {...(isOperator ? {
+                          watermark: { enabled: sectionDraft.watermark_enabled, text: sectionDraft.watermark_text, orientation: sectionDraft.watermark_orientation, opacity: sectionDraft.watermark_opacity } as WatermarkConfig,
+                          onWatermarkChange: (w: WatermarkConfig) => setSectionDraft((d) => d && { ...d, watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity }),
+                          noCopy: sectionDraft.no_copy,
+                          onNoCopyChange: (v: boolean) => setSectionDraft((d) => d && { ...d, no_copy: v }),
+                        } : {})}
                       />
                     )}
 

@@ -35,8 +35,10 @@ import { loadAssessments } from '../../services/assessment/assessmentService';
 import { employeeService } from '../../services/employee/employeeService';
 import { branchService } from '../../services/branch/branchService';
 import { getCurrentUser } from '../../services/auth/session';
+import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
+import type { WatermarkConfig } from '../../components/shared/ContentWatermark';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
 import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment, InductionFaqItem } from '../../types/induction';
 import type { Assessment } from '../../types/assessment';
@@ -204,7 +206,8 @@ function InductionManagement() {
   const [pendingThumbFile, setPendingThumbFile] = useState<File | null>(null);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
-  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[] } | null>(null);
+  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
+  const [isOperator, setIsOperator] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [savingSection, setSavingSection] = useState(false);
 
@@ -218,8 +221,8 @@ function InductionManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), loadAssessments(), branchService.getAll()])
-      .then(([d, a, e, asm, br]) => { setDays(d); setAssignments(a); setEmployees(e); setAssessments(asm); setBranches(br); })
+    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), loadAssessments(), branchService.getAll(), loadCompany()])
+      .then(([d, a, e, asm, br, company]) => { setDays(d); setAssignments(a); setEmployees(e); setAssessments(asm); setBranches(br); setIsOperator(company?.is_platform_operator ?? false); })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
   }
@@ -333,12 +336,15 @@ function InductionManagement() {
 
   function startNewSection() {
     setEditingSectionId('new');
-    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [] });
+    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], watermark_enabled: false, watermark_text: '', watermark_orientation: 'diagonal', watermark_opacity: 12, no_copy: false });
   }
 
   function startEditSection(s: InductionDaySection) {
     setEditingSectionId(s.id);
-    setSectionDraft({ section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items });
+    setSectionDraft({
+      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items,
+      watermark_enabled: s.watermark_enabled, watermark_text: s.watermark_text, watermark_orientation: s.watermark_orientation, watermark_opacity: s.watermark_opacity, no_copy: s.no_copy,
+    });
   }
 
   function updateFaqItem(index: number, field: keyof InductionFaqItem, value: string) {
@@ -360,6 +366,11 @@ function InductionManagement() {
     if (!sectionDraft || !editingDayId || editingDayId === 'new' || !user?.companyId) return;
     setSavingSection(true);
     try {
+      const protection = {
+        watermark_enabled: sectionDraft.watermark_enabled, watermark_text: sectionDraft.watermark_text,
+        watermark_orientation: sectionDraft.watermark_orientation, watermark_opacity: sectionDraft.watermark_opacity,
+        no_copy: sectionDraft.no_copy,
+      };
       if (editingSectionId === 'new') {
         await saveSection({
           company_id: user.companyId, day_id: editingDayId,
@@ -367,12 +378,14 @@ function InductionManagement() {
           page_content: sectionDraft.page_content, assessment_id: sectionDraft.assessment_id,
           faq_items: sectionDraft.faq_items,
           display_order: sections.length,
+          ...protection,
         });
       } else if (editingSectionId) {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: sectionDraft.assessment_id,
           faq_items: sectionDraft.faq_items,
+          ...protection,
         });
       }
       setEditingSectionId(null);
@@ -585,6 +598,12 @@ function InductionManagement() {
                       onImageUpload={uploadInlineImage}
                       minHeight={220}
                       resetKey={editingSectionId ?? 'new'}
+                      {...(isOperator ? {
+                        watermark: { enabled: sectionDraft.watermark_enabled, text: sectionDraft.watermark_text, orientation: sectionDraft.watermark_orientation, opacity: sectionDraft.watermark_opacity } as WatermarkConfig,
+                        onWatermarkChange: (w: WatermarkConfig) => setSectionDraft((d) => d && { ...d, watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity }),
+                        noCopy: sectionDraft.no_copy,
+                        onNoCopyChange: (v: boolean) => setSectionDraft((d) => d && { ...d, no_copy: v }),
+                      } : {})}
                     />
                   )}
 
