@@ -357,7 +357,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         .rte-content p.is-editor-empty:first-child::before { color: #94A3B8; content: attr(data-placeholder); float: left; pointer-events: none; height: 0; }
       `}</style>
 
-      <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 p-2">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1 rounded-t-xl border-b border-slate-100 bg-white p-2">
 
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)"><IconUndo /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)"><IconRedo /></ToolbarButton>
