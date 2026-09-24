@@ -6,6 +6,7 @@ import {
   getCourseById,
   createCourse as repositoryCreateCourse,
   updateCourse,
+  bulkApplyCourseProtection,
   deleteCourse,
   setCourseStatus,
   convertCourseToModule as repositoryConvertCourseToModule,
@@ -121,6 +122,10 @@ export async function toggleCourseStatus(
 
 export async function uploadCourseThumbnail(file: File, courseId: string): Promise<string> {
   return await repositoryUploadCourseThumbnail(file, courseId);
+}
+
+export async function applyProtectionToAllCourses(companyId: string, patch: import('../../components/shared/ContentWatermark').ContentProtectionPatch): Promise<number> {
+  return bulkApplyCourseProtection(companyId, patch);
 }
 
 function validateCourseForm(data: Partial<CourseForm>): void {

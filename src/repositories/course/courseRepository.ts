@@ -91,6 +91,12 @@ export async function updateCourse(
   return data;
 }
 
+export async function bulkApplyCourseProtection(companyId: string, patch: import('../../components/shared/ContentWatermark').ContentProtectionPatch): Promise<number> {
+  const { data, error } = await supabase.from('courses').update(patch).eq('company_id', companyId).select('id');
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
 export async function deleteCourse(id: string): Promise<void> {
   const { error } = await supabase
     .from("courses")

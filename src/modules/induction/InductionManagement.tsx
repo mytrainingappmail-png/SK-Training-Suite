@@ -2,10 +2,10 @@
 //
 // Admin management for the Induction module — deliberately modeled on
 // RealEstateProjectManagement.tsx (flat Days instead of Projects, Page/Test
-// sections, drag-and-drop reorder). Test sections link to an EXISTING
-// Assessment (picked from a dropdown) rather than embedding a duplicate
-// question-builder — Assessments are already managed centrally elsewhere
-// in Admin, so Induction just reuses that.
+// sections, drag-and-drop reorder). Test sections auto-create their own
+// private, per-section assessment+questions (never picked from the shared,
+// company-wide Assessment pool used by Courses) — plus CSV bulk import and
+// a downloadable sample CSV for fast question entry.
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -31,25 +31,132 @@ import {
   loadAssignments, assignEmployee, markAssignmentComplete, reactivateAssignment, removeAssignment,
   cloneDayToBranch,
 } from '../../services/induction/inductionService';
-import { loadAssessments } from '../../services/assessment/assessmentService';
+import {
+  loadAssessments, createAssessment as createAssessmentSvc,
+  saveAssessment as saveAssessmentSettings, removeAssessment as removeAssessmentSvc,
+} from '../../services/assessment/assessmentService';
+import {
+  loadQuestions, loadOptionsByQuestion, createQuestion as createQuestionSvc,
+  saveQuestion as saveQuestionSvc, removeQuestion as removeQuestionSvc,
+} from '../../services/question/questionService';
 import { employeeService } from '../../services/employee/employeeService';
 import { branchService } from '../../services/branch/branchService';
 import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
-import type { WatermarkConfig } from '../../components/shared/ContentWatermark';
+import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
+import { protectionPatchFromCompany, DEFAULT_WATERMARK } from '../../components/shared/ContentWatermark';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
 import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment, InductionFaqItem } from '../../types/induction';
-import type { Assessment } from '../../types/assessment';
+import { defaultAssessmentForm } from '../../types/assessment';
+import type { Question, QuestionWithOptionsForm } from '../../types/question';
+import { defaultQuestionForm } from '../../types/question';
 import type { Employee } from '../../types/employee';
 import type { Branch } from '../../types/branch';
+import type { Company } from '../../types/company';
 
 const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
 async function uploadInlineImage(file: File): Promise<string> {
   const { url } = await uploadImage(file);
   return url;
+}
+
+// ── CSV bulk import/export for Induction Test questions — 4-option MCQ only,
+// matching the simple in-line question builder below (native, no dependency,
+// same technique as AssessmentManagement's CSV import). ──────────────────────
+const TEST_CSV_HEADER = ['question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'marks'];
+
+function parseTestCsv(text: string): string[][] {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, '')));
+}
+
+function csvToTestQuestionForms(text: string, assessmentId: string, startOrder: number): QuestionWithOptionsForm[] {
+  const rows = parseTestCsv(text);
+  if (rows.length === 0) return [];
+  const dataRows = rows[0][0]?.toLowerCase() === 'question_text' ? rows.slice(1) : rows;
+  return dataRows.map((row, i) => {
+    const [questionText, optA, optB, optC, optD, correctRaw, marksRaw] = row;
+    const optionTexts = [optA, optB, optC, optD].filter((t): t is string => !!t && t.trim().length > 0);
+    const correctLetter = (correctRaw ?? 'A').trim().toUpperCase();
+    const correctIndex = ['A', 'B', 'C', 'D'].indexOf(correctLetter);
+    const options = optionTexts.map((text, idx) => ({ option_text: text, is_correct: idx === (correctIndex >= 0 ? correctIndex : 0), display_order: idx + 1 }));
+    return {
+      ...defaultQuestionForm,
+      assessment_id: assessmentId,
+      question_code: `IND-${Date.now().toString(36).toUpperCase()}-${i}`,
+      question_text: questionText ?? '',
+      marks: Number(marksRaw) > 0 ? Number(marksRaw) : 1,
+      display_order: startOrder + i,
+      options: options.length >= 2 ? options : defaultQuestionForm.options,
+    };
+  }).filter((q) => q.question_text.trim().length > 0);
+}
+
+function testQuestionsToCsv(questions: Question[], optionsByQuestion: Record<string, { option_text: string; is_correct: boolean }[]>): string {
+  const lines = questions.map((q) => {
+    const opts = optionsByQuestion[q.id] ?? [];
+    const correctIndex = opts.findIndex((o) => o.is_correct);
+    return [
+      `"${q.question_text.replace(/"/g, '""')}"`,
+      opts[0]?.option_text ?? '', opts[1]?.option_text ?? '', opts[2]?.option_text ?? '', opts[3]?.option_text ?? '',
+      correctIndex >= 0 ? 'ABCD'[correctIndex] : 'A',
+      String(q.marks),
+    ].join(',');
+  });
+  return [TEST_CSV_HEADER.join(','), ...lines].join('\n');
+}
+
+function sampleTestCsv(): string {
+  return [
+    TEST_CSV_HEADER.join(','),
+    ['"What is RERA?"', 'A real estate law', 'A tax slab', 'A bank scheme', 'A loan type', 'A', '1'].join(','),
+    ['"Carpet area excludes"', 'Walls', 'Balcony', 'Kitchen', 'Bedroom', 'B', '1'].join(','),
+  ].join('\n');
+}
+
+// ── CSV bulk import/export for FAQ sections — 2 columns (question, answer). ──
+const FAQ_CSV_HEADER = ['question', 'answer'];
+
+function csvToFaqItems(text: string): InductionFaqItem[] {
+  const rows = parseTestCsv(text);
+  if (rows.length === 0) return [];
+  const dataRows = rows[0][0]?.toLowerCase() === 'question' ? rows.slice(1) : rows;
+  return dataRows
+    .map((row) => ({ question: row[0] ?? '', answer: row[1] ?? '' }))
+    .filter((item) => item.question.trim().length > 0);
+}
+
+function faqItemsToCsv(items: InductionFaqItem[]): string {
+  const lines = items.map((item) => [
+    `"${item.question.replace(/"/g, '""')}"`,
+    `"${item.answer.replace(/"/g, '""')}"`,
+  ].join(','));
+  return [FAQ_CSV_HEADER.join(','), ...lines].join('\n');
+}
+
+function sampleFaqCsv(): string {
+  return [
+    FAQ_CSV_HEADER.join(','),
+    ['"What is RERA?"', '"Real Estate Regulatory Authority — the law governing real estate sales in India."'].join(','),
+    ['"What is carpet area?"', '"The usable floor area inside a unit\'s walls, excluding common areas."'].join(','),
+  ].join('\n');
+}
+
+function downloadTextFile(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function IconGrip({ className = 'h-4 w-4' }: { className?: string }) {
@@ -188,7 +295,6 @@ function InductionManagement() {
   const [days, setDays] = useState<InductionDay[]>([]);
   const [assignments, setAssignments] = useState<InductionAssignment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
   const [cloneTargets, setCloneTargets] = useState<Record<string, string>>({});
@@ -208,8 +314,24 @@ function InductionManagement() {
   const [sections, setSections] = useState<InductionDaySection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
   const [isOperator, setIsOperator] = useState(false);
+  const [company, setCompany] = useState<Company | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [savingSection, setSavingSection] = useState(false);
+
+  // Induction's own dedicated Test builder — each Test section auto-creates
+  // its own private assessment+questions (never picked from the shared,
+  // company-wide Assessment pool), same pattern as Real Estate Project
+  // Test sections. Plus CSV bulk import/export for questions.
+  const DEFAULT_TEST_SETTINGS = { passing_percentage: 70, duration_minutes: 15, shuffle_questions: true, shuffle_options: true };
+  const [testSettingsDraft, setTestSettingsDraft] = useState(DEFAULT_TEST_SETTINGS);
+  const [testQuestions, setTestQuestions] = useState<Question[]>([]);
+  const [testQuestionOptions, setTestQuestionOptions] = useState<Record<string, { option_text: string; is_correct: boolean }[]>>({});
+  const [questionDraft, setQuestionDraft] = useState<QuestionWithOptionsForm | null>(null);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | 'new' | null>(null);
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const faqCsvInputRef = useRef<HTMLInputElement>(null);
 
   const [pickEmployeeId, setPickEmployeeId] = useState('');
   const [assigning, setAssigning] = useState(false);
@@ -221,8 +343,8 @@ function InductionManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), loadAssessments(), branchService.getAll(), loadCompany()])
-      .then(([d, a, e, asm, br, company]) => { setDays(d); setAssignments(a); setEmployees(e); setAssessments(asm); setBranches(br); setIsOperator(company?.is_platform_operator ?? false); })
+    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), branchService.getAll(), loadCompany()])
+      .then(([d, a, e, br, co]) => { setDays(d); setAssignments(a); setEmployees(e); setBranches(br); setCompany(co); setIsOperator(co?.is_platform_operator ?? false); })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
   }
@@ -334,9 +456,49 @@ function InductionManagement() {
     }
   }
 
+  async function fetchTestData(assessmentId: string) {
+    try {
+      const [allAssessments, allQuestions] = await Promise.all([loadAssessments(), loadQuestions()]);
+      const a = allAssessments.find((x) => x.id === assessmentId);
+      if (a) {
+        setTestSettingsDraft({
+          passing_percentage: a.passing_percentage,
+          duration_minutes: a.duration_minutes,
+          shuffle_questions: a.shuffle_questions,
+          shuffle_options: a.shuffle_options,
+        });
+      }
+      const qs = allQuestions.filter((q) => q.assessment_id === assessmentId).sort((x, y) => x.display_order - y.display_order);
+      setTestQuestions(qs);
+      const entries = await Promise.all(qs.map(async (q) => [q.id, await loadOptionsByQuestion(q.id)] as const));
+      setTestQuestionOptions(Object.fromEntries(entries));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load test.');
+    }
+  }
+
+  function resetTestState() {
+    setTestSettingsDraft(DEFAULT_TEST_SETTINGS);
+    setTestQuestions([]);
+    setTestQuestionOptions({});
+    setQuestionDraft(null);
+    setEditingQuestionId(null);
+  }
+
   function startNewSection() {
     setEditingSectionId('new');
-    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], watermark_enabled: false, watermark_text: '', watermark_orientation: 'diagonal', watermark_opacity: 12, no_copy: false });
+    const defaults = company ? protectionPatchFromCompany(company) : { watermark_enabled: false, watermark_text: '', watermark_orientation: DEFAULT_WATERMARK.orientation, watermark_opacity: DEFAULT_WATERMARK.opacity, no_copy: false };
+    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], ...defaults });
+    resetTestState();
+  }
+
+  // Content-protection fields save immediately as they're toggled (no need
+  // to also hit "Save Section") — only for a section that already exists,
+  // since a brand-new draft has no row to update yet.
+  function persistProtectionIfExisting(patch: ContentProtectionPatch) {
+    if (editingSectionId && editingSectionId !== 'new') {
+      editSection(editingSectionId, patch).catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to save protection settings.'));
+    }
   }
 
   function startEditSection(s: InductionDaySection) {
@@ -345,6 +507,10 @@ function InductionManagement() {
       section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items,
       watermark_enabled: s.watermark_enabled, watermark_text: s.watermark_text, watermark_orientation: s.watermark_orientation, watermark_opacity: s.watermark_opacity, no_copy: s.no_copy,
     });
+    resetTestState();
+    if (s.section_type === 'test' && s.assessment_id) {
+      fetchTestData(s.assessment_id);
+    }
   }
 
   function updateFaqItem(index: number, field: keyof InductionFaqItem, value: string) {
@@ -361,6 +527,27 @@ function InductionManagement() {
   function removeFaqItem(index: number) {
     setSectionDraft((d) => (d ? { ...d, faq_items: d.faq_items.filter((_, i) => i !== index) } : d));
   }
+  async function handleImportFaqCsv(file: File) {
+    try {
+      const text = await file.text();
+      const items = csvToFaqItems(text);
+      if (items.length === 0) {
+        showToast('No valid rows found in that CSV.');
+        return;
+      }
+      setSectionDraft((d) => (d ? { ...d, faq_items: [...d.faq_items, ...items] } : d));
+      showToast(`Added ${items.length} question(s) — click Save Section to store them.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to import CSV.');
+    }
+  }
+  function handleExportFaqCsv() {
+    if (!sectionDraft || sectionDraft.faq_items.length === 0) return;
+    downloadTextFile(faqItemsToCsv(sectionDraft.faq_items), `${sectionDraft.title || 'induction-faq'}.csv`, 'text/csv');
+  }
+  function handleDownloadFaqSampleCsv() {
+    downloadTextFile(sampleFaqCsv(), 'induction-faq-sample.csv', 'text/csv');
+  }
 
   async function handleSaveSection() {
     if (!sectionDraft || !editingDayId || editingDayId === 'new' || !user?.companyId) return;
@@ -371,11 +558,45 @@ function InductionManagement() {
         watermark_orientation: sectionDraft.watermark_orientation, watermark_opacity: sectionDraft.watermark_opacity,
         no_copy: sectionDraft.no_copy,
       };
+      let assessmentId = sectionDraft.assessment_id;
+      if (sectionDraft.section_type === 'test') {
+        if (!sectionDraft.title.trim()) throw new Error('Give the test a subject line first.');
+        // Every Induction Test gets its own private assessment — auto-created
+        // here, never picked from the shared company-wide Assessment pool —
+        // so it can't be edited/deleted from Admin → Assessments by mistake.
+        // Title is prefixed so every Induction Day's test groups together in
+        // Assessment Results as practice tests, distinct from the final exam
+        // (that one's run in Live Quiz) — each Day still keeps its OWN
+        // assessment underneath, so per-Day pass-gating is unaffected.
+        const testTitle = `Induction Practice Test — ${sectionDraft.title}`;
+        const settingsPayload = {
+          assessment_title: testTitle,
+          description: testTitle,
+          passing_percentage: testSettingsDraft.passing_percentage,
+          duration_minutes: testSettingsDraft.duration_minutes,
+          shuffle_questions: testSettingsDraft.shuffle_questions,
+          shuffle_options: testSettingsDraft.shuffle_options,
+        };
+        if (assessmentId) {
+          await saveAssessmentSettings(assessmentId, settingsPayload);
+        } else {
+          const created = await createAssessmentSvc({
+            ...defaultAssessmentForm,
+            lesson_id: null,
+            company_id: user.companyId,
+            assessment_code: `induction-test-${Date.now().toString(36)}`,
+            assessment_type: 'quiz',
+            auto_submit: true,
+            ...settingsPayload,
+          });
+          assessmentId = created.id;
+        }
+      }
       if (editingSectionId === 'new') {
         await saveSection({
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
-          page_content: sectionDraft.page_content, assessment_id: sectionDraft.assessment_id,
+          page_content: sectionDraft.page_content, assessment_id: assessmentId,
           faq_items: sectionDraft.faq_items,
           display_order: sections.length,
           ...protection,
@@ -383,7 +604,7 @@ function InductionManagement() {
       } else if (editingSectionId) {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
-          page_content: sectionDraft.page_content, assessment_id: sectionDraft.assessment_id,
+          page_content: sectionDraft.page_content, assessment_id: assessmentId,
           faq_items: sectionDraft.faq_items,
           ...protection,
         });
@@ -419,12 +640,119 @@ function InductionManagement() {
   async function handleDeleteSection(id: string) {
     if (!editingDayId || editingDayId === 'new') return;
     try {
+      const s = sections.find((x) => x.id === id);
       await removeSection(id);
+      if (s?.section_type === 'test' && s.assessment_id) {
+        try { await removeAssessmentSvc(s.assessment_id); } catch { /* best-effort cleanup */ }
+      }
       fetchSections(editingDayId);
       showToast('Section deleted.');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to delete section.');
     }
+  }
+
+  function startNewQuestion() {
+    const assessmentId = sectionDraft?.assessment_id;
+    if (!assessmentId) return;
+    setEditingQuestionId('new');
+    setQuestionDraft({
+      ...defaultQuestionForm,
+      assessment_id: assessmentId,
+      question_code: `q-${Date.now().toString(36)}`,
+      display_order: testQuestions.length + 1,
+      marks: 1,
+      options: [
+        { option_text: '', is_correct: true, display_order: 1 },
+        { option_text: '', is_correct: false, display_order: 2 },
+        { option_text: '', is_correct: false, display_order: 3 },
+        { option_text: '', is_correct: false, display_order: 4 },
+      ],
+    });
+  }
+
+  function startEditQuestion(q: Question) {
+    const opts = testQuestionOptions[q.id] ?? [];
+    setEditingQuestionId(q.id);
+    setQuestionDraft({
+      ...defaultQuestionForm,
+      assessment_id: q.assessment_id,
+      question_code: q.question_code,
+      question_text: q.question_text,
+      marks: q.marks,
+      display_order: q.display_order,
+      options: opts.length ? opts.map((o, i) => ({ option_text: o.option_text, is_correct: o.is_correct, display_order: i + 1 })) : defaultQuestionForm.options,
+    });
+  }
+
+  async function handleSaveQuestion() {
+    if (!questionDraft) return;
+    setSavingQuestion(true);
+    try {
+      if (editingQuestionId === 'new') {
+        await createQuestionSvc(questionDraft);
+      } else if (editingQuestionId) {
+        await saveQuestionSvc(editingQuestionId, questionDraft);
+      }
+      const assessmentId = questionDraft.assessment_id;
+      setEditingQuestionId(null);
+      setQuestionDraft(null);
+      await fetchTestData(assessmentId);
+      showToast('Question saved.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save question.');
+    } finally {
+      setSavingQuestion(false);
+    }
+  }
+
+  async function handleDeleteQuestion(id: string, assessmentId: string) {
+    try {
+      await removeQuestionSvc(id);
+      await fetchTestData(assessmentId);
+      showToast('Question deleted.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete question.');
+    }
+  }
+
+  function setCorrectOption(index: number) {
+    setQuestionDraft((d) => d && { ...d, options: d.options.map((o, i) => ({ ...o, is_correct: i === index })) });
+  }
+  function updateOptionText(index: number, text: string) {
+    setQuestionDraft((d) => d && { ...d, options: d.options.map((o, i) => (i === index ? { ...o, option_text: text } : o)) });
+  }
+
+  async function handleImportCsv(file: File) {
+    const assessmentId = sectionDraft?.assessment_id;
+    if (!assessmentId) return;
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      const forms = csvToTestQuestionForms(text, assessmentId, testQuestions.length + 1);
+      if (forms.length === 0) {
+        showToast('No valid rows found in that CSV.');
+        return;
+      }
+      for (const form of forms) {
+        await createQuestionSvc(form);
+      }
+      await fetchTestData(assessmentId);
+      showToast(`Imported ${forms.length} question(s).`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to import CSV.');
+    } finally {
+      setImportingCsv(false);
+    }
+  }
+
+  function handleExportCsv() {
+    if (testQuestions.length === 0) return;
+    downloadTextFile(testQuestionsToCsv(testQuestions, testQuestionOptions), `${sectionDraft?.title || 'induction-test'}-questions.csv`, 'text/csv');
+  }
+
+  function handleDownloadSampleCsv() {
+    downloadTextFile(sampleTestCsv(), 'induction-test-sample.csv', 'text/csv');
   }
 
   const unassignedEmployees = employees.filter((e) => !assignments.some((a) => a.employee_id === e.id && a.status === 'active'));
@@ -600,29 +928,194 @@ function InductionManagement() {
                       resetKey={editingSectionId ?? 'new'}
                       {...(isOperator ? {
                         watermark: { enabled: sectionDraft.watermark_enabled, text: sectionDraft.watermark_text, orientation: sectionDraft.watermark_orientation, opacity: sectionDraft.watermark_opacity } as WatermarkConfig,
-                        onWatermarkChange: (w: WatermarkConfig) => setSectionDraft((d) => d && { ...d, watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity }),
+                        onWatermarkChange: (w: WatermarkConfig) => {
+                          setSectionDraft((d) => d && { ...d, watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity });
+                          persistProtectionIfExisting({ watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity, no_copy: sectionDraft.no_copy });
+                        },
                         noCopy: sectionDraft.no_copy,
-                        onNoCopyChange: (v: boolean) => setSectionDraft((d) => d && { ...d, no_copy: v }),
+                        onNoCopyChange: (v: boolean) => {
+                          setSectionDraft((d) => d && { ...d, no_copy: v });
+                          persistProtectionIfExisting({ watermark_enabled: sectionDraft.watermark_enabled, watermark_text: sectionDraft.watermark_text, watermark_orientation: sectionDraft.watermark_orientation, watermark_opacity: sectionDraft.watermark_opacity, no_copy: v });
+                        },
                       } : {})}
                     />
                   )}
 
                   {sectionDraft.section_type === 'test' && (
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-500">Assessment</label>
-                      <select value={sectionDraft.assessment_id ?? ''} onChange={(e) => setSectionDraft((d) => d && { ...d, assessment_id: e.target.value || null })} className={INPUT_CLS}>
-                        <option value="">— Select an assessment —</option>
-                        {assessments.map((a) => <option key={a.id} value={a.id}>{a.assessment_title} ({a.maximum_attempts} attempt{a.maximum_attempts === 1 ? '' : 's'} allowed)</option>)}
-                      </select>
-                      <p className="mt-1 text-xs text-slate-400">
-                        Assessments (with their questions, passing score, and how many attempts an employee gets) are created in Admin → Assessments — pick one here to attach it to this Day's test. The next Day unlocks once this test is passed.
-                      </p>
+                    <div className="space-y-4">
+                      <div className="rounded-xl bg-slate-50 p-4">
+                        <p className="mb-3 text-xs font-semibold text-slate-500">Test Settings — a private test just for this Day, not shared with any other section</p>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          <div>
+                            <label className="mb-1 block text-xs text-slate-500">Pass %</label>
+                            <input
+                              type="number" min={1} max={100}
+                              value={testSettingsDraft.passing_percentage}
+                              onChange={(e) => setTestSettingsDraft((d) => ({ ...d, passing_percentage: Number(e.target.value) }))}
+                              className={INPUT_CLS}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-slate-500">Timer (minutes)</label>
+                            <input
+                              type="number" min={1} max={600}
+                              value={testSettingsDraft.duration_minutes}
+                              onChange={(e) => setTestSettingsDraft((d) => ({ ...d, duration_minutes: Number(e.target.value) }))}
+                              className={INPUT_CLS}
+                            />
+                          </div>
+                          <label className="mt-5 flex items-center gap-2 text-xs text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={testSettingsDraft.shuffle_questions}
+                              onChange={(e) => setTestSettingsDraft((d) => ({ ...d, shuffle_questions: e.target.checked }))}
+                            />
+                            Shuffle Questions
+                          </label>
+                          <label className="mt-5 flex items-center gap-2 text-xs text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={testSettingsDraft.shuffle_options}
+                              onChange={(e) => setTestSettingsDraft((d) => ({ ...d, shuffle_options: e.target.checked }))}
+                            />
+                            Shuffle Options
+                          </label>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-400">
+                          Employees get {testSettingsDraft.duration_minutes} minute(s) and need {testSettingsDraft.passing_percentage}% to pass. Score shows up in Results and Reports automatically. Save this section once to store these settings.
+                        </p>
+                      </div>
+
+                      {sectionDraft.assessment_id ? (
+                        <div>
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-slate-500">Questions ({testQuestions.length})</p>
+                            <div className="flex flex-wrap gap-2">
+                              <button type="button" onClick={handleDownloadSampleCsv} className="text-xs font-semibold text-slate-500 hover:underline">Download Sample CSV</button>
+                              <button type="button" onClick={() => csvInputRef.current?.click()} disabled={importingCsv} className="text-xs font-semibold text-indigo-600 hover:underline disabled:opacity-50">
+                                {importingCsv ? 'Importing…' : 'Bulk Upload CSV'}
+                              </button>
+                              {testQuestions.length > 0 && (
+                                <button type="button" onClick={handleExportCsv} className="text-xs font-semibold text-slate-500 hover:underline">Export CSV</button>
+                              )}
+                            </div>
+                            <input
+                              ref={csvInputRef}
+                              type="file"
+                              accept=".csv"
+                              className="hidden"
+                              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void handleImportCsv(f); }}
+                            />
+                          </div>
+                          <div className="mb-3 space-y-2">
+                            {testQuestions.length === 0 && (
+                              <p className="text-xs text-slate-400">No questions yet — add one below, or bulk upload a CSV (columns: question_text, option_a-d, correct_option [A-D], marks).</p>
+                            )}
+                            {testQuestions.map((q) => {
+                              const opts = testQuestionOptions[q.id] ?? [];
+                              const correct = opts.find((o) => o.is_correct);
+                              return (
+                                <div key={q.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-slate-800">{q.question_text}</p>
+                                    <p className="text-xs text-slate-400">{q.marks} mark(s) · Correct: {correct?.option_text ?? '—'}</p>
+                                  </div>
+                                  <div className="flex flex-shrink-0 gap-2">
+                                    <button onClick={() => startEditQuestion(q)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
+                                    <button onClick={() => handleDeleteQuestion(q.id, q.assessment_id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {questionDraft ? (
+                            <div className="rounded-xl border border-slate-200 p-4">
+                              <label className="mb-1 block text-xs font-semibold text-slate-500">Question</label>
+                              <textarea
+                                value={questionDraft.question_text}
+                                onChange={(e) => setQuestionDraft((d) => d && { ...d, question_text: e.target.value })}
+                                placeholder="Question"
+                                rows={2}
+                                className={`${INPUT_CLS} mb-3`}
+                              />
+                              <label className="mb-1 block text-xs font-semibold text-slate-500">Options — mark the correct one</label>
+                              <div className="space-y-2">
+                                {questionDraft.options.map((opt, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setCorrectOption(i)}
+                                      title="Mark as correct"
+                                      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold transition ${
+                                        opt.is_correct ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                      }`}
+                                    >
+                                      {String.fromCharCode(65 + i)}
+                                    </button>
+                                    <input
+                                      value={opt.option_text}
+                                      onChange={(e) => updateOptionText(i, e.target.value)}
+                                      placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                                      className={INPUT_CLS}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-3 flex items-center gap-2">
+                                <label className="text-xs font-semibold text-slate-500">Marks for this question</label>
+                                <input
+                                  type="number" min={1}
+                                  value={questionDraft.marks}
+                                  onChange={(e) => setQuestionDraft((d) => d && { ...d, marks: Number(e.target.value) })}
+                                  className="w-20 rounded-lg bg-slate-50 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+                                />
+                              </div>
+                              <div className="mt-4 flex justify-end gap-2">
+                                <button onClick={() => { setEditingQuestionId(null); setQuestionDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleSaveQuestion}
+                                  disabled={savingQuestion}
+                                  className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                  {savingQuestion ? 'Saving…' : 'Save Question'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button onClick={startNewQuestion} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                              + Add Question
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">Save this section once (below) to unlock adding questions.</p>
+                      )}
                     </div>
                   )}
 
                   {sectionDraft.section_type === 'faq' && (
                     <div className="space-y-3">
-                      {sectionDraft.faq_items.length === 0 && <p className="text-xs text-slate-400">No questions yet — add one below.</p>}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-500">Questions ({sectionDraft.faq_items.length})</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={handleDownloadFaqSampleCsv} className="text-xs font-semibold text-slate-500 hover:underline">Download Sample CSV</button>
+                          <button type="button" onClick={() => faqCsvInputRef.current?.click()} className="text-xs font-semibold text-indigo-600 hover:underline">Bulk Upload CSV</button>
+                          {sectionDraft.faq_items.length > 0 && (
+                            <button type="button" onClick={handleExportFaqCsv} className="text-xs font-semibold text-slate-500 hover:underline">Export CSV</button>
+                          )}
+                        </div>
+                        <input
+                          ref={faqCsvInputRef}
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void handleImportFaqCsv(f); }}
+                        />
+                      </div>
+                      {sectionDraft.faq_items.length === 0 && <p className="text-xs text-slate-400">No questions yet — add one below, or bulk upload a CSV (columns: question, answer).</p>}
                       {sectionDraft.faq_items.map((item, i) => (
                         <div key={i} className="rounded-xl border border-slate-100 p-3">
                           <div className="mb-2 flex items-center justify-between">

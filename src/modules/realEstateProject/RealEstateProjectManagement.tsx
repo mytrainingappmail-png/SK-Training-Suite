@@ -43,11 +43,13 @@ import {
 } from '../../services/question/questionService';
 import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
-import type { WatermarkConfig } from '../../components/shared/ContentWatermark';
+import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
+import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
 import type { RealEstateProjectSection, RealEstateProjectSectionForm, ProjectSectionFaqItem } from '../../types/realEstateProjectSection';
 import { defaultProjectSectionForm } from '../../types/realEstateProjectSection';
+import type { Company } from '../../types/company';
 import { defaultAssessmentForm } from '../../types/assessment';
 import type { Question, QuestionOption, QuestionWithOptionsForm } from '../../types/question';
 import { defaultQuestionForm } from '../../types/question';
@@ -263,6 +265,7 @@ function RealEstateProjectManagement() {
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
   const [pdfUploadEnabled, setPdfUploadEnabled] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
+  const [company, setCompany] = useState<Company | null>(null);
 
   const [sections, setSections] = useState<RealEstateProjectSection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<RealEstateProjectSectionForm | null>(null);
@@ -289,12 +292,13 @@ function RealEstateProjectManagement() {
   function fetchAll() {
     setLoading(true);
     Promise.all([loadProjects(), loadAllBrochures(), branchService.getAll(), loadCompany()])
-      .then(([p, b, br, company]) => {
+      .then(([p, b, br, co]) => {
         setProjects(p);
         setBrochures(b);
         setBranches(br);
-        setPdfUploadEnabled(company?.brochure_pdf_upload_enabled ?? false);
-        setIsOperator(company?.is_platform_operator ?? false);
+        setPdfUploadEnabled(co?.brochure_pdf_upload_enabled ?? false);
+        setIsOperator(co?.is_platform_operator ?? false);
+        setCompany(co);
       })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
@@ -483,8 +487,18 @@ function RealEstateProjectManagement() {
   function startNewSection() {
     if (!editingProjectId || editingProjectId === 'new' || !user?.companyId) return;
     setEditingSectionId('new');
-    setSectionDraft({ ...defaultProjectSectionForm, company_id: user.companyId, project_id: editingProjectId, display_order: sections.length });
+    const defaults = company ? protectionPatchFromCompany(company) : {};
+    setSectionDraft({ ...defaultProjectSectionForm, ...defaults, company_id: user.companyId, project_id: editingProjectId, display_order: sections.length });
     resetTestState();
+  }
+
+  // Content-protection fields save immediately as they're toggled (no need
+  // to also hit "Save Section") — only for a section that already exists,
+  // since a brand-new draft has no row to update yet.
+  function persistProtectionIfExisting(patch: ContentProtectionPatch) {
+    if (editingSectionId && editingSectionId !== 'new') {
+      editSection(editingSectionId, patch).catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to save protection settings.'));
+    }
   }
 
   function startEditSection(s: RealEstateProjectSection) {
@@ -921,9 +935,15 @@ function RealEstateProjectManagement() {
                         resetKey={editingSectionId ?? 'new-section'}
                         {...(isOperator ? {
                           watermark: { enabled: sectionDraft.watermark_enabled, text: sectionDraft.watermark_text, orientation: sectionDraft.watermark_orientation, opacity: sectionDraft.watermark_opacity } as WatermarkConfig,
-                          onWatermarkChange: (w: WatermarkConfig) => setSectionDraft((d) => d && { ...d, watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity }),
+                          onWatermarkChange: (w: WatermarkConfig) => {
+                            setSectionDraft((d) => d && { ...d, watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity });
+                            persistProtectionIfExisting({ watermark_enabled: w.enabled, watermark_text: w.text, watermark_orientation: w.orientation, watermark_opacity: w.opacity, no_copy: sectionDraft.no_copy });
+                          },
                           noCopy: sectionDraft.no_copy,
-                          onNoCopyChange: (v: boolean) => setSectionDraft((d) => d && { ...d, no_copy: v }),
+                          onNoCopyChange: (v: boolean) => {
+                            setSectionDraft((d) => d && { ...d, no_copy: v });
+                            persistProtectionIfExisting({ watermark_enabled: sectionDraft.watermark_enabled, watermark_text: sectionDraft.watermark_text, watermark_orientation: sectionDraft.watermark_orientation, watermark_opacity: sectionDraft.watermark_opacity, no_copy: v });
+                          },
                         } : {})}
                       />
                     )}

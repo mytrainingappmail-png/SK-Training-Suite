@@ -10,6 +10,10 @@ import { uploadImage } from "../../services/contentEditor/contentEditorService";
 import { invalidateBrandingCache } from "../../services/branding/brandingService";
 import { listCompanyLogoAssets, addCompanyLogoAsset, removeCompanyLogoAsset } from "../../repositories/company/companyLogoAssetRepository";
 import type { CompanyLogoAsset } from "../../repositories/company/companyLogoAssetRepository";
+import { protectionPatchFromCompany } from "../shared/ContentWatermark";
+import { applyProtectionToAllSections as applyProtectionToAllInductionSections } from "../../services/induction/inductionService";
+import { applyProtectionToAllSections as applyProtectionToAllProjectSections } from "../../services/realEstateProject/realEstateProjectService";
+import { applyProtectionToAllCourses } from "../../services/course/courseService";
 
 type ImageFieldKey = "logo" | "login_logo_url" | "app_icon_url" | "favicon";
 
@@ -315,6 +319,8 @@ function CompanyManagement() {
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
+  const [applyingProtectionTo, setApplyingProtectionTo] = useState<"induction" | "projects" | "courses" | null>(null);
+
   useEffect(() => {
     async function fetchCompany() {
       const data = await loadCompany();
@@ -404,6 +410,27 @@ function CompanyManagement() {
       alert("❌ Failed to upload image.");
     } finally {
       setUploadingField(null);
+    }
+  }
+
+  async function handleApplyProtectionToAll(target: "induction" | "projects" | "courses") {
+    if (!company) return;
+    const labels = { induction: "Induction sections", projects: "Real Estate Project sections", courses: "Courses" };
+    if (!window.confirm(`Apply the current watermark/copy-protection settings above to every existing ${labels[target]}? This overwrites any per-item overrides.`)) return;
+    setApplyingProtectionTo(target);
+    try {
+      await saveCompany(company.id, company);
+      const patch = protectionPatchFromCompany(company);
+      const count =
+        target === "induction" ? await applyProtectionToAllInductionSections(company.id, patch)
+        : target === "projects" ? await applyProtectionToAllProjectSections(company.id, patch)
+        : await applyProtectionToAllCourses(company.id, patch);
+      alert(`✅ Applied to ${count} ${labels[target]}.`);
+    } catch (error) {
+      console.error(error);
+      alert(`❌ Failed to apply to ${labels[target]}.`);
+    } finally {
+      setApplyingProtectionTo(null);
     }
   }
 
@@ -718,6 +745,96 @@ function CompanyManagement() {
           Allow uploading brochure PDFs (off = link-only, saves storage)
         </label>
       </div>
+
+      {company.is_platform_operator && (
+        <div className="mt-8 border-t pt-6">
+          <h3 className="mb-1 text-base font-bold text-slate-800">Content Protection Defaults</h3>
+          <p className="mb-4 text-sm text-slate-500">
+            Set once here — every new Induction section, Project section, or Course starts with these settings automatically. Use "Apply to all" to push them onto everything that already exists; any individual item can still be switched off or overridden on its own page.
+          </p>
+          <div className="max-w-xl space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={company.default_watermark_enabled}
+                onChange={(e) => setCompany({ ...company, default_watermark_enabled: e.target.checked })}
+              />
+              Watermark
+            </label>
+            {company.default_watermark_enabled && (
+              <div className="space-y-2 border-l-2 border-slate-200 pl-3">
+                <input
+                  value={company.default_watermark_text ?? ""}
+                  onChange={(e) => setCompany({ ...company, default_watermark_text: e.target.value })}
+                  placeholder="Watermark text (e.g. your company name)"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+                />
+                <div className="flex gap-1.5">
+                  {(["horizontal", "diagonal", "vertical"] as const).map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() => setCompany({ ...company, default_watermark_orientation: o })}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold capitalize transition ${
+                        company.default_watermark_orientation === o ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Light</span>
+                  <input
+                    type="range"
+                    min={3}
+                    max={40}
+                    value={company.default_watermark_opacity}
+                    onChange={(e) => setCompany({ ...company, default_watermark_opacity: Number(e.target.value) })}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-slate-500">Dark</span>
+                </div>
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={company.default_no_copy}
+                onChange={(e) => setCompany({ ...company, default_no_copy: e.target.checked })}
+              />
+              Disable copy &amp; right-click
+            </label>
+            <p className="text-xs text-slate-400">Save Changes below to store these defaults — Apply-to-all buttons save them for you first, then push them onto existing content.</p>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleApplyProtectionToAll("induction")}
+              disabled={applyingProtectionTo !== null}
+              className="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {applyingProtectionTo === "induction" ? "Applying…" : "Apply to all Induction sections"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyProtectionToAll("projects")}
+              disabled={applyingProtectionTo !== null}
+              className="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {applyingProtectionTo === "projects" ? "Applying…" : "Apply to all Project sections"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyProtectionToAll("courses")}
+              disabled={applyingProtectionTo !== null}
+              className="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {applyingProtectionTo === "courses" ? "Applying…" : "Apply to all Courses"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 border-t pt-6">
         <h3 className="mb-1 text-base font-bold text-slate-800">Super Admin Console Colors</h3>

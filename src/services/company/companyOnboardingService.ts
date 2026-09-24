@@ -101,6 +101,11 @@ export async function onboardCompany(input: CompanyOnboardingInput): Promise<Com
     sidebar_name_position: "left",
     sidebar_menu_order: null,
     brochure_pdf_upload_enabled: false,
+    default_watermark_enabled: false,
+    default_watermark_text: null,
+    default_watermark_orientation: 'diagonal',
+    default_watermark_opacity: 12,
+    default_no_copy: false,
   }).catch((err) => {
     throw new Error(`Company create failed: ${err instanceof Error ? err.message : String(err)}`);
   });

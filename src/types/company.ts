@@ -97,6 +97,14 @@ export interface Company {
   // starts link-only, and turns uploads back on deliberately if it wants them.
   brochure_pdf_upload_enabled: boolean;
 
+  // Content-protection defaults (operator-only) — what NEW Induction pages/Project
+  // sections/Courses start with, and what "Apply to all" stamps onto existing ones.
+  default_watermark_enabled: boolean;
+  default_watermark_text: string | null;
+  default_watermark_orientation: 'horizontal' | 'vertical' | 'diagonal';
+  default_watermark_opacity: number;
+  default_no_copy: boolean;
+
   created_at: string;
 
   updated_at: string;

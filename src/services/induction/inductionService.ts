@@ -5,7 +5,7 @@
 
 import {
   getDays, createDay, updateDay, deleteDay, getDay,
-  getSectionsForDay, getAllSections, createSection, updateSection, deleteSection,
+  getSectionsForDay, getAllSections, createSection, updateSection, deleteSection, bulkApplySectionProtection,
   getCompletionsForEmployee, markDayComplete,
   getAssignments, getMyAssignment, createAssignment, setAssignmentStatus, deleteAssignment,
 } from '../../repositories/induction/inductionRepository';
@@ -115,6 +115,10 @@ export async function editSection(id: string, form: Partial<InductionDaySectionF
 
 export async function removeSection(id: string): Promise<void> {
   await deleteSection(id);
+}
+
+export async function applyProtectionToAllSections(companyId: string, patch: import('../../components/shared/ContentWatermark').ContentProtectionPatch): Promise<number> {
+  return bulkApplySectionProtection(companyId, patch);
 }
 
 export async function reorderSections(orderedIds: string[]): Promise<void> {

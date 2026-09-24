@@ -746,9 +746,17 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
 
       </div>
 
-      <div className="relative max-h-[70vh] overflow-y-auto">
-        <EditorContent editor={editor} {...(showProtectControl ? noCopyProps(!!noCopy) : {})} />
-        {showProtectControl && <ContentWatermark config={watermark!} />}
+      {/* The watermark's containing block must be the INNER div (natural height, grows with
+          content), not the outer scroll box — that box's height is capped by max-h-[70vh],
+          so an overlay sized against it only ever covers the first screenful and scrolls
+          away, exactly as reported ("only shows at the top"). Nesting it one level in fixes
+          that: the inner div is as tall as the actual content, so `inset-0` covers all of it
+          and it scrolls along with the text underneath it. */}
+      <div className="max-h-[70vh] overflow-y-auto">
+        <div className="relative">
+          <EditorContent editor={editor} {...(showProtectControl ? noCopyProps(!!noCopy) : {})} />
+          {showProtectControl && <ContentWatermark config={watermark!} />}
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2 rounded-b-xl border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-400">

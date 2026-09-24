@@ -86,6 +86,14 @@ export async function deleteSection(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** Stamps a content-protection patch onto every Page/Test/FAQ section this company already
+ * has — "Apply to all" in Company Management. Returns how many rows were touched. */
+export async function bulkApplySectionProtection(companyId: string, patch: import('../../components/shared/ContentWatermark').ContentProtectionPatch): Promise<number> {
+  const { data, error } = await supabase.from('induction_day_sections').update(patch).eq('company_id', companyId).select('id');
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
 // ── Day completion tracking (gates Test sections + the next Day) ────────────
 
 export async function getCompletionsForEmployee(employeeId: string): Promise<InductionDayCompletion[]> {

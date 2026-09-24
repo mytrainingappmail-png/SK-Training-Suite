@@ -23,6 +23,7 @@ import {
   createSection as repoCreateSection,
   updateSection,
   deleteSection,
+  bulkApplySectionProtection,
   getCompletionsForEmployee,
   markProjectComplete as repoMarkProjectComplete,
 } from '../../repositories/realEstateProject/realEstateProjectRepository';
@@ -212,6 +213,10 @@ export async function reorderSections(orderedIds: string[]): Promise<void> {
 
 export async function removeSection(id: string): Promise<void> {
   await deleteSection(id);
+}
+
+export async function applyProtectionToAllSections(companyId: string, patch: import('../../components/shared/ContentWatermark').ContentProtectionPatch): Promise<number> {
+  return bulkApplySectionProtection(companyId, patch);
 }
 
 // ── Completion tracking (gates Test sections until marked complete) ────────────

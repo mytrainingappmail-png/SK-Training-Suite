@@ -28,6 +28,7 @@ import {
   uploadCourseThumbnail,
 } from "../../services/course/courseService";
 import { loadCompanies, loadCompany } from "../../services/company/companyService";
+import { protectionPatchFromCompany } from "../shared/ContentWatermark";
 import { loadCategories } from "../../services/category/categoryService";
 import CourseBulkImportModal from "./CourseBulkImportModal";
 
@@ -492,7 +493,12 @@ function CourseModal({
 
   useEffect(() => {
     loadCompany()
-      .then((c) => setIsPlatformOperator(c?.is_platform_operator ?? false))
+      .then((c) => {
+        setIsPlatformOperator(c?.is_platform_operator ?? false);
+        // A brand-new course starts with the company's content-protection
+        // defaults pre-filled — an already-open Edit form is left alone.
+        if (!isEdit && c) setForm((p) => ({ ...p, ...protectionPatchFromCompany(c) }));
+      })
       .catch(() => setIsPlatformOperator(false));
   }, []);
 

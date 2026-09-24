@@ -43,6 +43,33 @@ export default function ContentWatermark({ config }: { config: WatermarkConfig }
 
 export const DEFAULT_WATERMARK: WatermarkConfig = { enabled: false, text: "", orientation: "diagonal", opacity: 12 };
 
+/** The 5 db columns every protectable content table (induction_day_sections,
+ * real_estate_project_sections, courses) shares — used for both "new item starts with the
+ * company default" and "apply this to everything that already exists". */
+export interface ContentProtectionPatch {
+  watermark_enabled: boolean;
+  watermark_text: string | null;
+  watermark_orientation: "horizontal" | "vertical" | "diagonal";
+  watermark_opacity: number;
+  no_copy: boolean;
+}
+
+export function protectionPatchFromCompany(company: {
+  default_watermark_enabled: boolean;
+  default_watermark_text: string | null;
+  default_watermark_orientation: "horizontal" | "vertical" | "diagonal";
+  default_watermark_opacity: number;
+  default_no_copy: boolean;
+}): ContentProtectionPatch {
+  return {
+    watermark_enabled: company.default_watermark_enabled,
+    watermark_text: company.default_watermark_text,
+    watermark_orientation: company.default_watermark_orientation,
+    watermark_opacity: company.default_watermark_opacity,
+    no_copy: company.default_no_copy,
+  };
+}
+
 /** Spreads onto the content wrapper to discourage casual copying: no text selection, no
  * right-click menu, no image drag-save. Not a real DRM — a determined person can still use
  * devtools — but it raises the bar past "select all, copy, paste elsewhere" for everyone else. */

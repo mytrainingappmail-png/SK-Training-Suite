@@ -146,6 +146,12 @@ export async function deleteSection(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function bulkApplySectionProtection(companyId: string, patch: import('../../components/shared/ContentWatermark').ContentProtectionPatch): Promise<number> {
+  const { data, error } = await supabase.from('real_estate_project_sections').update(patch).eq('company_id', companyId).select('id');
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
 // ── Completion tracking (gates Test sections until marked complete) ────────────
 
 export async function getCompletionsForEmployee(employeeId: string): Promise<string[]> {
