@@ -302,6 +302,11 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
     return !q.question_text.trim() && q.options.every((o) => !o.option_text.trim());
   }
 
+  // Hidden questions don't count toward results (see the 🙈 toggle above), so
+  // the preview total excludes them too — otherwise it wouldn't match what
+  // the Host screen / final score actually add up to.
+  const totalMarks = questions.reduce((sum, q) => sum + (q.is_hidden ? 0 : q.marks || 1), 0);
+
   // Distinct source projects present among the current questions — only
   // non-empty for a merged quiz (see mergeQuizzes). Counts included so
   // "remove all of X" shows exactly how many that'll take with it.
@@ -607,7 +612,9 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
       {/* Questions */}
       <fieldset disabled={!canEdit} className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-300">{questions.length} question(s)</h2>
+          <h2 className="text-sm font-semibold text-slate-300">
+            {questions.length} question(s) <span className="text-slate-500 font-normal">· {totalMarks} marks total</span>
+          </h2>
           {canEdit && (
           <button
             onClick={addQuestion}
@@ -704,6 +711,17 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                   <option value="hotspot">Click-the-Map</option>
                   {isExam && <option value="written">Written answer</option>}
                 </select>
+                <label className="flex items-center gap-1 text-xs text-slate-400" title="Marks for this question">
+                  <span>Marks</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="w-14 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
+                    value={q.marks}
+                    onChange={(e) => updateQuestion(q.localId, { marks: e.target.value ? Number(e.target.value) : 1 })}
+                  />
+                </label>
                 {!isExam && (
                 <input
                   type="number"
