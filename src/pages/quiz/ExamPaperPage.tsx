@@ -56,6 +56,23 @@ export default function ExamPaperPage() {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [photoError, setPhotoError] = useState<Record<string, string>>({});
 
+  // Written answers can't lock on the first keystroke (that would cap you at
+  // one character) — instead the candidate composes freely, then explicitly
+  // locks it. Persisted locally so a mid-exam reload on the same phone keeps
+  // it locked; MCQ/hotspot need no such tracking since isAnswered() already
+  // tells us "given" the moment a single tap/click sets them.
+  const lockedWrittenKey = `exam-locked-written-${sessionId}`;
+  const [lockedWritten, setLockedWritten] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(lockedWrittenKey) || "[]")); } catch { return new Set(); }
+  });
+  function lockWritten(qid: string) {
+    setLockedWritten((prev) => {
+      const next = new Set(prev).add(qid);
+      try { localStorage.setItem(lockedWrittenKey, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   const clockOffsetMs = useRef(0);
   const pendingRef = useRef<Record<string, ExamAnswerDraft>>({});
   const flushingRef = useRef(false);
@@ -441,70 +458,87 @@ export default function ExamPaperPage() {
 
               <p className="text-base font-semibold leading-snug mb-3 whitespace-pre-wrap">{q.question_text}</p>
 
-              {(q.type === "mcq" || q.type === "truefalse") && (
-                <div className="space-y-2">
-                  {q.options.map((o) => {
-                    const sel = d.selected_option_id === o.option_id;
-                    return (
-                      <button
-                        key={o.option_id}
-                        onClick={() => setDraft(q.question_id, { selected_option_id: sel ? null : o.option_id })}
-                        className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${
-                          sel ? "border-violet-500 bg-violet-500/20 text-white font-semibold" : "border-slate-700 text-slate-200 hover:border-slate-500"
-                        }`}
-                      >
-                        {sel ? "● " : "○ "}{o.option_text}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {(q.type === "mcq" || q.type === "truefalse") && (() => {
+                const locked = isAnswered(d);
+                return (
+                  <div className="space-y-2">
+                    {q.options.map((o) => {
+                      const sel = d.selected_option_id === o.option_id;
+                      return (
+                        <button
+                          key={o.option_id}
+                          onClick={() => { if (locked) return; setDraft(q.question_id, { selected_option_id: o.option_id }); }}
+                          disabled={locked && !sel}
+                          className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${
+                            sel ? "border-violet-500 bg-violet-500/20 text-white font-semibold" : "border-slate-700 text-slate-200 hover:border-slate-500"
+                          } ${locked && !sel ? "opacity-40" : ""}`}
+                        >
+                          {sel ? "● " : "○ "}{o.option_text}
+                        </button>
+                      );
+                    })}
+                    {locked && <p className="text-[11px] text-slate-500">🔒 Answer locked — this can't be changed.</p>}
+                  </div>
+                );
+              })()}
 
               {q.type === "hotspot" && q.image_url && (
                 <div className="-mx-4">
                   <HotspotPlayer
                     imageUrl={q.image_url}
-                    disabled={false}
-                    onTap={(x, y) => setDraft(q.question_id, { click_x: x, click_y: y })}
+                    disabled={isAnswered(d)}
+                    onTap={(x, y) => { if (isAnswered(d)) return; setDraft(q.question_id, { click_x: x, click_y: y }); }}
                     markers={d.click_x !== null && d.click_y !== null ? [{ x: d.click_x, y: d.click_y, correct: true }] : undefined}
                   />
-                  <p className="text-center text-xs text-slate-500 mt-1">{d.click_x !== null ? "Tap again to move your answer." : "Tap the spot on the map."}</p>
+                  <p className="text-center text-xs text-slate-500 mt-1">{isAnswered(d) ? "🔒 Answer locked — this can't be changed." : "Tap the spot on the map."}</p>
                 </div>
               )}
 
-              {q.type === "written" && (
-                <div className="space-y-3">
-                  <textarea
-                    value={d.text}
-                    onChange={(e) => setDraft(q.question_id, { text: e.target.value })}
-                    rows={5}
-                    placeholder="Type your answer here…"
-                    className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-3 text-[15px] text-white outline-none focus:border-violet-500"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <label className="text-xs font-semibold bg-slate-800 border border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2.5 cursor-pointer">
-                      📷 Take photo
-                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void handlePhoto(q.question_id, e.target.files); e.target.value = ""; }} />
-                    </label>
-                    <label className="text-xs font-semibold bg-slate-800 border border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2.5 cursor-pointer">
-                      🖼 Choose photo
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { void handlePhoto(q.question_id, e.target.files); e.target.value = ""; }} />
-                    </label>
-                    {uploading[q.question_id] && <span className="text-xs text-slate-400 self-center">Uploading…</span>}
+              {q.type === "written" && (() => {
+                const locked = lockedWritten.has(q.question_id);
+                return (
+                  <div className="space-y-3">
+                    <textarea
+                      value={d.text}
+                      onChange={(e) => setDraft(q.question_id, { text: e.target.value })}
+                      disabled={locked}
+                      rows={5}
+                      placeholder="Type your answer here…"
+                      className={`w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-3 text-[15px] text-white outline-none focus:border-violet-500 ${locked ? "opacity-60" : ""}`}
+                    />
+                    {!locked && (
+                      <div className="flex flex-wrap gap-2">
+                        <label className="text-xs font-semibold bg-slate-800 border border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2.5 cursor-pointer">
+                          📷 Take photo
+                          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void handlePhoto(q.question_id, e.target.files); e.target.value = ""; }} />
+                        </label>
+                        <label className="text-xs font-semibold bg-slate-800 border border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2.5 cursor-pointer">
+                          🖼 Choose photo
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => { void handlePhoto(q.question_id, e.target.files); e.target.value = ""; }} />
+                        </label>
+                        {uploading[q.question_id] && <span className="text-xs text-slate-400 self-center">Uploading…</span>}
+                      </div>
+                    )}
+                    {photoError[q.question_id] && <p className="text-xs text-red-300">{photoError[q.question_id]}</p>}
+                    {d.image_paths.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {d.image_paths.map((p) => (
+                          <div key={p} className="relative h-24 w-24 rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                            {photoUrls[p] ? <img src={photoUrls[p]} alt="Attached answer" className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] text-slate-500">…</div>}
+                            {!locked && <button onClick={() => handleRemovePhoto(q.question_id, p)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 text-white text-xs" aria-label="Remove photo">✕</button>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!locked && isAnswered(d) && (
+                      <button onClick={() => lockWritten(q.question_id)} className="text-xs font-semibold bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded-lg px-3 py-2">
+                        🔒 Lock this answer
+                      </button>
+                    )}
+                    {locked && <p className="text-[11px] text-slate-500">🔒 Answer locked — this can't be changed.</p>}
                   </div>
-                  {photoError[q.question_id] && <p className="text-xs text-red-300">{photoError[q.question_id]}</p>}
-                  {d.image_paths.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {d.image_paths.map((p) => (
-                        <div key={p} className="relative h-24 w-24 rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
-                          {photoUrls[p] ? <img src={photoUrls[p]} alt="Attached answer" className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] text-slate-500">…</div>}
-                          <button onClick={() => handleRemovePhoto(q.question_id, p)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 text-white text-xs" aria-label="Remove photo">✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
             </div>
           );
         })}
@@ -547,7 +581,7 @@ export default function ExamPaperPage() {
             <p className="text-sm text-slate-300 mb-1">{answeredCount} of {paper.length} answered.</p>
             {unanswered > 0 && <p className="text-sm text-amber-300 mb-1">{unanswered} question{unanswered === 1 ? " is" : "s are"} still blank.</p>}
             {flaggedCount > 0 && <p className="text-sm text-amber-300 mb-1">{flaggedCount} marked for review.</p>}
-            <p className="text-xs text-slate-500 mt-2 mb-4">You can't change anything after submitting, and you won't see a result until your trainer shares it.</p>
+            <p className="text-xs text-slate-500 mt-2 mb-4">Each answer locks the moment you give it, so there's nothing left to change here — and you won't see a result until your trainer shares it.</p>
             {error && <p className="text-xs text-red-300 mb-3">{error}</p>}
             <div className="flex gap-2">
               <button onClick={() => { setShowConfirm(false); setError(""); }} disabled={submitting} className="flex-1 text-sm font-semibold border border-slate-700 rounded-lg px-4 py-3">Keep working</button>

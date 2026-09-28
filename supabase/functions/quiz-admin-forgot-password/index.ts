@@ -78,7 +78,7 @@ serve(async (req) => {
     const otp = linkData.properties?.email_otp;
 
     if (otp && resendApiKey && resendFromEmail) {
-      await fetch("https://api.resend.com/emails", {
+      const resendRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -88,6 +88,17 @@ serve(async (req) => {
           html: `<p>Someone requested a password reset for the Live Quiz admin account <b>${admin.username}</b>.</p><p style="font-size:28px;font-weight:700;letter-spacing:4px;">${otp}</p><p>Enter this code on the reset page. It expires shortly and can only be used once.</p><p>If you didn't request this, you can safely ignore this email.</p>`,
         }),
       });
+      // The client always gets the same generic message (anti-enumeration),
+      // so a silent Resend failure here — sandbox mode, unverified sending
+      // domain, bad address — used to look identical to a real send from
+      // the outside. Logging it server-side is the only way to tell the
+      // difference when someone reports "no code arrived".
+      if (!resendRes.ok) {
+        const body = await resendRes.text().catch(() => "");
+        console.error(`[quiz-admin-forgot-password] Resend send failed (${resendRes.status}): ${body}`);
+      }
+    } else if (otp) {
+      console.error("[quiz-admin-forgot-password] RESEND_API_KEY/RESEND_FROM_EMAIL not configured — OTP generated but no email was sent.");
     }
 
     return new Response(JSON.stringify({ success: true, message: GENERIC_MESSAGE }), {

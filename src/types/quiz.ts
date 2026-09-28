@@ -57,11 +57,11 @@ export interface Quiz {
   updated_at: string;
 }
 
-/** One correct area on a hotspot image, all in 0-100 "percent of the image" space. A tap inside ANY zone of a question is correct. */
+/** One correct area on a hotspot image, all in 0-100 "percent of the image" space. A tap inside ANY zone of a question is correct. `color` is optional (admin-chosen, hex) — unset zones fall back to the default green so older questions render unchanged. */
 export type HotspotZone =
-  | { shape: "circle"; x: number; y: number; r: number }
-  | { shape: "rect"; x: number; y: number; w: number; h: number }
-  | { shape: "poly"; points: [number, number][] };
+  | { shape: "circle"; x: number; y: number; r: number; color?: string }
+  | { shape: "rect"; x: number; y: number; w: number; h: number; color?: string }
+  | { shape: "poly"; points: [number, number][]; color?: string };
 
 export type QuizQuestionType = "mcq" | "truefalse" | "hotspot" | "written";
 

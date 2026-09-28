@@ -17,6 +17,53 @@ const DEFAULT_MOTIVATIONAL_WORDS = [
   "Success", "Persistence", "Ambition", "Passion", "Winner",
 ];
 
+const EyeIcon: React.FC<{ open: boolean }> = ({ open }) =>
+  open ? (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12c1.292 4.338 5.31 7.5 9.966 7.5a10.45 10.45 0 0 0 4.293-.917m3.243-2.158a10.45 10.45 0 0 0 2.564-3.425c-1.292-4.338-5.31-7.5-9.966-7.5a10.45 10.45 0 0 0-4.293.917m7.853 7.853a3 3 0 1 0-4.243-4.243m4.243 4.243L19 19m-7.853-7.853L3 3"
+      />
+    </svg>
+  ) : (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+  );
+
+function PasswordField({
+  value, onChange, placeholder, autoComplete,
+}: { value: string; onChange: (v: string) => void; placeholder?: string; autoComplete?: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        className="w-full rounded-lg bg-slate-800 border border-slate-700 pl-3 pr-10 py-2 text-sm text-white outline-none focus:border-violet-500"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-200"
+        aria-label={show ? "Hide password" : "Show password"}
+        tabIndex={-1}
+      >
+        <EyeIcon open={show} />
+      </button>
+    </div>
+  );
+}
+
 function FallingWords({ words }: { words: string[] }) {
   // A fixed, randomized-looking layout computed once per mount (not on
   // every render) — each word gets its own horizontal spot, fall
@@ -280,14 +327,7 @@ export default function QuizAdminLoginPage() {
                     Forgot password?
                   </button>
                 </div>
-                <input
-                  type="password"
-                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  autoComplete="current-password"
-                />
+                <PasswordField value={password} onChange={setPassword} placeholder="Enter password" autoComplete="current-password" />
               </div>
 
               <button
@@ -391,24 +431,13 @@ export default function QuizAdminLoginPage() {
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
                   New Password
                 </label>
-                <input
-                  type="password"
-                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                />
+                <PasswordField value={newPassword} onChange={setNewPassword} placeholder="At least 8 characters" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
                   Confirm Password
                 </label>
-                <input
-                  type="password"
-                  className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
+                <PasswordField value={confirmPassword} onChange={setConfirmPassword} />
               </div>
 
               <button
