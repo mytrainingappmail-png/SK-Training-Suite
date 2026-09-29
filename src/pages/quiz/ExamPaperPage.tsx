@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
+import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
   getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult,
   uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl,
@@ -50,6 +51,7 @@ export default function ExamPaperPage() {
   const [lobbySeconds, setLobbySeconds] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [showCalc, setShowCalc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<MyExamResultRow[] | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
@@ -440,9 +442,19 @@ export default function ExamPaperPage() {
             {saveStatus === "offline" && <span className="text-amber-300">⚠ Offline — answers are safe on this phone and will save when you're back online</span>}
           </p>
         </div>
-        <span className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-sm font-bold ${urgent ? "bg-red-500/20 text-red-300 animate-pulse" : "bg-slate-800 text-slate-100"}`}>
-          ⏱ {formatClock(secondsLeft)}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowCalc((s) => !s)}
+            className={`rounded-full h-9 w-9 flex items-center justify-center text-base border ${showCalc ? "bg-violet-600 border-violet-500 text-white" : "bg-slate-800 border-slate-700 text-slate-300"}`}
+            aria-label="Toggle calculator"
+            title="Calculator"
+          >
+            🧮
+          </button>
+          <span className={`rounded-full px-3 py-1.5 font-mono text-sm font-bold ${urgent ? "bg-red-500/20 text-red-300 animate-pulse" : "bg-slate-800 text-slate-100"}`}>
+            ⏱ {formatClock(secondsLeft)}
+          </span>
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-3 sm:px-4 pt-4 space-y-4">
@@ -570,6 +582,8 @@ export default function ExamPaperPage() {
           <button onClick={() => setShowConfirm(true)} className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-3 text-sm">Submit</button>
         </div>
       </div>
+
+      <ExamCalculator open={showCalc} onClose={() => setShowCalc(false)} />
 
       {showPalette && (
         <div className="fixed inset-0 z-40 bg-black/60 flex items-end sm:items-center justify-center" onClick={() => setShowPalette(false)}>

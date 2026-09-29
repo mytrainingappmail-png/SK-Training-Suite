@@ -12,8 +12,12 @@ import type { HotspotZone } from "../../types/quiz";
 import { ZoneOverlay } from "./hotspotZones";
 
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 4;
-const ZOOM_STEP = 0.5;
+// Raised from 4 — a map with many small, closely-packed correct areas
+// (16 landmarks on one Gurgaon plan, say) needs real zoom headroom for an
+// accurate tap; 8x plus full pan coverage gets a candidate close enough to
+// tell two adjacent circles apart.
+const MAX_ZOOM = 8;
+const ZOOM_STEP = 1;
 const DRAG_THRESHOLD_PX = 6;
 
 interface RevealMarker {
@@ -65,10 +69,9 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (disabled) {
-      flashBlocked();
-      return;
-    }
+    // Panning/zooming to look around stays available even after the answer
+    // locks — only a genuine stationary TAP is blocked (checked in
+    // handlePointerUp, once we know this gesture wasn't a drag).
     (e.target as Element).setPointerCapture(e.pointerId);
     dragState.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, moved: false };
   }
@@ -85,7 +88,12 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
   function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
     const drag = dragState.current;
     dragState.current = null;
-    if (disabled || !drag || drag.moved || !imgRef.current) return;
+    if (!drag || drag.moved || !imgRef.current) return; // was a pan, not a tap — never scored, lock or no lock
+
+    if (disabled) {
+      flashBlocked();
+      return;
+    }
 
     // A tap, not a drag — score it. getBoundingClientRect() reflects the
     // image's actual on-screen box right now (post zoom/pan), so this is
@@ -109,7 +117,7 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
       >
         <div
           className="absolute inset-0 flex items-center justify-center"
-          style={{ cursor: disabled ? "default" : zoom > MIN_ZOOM ? "grab" : "crosshair" }}
+          style={{ cursor: zoom > MIN_ZOOM ? "grab" : disabled ? "default" : "crosshair" }}
         >
           {/* Image + answer overlays share one wrapper so the correct area and the
               tap marker stay glued to the image itself — through zoom and pan, and
@@ -176,7 +184,7 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
         )}
       </div>
       <p className="text-center text-xs text-slate-500 mt-2">
-        {disabled ? "Answer locked in." : "Use +/− to zoom, drag to look around, tap the correct spot."}
+        {disabled ? "Answer locked in — you can still zoom/drag to look around." : "Use +/− to zoom, drag to look around, tap the correct spot."}
       </p>
     </div>
   );
