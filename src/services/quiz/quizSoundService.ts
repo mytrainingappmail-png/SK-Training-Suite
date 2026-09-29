@@ -82,3 +82,52 @@ export function playFanfare(): void {
     noise.start(start);
   }
 }
+
+/**
+ * Built-in "waiting room" ambience for the Exam lobby (candidate joined
+ * early, waiting on exam_sessions.opens_at) — a soft, unlooping-sounding
+ * bell phrase that repeats every ~4.5s, gentle enough to sit under for
+ * minutes at a time (unlike playFanfare, which is a one-shot celebration
+ * sound). No audio file — synthesized like the rest of this service, so
+ * an admin who wants a real track still supplies one via the "custom" URL
+ * option; this is only the no-setup default. Returns a stop() to call on
+ * unmount/lobby-end.
+ */
+export function startLobbyAmbience(volumePercent: number): () => void {
+  const ctx = getContext();
+  if (!ctx) return () => {};
+
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const peakGain = Math.min(1, Math.max(0, volumePercent / 100)) * 0.2;
+  const notes = [523.25, 587.33, 659.25, 784.0, 659.25, 587.33]; // C5 D5 E5 G5 E5 D5
+  let i = 0;
+
+  function playNote() {
+    if (stopped) return;
+    const c = getContext();
+    if (c) {
+      const freq = notes[i % notes.length];
+      const start = c.currentTime;
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(peakGain, start + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.3);
+      osc.connect(gain);
+      gain.connect(c.destination);
+      osc.start(start);
+      osc.stop(start + 1.4);
+    }
+    i++;
+    timer = setTimeout(playNote, 750);
+  }
+  playNote();
+
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
+}

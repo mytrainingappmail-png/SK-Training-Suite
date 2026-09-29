@@ -34,6 +34,9 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   login_logo_position: "top_center",
   login_logo_scale: 100,
   result_close_minutes: 5,
+  exam_lobby_music: "builtin",
+  exam_lobby_music_url: null,
+  exam_lobby_music_volume: 60,
 };
 
 /** Returns saved settings, or sensible defaults if this company has never saved any yet (no row exists until the first Save). */

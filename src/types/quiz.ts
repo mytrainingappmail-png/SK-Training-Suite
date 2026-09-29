@@ -291,6 +291,10 @@ export interface QuizSettings {
   login_logo_scale: number;
   /** How long the post-quiz result screen stays open before auto-closing back to Join Quiz. */
   result_close_minutes: number;
+  /** Plays while a candidate waits in the Exam lobby before opens_at — same builtin/custom/off shape as champ_music, independent choice. */
+  exam_lobby_music: ChampMusic;
+  exam_lobby_music_url: string | null;
+  exam_lobby_music_volume: number;
   updated_at: string;
 }
 
@@ -380,6 +384,9 @@ export interface QuizPublicBranding {
   login_words_enabled: boolean;
   login_logo_position: CertLogoPosition;
   login_logo_scale: number;
+  exam_lobby_music: ChampMusic;
+  exam_lobby_music_url: string | null;
+  exam_lobby_music_volume: number;
 }
 
 export interface QuizCertificate {

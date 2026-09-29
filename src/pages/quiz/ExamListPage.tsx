@@ -6,7 +6,8 @@ import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/qui
 import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz, duplicateQuiz } from "../../services/quiz/quizService";
 import { createExamSession, listExamSessions } from "../../repositories/exam/examAdminRepository";
 import { listFoldersForCompany } from "../../repositories/quiz/quizResultFolderRepository";
-import type { Quiz } from "../../types/quiz";
+import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
+import type { Quiz, ChampMusic } from "../../types/quiz";
 import type { ExamSession } from "../../types/exam";
 
 type StartMode = "now" | "in" | "at";
@@ -40,6 +41,12 @@ export default function ExamListPage() {
   const [startAtLocal, setStartAtLocal] = useState("");
   const [starting, setStarting] = useState(false);
 
+  const [lobbyMusic, setLobbyMusic] = useState<ChampMusic>("builtin");
+  const [lobbyMusicUrl, setLobbyMusicUrl] = useState("");
+  const [lobbyMusicVolume, setLobbyMusicVolume] = useState(60);
+  const [lobbyMusicSaving, setLobbyMusicSaving] = useState(false);
+  const [lobbyMusicMessage, setLobbyMusicMessage] = useState("");
+
   function refresh() {
     if (!admin) return;
     setLoading(true);
@@ -47,6 +54,31 @@ export default function ExamListPage() {
   }
 
   useEffect(refresh, [admin]);
+
+  useEffect(() => {
+    if (!admin) return;
+    getSettings(admin.company_id).then((s) => {
+      setLobbyMusic(s.exam_lobby_music);
+      setLobbyMusicUrl(s.exam_lobby_music_url ?? "");
+      setLobbyMusicVolume(s.exam_lobby_music_volume);
+    }).catch(() => {});
+  }, [admin]);
+
+  async function handleSaveLobbyMusic() {
+    if (!admin) return;
+    setLobbyMusicSaving(true);
+    setLobbyMusicMessage("");
+    try {
+      await saveSettings(admin.company_id, {
+        exam_lobby_music: lobbyMusic,
+        exam_lobby_music_url: lobbyMusicUrl.trim() || null,
+        exam_lobby_music_volume: lobbyMusicVolume,
+      });
+      setLobbyMusicMessage("Saved.");
+    } finally {
+      setLobbyMusicSaving(false);
+    }
+  }
 
   const filtered = exams.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()));
 
@@ -125,6 +157,51 @@ export default function ExamListPage() {
             + New Exam
           </Link>
         )}
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">🎵 Lobby Wait Music</div>
+        <p className="text-xs text-slate-500">Plays on a candidate's phone while they wait for the exam to open. Paste a URL to use your own track (e.g. a Hindi motivational tune you have the rights to) — the built-in option is a plain synthesized chime, not a real song.</p>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <select
+            disabled={!canEdit}
+            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+            value={lobbyMusic}
+            onChange={(e) => setLobbyMusic(e.target.value as ChampMusic)}
+          >
+            <option value="builtin">🔔 Built-in (gentle chime)</option>
+            <option value="custom">🔗 Custom URL</option>
+            <option value="off">🔇 Off</option>
+          </select>
+          {lobbyMusic === "custom" && (
+            <input
+              disabled={!canEdit}
+              className="flex-1 min-w-[14rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+              placeholder="https://… (mp3/ogg URL)"
+              value={lobbyMusicUrl}
+              onChange={(e) => setLobbyMusicUrl(e.target.value)}
+            />
+          )}
+          <input
+            disabled={!canEdit}
+            type="range"
+            min={0}
+            max={100}
+            value={lobbyMusicVolume}
+            onChange={(e) => setLobbyMusicVolume(Number(e.target.value))}
+            className="w-32 disabled:opacity-50"
+          />
+          {canEdit && (
+            <button
+              onClick={handleSaveLobbyMusic}
+              disabled={lobbyMusicSaving}
+              className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
+            >
+              💾 {lobbyMusicSaving ? "Saving…" : "Save"}
+            </button>
+          )}
+          {lobbyMusicMessage && <span className="text-xs text-emerald-300">{lobbyMusicMessage}</span>}
+        </div>
       </div>
 
       <input

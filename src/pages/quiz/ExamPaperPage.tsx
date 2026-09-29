@@ -8,7 +8,10 @@ import {
   getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult,
   uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl,
 } from "../../repositories/exam/examPlayRepository";
+import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
+import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
+import type { QuizPublicBranding } from "../../types/quiz";
 
 type Phase = "loading" | "lobby" | "paper" | "submitted" | "result" | "error";
 type SaveStatus = "saved" | "saving" | "offline";
@@ -57,6 +60,10 @@ export default function ExamPaperPage() {
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [photoError, setPhotoError] = useState<Record<string, string>>({});
+  const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
+  const [musicOn, setMusicOn] = useState(true);
+  const lobbyAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lobbyStopRef = useRef<(() => void) | null>(null);
 
   // Written answers can't lock on the first keystroke (that would cap you at
   // one character) — instead the candidate composes freely, then explicitly
@@ -204,6 +211,32 @@ export default function ExamPaperPage() {
   }, [sessionId, applyState, loadPaper, navigate]);
 
   useEffect(() => { void bootstrap(); }, [bootstrap]);
+
+  useEffect(() => { getPublicQuizBranding().then(setBranding).catch(() => {}); }, []);
+
+  // Lobby wait music — admin-configurable (builtin/custom/off), starts once the
+  // lobby screen is showing and settings have loaded, stops the moment the
+  // paper opens or the candidate mutes it. Never plays outside the lobby.
+  useEffect(() => {
+    function stopAll() {
+      lobbyStopRef.current?.();
+      lobbyStopRef.current = null;
+      lobbyAudioRef.current?.pause();
+      lobbyAudioRef.current = null;
+    }
+    if (phase !== "lobby" || !branding || !musicOn) return stopAll;
+    const choice = branding.exam_lobby_music;
+    if (choice === "builtin") {
+      lobbyStopRef.current = startLobbyAmbience(branding.exam_lobby_music_volume);
+    } else if (choice === "custom" && branding.exam_lobby_music_url) {
+      const audio = new Audio(branding.exam_lobby_music_url);
+      audio.loop = true;
+      audio.volume = Math.min(1, Math.max(0, branding.exam_lobby_music_volume / 100));
+      audio.play().catch(() => {});
+      lobbyAudioRef.current = audio;
+    }
+    return stopAll;
+  }, [phase, branding, musicOn]);
 
   // ── Clocks (database time, corrected for this device) ───────────────────
   useEffect(() => {
@@ -377,6 +410,14 @@ export default function ExamPaperPage() {
           <p className="text-xs text-slate-500 mb-5">{state.total_questions} questions · {Math.round(state.duration_seconds / 60)} min</p>
           <p className="text-4xl font-mono font-black text-amber-400">{formatClock(lobbySeconds)}</p>
           <p className="text-[11px] text-slate-500 mt-2">until it starts</p>
+          {branding && branding.exam_lobby_music !== "off" && (
+            <button
+              onClick={() => setMusicOn((v) => !v)}
+              className="mt-5 text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-1.5 mx-auto"
+            >
+              {musicOn ? "🔊 Music on — tap to mute" : "🔇 Music off — tap to unmute"}
+            </button>
+          )}
         </div>
       </div>
     );
