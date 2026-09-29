@@ -73,6 +73,16 @@ export default function ExamPaperPage() {
     });
   }
 
+  // Brief "already answered" flash for MCQ/True-False — hotspot has its own
+  // version of this built into HotspotPlayer itself.
+  const [blockedFlashQid, setBlockedFlashQid] = useState<string | null>(null);
+  const blockedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function flashBlocked(qid: string) {
+    setBlockedFlashQid(qid);
+    if (blockedFlashTimer.current) clearTimeout(blockedFlashTimer.current);
+    blockedFlashTimer.current = setTimeout(() => setBlockedFlashQid(null), 1600);
+  }
+
   const clockOffsetMs = useRef(0);
   const pendingRef = useRef<Record<string, ExamAnswerDraft>>({});
   const flushingRef = useRef(false);
@@ -467,8 +477,10 @@ export default function ExamPaperPage() {
                       return (
                         <button
                           key={o.option_id}
-                          onClick={() => { if (locked) return; setDraft(q.question_id, { selected_option_id: o.option_id }); }}
-                          disabled={locked && !sel}
+                          onClick={() => {
+                            if (locked) { flashBlocked(q.question_id); return; }
+                            setDraft(q.question_id, { selected_option_id: o.option_id });
+                          }}
                           className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${
                             sel ? "border-violet-500 bg-violet-500/20 text-white font-semibold" : "border-slate-700 text-slate-200 hover:border-slate-500"
                           } ${locked && !sel ? "opacity-40" : ""}`}
@@ -477,7 +489,11 @@ export default function ExamPaperPage() {
                         </button>
                       );
                     })}
-                    {locked && <p className="text-[11px] text-slate-500">🔒 Answer locked — this can't be changed.</p>}
+                    {blockedFlashQid === q.question_id ? (
+                      <p className="text-[11px] font-semibold text-amber-300">🔒 Already answered — no changes allowed.</p>
+                    ) : locked ? (
+                      <p className="text-[11px] text-slate-500">🔒 Answer locked — this can't be changed.</p>
+                    ) : null}
                   </div>
                 );
               })()}

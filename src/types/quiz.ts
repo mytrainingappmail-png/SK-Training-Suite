@@ -57,11 +57,11 @@ export interface Quiz {
   updated_at: string;
 }
 
-/** One correct area on a hotspot image, all in 0-100 "percent of the image" space. A tap inside ANY zone of a question is correct. `color` is optional (admin-chosen, hex) — unset zones fall back to the default green so older questions render unchanged. */
+/** One correct area on a hotspot image, all in 0-100 "percent of the image" space. A tap inside ANY zone of a question is correct. `color` is optional (admin-chosen, hex) — unset zones fall back to the default green so older questions render unchanged. `label` is an admin-only note (e.g. "Pataudi Road") to tell overlapping areas apart while marking — never rendered on a candidate-facing screen, since that would give the answer away. */
 export type HotspotZone =
-  | { shape: "circle"; x: number; y: number; r: number; color?: string }
-  | { shape: "rect"; x: number; y: number; w: number; h: number; color?: string }
-  | { shape: "poly"; points: [number, number][]; color?: string };
+  | { shape: "circle"; x: number; y: number; r: number; color?: string; label?: string }
+  | { shape: "rect"; x: number; y: number; w: number; h: number; color?: string; label?: string }
+  | { shape: "poly"; points: [number, number][]; color?: string; label?: string };
 
 export type QuizQuestionType = "mcq" | "truefalse" | "hotspot" | "written";
 

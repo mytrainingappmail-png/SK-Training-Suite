@@ -7,7 +7,7 @@
 // stays correct no matter the current zoom/pan — no transform math needed
 // to interpret it.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HotspotZone } from "../../types/quiz";
 import { ZoneOverlay } from "./hotspotZones";
 
@@ -36,8 +36,18 @@ interface Props {
 export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zones }: Props) {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [blockedFlash, setBlockedFlash] = useState(false);
   const dragState = useRef<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(null);
+  const blockedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => () => { if (blockedTimer.current) clearTimeout(blockedTimer.current); }, []);
+
+  function flashBlocked() {
+    setBlockedFlash(true);
+    if (blockedTimer.current) clearTimeout(blockedTimer.current);
+    blockedTimer.current = setTimeout(() => setBlockedFlash(false), 1600);
+  }
 
   function zoomIn() {
     setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP));
@@ -55,7 +65,10 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (disabled) return;
+    if (disabled) {
+      flashBlocked();
+      return;
+    }
     (e.target as Element).setPointerCapture(e.pointerId);
     dragState.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, moved: false };
   }
@@ -153,6 +166,14 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
             </button>
           )}
         </div>
+
+        {blockedFlash && (
+          <div className="absolute inset-x-0 top-3 flex justify-center pointer-events-none">
+            <div className="bg-slate-950/95 border border-amber-500/50 text-amber-200 text-xs font-semibold rounded-full px-4 py-2 shadow-lg">
+              🔒 Already answered — no changes allowed
+            </div>
+          </div>
+        )}
       </div>
       <p className="text-center text-xs text-slate-500 mt-2">
         {disabled ? "Answer locked in." : "Use +/− to zoom, drag to look around, tap the correct spot."}

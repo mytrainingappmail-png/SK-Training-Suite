@@ -112,8 +112,18 @@ const TONE: Record<ZoneTone, { stroke: string; fill: string }> = {
   ghost: { stroke: "#94a3b8", fill: "rgba(148,163,184,0.10)" },
 };
 
-/** Draws zones over an image — must sit inside a `relative` box that is exactly the image's size. Circle radii use the same "percent units" the scoring uses, so what's drawn is what counts. A selected circle also gets a small draggable resize handle at its right edge. */
-export function ZoneOverlay({ zones, tone = "correct", selectedIndex = null }: { zones: HotspotZone[]; tone?: ZoneTone; selectedIndex?: number | null }) {
+/** A zone's own top-most point, in percent units — where its label tag anchors. */
+function zoneTopAnchor(z: HotspotZone): { x: number; y: number } {
+  if (z.shape === "circle") return { x: z.x, y: z.y - z.r };
+  if (z.shape === "rect") return { x: z.x + z.w / 2, y: z.y };
+  const ys = z.points.map((p) => p[1]);
+  const minY = Math.min(...ys);
+  const top = z.points.find((p) => p[1] === minY) ?? z.points[0];
+  return { x: top[0], y: top[1] };
+}
+
+/** Draws zones over an image — must sit inside a `relative` box that is exactly the image's size. Circle radii use the same "percent units" the scoring uses, so what's drawn is what counts. A selected circle also gets a small draggable resize handle at its right edge. `showLabels` is opt-in and meant for the admin editor ONLY — never pass it where a candidate could see the overlay, since a zone's label (e.g. "Pataudi Road") would give the answer away before they've even tapped. */
+export function ZoneOverlay({ zones, tone = "correct", selectedIndex = null, showLabels = false }: { zones: HotspotZone[]; tone?: ZoneTone; selectedIndex?: number | null; showLabels?: boolean }) {
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full pointer-events-none">
       {zones.map((z, i) => {
@@ -122,16 +132,34 @@ export function ZoneOverlay({ zones, tone = "correct", selectedIndex = null }: {
         const stroke = isSel ? TONE.selected.stroke : own ?? TONE[tone].stroke;
         const fill = isSel ? TONE.selected.fill : own ? hexToRgba(own, 0.25) : TONE[tone].fill;
         const common = { stroke, fill, strokeWidth: 2, vectorEffect: "non-scaling-stroke" as const };
-        if (z.shape === "circle") {
-          return (
-            <g key={i}>
-              <ellipse cx={z.x} cy={z.y} rx={z.r} ry={z.r} {...common} />
-              {isSel && <circle cx={z.x + z.r} cy={z.y} r={1.8} fill="#fff" stroke="#1e293b" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />}
-            </g>
-          );
-        }
-        if (z.shape === "rect") return <rect key={i} x={z.x} y={z.y} width={z.w} height={z.h} {...common} />;
-        return <polygon key={i} points={z.points.map((p) => p.join(",")).join(" ")} {...common} />;
+        const anchor = showLabels && z.label ? zoneTopAnchor(z) : null;
+        return (
+          <g key={i}>
+            {z.shape === "circle" && (
+              <>
+                <ellipse cx={z.x} cy={z.y} rx={z.r} ry={z.r} {...common} />
+                {isSel && <circle cx={z.x + z.r} cy={z.y} r={1.8} fill="#fff" stroke="#1e293b" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />}
+              </>
+            )}
+            {z.shape === "rect" && <rect x={z.x} y={z.y} width={z.w} height={z.h} {...common} />}
+            {z.shape === "poly" && <polygon points={z.points.map((p) => p.join(",")).join(" ")} {...common} />}
+            {anchor && (
+              <text
+                x={anchor.x}
+                y={Math.max(3, anchor.y - 1.5)}
+                fontSize={3.2}
+                textAnchor="middle"
+                fill="#fff"
+                stroke="#0f172a"
+                strokeWidth={0.5}
+                paintOrder="stroke"
+                fontWeight={700}
+              >
+                {z.label}
+              </text>
+            )}
+          </g>
+        );
       })}
     </svg>
   );
@@ -145,7 +173,8 @@ const TOOLS: { id: "circle" | "rect" | "poly" | "pen"; label: string; hint: stri
 ];
 
 function zoneLabel(z: HotspotZone, i: number): string {
-  return `${i + 1}. ${z.shape === "circle" ? "Circle" : z.shape === "rect" ? "Rectangle" : "Shape"}`;
+  const kind = z.shape === "circle" ? "Circle" : z.shape === "rect" ? "Rectangle" : "Shape";
+  return z.label ? `${i + 1}. ${z.label}` : `${i + 1}. ${kind}`;
 }
 
 interface PanelProps {
@@ -364,6 +393,14 @@ export function HotspotZonePanel({ imageUrl, zones, onZonesChange, ghostZones }:
     }
   }
 
+  // Admin-only note on the selected area (e.g. "Pataudi Road") — tells
+  // overlapping/lookalike areas apart while marking. Never shown to a
+  // candidate (see ZoneOverlay's showLabels doc).
+  function setLabel(text: string) {
+    if (selected === null) return;
+    onZonesChange(zones.map((z, i) => (i === selected ? { ...z, label: text } : z)));
+  }
+
   function cancelGesture() {
     resizeRef.current = null;
     moveRef.current = null;
@@ -422,8 +459,8 @@ export function HotspotZonePanel({ imageUrl, zones, onZonesChange, ghostZones }:
         onPointerCancel={cancelGesture}
       >
         <img ref={imgRef} src={imageUrl} alt="Hotspot question" draggable={false} className="block max-w-full h-auto" />
-        {ghostZones && ghostZones.length > 0 && <ZoneOverlay zones={ghostZones} tone="ghost" />}
-        <ZoneOverlay zones={displayZones} tone="correct" selectedIndex={selected} />
+        {ghostZones && ghostZones.length > 0 && <ZoneOverlay zones={ghostZones} tone="ghost" showLabels />}
+        <ZoneOverlay zones={displayZones} tone="correct" selectedIndex={selected} showLabels />
         {(draftRect || polyDraft.length > 0 || penDraft.length > 0) && (
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full pointer-events-none">
             {draftRect && <rect x={draftRect.x} y={draftRect.y} width={draftRect.w} height={draftRect.h} fill="rgba(251,191,36,0.2)" stroke="#fbbf24" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeDasharray="4 3" />}
@@ -436,6 +473,19 @@ export function HotspotZonePanel({ imageUrl, zones, onZonesChange, ghostZones }:
           </svg>
         )}
       </div>
+
+      {selectedZone && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-slate-400 shrink-0">Label this area</label>
+          <input
+            type="text"
+            value={selectedZone.label ?? ""}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder='e.g. "Pataudi Road" — for you only, never shown to a trainee'
+            className="flex-1 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white outline-none focus:border-violet-500"
+          />
+        </div>
+      )}
 
       {tool === "poly" && polyDraft.length > 0 && (
         <div className="flex items-center gap-2">
