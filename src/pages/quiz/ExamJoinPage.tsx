@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { ensureParticipantSession, getSavedPlayerName } from "../../services/quiz/quizPlayService";
 import { joinExam } from "../../repositories/exam/examPlayRepository";
+import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
+import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
+import type { QuizPublicBranding } from "../../types/quiz";
 
 /** Employee entry to an exam: PIN + name. Mobile-first, one card. */
 export default function ExamJoinPage() {
@@ -12,6 +15,14 @@ export default function ExamJoinPage() {
   const [name, setName] = useState(getSavedPlayerName());
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
+  const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
+
+  useEffect(() => {
+    getPublicQuizBranding().then((b) => {
+      setBranding(b);
+      applyQuizFavicon(b?.favicon_url);
+    });
+  }, []);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -33,7 +44,11 @@ export default function ExamJoinPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-8">
       <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-center">
-        <div className="text-3xl mb-2">📝</div>
+        {branding?.brand_logo_url ? (
+          <img src={branding.brand_logo_url} alt="" className="h-14 w-14 object-contain rounded-xl mx-auto mb-3" />
+        ) : (
+          <div className="text-3xl mb-2">📝</div>
+        )}
         <h1 className="text-lg font-bold text-white mb-1">Join Exam</h1>
         <p className="text-xs text-slate-400 mb-6">Enter the PIN your trainer shows</p>
 
