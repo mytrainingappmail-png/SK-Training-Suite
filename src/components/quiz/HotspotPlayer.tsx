@@ -6,6 +6,17 @@
 // the image's live getBoundingClientRect() at the moment of the tap, so it
 // stays correct no matter the current zoom/pan — no transform math needed
 // to interpret it.
+//
+// Two usage modes, chosen by whether the caller passes requireConfirm:
+//  - Live Quiz (default, requireConfirm unset): a tap submits immediately
+//    via onTap, exactly as before — one shot, synced to the live question
+//    timer. Untouched by the change below.
+//  - Exam (requireConfirm=true): a tap only PLACES A PIN; the trainee must
+//    tap "Confirm" to actually lock it in via onConfirmTap. This exists
+//    because trainees were getting wrong answers locked in from an
+//    accidental brush while scrolling past the map, with no way back.
+//    maxTaps/confirmedTaps let one question expect several distinct spots
+//    (e.g. 16 numbered landmarks on one map) instead of just one.
 
 import { useEffect, useRef, useState } from "react";
 import type { HotspotZone } from "../../types/quiz";
@@ -18,13 +29,23 @@ const MIN_ZOOM = 1;
 // tell two adjacent circles apart.
 const MAX_ZOOM = 8;
 const ZOOM_STEP = 1;
-const DRAG_THRESHOLD_PX = 6;
+// Raised from 6 — a fixed pixel threshold this tight misclassifies a
+// genuine tap as a drag on phones with a more sensitive/jittery touch
+// sensor (tap never registers), and inconsistently the other way on
+// others. 12px is forgiving of normal finger tremor while still catching
+// an intentional pan.
+const DRAG_THRESHOLD_PX = 12;
 
 interface RevealMarker {
   x: number;
   y: number;
   radius?: number;
   correct: boolean;
+}
+
+interface Tap {
+  x: number;
+  y: number;
 }
 
 interface Props {
@@ -35,17 +56,36 @@ interface Props {
   markers?: RevealMarker[];
   /** The correct area(s), drawn once the tap has been scored. */
   zones?: HotspotZone[];
+  /** Exam mode: require an explicit "Confirm" tap before a spot locks in, and allow more than one spot per question. */
+  requireConfirm?: boolean;
+  /** How many distinct spots this question expects. Only meaningful with requireConfirm. Defaults to 1. */
+  maxTaps?: number;
+  /** Already-locked-in spots (exam mode) — persists across saves/reloads. */
+  confirmedTaps?: Tap[];
+  /** Called instead of onTap, once the trainee taps Confirm, in exam mode. */
+  onConfirmTap?: (xPct: number, yPct: number) => void;
 }
 
-export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zones }: Props) {
+export default function HotspotPlayer({
+  imageUrl, disabled, onTap, markers, zones,
+  requireConfirm = false, maxTaps = 1, confirmedTaps, onConfirmTap,
+}: Props) {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [blockedFlash, setBlockedFlash] = useState(false);
+  const [pending, setPending] = useState<Tap | null>(null);
   const dragState = useRef<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(null);
   const blockedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
+  const taps = confirmedTaps ?? [];
+  const maxed = requireConfirm && taps.length >= maxTaps;
+  const effectiveDisabled = disabled || maxed;
+
   useEffect(() => () => { if (blockedTimer.current) clearTimeout(blockedTimer.current); }, []);
+  // Clears any pending (unconfirmed) pin once the question locks from outside
+  // (time ran out, answer got disabled) so a stale pin never lingers.
+  useEffect(() => { if (effectiveDisabled) setPending(null); }, [effectiveDisabled]);
 
   function flashBlocked() {
     setBlockedFlash(true);
@@ -90,7 +130,7 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
     dragState.current = null;
     if (!drag || drag.moved || !imgRef.current) return; // was a pan, not a tap — never scored, lock or no lock
 
-    if (disabled) {
+    if (effectiveDisabled) {
       flashBlocked();
       return;
     }
@@ -102,7 +142,19 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
     const xPct = ((e.clientX - rect.left) / rect.width) * 100;
     const yPct = ((e.clientY - rect.top) / rect.height) * 100;
     if (xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) return; // tapped outside the image itself
-    onTap(Math.round(xPct * 10) / 10, Math.round(yPct * 10) / 10);
+    const point = { x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 };
+
+    if (requireConfirm) {
+      setPending(point); // just place the pin — trainee must tap Confirm to lock it in
+    } else {
+      onTap(point.x, point.y);
+    }
+  }
+
+  function confirmPending() {
+    if (!pending) return;
+    (onConfirmTap ?? onTap)(pending.x, pending.y);
+    setPending(null);
   }
 
   return (
@@ -117,7 +169,7 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
       >
         <div
           className="absolute inset-0 flex items-center justify-center"
-          style={{ cursor: zoom > MIN_ZOOM ? "grab" : disabled ? "default" : "crosshair" }}
+          style={{ cursor: zoom > MIN_ZOOM ? "grab" : effectiveDisabled ? "default" : "crosshair" }}
         >
           {/* Image + answer overlays share one wrapper so the correct area and the
               tap marker stay glued to the image itself — through zoom and pan, and
@@ -144,6 +196,21 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
                 style={{ left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20 }}
               />
             ))}
+            {requireConfirm && taps.map((t, i) => (
+              <div
+                key={i}
+                className="absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 bg-emerald-500 border-2 border-white flex items-center justify-center text-[9px] font-bold text-white"
+                style={{ left: `${t.x}%`, top: `${t.y}%`, width: 18, height: 18 }}
+              >
+                {i + 1}
+              </div>
+            ))}
+            {requireConfirm && pending && (
+              <div
+                className="absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-amber-400 bg-amber-400/30 animate-pulse"
+                style={{ left: `${pending.x}%`, top: `${pending.y}%`, width: 22, height: 22 }}
+              />
+            )}
           </div>
         </div>
 
@@ -175,16 +242,34 @@ export default function HotspotPlayer({ imageUrl, disabled, onTap, markers, zone
           )}
         </div>
 
+        {requireConfirm && pending && (
+          <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none px-3">
+            <div className="pointer-events-auto flex items-center gap-2 bg-slate-950/95 border border-amber-500/50 rounded-full pl-4 pr-2 py-2 shadow-lg">
+              <span className="text-xs font-semibold text-amber-200">📍 Tap elsewhere to move, or</span>
+              <button
+                onClick={confirmPending}
+                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-3 py-1.5"
+              >
+                ✅ Confirm
+              </button>
+            </div>
+          </div>
+        )}
+
         {blockedFlash && (
           <div className="absolute inset-x-0 top-3 flex justify-center pointer-events-none">
             <div className="bg-slate-950/95 border border-amber-500/50 text-amber-200 text-xs font-semibold rounded-full px-4 py-2 shadow-lg">
-              🔒 Already answered — no changes allowed
+              {maxed ? `🔒 All ${maxTaps} points already marked` : "🔒 Already answered — no changes allowed"}
             </div>
           </div>
         )}
       </div>
       <p className="text-center text-xs text-slate-500 mt-2">
-        {disabled ? "Answer locked in — you can still zoom/drag to look around." : "Use +/− to zoom, drag to look around, tap the correct spot."}
+        {effectiveDisabled
+          ? "Answer locked in — you can still zoom/drag to look around."
+          : requireConfirm
+            ? `Use +/− to zoom, drag to look around, tap a spot then Confirm. ${taps.length} / ${maxTaps} marked.`
+            : "Use +/− to zoom, drag to look around, tap the correct spot."}
       </p>
     </div>
   );

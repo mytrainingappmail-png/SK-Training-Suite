@@ -3,7 +3,7 @@
 // ensureParticipantSession.
 
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
+import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow, HotspotTap } from "../../types/exam";
 
 function fail(label: string, error: { message: string }): never {
   console.error(`[examPlayRepository] ${label}:`, error);
@@ -42,6 +42,8 @@ interface PaperRow {
   saved_text: string | null;
   saved_image_paths: string[] | null;
   saved_flagged: boolean;
+  saved_hotspot_taps: HotspotTap[] | null;
+  hotspot_zone_count: number | null;
 }
 
 export async function getExamPaper(sessionId: string): Promise<ExamPaperQuestion[]> {
@@ -63,10 +65,12 @@ export async function getExamPaper(sessionId: string): Promise<ExamPaperQuestion
           selected_option_id: r.saved_selected_option_id,
           click_x: r.saved_click_x === null ? null : Number(r.saved_click_x),
           click_y: r.saved_click_y === null ? null : Number(r.saved_click_y),
+          hotspot_taps: r.saved_hotspot_taps ?? [],
           text: r.saved_text ?? "",
           image_paths: r.saved_image_paths ?? [],
           flagged: r.saved_flagged,
         },
+        hotspotZoneCount: r.hotspot_zone_count,
       };
       byId.set(r.question_id, q);
     }
@@ -85,6 +89,7 @@ export async function saveExamAnswer(sessionId: string, questionId: string, draf
     p_text_answer: draft.text,
     p_image_paths: draft.image_paths,
     p_flagged: draft.flagged,
+    p_hotspot_taps: draft.hotspot_taps,
   });
   if (error) fail("saveExamAnswer", error);
 }

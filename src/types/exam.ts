@@ -80,6 +80,9 @@ export interface ExamDetailRow {
   image_paths: string[];
   click_x: number | null;
   click_y: number | null;
+  hotspot_taps: HotspotTap[];
+  /** Only populated here for the admin's own review screen — never sent to a trainee. */
+  hotspot_zones: unknown[] | null;
   answered: boolean;
   flagged: boolean;
   is_correct: boolean | null;
@@ -115,11 +118,18 @@ export interface ExamState {
   passing_score_pct: number;
 }
 
+export interface HotspotTap {
+  x: number;
+  y: number;
+}
+
 /** What is saved for one question - mirrored locally so an offline phone loses nothing. */
 export interface ExamAnswerDraft {
   selected_option_id: string | null;
   click_x: number | null;
   click_y: number | null;
+  /** Hotspot only — one confirmed tap per identified spot, up to the question's zone count. */
+  hotspot_taps: HotspotTap[];
   text: string;
   image_paths: string[];
   flagged: boolean;
@@ -134,6 +144,8 @@ export interface ExamPaperQuestion {
   image_url: string | null;
   options: { option_id: string; option_text: string }[];
   saved: ExamAnswerDraft;
+  /** Hotspot only — how many points to identify (zone count). Null for a legacy single-target question, which still expects exactly one tap. */
+  hotspotZoneCount: number | null;
 }
 
 export interface MyExamResultRow {

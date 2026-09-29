@@ -3,9 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
+import { ZoneOverlay } from "../../components/quiz/hotspotZones";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
-import type { QuizResultFolder } from "../../types/quiz";
+import type { QuizResultFolder, HotspotZone } from "../../types/quiz";
 import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
@@ -461,13 +462,22 @@ export default function ExamHostPage() {
                         </div>
                       ) : d.type === "hotspot" ? (
                         <div className="mt-2">
-                          {d.image_url && d.click_x !== null && d.click_y !== null ? (
+                          {d.image_url && (d.hotspot_taps.length > 0 || (d.click_x !== null && d.click_y !== null)) ? (
                             <div className="relative inline-block max-w-full rounded-lg overflow-hidden border border-slate-700">
                               <img src={d.image_url} alt="Map" className="block max-w-full h-auto max-h-64" />
-                              <span className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white" style={{ left: `${d.click_x}%`, top: `${d.click_y}%`, background: d.is_correct ? "#10b981" : "#ef4444" }} />
+                              {d.hotspot_zones && d.hotspot_zones.length > 0 && <ZoneOverlay zones={d.hotspot_zones as HotspotZone[]} tone="correct" />}
+                              {(d.hotspot_taps.length > 0 ? d.hotspot_taps : d.click_x !== null && d.click_y !== null ? [{ x: d.click_x, y: d.click_y }] : []).map((t, i) => (
+                                <span
+                                  key={i}
+                                  className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+                                  style={{ left: `${t.x}%`, top: `${t.y}%`, background: "#f59e0b" }}
+                                />
+                              ))}
                             </div>
                           ) : <p className="text-xs text-slate-500">— Not answered</p>}
-                          <p className={`text-xs mt-1 ${d.is_correct ? "text-emerald-300" : "text-red-300"}`}>{d.is_correct ? "✓ Tapped inside the correct area" : d.answered ? "✗ Tapped outside the correct area" : ""}</p>
+                          <p className={`text-xs mt-1 ${d.is_correct ? "text-emerald-300" : d.answered ? "text-amber-300" : "text-slate-500"}`}>
+                            {d.answered ? `${d.is_correct ? "✓" : "≈"} Scored ${d.marks_awarded ?? 0} / ${d.marks} marks · ${d.hotspot_taps.length || (d.click_x !== null ? 1 : 0)} point(s) tapped` : ""}
+                          </p>
                         </div>
                       ) : (
                         <div className="mt-2 text-xs space-y-0.5">

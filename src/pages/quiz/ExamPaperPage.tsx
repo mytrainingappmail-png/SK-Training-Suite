@@ -16,7 +16,7 @@ import type { QuizPublicBranding } from "../../types/quiz";
 type Phase = "loading" | "lobby" | "paper" | "submitted" | "result" | "error";
 type SaveStatus = "saved" | "saving" | "offline";
 
-const EMPTY_DRAFT: ExamAnswerDraft = { selected_option_id: null, click_x: null, click_y: null, text: "", image_paths: [], flagged: false };
+const EMPTY_DRAFT: ExamAnswerDraft = { selected_option_id: null, click_x: null, click_y: null, hotspot_taps: [], text: "", image_paths: [], flagged: false };
 const LOCKED_RE = /locked|already submitted|time is over|not started/i;
 
 function formatClock(totalSeconds: number): string {
@@ -29,7 +29,7 @@ function formatClock(totalSeconds: number): string {
 
 function isAnswered(d: ExamAnswerDraft | undefined): boolean {
   if (!d) return false;
-  return d.selected_option_id !== null || d.click_x !== null || d.text.trim() !== "" || d.image_paths.length > 0;
+  return d.selected_option_id !== null || d.click_x !== null || d.hotspot_taps.length > 0 || d.text.trim() !== "" || d.image_paths.length > 0;
 }
 
 /**
@@ -551,17 +551,25 @@ export default function ExamPaperPage() {
                 );
               })()}
 
-              {q.type === "hotspot" && q.image_url && (
-                <div className="-mx-4">
-                  <HotspotPlayer
-                    imageUrl={q.image_url}
-                    disabled={isAnswered(d)}
-                    onTap={(x, y) => { if (isAnswered(d)) return; setDraft(q.question_id, { click_x: x, click_y: y }); }}
-                    markers={d.click_x !== null && d.click_y !== null ? [{ x: d.click_x, y: d.click_y, correct: true }] : undefined}
-                  />
-                  <p className="text-center text-xs text-slate-500 mt-1">{isAnswered(d) ? "🔒 Answer locked — this can't be changed." : "Tap the spot on the map."}</p>
-                </div>
-              )}
+              {q.type === "hotspot" && q.image_url && (() => {
+                const maxTaps = q.hotspotZoneCount ?? 1;
+                return (
+                  <div className="-mx-4">
+                    <HotspotPlayer
+                      imageUrl={q.image_url}
+                      disabled={false}
+                      requireConfirm
+                      maxTaps={maxTaps}
+                      confirmedTaps={d.hotspot_taps}
+                      onTap={() => {}}
+                      onConfirmTap={(x, y) => {
+                        if (d.hotspot_taps.length >= maxTaps) return;
+                        setDraft(q.question_id, { hotspot_taps: [...d.hotspot_taps, { x, y }] });
+                      }}
+                    />
+                  </div>
+                );
+              })()}
 
               {q.type === "written" && (() => {
                 const locked = lockedWritten.has(q.question_id);

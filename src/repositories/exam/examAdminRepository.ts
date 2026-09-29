@@ -83,6 +83,7 @@ export async function getExamParticipantDetail(participantId: string): Promise<E
     marks_awarded: r.marks_awarded === null ? null : Number(r.marks_awarded),
     click_x: r.click_x === null ? null : Number(r.click_x),
     click_y: r.click_y === null ? null : Number(r.click_y),
+    hotspot_taps: r.hotspot_taps ?? [],
   }));
 }
 
