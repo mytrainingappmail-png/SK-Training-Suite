@@ -43,6 +43,7 @@ import { loadLearningPaths } from '../../../services/learningPath/learningPathSe
 import { loadEnrollments as loadPathEnrollments } from '../../../services/learningPathEnrollment/learningPathEnrollmentService';
 import { loadEntries as loadMarketDataEntries } from '../../../services/marketData/marketDataService';
 import { getCurrentUser } from '../../../services/auth/session';
+import AuditTrailPanel from './AuditTrailPanel';
 
 import type { Company } from '../../../types/company';
 import type { MarketDataEntry } from '../../../types/marketData';
@@ -677,6 +678,8 @@ function AuditLogCenter() {
 
   return (
     <div className="space-y-6">
+
+      <AuditTrailPanel />
 
       {/* STICKY TOOLBAR */}
       <div className="sticky top-0 z-20 space-y-3 rounded-2xl bg-white/95 p-4 shadow-sm backdrop-blur">

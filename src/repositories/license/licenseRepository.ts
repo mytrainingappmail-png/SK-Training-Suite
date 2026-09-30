@@ -114,6 +114,11 @@ export async function updateDiscountCode(id: string, form: Partial<DiscountCodeF
   throw new Error('Discount code not found after update.');
 }
 
+export async function redeemDiscountCode(codeId: string, companyId: string, planId: string | null): Promise<void> {
+  const { error } = await supabase.rpc('redeem_discount_code', { p_code_id: codeId, p_company_id: companyId, p_plan_id: planId });
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteDiscountCode(id: string): Promise<void> {
   const { error } = await supabase.from('discount_codes').delete().eq('id', id);
   if (error) throw new Error(error.message);

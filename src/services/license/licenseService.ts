@@ -8,7 +8,7 @@
 import {
   getPlans, createPlan, updatePlan, deletePlan,
   getCompanyLicenses, createCompanyLicense, updateCompanyLicense, deleteCompanyLicense,
-  getDiscountCodes, createDiscountCode, updateDiscountCode, deleteDiscountCode,
+  getDiscountCodes, createDiscountCode, updateDiscountCode, deleteDiscountCode, redeemDiscountCode as redeemDiscountCodeRepo,
   getLicenseNotifications, recordLicenseNotification,
   getPlanModules, setPlanModule as setPlanModuleRepo, deletePlanModule,
 } from '../../repositories/license/licenseRepository';
@@ -269,8 +269,9 @@ export function validateDiscountCode(code: DiscountCode, planId: string, origina
   return { valid: true, discountedPrice };
 }
 
-export async function redeemDiscountCode(code: DiscountCode): Promise<DiscountCode> {
-  return updateDiscountCode(code.id, { times_used: code.times_used + 1 });
+/** Uses one redemption of a code for a company. Checked and counted together in the database, so the last use can't be claimed twice and one company can't use the same code twice. */
+export async function redeemDiscountCode(code: DiscountCode, companyId: string, planId: string | null = null): Promise<void> {
+  await redeemDiscountCodeRepo(code.id, companyId, planId);
 }
 
 // ── License Notifications ────────────────────────────────────────────────────

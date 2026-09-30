@@ -26,11 +26,14 @@ function daysUntilExpiry(endDate: string): number {
 
 type DueType = "expiry_7_days" | "expiry_3_days" | "expiry_today";
 
+// Windows, not exact days: if the daily run is missed (or an email fails) the
+// reminder still goes out on the next run instead of being lost for good. Each
+// type is sent at most once (license_notifications is the source of truth).
 function getDueNotificationType(endDate: string, alreadySentTypes: Set<string>): DueType | null {
   const days = daysUntilExpiry(endDate);
-  if (days === 7 && !alreadySentTypes.has("expiry_7_days")) return "expiry_7_days";
-  if (days === 3 && !alreadySentTypes.has("expiry_3_days")) return "expiry_3_days";
-  if (days === 0 && !alreadySentTypes.has("expiry_today")) return "expiry_today";
+  if (days <= 0 && days >= -7 && !alreadySentTypes.has("expiry_today")) return "expiry_today";
+  if (days > 0 && days <= 3 && !alreadySentTypes.has("expiry_3_days")) return "expiry_3_days";
+  if (days > 3 && days <= 7 && !alreadySentTypes.has("expiry_7_days")) return "expiry_7_days";
   return null;
 }
 
@@ -111,10 +114,28 @@ serve(async (req) => {
         });
         if (logErr) throw logErr;
 
+        // Delivered: clear any earlier failure record for this reminder.
+        await supabase.from("notification_outbox").delete().eq("company_license_id", license.id).eq("notification_type", dueType);
         result.sent += 1;
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         result.failed += 1;
-        result.errors.push(`${company?.company_name ?? license.company_id}: ${err instanceof Error ? err.message : String(err)}`);
+        result.errors.push(`${company?.company_name ?? license.company_id}: ${message}`);
+
+        // Keep the failure where the operator can see it; tomorrow's run retries.
+        const { data: prior } = await supabase
+          .from("notification_outbox")
+          .select("attempts")
+          .eq("company_license_id", license.id)
+          .eq("notification_type", dueType)
+          .maybeSingle();
+        await supabase.from("notification_outbox").upsert({
+          company_license_id: license.id,
+          notification_type: dueType,
+          attempts: (prior?.attempts ?? 0) + 1,
+          last_error: message.slice(0, 500),
+          last_attempt_at: new Date().toISOString(),
+        }, { onConflict: "company_license_id,notification_type" });
       }
     }
 
