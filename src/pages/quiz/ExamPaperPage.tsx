@@ -10,6 +10,7 @@ import {
 } from "../../repositories/exam/examPlayRepository";
 import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
 import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
+import FallingWords, { DEFAULT_MOTIVATIONAL_WORDS } from "../../components/quiz/FallingWords";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
 import type { QuizPublicBranding } from "../../types/quiz";
 
@@ -82,6 +83,11 @@ export default function ExamPaperPage() {
     });
   }
 
+  // MCQ/truefalse pick a pending option first — same "tap then confirm"
+  // pattern as hotspot, so a locked-in wrong answer never comes from an
+  // accidental scroll-tap, and gives an explicit Not Sure escape hatch.
+  const [pendingMcq, setPendingMcq] = useState<Record<string, string>>({});
+
   // Brief "already answered" flash for MCQ/True-False — hotspot has its own
   // version of this built into HotspotPlayer itself.
   const [blockedFlashQid, setBlockedFlashQid] = useState<string | null>(null);
@@ -153,16 +159,25 @@ export default function ExamPaperPage() {
     return flush();
   }
 
-  function setDraft(qid: string, patch: Partial<ExamAnswerDraft>) {
-    setAnswers((prev) => {
-      const next = { ...(prev[qid] ?? EMPTY_DRAFT), ...patch };
-      pendingRef.current[qid] = next;
-      persistPending();
-      return { ...prev, [qid]: next };
-    });
+  // Computes and records the next draft SYNCHRONOUSLY (not inside the
+  // setAnswers updater, whose timing React doesn't guarantee) so a caller
+  // that immediately triggers a save — e.g. instant reveal, or a hotspot
+  // confirm firing right after an async server check — always reads the
+  // just-applied patch from pendingRef, never a stale one from before it.
+  // Two taps confirmed back-to-back without this raced: the second tap's
+  // save could fire before React had processed the first's setAnswers
+  // update, so it saved a draft missing that first tap (or overwrote the
+  // server with one), even though pendingRef.current[qid] existed the whole
+  // time — the bug was reading it via the updater's `prev` instead of here.
+  function setDraft(qid: string, patch: Partial<ExamAnswerDraft>): ExamAnswerDraft {
+    const next = { ...(pendingRef.current[qid] ?? answers[qid] ?? EMPTY_DRAFT), ...patch };
+    pendingRef.current[qid] = next;
+    persistPending();
+    setAnswers((prev) => ({ ...prev, [qid]: next }));
     setSaveStatus("saving");
     if (flushTimer.current) clearTimeout(flushTimer.current);
     flushTimer.current = setTimeout(() => { void flush(); }, 700);
+    return next;
   }
 
   // ── Load ────────────────────────────────────────────────────────────────
@@ -407,9 +422,15 @@ export default function ExamPaperPage() {
   }
 
   if (phase === "lobby" && state) {
+    const lobbyWords = branding?.login_words_enabled === false ? null : (
+      branding?.login_motivational_words
+        ? branding.login_motivational_words.split(/\r?\n|,/).map((w) => w.trim()).filter(Boolean)
+        : DEFAULT_MOTIVATIONAL_WORDS
+    );
     return (
-      <div className={`${shell} flex items-center justify-center px-4`}>
-        <div className="max-w-sm w-full text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
+      <div className={`${shell} relative flex items-center justify-center px-4 overflow-hidden`}>
+        {lobbyWords && lobbyWords.length > 0 && <FallingWords words={lobbyWords} />}
+        <div className="relative max-w-sm w-full text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
           <div className="h-2.5 w-2.5 rounded-full bg-amber-400 mx-auto mb-3 animate-pulse" />
           <h1 className="text-lg font-bold mb-1">{state.quiz_title}</h1>
           <p className="text-xs text-slate-400 mb-1">You're in, {state.display_name}. The exam starts soon — stay on this screen.</p>
@@ -530,34 +551,59 @@ export default function ExamPaperPage() {
               {(q.type === "mcq" || q.type === "truefalse") && (() => {
                 const locked = isAnswered(d);
                 const revealOn = branding?.exam_reveal_answers ?? true;
+                const pendingOptionId = pendingMcq[q.question_id];
                 return (
                   <div className="space-y-2">
                     {q.options.map((o) => {
                       const sel = d.selected_option_id === o.option_id;
+                      const pending = pendingOptionId === o.option_id;
                       const reveal = revealOn && sel && d.selected_is_correct !== null;
-                      const selClass = !sel
-                        ? "border-slate-700 text-slate-200 hover:border-slate-500"
-                        : reveal
-                          ? d.selected_is_correct
-                            ? "border-emerald-500 bg-emerald-500/20 text-white font-semibold"
-                            : "border-red-500 bg-red-500/20 text-white font-semibold"
-                          : "border-violet-500 bg-violet-500/20 text-white font-semibold";
+                      const selClass = pending
+                        ? "border-amber-400 bg-amber-400/15 text-white font-semibold"
+                        : !sel
+                          ? "border-slate-700 text-slate-200 hover:border-slate-500"
+                          : reveal
+                            ? d.selected_is_correct
+                              ? "border-emerald-500 bg-emerald-500/20 text-white font-semibold"
+                              : "border-red-500 bg-red-500/20 text-white font-semibold"
+                            : "border-violet-500 bg-violet-500/20 text-white font-semibold";
                       return (
                         <button
                           key={o.option_id}
                           onClick={() => {
                             if (locked) { flashBlocked(q.question_id); return; }
-                            setDraft(q.question_id, { selected_option_id: o.option_id });
+                            // First tap on any option just proposes it — Confirm actually locks it in.
+                            setPendingMcq((prev) => ({ ...prev, [q.question_id]: o.option_id }));
+                          }}
+                          className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${selClass} ${locked && !sel ? "opacity-40" : ""}`}
+                        >
+                          {pending ? "📍 " : sel ? (reveal ? (d.selected_is_correct ? "✓ " : "✗ ") : "● ") : "○ "}{o.option_text}
+                        </button>
+                      );
+                    })}
+                    {!locked && pendingOptionId && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-xs font-semibold text-amber-200 flex-1">Sure about this one?</span>
+                        <button
+                          onClick={() => setPendingMcq((prev) => { const next = { ...prev }; delete next[q.question_id]; return next; })}
+                          className="text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-full px-3 py-1.5"
+                        >
+                          🤔 Not sure
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDraft(q.question_id, { selected_option_id: pendingOptionId });
+                            setPendingMcq((prev) => { const next = { ...prev }; delete next[q.question_id]; return next; });
                             // Skip the usual 700ms autosave debounce — an instant reveal needs the save (and its is_correct) right away.
                             if (flushTimer.current) clearTimeout(flushTimer.current);
                             void flush();
                           }}
-                          className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${selClass} ${locked && !sel ? "opacity-40" : ""}`}
+                          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-3 py-1.5"
                         >
-                          {sel ? (reveal ? (d.selected_is_correct ? "✓ " : "✗ ") : "● ") : "○ "}{o.option_text}
+                          ✅ Confirm
                         </button>
-                      );
-                    })}
+                      </div>
+                    )}
                     {blockedFlashQid === q.question_id ? (
                       <p className="text-[11px] font-semibold text-amber-300">🔒 Already answered — no changes allowed.</p>
                     ) : locked ? (
@@ -581,7 +627,11 @@ export default function ExamPaperPage() {
                       feedbackSize={branding?.exam_hotspot_feedback_size ?? "small"}
                       onTap={() => {}}
                       onConfirmTap={async (x, y) => {
-                        if (d.hotspot_taps.length >= maxTaps) return;
+                        // Reads the freshest known array (pendingRef, kept in sync by setDraft
+                        // synchronously) rather than the `d` closure, which an async gap like the
+                        // network check below could otherwise leave one tap behind.
+                        const latestTaps = (pendingRef.current[q.question_id] ?? d).hotspot_taps;
+                        if (latestTaps.length >= maxTaps) return;
                         const revealOn = branding?.exam_reveal_answers ?? true;
                         let tap = { x, y } as ExamAnswerDraft["hotspot_taps"][number];
                         if (revealOn) {
@@ -590,7 +640,8 @@ export default function ExamPaperPage() {
                             tap = { x, y, correct: result.correct, label: result.label };
                           } catch { /* offline/error — still record the tap, submit-time grading is authoritative anyway */ }
                         }
-                        setDraft(q.question_id, { hotspot_taps: [...d.hotspot_taps, tap] });
+                        const base = (pendingRef.current[q.question_id] ?? d).hotspot_taps;
+                        setDraft(q.question_id, { hotspot_taps: [...base, tap] });
                         if (flushTimer.current) clearTimeout(flushTimer.current);
                         void flush();
                       }}

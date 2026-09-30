@@ -1,12 +1,11 @@
-// A basic 4-function calculator for the exam paper — slides up from the
-// bottom as its own strip, sitting ABOVE the existing Questions/Submit bar
-// rather than covering the question above it, so a candidate can read the
-// numbers in the question and use the calculator at the same time without
-// either one blocking the other. Stays mounted (just translated off-screen)
-// while closed, so an in-progress calculation survives opening and closing
-// it mid-question.
+// A basic 4-function calculator, floating over the exam/quiz screen. Docks
+// above the bottom action bar by default; drag the header to move it out of
+// the way of whatever it's covering (a question, the Submit bar) — the
+// trainee reported it blocking content with nowhere to move it. Stays
+// mounted (just translated off-screen) while closed, so an in-progress
+// calculation — and wherever it was dragged to — survives toggling it.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Op = "+" | "-" | "×" | "÷";
 
@@ -34,6 +33,36 @@ export default function ExamCalculator({ open, onClose }: { open: boolean; onClo
   const [stored, setStored] = useState<number | null>(null);
   const [pendingOp, setPendingOp] = useState<Op | null>(null);
   const [justEvaluated, setJustEvaluated] = useState(false);
+
+  // Drag offset from the default docked position (0,0 = docked bottom-center).
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
+
+  function handleHeaderDown(e: React.PointerEvent<HTMLDivElement>) {
+    (e.target as Element).setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: offset.x, baseY: offset.y, moved: false };
+  }
+  function handleHeaderMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+    setOffset({ x: drag.baseX + dx, y: drag.baseY + dy });
+  }
+  function handleHeaderUp() {
+    dragRef.current = null;
+  }
+
+  // A drag that ends far off-screen (e.g. the trainee dragged it behind the
+  // header) would strand the calculator somewhere they can't reach it again —
+  // snap back to docked whenever it's reopened after being dragged badly out of view.
+  useEffect(() => {
+    if (!open) return;
+    const maxY = -window.innerHeight + 160;
+    if (offset.y < maxY) setOffset({ x: 0, y: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function inputDigit(d: string) {
     if (justEvaluated) {
@@ -90,13 +119,23 @@ export default function ExamCalculator({ open, onClose }: { open: boolean; onClo
 
   return (
     <div
-      className="fixed inset-x-0 z-40 transition-transform duration-200 px-2"
-      style={{ bottom: "72px", transform: open ? "translateY(0)" : "translateY(130%)" }}
+      className="fixed inset-x-0 z-40 px-2"
+      style={{
+        bottom: "72px",
+        transform: open ? `translate(${offset.x}px, ${offset.y}px)` : "translateY(130%)",
+        transition: dragRef.current ? "none" : "transform 0.2s ease-out",
+      }}
       aria-hidden={!open}
     >
       <div className="max-w-2xl mx-auto bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">🧮 Calculator</span>
+        <div
+          onPointerDown={handleHeaderDown}
+          onPointerMove={handleHeaderMove}
+          onPointerUp={handleHeaderUp}
+          onPointerCancel={handleHeaderUp}
+          className="flex items-center justify-between px-4 py-2 border-b border-slate-800 cursor-grab active:cursor-grabbing touch-none select-none"
+        >
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">⠿ 🧮 Calculator — drag to move</span>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-sm px-2 py-1" aria-label="Close calculator">✕ Close</button>
         </div>
         <div className="px-4 pt-2 pb-1 text-right min-h-[2rem]">

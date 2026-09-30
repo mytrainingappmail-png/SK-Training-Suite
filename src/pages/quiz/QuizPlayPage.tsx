@@ -6,6 +6,7 @@ import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat } from "../../services/quiz/quizPlayService";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
+import ExamCalculator from "../../components/quiz/ExamCalculator";
 import { effectiveZones } from "../../components/quiz/hotspotZones";
 import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
@@ -49,6 +50,7 @@ export default function QuizPlayPage() {
   const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
   const [endStep, setEndStep] = useState<"splash" | "details">("splash");
   const [justReconnected, setJustReconnected] = useState(false);
+  const [showCalc, setShowCalc] = useState(false);
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -479,14 +481,25 @@ export default function QuizPlayPage() {
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
           Q{question.question_index + 1} of {question.total_questions}
         </span>
-        <span
-          className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-mono font-bold ${
-            secondsLeft <= 5 ? "border-red-500 text-red-400 animate-pulse" : "border-amber-400 text-white"
-          }`}
-        >
-          {secondsLeft}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCalc((v) => !v)}
+            className={`h-9 w-9 rounded-full border flex items-center justify-center text-base ${showCalc ? "bg-violet-600 border-violet-500 text-white" : "bg-slate-800 border-slate-700 text-slate-300"}`}
+            aria-label="Toggle calculator"
+          >
+            🧮
+          </button>
+          <span
+            className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-mono font-bold ${
+              secondsLeft <= 5 ? "border-red-500 text-red-400 animate-pulse" : "border-amber-400 text-white"
+            }`}
+          >
+            {secondsLeft}
+          </span>
+        </div>
       </div>
+
+      <ExamCalculator open={showCalc} onClose={() => setShowCalc(false)} />
 
       <div className="flex-1 flex flex-col">
         <div className="px-6 py-8 text-center text-lg font-semibold text-white">{question.question_text}</div>
