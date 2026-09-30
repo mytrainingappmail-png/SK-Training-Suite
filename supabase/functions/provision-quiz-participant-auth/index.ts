@@ -17,6 +17,7 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clientIp, HttpError, rateLimit } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +39,11 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
+    // Public by design (anyone joining a quiz needs a throwaway login), so
+    // it is throttled per network address to stop mass account creation. The
+    // ceiling is generous because a whole classroom can share one address.
+    await rateLimit(supabaseAdmin, `quiz-participant:ip:${clientIp(req)}`, 300, 3600);
+
     const token = crypto.randomUUID();
     const email = `participant-${token}@internal.sktraining.quiz`;
     const password = crypto.randomUUID() + crypto.randomUUID();
@@ -56,7 +62,7 @@ serve(async (req) => {
   } catch (err) {
     return new Response(
       JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: err instanceof HttpError ? err.status : 400 }
     );
   }
 });

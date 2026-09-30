@@ -12,6 +12,7 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clientIp, escapeLike, HttpError, rateLimit } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,12 +50,30 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: admin } = await supabaseAdmin
+    // A 6-digit code can be guessed by brute force, so cap wrong tries: 5 per
+    // account per 15 minutes (whoever is guessing burns the account's budget)
+    // and a wider ceiling per network address.
+    await rateLimit(supabaseAdmin, `quiz-reset:ip:${clientIp(req)}`, 30, 900);
+    await rateLimit(supabaseAdmin, `quiz-reset:id:${identifier.toLowerCase()}`, 5, 900, "Too many attempts. Request a new code and try again in a few minutes.");
+
+    // Find the admin by the contact email or mobile they typed. Matching is
+    // literal (no wildcards) and each lookup is its own query, so the typed
+    // text can never alter the query itself.
+    const byEmail = await supabaseAdmin
       .from("quiz_admins")
       .select("username, contact_email, contact_mobile, status, companies(company_code)")
-      .or(`contact_email.ilike.${identifier},contact_mobile.eq.${identifier}`)
+      .ilike("contact_email", escapeLike(identifier))
       .eq("status", "active")
-      .maybeSingle();
+      .limit(2);
+    const byMobile = byEmail.data && byEmail.data.length > 0 ? { data: [] as typeof byEmail.data } : await supabaseAdmin
+      .from("quiz_admins")
+      .select("username, contact_email, contact_mobile, status, companies(company_code)")
+      .eq("contact_mobile", identifier)
+      .eq("status", "active")
+      .limit(2);
+    const matches = [...(byEmail.data ?? []), ...(byMobile.data ?? [])];
+    // Ambiguous (two accounts share the contact) is treated as no match.
+    const admin = matches.length === 1 ? matches[0] : null;
 
     const companyCode = (admin?.companies as { company_code?: string } | null)?.company_code;
     if (!admin || !companyCode) {
@@ -84,7 +103,7 @@ serve(async (req) => {
   } catch (err) {
     return new Response(
       JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: err instanceof HttpError ? err.status : 400 }
     );
   }
 });

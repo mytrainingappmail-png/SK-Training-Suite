@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isServiceRoleRequest } from "../_shared/auth.ts";
 
 function daysUntilExpiry(endDate: string): number {
   const end = new Date(endDate);
@@ -33,7 +34,15 @@ function getDueNotificationType(endDate: string, alreadySentTypes: Set<string>):
   return null;
 }
 
-serve(async (_req) => {
+serve(async (req) => {
+  // Only the pg_cron job (service-role bearer) may run the scheduler.
+  if (!isServiceRoleRequest(req)) {
+    return new Response(JSON.stringify({ success: false, error: "Not allowed." }), {
+      headers: { "Content-Type": "application/json" },
+      status: 403,
+    });
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);

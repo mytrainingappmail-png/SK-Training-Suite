@@ -18,6 +18,7 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clientIp, escapeLike, HttpError, rateLimit } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,12 +52,29 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: admin } = await supabaseAdmin
+    // Throttle code requests: per network address and per typed identifier,
+    // so nobody can flood an admin's inbox or burn through codes.
+    await rateLimit(supabaseAdmin, `quiz-forgot:ip:${clientIp(req)}`, 20, 3600);
+    await rateLimit(supabaseAdmin, `quiz-forgot:id:${identifier.toLowerCase()}`, 3, 3600, "A code was already sent recently. Please check your email or try again in an hour.");
+
+    // Find the admin by the contact email or mobile they typed. Matching is
+    // literal (no wildcards) and each lookup is its own query, so the typed
+    // text can never alter the query itself.
+    const byEmail = await supabaseAdmin
       .from("quiz_admins")
       .select("username, contact_email, contact_mobile, status, companies(company_code)")
-      .or(`contact_email.ilike.${identifier},contact_mobile.eq.${identifier}`)
+      .ilike("contact_email", escapeLike(identifier))
       .eq("status", "active")
-      .maybeSingle();
+      .limit(2);
+    const byMobile = byEmail.data && byEmail.data.length > 0 ? { data: [] as typeof byEmail.data } : await supabaseAdmin
+      .from("quiz_admins")
+      .select("username, contact_email, contact_mobile, status, companies(company_code)")
+      .eq("contact_mobile", identifier)
+      .eq("status", "active")
+      .limit(2);
+    const matches = [...(byEmail.data ?? []), ...(byMobile.data ?? [])];
+    // Ambiguous (two accounts share the contact) is treated as no match.
+    const admin = matches.length === 1 ? matches[0] : null;
 
     // Same response either way — don't reveal whether a match exists.
     const companyCode = (admin?.companies as { company_code?: string } | null)?.company_code;
@@ -108,7 +126,7 @@ serve(async (req) => {
   } catch (err) {
     return new Response(
       JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: err instanceof HttpError ? err.status : 400 }
     );
   }
 });

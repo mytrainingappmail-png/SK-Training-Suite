@@ -98,3 +98,59 @@ export function assertCanAdminister(caller: Caller, targetCompanyId: string): vo
     throw new HttpError(403, "You can only manage employees of your own company.");
   }
 }
+
+/** True when the bearer token is the project's service-role key (the pg_cron
+ *  scheduler uses it). The gateway has already verified the JWT signature
+ *  (verify_jwt), so reading the role claim from the payload is sufficient. */
+export function isServiceRoleRequest(req: Request): boolean {
+  const header = req.headers.get("Authorization") ?? "";
+  const token = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const claims = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
+    return claims?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
+export function clientIp(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-for") ?? "";
+  return (fwd.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim();
+}
+
+/** Counts a hit against `key`; throws 429 once more than `max` hits land
+ *  within `windowSeconds`. Backed by the edge_rate_limits table. */
+export async function rateLimit(
+  admin: SupabaseClient,
+  key: string,
+  max: number,
+  windowSeconds: number,
+  message = "Too many requests. Please wait a while and try again.",
+): Promise<void> {
+  const { data, error } = await admin.rpc("edge_rate_limit", {
+    p_key: key,
+    p_max: max,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) throw new HttpError(500, "Could not check request limits.");
+  if (data === false) throw new HttpError(429, message);
+}
+
+/** Escapes % and _ so user text can be used as a literal in ILIKE. */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => "\\" + c);
+}
+
+/** Constant-time string comparison. */
+export function safeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  let diff = x.length ^ y.length;
+  const len = Math.max(x.length, y.length);
+  for (let i = 0; i < len; i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
+}

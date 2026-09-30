@@ -17,6 +17,7 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { HttpError, requireEmployeeCaller } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,14 +67,24 @@ serve(async (req) => {
       throw new Error("You must be signed in to set up a Calling App account.");
     }
 
-    const { data: callerEmployee } = await supabaseAdmin
-      .from("employees")
-      .select("company_id")
-      .eq("auth_user_id", callerData.user.id)
-      .maybeSingle();
+    // Granting Calling App access is an administrator action (the table's own
+    // write policy requires it too): active SUPER_ADMIN of this company.
+    const caller = await requireEmployeeCaller(req, supabaseAdmin);
+    if (!caller.isSuperAdmin || caller.companyId !== payload.companyId) {
+      throw new HttpError(403, "You are not authorized to create a Calling App account for this company.");
+    }
 
-    if (!callerEmployee || callerEmployee.company_id !== payload.companyId) {
-      throw new Error("You are not authorized to create a Calling App account for this company.");
+    if (!/^[A-Za-z0-9._-]{2,40}$/.test(payload.username)) {
+      throw new Error("Username can only contain letters, numbers, dots, dashes and underscores.");
+    }
+    // A linked employee / reporting line must belong to the same company.
+    if (payload.employeeId) {
+      const { data: linked } = await supabaseAdmin.from("employees").select("company_id").eq("id", payload.employeeId).maybeSingle();
+      if (!linked || linked.company_id !== payload.companyId) throw new Error("That employee does not belong to this company.");
+    }
+    if (payload.reportsTo) {
+      const { data: boss } = await supabaseAdmin.from("calling_app_admins").select("company_id").eq("id", payload.reportsTo).maybeSingle();
+      if (!boss || boss.company_id !== payload.companyId) throw new Error("That reporting manager does not belong to this company.");
     }
 
     const { data: company, error: companyError } = await supabaseAdmin

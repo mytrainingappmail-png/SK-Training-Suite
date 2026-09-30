@@ -26,6 +26,16 @@
 //    invokes this one per notification (mirrors licenseNotificationService.ts).
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
+import {
+  corsHeaders,
+  escapeLike,
+  HttpError,
+  isServiceRoleRequest,
+  jsonResponse,
+  requireEmployeeCaller,
+  serviceClient,
+} from "../_shared/auth.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 interface NotificationPayload {
   channel: "email" | "whatsapp";
@@ -121,9 +131,37 @@ async function sendWhatsApp(payload: NotificationPayload): Promise<void> {
   }
 }
 
+// Only ever notify a contact that is on file for a company — this function must
+// not be usable to send arbitrary messages to arbitrary addresses/numbers.
+async function contactOnFile(admin: SupabaseClient, payload: NotificationPayload): Promise<boolean> {
+  if (payload.channel === "email") {
+    const { data } = await admin.from("companies").select("id").ilike("email", escapeLike(payload.companyEmail ?? "")).limit(1);
+    return (data ?? []).length > 0;
+  }
+  const { data } = await admin.from("companies").select("id").eq("phone", payload.companyMobile ?? "").limit(1);
+  return (data ?? []).length > 0;
+}
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
+    // Callable by the daily scheduler (service role) or by the platform
+    // operator's administrators from the licence screen — nobody else.
+    const admin = serviceClient();
+    if (!isServiceRoleRequest(req)) {
+      const caller = await requireEmployeeCaller(req, admin);
+      if (!(caller.isSuperAdmin && caller.companyIsOperator)) {
+        throw new HttpError(403, "Only the platform administrator can send licence notifications.");
+      }
+    }
+
     const payload: NotificationPayload = await req.json();
+    if (!(await contactOnFile(admin, payload))) {
+      throw new HttpError(400, "That contact is not on file for any company.");
+    }
 
     if (payload.channel === "email") {
       await sendEmail(payload);
@@ -133,14 +171,9 @@ serve(async (req) => {
       throw new Error(`Unknown channel: ${payload.channel}`);
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" },
-      status: 200,
-    });
+    return jsonResponse({ success: true });
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error" }), {
-      headers: { "Content-Type": "application/json" },
-      status: 400,
-    });
+    if (err instanceof HttpError) return jsonResponse({ success: false, error: err.message }, err.status);
+    return jsonResponse({ success: false, error: err instanceof Error ? err.message : "Unknown error" }, 400);
   }
 });

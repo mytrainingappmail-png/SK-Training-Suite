@@ -58,6 +58,10 @@ serve(async (req) => {
     if (!payload.companyId || !payload.username || !payload.password) {
       throw new Error("companyId, username and password are all required.");
     }
+    if (payload.password.length < 8) throw new Error("Password must be at least 8 characters.");
+    if (!/^[A-Za-z0-9._-]{2,40}$/.test(payload.username)) {
+      throw new Error("Username can only contain letters, numbers, dots, dashes and underscores.");
+    }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
@@ -70,9 +74,26 @@ serve(async (req) => {
 
     const { data: callerEmployee } = await supabaseAdmin
       .from("employees")
-      .select("company_id")
+      .select("id, company_id, active")
       .eq("auth_user_id", callerData.user.id)
       .maybeSingle();
+
+    // An employee counts only if they are an active SUPER_ADMIN of that
+    // company (the LMS bootstrap panel is an administrator screen). Any
+    // ordinary employee of the company used to pass this check.
+    let employeeIsAdmin = false;
+    if (callerEmployee?.active && callerEmployee.company_id === payload.companyId) {
+      const { data: adminRoles } = await supabaseAdmin
+        .from("employee_roles")
+        .select("roles!inner(role_code, company_id)")
+        .eq("employee_id", callerEmployee.id)
+        .eq("active", true);
+      employeeIsAdmin = (adminRoles ?? []).some((row: Record<string, unknown>) => {
+        const r = row.roles as { role_code?: string; company_id?: string } | { role_code?: string; company_id?: string }[] | null;
+        const role = Array.isArray(r) ? r[0] : r;
+        return role?.role_code === "SUPER_ADMIN" && role?.company_id === payload.companyId;
+      });
+    }
 
     const { data: callerQuizAdmin } = await supabaseAdmin
       .from("quiz_admins")
@@ -80,8 +101,14 @@ serve(async (req) => {
       .eq("auth_user_id", callerData.user.id)
       .maybeSingle();
 
-    const authorizedAsEmployee = callerEmployee?.company_id === payload.companyId;
-    const authorizedAsQuizAdmin = callerQuizAdmin?.status === "active" && callerQuizAdmin.company_id === payload.companyId;
+    const authorizedAsEmployee = employeeIsAdmin;
+    // Creating quiz admins is a user-management action: only a quiz Super
+    // Admin may do it (a view-only or plain admin could otherwise mint
+    // themselves an editor).
+    const authorizedAsQuizAdmin =
+      callerQuizAdmin?.status === "active" &&
+      callerQuizAdmin.company_id === payload.companyId &&
+      callerQuizAdmin.role === "super_admin";
 
     if (!authorizedAsEmployee && !authorizedAsQuizAdmin) {
       throw new Error("You are not authorized to create a Live Quiz admin for this company.");

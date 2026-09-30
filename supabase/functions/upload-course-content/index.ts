@@ -2,25 +2,18 @@
 //
 // Server-side upload proxy for the `course-content` Storage bucket.
 //
-// This project does not use Supabase Auth — logins are handled by a custom,
-// localStorage-based session (see src/services/auth/session.ts). Because of
-// that, every browser-side Supabase request runs as the `anon` role, which
-// can never satisfy Storage RLS policies that require a real authenticated
-// Supabase user (auth.uid()). Weakening those policies so `anon` can write
-// would let anyone holding the public anon key upload to the bucket.
-//
-// Instead, the privileged write happens here: this function runs with the
-// `service_role` key (a server-side secret, never shipped to the browser,
-// configured as a Supabase Edge Function secret — never a VITE_-prefixed
-// env var). The client calls this function instead of Storage directly,
-// passing the file plus the employee id from its custom session. This
-// function verifies that id corresponds to a real, active employee before
-// performing the upload on their behalf, then returns the public URL.
+// The privileged write happens here (service_role key, a server-side secret
+// that never reaches the browser) so storage quotas can be enforced and every
+// file is recorded against its owning company. The caller is identified by
+// their real Supabase Auth session (the bearer token that
+// supabase.functions.invoke sends automatically) — never by an id passed in a
+// header, which anyone who learned an employee id could have forged.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders as SHARED_CORS, HttpError, requireEmployeeCaller } from '../_shared/auth.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const MEDIA_BUCKET = 'course-content';
 
@@ -32,10 +25,8 @@ const FOLDER_BY_KIND: Record<string, string> = {
 };
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-employee-id',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  ...SHARED_CORS,
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 function json(body: unknown, status = 200): Response {
@@ -55,26 +46,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const employeeId = req.headers.get('x-employee-id');
-    if (!employeeId) {
-      return json({ error: 'Missing employee session.' }, 401);
-    }
-
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // Verify the custom session's employee id is real and active before
-    // allowing a privileged write on their behalf. The client's cached
-    // session (localStorage) is never trusted on its own — this is a
-    // live lookup against the `employees` table.
-    const { data: employee, error: employeeError } = await admin
-      .from('employees')
-      .select('id, active, company_id')
-      .eq('id', employeeId)
-      .single();
-
-    if (employeeError || !employee || !employee.active) {
-      return json({ error: 'Invalid or inactive session.' }, 401);
-    }
+    // Who is calling? A real, signed-in, active employee — resolved from the
+    // verified session token, never from a client-supplied id.
+    const employee = await requireEmployeeCaller(req, admin).catch((err) => {
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(401, 'Invalid or inactive session.');
+    });
 
     const formData = await req.formData();
     const file = formData.get('file');
@@ -91,7 +70,7 @@ Deno.serve(async (req) => {
     // storage allowance (or exceeds the platform's per-file limit). Limits live in the database
     // (storage_settings + subscription_plans.max_storage_gb), not in this code.
     const { data: check, error: checkError } = await admin
-      .rpc('storage_check_upload', { p_company: employee.company_id, p_bytes: file.size })
+      .rpc('storage_check_upload', { p_company: employee.companyId, p_bytes: file.size })
       .single();
     if (checkError) {
       return json({ error: checkError.message }, 500);
@@ -115,7 +94,7 @@ Deno.serve(async (req) => {
       return json({ error: uploadError.message }, 500);
     }
 
-    await admin.from('storage_file_owners').upsert({ bucket_id: MEDIA_BUCKET, name: path, company_id: employee.company_id, uploaded_by: employee.id });
+    await admin.from('storage_file_owners').upsert({ bucket_id: MEDIA_BUCKET, name: path, company_id: employee.companyId, uploaded_by: employee.employeeId });
 
     const { data: publicUrlData } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
 
@@ -125,6 +104,7 @@ Deno.serve(async (req) => {
       fileName: file.name,
     });
   } catch (err) {
+    if (err instanceof HttpError) return json({ error: err.message }, err.status);
     return json({ error: err instanceof Error ? err.message : 'Unexpected error.' }, 500);
   }
 });
