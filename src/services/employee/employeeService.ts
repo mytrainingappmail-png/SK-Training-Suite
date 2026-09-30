@@ -8,6 +8,7 @@ import {
   deleteEmployee,
   toggleEmployeeStatus,
   syncEmployeeAuthPassword,
+  provisionEmployeeLogin,
 } from "../../repositories/employee/employeeRepository";
 
 class EmployeeService {
@@ -25,13 +26,38 @@ class EmployeeService {
     return await searchEmployees(value);
   }
 
-  async create(employee: Partial<Employee>): Promise<Employee> {
+  /** Creates the employee and, when a password is supplied, their real login.
+   * If the login can't be created the new employee row is removed again, so
+   * nobody is left in the list who can't sign in and doesn't know why. */
+  async create(employee: Partial<Employee> & { password?: string }): Promise<Employee> {
     this.validate(employee);
 
-    return await createEmployee(employee);
+    const password = employee.password?.trim();
+    const created = await createEmployee(employee);
+
+    if (password) {
+      try {
+        await provisionEmployeeLogin(created.id, password);
+      } catch (err) {
+        await deleteEmployee(created.id).catch(() => undefined);
+        const reason = err instanceof Error ? err.message : "unknown error";
+        throw new Error(`Could not create this employee's login (${reason}). Nothing was saved — please try again.`);
+      }
+    }
+
+    return created;
   }
 
-  async update(id: string, employee: Partial<Employee>): Promise<Employee> {
+  /** Gives an existing employee who has no login yet (auth_user_id empty) a
+   * login with the given password. */
+  async createLogin(employeeId: string, password: string): Promise<void> {
+    if (password.length < 6) {
+      throw new Error("Password must be at least 6 characters.");
+    }
+    await provisionEmployeeLogin(employeeId, password);
+  }
+
+  async update(id: string, employee: Partial<Employee> & { password?: string }): Promise<Employee> {
     this.validate(employee);
 
     return await updateEmployee(id, employee);

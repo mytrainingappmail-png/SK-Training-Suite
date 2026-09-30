@@ -65,8 +65,6 @@ export const ADMIN_MODULES: AdminModuleDefinition[] = [
   { id: "attendance",        label: "Attendance" },
   { id: "geofence",          label: "Attendance Geofencing" },
 
-  { id: "security-migration", label: "Secure Login Migration" },
-
   { id: "theme",    label: "Theme",    permission: PERMISSIONS.VIEW_THEME },
   { id: "settings", label: "Settings", permission: PERMISSIONS.VIEW_SETTINGS },
   { id: "menu",     label: "Menu",     permission: PERMISSIONS.VIEW_MENU },

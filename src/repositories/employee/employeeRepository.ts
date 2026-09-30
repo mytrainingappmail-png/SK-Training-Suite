@@ -40,12 +40,20 @@ export async function searchEmployees(
   return data ?? [];
 }
 
+/** The password is never written to the employees table — it only ever
+ * exists on the Supabase Auth login (see provisionEmployeeLogin). Any
+ * `password` field on the payload is dropped here as a safety net. */
+function withoutPassword<T extends object>(employee: T): Omit<T, "password"> {
+  const { password: _ignored, ...rest } = employee as T & { password?: unknown };
+  return rest;
+}
+
 export async function createEmployee(
   employee: Partial<Employee>
 ): Promise<Employee> {
   const { data, error } = await supabase
     .from("employees")
-    .insert(employee)
+    .insert(withoutPassword(employee))
     .select()
     .single();
 
@@ -62,7 +70,7 @@ export async function updateEmployee(
 ): Promise<Employee> {
   const { data, error } = await supabase
     .from("employees")
-    .update(employee)
+    .update(withoutPassword(employee))
     .eq("id", id)
     .select()
     .single();
@@ -85,11 +93,41 @@ export async function syncEmployeeAuthPassword(authUserId: string, newPassword: 
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(await readFunctionError(error));
   }
   if (data?.success === false) {
     throw new Error(data.error ?? "Could not update the employee's login password.");
   }
+}
+
+/** Creates the employee's real login with the given password (admin only —
+ * the edge function checks the caller). For an employee that has no login yet. */
+export async function provisionEmployeeLogin(employeeDbId: string, password: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("provision-employee-auth", {
+    body: { employeeDbId, password },
+  });
+
+  if (error) {
+    throw new Error(await readFunctionError(error));
+  }
+  if (data?.success === false) {
+    throw new Error(data.error ?? "Could not create the employee's login.");
+  }
+}
+
+// supabase.functions.invoke reports any non-2xx as a generic message; the
+// useful reason is in the response body.
+async function readFunctionError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response } | null)?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // fall through
+    }
+  }
+  return error instanceof Error ? error.message : "Request failed.";
 }
 
 export async function deleteEmployee(

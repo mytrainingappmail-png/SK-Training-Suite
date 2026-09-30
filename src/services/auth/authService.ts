@@ -1,21 +1,20 @@
 // File: src/services/auth/authService.ts
 //
-// SECURITY MIGRATION — Phase 2.
+// Every employee logs in through REAL Supabase Auth
+// (supabase.auth.signInWithPassword). That gives each database request a
+// verifiable identity, which is what lets RLS policies restrict data by
+// company. There is no fallback password check any more: an employee without a
+// login (auth_user_id) is told to contact their administrator, who creates the
+// login from Employee Management.
 //
-// Employees who have been migrated (employees.auth_user_id is set) now
-// log in through REAL Supabase Auth (supabase.auth.signInWithPassword).
-// This gives every subsequent database request a real, verifiable
-// identity, which is what allows RLS policies to actually restrict
-// data by company — something the old plaintext-password check could
-// never support.
+// Before sign-in there is no session, so the lookups go through narrow
+// SECURITY DEFINER RPCs that reveal only what the login screen needs
+// (canonical codes, active/locked state) — never a password, id or personal
+// details. Failed attempts are counted and locked on the SERVER
+// (login_record_failed), never from client-supplied counters.
 //
-// Employees who have NOT been migrated yet (auth_user_id is still
-// null) continue to log in exactly the old way, with zero change in
-// behaviour — nobody is locked out during the gradual migration.
-//
-// The User object returned to the rest of the app, and the
-// setCurrentUser() call, are UNCHANGED — every existing file that
-// calls getCurrentUser() keeps working exactly as before.
+// The User object returned to the rest of the app, and the setCurrentUser()
+// call, are unchanged — every file that calls getCurrentUser() keeps working.
 //
 // Verified import paths from src/services/auth/:
 //   ../../lib/supabase      → src/lib/supabase.ts             (exports: supabase)
@@ -24,17 +23,8 @@
 
 import { supabase }       from "../../lib/supabase";
 import { setCurrentUser } from "./session";
-import { getSettingNumber } from "../setting/settingService";
 
 import type { User, UserStatus } from "../../types/app";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Configuration
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Default when no active "max_login_attempts" Setting exists — an admin can
-// override this from Settings Management without any code change.
-const DEFAULT_MAX_FAILED_ATTEMPTS = 5;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -62,13 +52,10 @@ export async function login(
   // ── 1. Validate inputs ─────────────────────────────────────────────────────
   // Company Code is optional — employee_code is only guaranteed unique
   // WITHIN a company, so without it every active company is searched for
-  // a match instead. A code is still honored when typed (unchanged path),
-  // useful if the same employee_code happens to exist in more than one
-  // company, or an admin just prefers to scope it explicitly.
+  // a match instead. A code is still honored when typed.
   //
   // The "Employee ID" field also doubles as an email field — the lookup
-  // RPCs match against employee_code OR email (case-insensitive), so
-  // someone can type either without needing a separate toggle.
+  // matches employee_code OR email (case-insensitive).
   if (!employeeId.trim()) {
     return fail("Employee ID or email is required.");
   }
@@ -77,7 +64,7 @@ export async function login(
   }
 
   // ── 2. Find every employee this could be ──────────────────────────────────
-  let candidates: EmployeeRowWithCode[];
+  let candidates: LoginCandidate[];
 
   if (companyCode.trim()) {
     const company = await fetchCompany(companyCode.trim());
@@ -87,10 +74,9 @@ export async function login(
     if (!company.active) {
       return fail("This company account is inactive. Contact support.");
     }
-    const emp = await fetchEmployee(employeeId.trim(), company.id);
-    candidates = emp ? [{ ...emp, company_code: companyCode.trim() }] : [];
+    candidates = await lookupCandidates(employeeId.trim(), companyCode.trim());
   } else {
-    const allCandidates = await fetchEmployeeAnyCompany(employeeId.trim());
+    const allCandidates = await lookupCandidates(employeeId.trim(), null);
     // A Super Admin (the company owner's role) is the highest-value
     // account in each company, and employee_code is just a sequential
     // number — every company's owner ends up as "00001". Left in the
@@ -109,42 +95,71 @@ export async function login(
     return fail("Invalid employee ID/email or password.");
   }
 
-  // ── 3. Try each candidate's password — real Supabase Auth if migrated,
-  //      legacy check otherwise — until one matches. In the overwhelming
-  //      majority of cases there's exactly one candidate anyway. ────────────
-  let matched: EmployeeRowWithCode | null = null;
+  // ── 3. Try each candidate's password against real Supabase Auth until one
+  //      matches. Locked candidates are skipped without trying the password.
+  //      In the overwhelming majority of cases there's exactly one. ─────────
+  let signedInAs: LoginCandidate | null = null;
+  let firstTried: LoginCandidate | null = null;
+  let lockedCandidate: LoginCandidate | null = null;
+  let anyWithoutLogin = false;
+
   for (const candidate of candidates) {
-    const passwordValid = candidate.auth_user_id
-      ? await validateViaSupabaseAuth(candidate.company_code, candidate.employee_code as string, password)
-      : candidate.password === password;
-    if (passwordValid) {
-      matched = candidate;
+    if (!candidate.has_login) {
+      anyWithoutLogin = true;
+      continue;
+    }
+    if (candidate.is_locked) {
+      lockedCandidate = lockedCandidate ?? candidate;
+      continue;
+    }
+    firstTried = firstTried ?? candidate;
+    if (await validateViaSupabaseAuth(candidate.company_code, candidate.employee_code, password)) {
+      signedInAs = candidate;
       break;
     }
   }
 
-  if (!matched) {
-    await handleFailedAttempt(candidates[0].id, candidates[0].failed_login_attempts ?? 0);
-    // Generic message — do not reveal which field was wrong
+  if (!signedInAs) {
+    if (firstTried) {
+      await recordFailedAttempt(firstTried);
+      // Generic message — do not reveal which field was wrong
+      return fail("Invalid employee ID/email or password.");
+    }
+    if (lockedCandidate) return fail(lockedMessage(lockedCandidate));
+    if (anyWithoutLogin) {
+      return fail("Your login has not been set up yet. Contact your administrator.");
+    }
     return fail("Invalid employee ID/email or password.");
   }
 
-  // ── 4. Validate the matched employee's active/locked status ───────────────
+  // ── 4. Load the signed-in employee's own row (row-level security lets
+  //      them read it) and validate active status ────────────────────────────
+  const { data: userData } = await supabase.auth.getUser();
+  const authUserId = userData?.user?.id;
+  const { data: matched, error: rowError } = authUserId
+    ? await supabase.from("employees").select("*").eq("auth_user_id", authUserId).maybeSingle()
+    : { data: null, error: null };
+
+  if (rowError || !matched) {
+    await supabase.auth.signOut();
+    return fail("Could not load your profile. Please try again or contact your administrator.");
+  }
   if (!matched.active) {
+    await supabase.auth.signOut();
     return fail("Your account is inactive. Contact your administrator.");
   }
   if (matched.account_locked) {
+    await supabase.auth.signOut();
     return fail(
-      "Your account has been locked after too many failed login attempts. " +
-      "Contact your administrator to unlock it."
+      "Your account has been locked. Contact your administrator to unlock it."
     );
   }
 
   // ── 5. Successful login — reset counters, update timestamps ───────────────
-  await handleSuccessfulLogin(matched.id);
+  await recordSuccessfulLogin();
 
   // ── 6. Resolve active role ────────────────────────────────────────────────
-  const roleId = await resolveRoleId(matched.id);
+  const roleId = await resolveRoleId(matched.id as string);
 
   // ── 7. Map to User interface ──────────────────────────────────────────────
   const user: User = {
@@ -170,9 +185,6 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
-  // Also end the real Supabase Auth session (harmless no-op for
-  // employees who were never migrated — signOut() just does nothing
-  // if there was no real session to begin with).
   await supabase.auth.signOut();
 
   const { logout: clearSession } = await import("./session");
@@ -240,94 +252,67 @@ async function fetchCompany(companyCode: string): Promise<CompanyRow | null> {
   return (data as CompanyRow[] | null)?.[0] ?? null;
 }
 
-interface EmployeeRow {
-  id:                    string;
-  company_id:            string;
-  branch_id:             string | null;
-  department_id:         string | null;
-  designation_id:        string | null;
-  employee_code:         string;
-  first_name:            string | null;
-  last_name:             string | null;
-  email:                 string | null;
-  mobile:                string | null;
-  active:                boolean;
-  password:              string | null;
-  failed_login_attempts: number | null;
-  account_locked:        boolean | null;
-  auth_user_id:          string | null;
-  is_super_admin:        boolean;
+/** What the login screen is allowed to know about an employee before they
+ * have proved who they are. Deliberately no id, password or personal data. */
+interface LoginCandidate {
+  company_code:   string;
+  employee_code:  string;
+  active:         boolean;
+  is_locked:      boolean;
+  locked_until:   string | null;
+  is_super_admin: boolean;
+  has_login:      boolean;
 }
 
-async function fetchEmployee(
-  employeeCode: string,
-  companyId:    string
-): Promise<EmployeeRow | null> {
-  // Also pre-session (see fetchCompany above) — routed through a SECURITY
-  // DEFINER RPC so `employees` (names, mobiles, password field) never needs
-  // an anon-accessible policy.
-  const { data, error } = await supabase.rpc("login_lookup_employee", {
-    p_employee_code: employeeCode,
-    p_company_id:    companyId,
+/** Searches by employee code or email — inside one company when a company
+ * code is given, otherwise across every active company (normally one match;
+ * a second only appears if two companies share the same employee code, in
+ * which case login() tries each candidate's password in turn). */
+async function lookupCandidates(
+  employeeCodeOrEmail: string,
+  companyCode: string | null
+): Promise<LoginCandidate[]> {
+  const { data, error } = await supabase.rpc("login_lookup", {
+    p_employee_code: employeeCodeOrEmail,
+    p_company_code:  companyCode,
   });
 
   if (error) {
-    console.error("[authService] fetchEmployee:", error.message);
-    return null;
-  }
-
-  return (data as EmployeeRow[] | null)?.[0] ?? null;
-}
-
-interface EmployeeRowWithCode extends EmployeeRow {
-  company_code: string;
-}
-
-/** No company code typed — searches every active company for a matching
- * employee_code. Normally returns at most one row; a second only shows up
- * if two different companies happen to share the exact same employee
- * code, in which case login() tries each candidate's password in turn. */
-async function fetchEmployeeAnyCompany(employeeCode: string): Promise<EmployeeRowWithCode[]> {
-  const { data, error } = await supabase.rpc("login_lookup_employee_any_company", {
-    p_employee_code: employeeCode,
-  });
-
-  if (error) {
-    console.error("[authService] fetchEmployeeAnyCompany:", error.message);
+    console.error("[authService] lookupCandidates:", error.message);
     return [];
   }
 
-  return (data as EmployeeRowWithCode[] | null) ?? [];
+  return (data as LoginCandidate[] | null) ?? [];
 }
 
-async function handleFailedAttempt(
-  employeeId:     string,
-  currentAttempts: number
-): Promise<void> {
-  const newAttempts = currentAttempts + 1;
-  const maxAttempts = await getSettingNumber("max_login_attempts", DEFAULT_MAX_FAILED_ATTEMPTS);
-  const shouldLock  = newAttempts >= maxAttempts;
+function lockedMessage(candidate: LoginCandidate): string {
+  if (candidate.locked_until) {
+    const minutes = Math.max(1, Math.ceil((new Date(candidate.locked_until).getTime() - Date.now()) / 60000));
+    return `Too many failed sign-in attempts. Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}, or contact your administrator.`;
+  }
+  return "Your account has been locked. Contact your administrator to unlock it.";
+}
 
-  // Still pre-session — a wrong password never establishes a Supabase
-  // Auth session, so this also has to go through the RPC.
-  const { error } = await supabase.rpc("login_record_failed_attempt", {
-    p_employee_id:  employeeId,
-    p_new_attempts: newAttempts,
-    p_lock:         shouldLock,
+async function recordFailedAttempt(candidate: LoginCandidate): Promise<void> {
+  // Still pre-session — a wrong password never establishes a Supabase Auth
+  // session, so this goes through the RPC, which counts and locks on the
+  // server (the lock threshold comes from the max_login_attempts setting).
+  const { error } = await supabase.rpc("login_record_failed", {
+    p_company_code:  candidate.company_code,
+    p_employee_code: candidate.employee_code,
   });
 
   if (error) {
-    console.error("[authService] handleFailedAttempt:", error.message);
+    console.error("[authService] recordFailedAttempt:", error.message);
   }
 }
 
-async function handleSuccessfulLogin(employeeId: string): Promise<void> {
-  const { error } = await supabase.rpc("login_record_successful_login", {
-    p_employee_id: employeeId,
-  });
+async function recordSuccessfulLogin(): Promise<void> {
+  // Signed in by now; the RPC acts on the caller's own employee row only.
+  const { error } = await supabase.rpc("login_record_success");
 
   if (error) {
-    console.error("[authService] handleSuccessfulLogin:", error.message);
+    console.error("[authService] recordSuccessfulLogin:", error.message);
   }
 }
 
@@ -383,56 +368,47 @@ export async function changePassword(
 
   const { data: emp, error: fetchError } = await supabase
     .from("employees")
-    .select("id, password, auth_user_id, employee_code, companies(company_code)")
+    .select("id, auth_user_id, employee_code, companies(company_code)")
     .eq("id", employeeId)
     .maybeSingle();
 
   if (fetchError || !emp) {
     return { success: false, error: "Employee not found." };
   }
+  if (!emp.auth_user_id) {
+    return { success: false, error: "Your login has not been set up yet. Contact your administrator." };
+  }
 
-  // Migrated employees actually authenticate against real Supabase Auth,
-  // not the legacy password column below — so verifying/changing their
-  // password has to go through it too, or the column ends up saying one
-  // thing while the real login still expects another (the exact bug that
-  // was locking migrated employees out after any password change).
-  if (emp.auth_user_id) {
-    const companiesJoin = emp.companies as { company_code: string } | { company_code: string }[] | null;
-    const companyCode = Array.isArray(companiesJoin) ? companiesJoin[0]?.company_code : companiesJoin?.company_code;
-    if (!companyCode) {
-      return { success: false, error: "Could not resolve your company. Please contact support." };
-    }
+  const companiesJoin = emp.companies as { company_code: string } | { company_code: string }[] | null;
+  const companyCode = Array.isArray(companiesJoin) ? companiesJoin[0]?.company_code : companiesJoin?.company_code;
+  if (!companyCode) {
+    return { success: false, error: "Could not resolve your company. Please contact support." };
+  }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: internalEmailFor(companyCode, emp.employee_code as string),
-      password: currentPassword,
-    });
-    if (signInError) {
-      return { success: false, error: "Current password is incorrect." };
-    }
-
-    const { error: updateAuthError } = await supabase.auth.updateUser({ password: newPassword });
-    if (updateAuthError) {
-      console.error("[authService] changePassword (auth):", updateAuthError.message);
-      return { success: false, error: "Failed to update password. Please try again." };
-    }
-  } else if (emp.password !== currentPassword) {
+  // Verify the current password by signing in with it, then change it on the
+  // real login. (Nothing about the password is stored anywhere else.)
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: internalEmailFor(companyCode, emp.employee_code as string),
+    password: currentPassword,
+  });
+  if (signInError) {
     return { success: false, error: "Current password is incorrect." };
   }
 
-  // Kept in sync either way — still what non-migrated employees actually
-  // log in with, and read/displayed elsewhere for migrated ones too.
+  const { error: updateAuthError } = await supabase.auth.updateUser({ password: newPassword });
+  if (updateAuthError) {
+    console.error("[authService] changePassword (auth):", updateAuthError.message);
+    return { success: false, error: "Failed to update password. Please try again." };
+  }
+
   const { error: updateError } = await supabase
     .from("employees")
-    .update({
-      password:             newPassword,
-      password_changed_at:  new Date().toISOString(),
-    })
+    .update({ password_changed_at: new Date().toISOString() })
     .eq("id", employeeId);
 
   if (updateError) {
-    console.error("[authService] changePassword:", updateError.message);
-    return { success: false, error: "Failed to update password. Please try again." };
+    // The password itself did change; only the timestamp failed.
+    console.error("[authService] changePassword (timestamp):", updateError.message);
   }
 
   return { success: true, error: null };

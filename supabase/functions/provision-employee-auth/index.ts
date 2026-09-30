@@ -1,89 +1,96 @@
 // supabase/functions/provision-employee-auth/index.ts
 //
-// Phase 1 of the login security migration. Creates a REAL Supabase Auth
-// account for one employee and links it back to their employees row via
-// auth_user_id. Uses a "fake" internal email pattern
-// ({companyCode}.{employeeId}@internal.sktraining) so the EXISTING
-// login screen (Company Code + Employee ID + Password) never has to
-// change — this is purely internal plumbing.
+// Creates an employee's real Supabase Auth login (internal email derived from
+// company code + employee code) with the password an administrator chose, and
+// links it to the employee row. Used when an admin creates an employee (single
+// add, CSV import, company onboarding) and to migrate any legacy employee that
+// has no login yet.
 //
-// This function requires the SERVICE ROLE key (admin-level access),
-// which is why it must run as an Edge Function — never in the browser.
-//
-// SETUP REQUIRED:
-// 1. Deploy:  supabase functions deploy provision-employee-auth
-// 2. Set secrets:
-//      supabase secrets set SUPABASE_URL=https://yourproject.supabase.co
-//      supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-//    (Find the Service Role key in Supabase Dashboard -> Settings -> API
-//    -> it's the OTHER key, never the anon key. Never put this key in
-//    any React file.)
+// Requires the SERVICE ROLE key internally, so the caller is authenticated
+// here: they must be a company administrator (or an administrator of the
+// platform-operator company), and the employee must not already have a login.
+// Company code and employee code are read from the database, never trusted
+// from the request.
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import {
+  assertCanAdminister,
+  corsHeaders,
+  HttpError,
+  jsonResponse,
+  requireEmployeeCaller,
+  serviceClient,
+} from "../_shared/auth.ts";
 
 interface ProvisionRequest {
   employeeDbId: string;
-  companyCode: string;
-  employeeCode: string;
   password: string;
+  // Accepted for backwards compatibility with older clients; ignored.
+  companyCode?: string;
+  employeeCode?: string;
 }
 
 serve(async (req) => {
-  // Browsers send a CORS preflight OPTIONS request before the real
-  // POST — without answering this, the browser blocks the real
-  // request entirely before it's even sent. Direct server-to-server
-  // calls (like the PowerShell test) never send this, which is why
-  // that test worked while the in-app call failed.
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Required secrets are not configured.");
-    }
+    const admin = serviceClient();
+    const caller = await requireEmployeeCaller(req, admin);
 
     const payload: ProvisionRequest = await req.json();
-    if (!payload.employeeDbId || !payload.companyCode || !payload.employeeCode || !payload.password) {
-      throw new Error("employeeDbId, companyCode, employeeCode and password are all required.");
+    if (!payload.employeeDbId || !payload.password) {
+      throw new HttpError(400, "employeeDbId and password are required.");
+    }
+    if (payload.password.length < 6) {
+      throw new HttpError(400, "Password must be at least 6 characters.");
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const { data: target, error: targetError } = await admin
+      .from("employees")
+      .select("id, company_id, employee_code, auth_user_id, companies(company_code)")
+      .eq("id", payload.employeeDbId)
+      .maybeSingle();
+    if (targetError) throw new HttpError(500, "Could not load the employee.");
+    if (!target) throw new HttpError(404, "Employee not found.");
 
-    const internalEmail = `${payload.companyCode.toLowerCase()}.${payload.employeeCode.toLowerCase()}@internal.sktraining`;
+    assertCanAdminister(caller, target.company_id as string);
 
-    const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    if (target.auth_user_id) {
+      throw new HttpError(409, "This employee already has a login. Use Reset Password instead.");
+    }
+
+    const companies = target.companies as { company_code: string } | { company_code: string }[] | null;
+    const companyCode = (Array.isArray(companies) ? companies[0]?.company_code : companies?.company_code) ?? "";
+    if (!companyCode) throw new HttpError(500, "Could not resolve the employee's company.");
+
+    const internalEmail = `${companyCode.toLowerCase()}.${String(target.employee_code).toLowerCase()}@internal.sktraining`;
+
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: internalEmail,
       password: payload.password,
       email_confirm: true,
     });
+    if (createError) throw new HttpError(400, createError.message);
 
-    if (createError) throw new Error(createError.message);
-
-    const { error: linkError } = await supabaseAdmin
+    const { error: linkError } = await admin
       .from("employees")
-      .update({ auth_user_id: created.user.id })
-      .eq("id", payload.employeeDbId);
+      .update({ auth_user_id: created.user.id, password_changed_at: new Date().toISOString() })
+      .eq("id", target.id)
+      .is("auth_user_id", null);
 
-    if (linkError) throw new Error(linkError.message);
+    if (linkError) {
+      // Don't leave an orphan login that nobody can use or clean up.
+      await admin.auth.admin.deleteUser(created.user.id);
+      throw new HttpError(500, "Could not link the login to the employee.");
+    }
 
-    return new Response(
-      JSON.stringify({ success: true, authUserId: created.user.id, internalEmail }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
+    return jsonResponse({ success: true, authUserId: created.user.id, internalEmail });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-    );
+    if (err instanceof HttpError) {
+      return jsonResponse({ success: false, error: err.message }, err.status);
+    }
+    return jsonResponse({ success: false, error: err instanceof Error ? err.message : "Unknown error" }, 400);
   }
 });

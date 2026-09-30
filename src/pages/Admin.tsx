@@ -58,7 +58,6 @@ import LegalDocumentManagement from "../components/admin/legal/LegalDocumentMana
 import VideoLibraryManagement from "../modules/videoLibraryContent/VideoLibraryManagement";
 import BulkCertificateIssue from "../modules/certificate/BulkCertificateIssue";
 import AttendanceManagement from "../modules/attendance/AttendanceManagement";
-import SecurityMigration from "../modules/security/SecurityMigration";
 import GeofenceManagement from "../modules/geofence/GeofenceManagement";
 import NotificationCenter from "../components/admin/notifications/NotificationCenter";
 import TicketManagement from "../components/admin/support/TicketManagement";
@@ -429,9 +428,6 @@ function Admin() {
                   {can(PERMISSIONS.VIEW_PERMISSION) && matches("Permission Matrix") && (
                     <button onClick={() => setActiveTab("role-permission")} className={getTabClass()} style={getTabStyle("role-permission")}>Permission Matrix</button>
                   )}
-                  {matches("Secure Login Migration") && (
-                    <button onClick={() => setActiveTab("security-migration")} className={getTabClass()} style={getTabStyle("security-migration")}>Secure Login Migration</button>
-                  )}
                 </div>
               </div>
             ) : null}
@@ -686,7 +682,6 @@ function Admin() {
 
             {activeTab === "attendance" && moduleAllowed("attendance") && <AttendanceManagement />}
 
-            {activeTab === "security-migration" && <SecurityMigration />}
 
             {activeTab === "geofence" && moduleAllowed("geofence") && <GeofenceManagement />}
           </div>

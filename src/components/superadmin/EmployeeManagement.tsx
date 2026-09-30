@@ -687,7 +687,13 @@ function EmployeeModal({
             </div>
 
             <FL
-              label={isEdit ? "Reset Password (leave blank to keep unchanged)" : "Temporary Password"}
+              label={
+                isEdit
+                  ? (editing?.auth_user_id
+                      ? "Reset Password (leave blank to keep unchanged)"
+                      : "Set Login Password — this employee cannot sign in yet")
+                  : "Temporary Password"
+              }
               required={!isEdit}
               error={errs.password}
             >
@@ -828,20 +834,6 @@ export default function EmployeeManagement() {
   const [page,   setPage]   = useState(1);
   const [banner, setBanner] = useState("");
   const [modal,  setModal]  = useState<ModalKind>(null);
-  // Per-row reveal — the password column stays masked until an admin
-  // deliberately clicks the eye icon for that specific employee, never
-  // shown by default across the whole table at once.
-  const [revealedPasswords, setRevealedPasswords] = useState<Set<string>>(new Set());
-
-  function togglePasswordReveal(id: string) {
-    setRevealedPasswords((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   const addBtnRef  = useRef<HTMLButtonElement>(null);
   const openerRef  = useRef<Element | null>(null);
 
@@ -926,13 +918,14 @@ export default function EmployeeManagement() {
         const newPassword = password && password.trim() ? password.trim() : null;
         const payload: EmployeeForm = newPassword ? data : rest;
         await employeeService.update(modal.emp.id, payload);
-        // employeeService.update only ever touches the legacy password
-        // column — for an employee already migrated to real Supabase
-        // Auth, that column isn't what they actually log in with
-        // anymore, so a reset here would silently lock them out unless
-        // the real login password is kept in sync too.
-        if (newPassword && modal.emp.auth_user_id) {
-          await employeeService.resetPassword(modal.emp.auth_user_id, newPassword);
+        // The password lives only on the employee's real login — reset it
+        // there, or create the login if this employee never had one.
+        if (newPassword) {
+          if (modal.emp.auth_user_id) {
+            await employeeService.resetPassword(modal.emp.auth_user_id, newPassword);
+          } else {
+            await employeeService.createLogin(modal.emp.id, newPassword);
+          }
         }
       } else {
         await employeeService.create(data);
@@ -1083,7 +1076,7 @@ export default function EmployeeManagement() {
                     { h: "#",           w: "w-10  text-left"   },
                     { h: "Code",        w: "text-left"         },
                     { h: "Employee",    w: "text-left"         },
-                    { h: "Password",    w: "text-left"         },
+                    { h: "Login",       w: "text-left"         },
                     { h: "Company",     w: "text-left"         },
                     { h: "Branch",      w: "text-left"         },
                     { h: "Department",  w: "text-left"         },
@@ -1117,30 +1110,18 @@ export default function EmployeeManagement() {
                         {emp.email  && <p className="text-xs text-slate-400">{emp.email}</p>}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs text-slate-600">
-                            {revealedPasswords.has(emp.id) ? (emp.password ?? "—") : "••••••••"}
+                        {emp.auth_user_id ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                            Can sign in
                           </span>
-                          {emp.password && (
-                            <button
-                              type="button"
-                              onClick={() => togglePasswordReveal(emp.id)}
-                              aria-label={revealedPasswords.has(emp.id) ? "Hide password" : "Show password"}
-                              className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                            >
-                              {revealedPasswords.has(emp.id) ? (
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                </svg>
-                              ) : (
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                </svg>
-                              )}
-                            </button>
-                          )}
-                        </div>
+                        ) : (
+                          <span
+                            className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700"
+                            title="Open Edit and set a password to create this employee's login."
+                          >
+                            No login yet
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {findName(companies,    emp.company_id,     "company_name")}

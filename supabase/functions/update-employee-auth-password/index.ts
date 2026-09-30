@@ -1,28 +1,23 @@
 // supabase/functions/update-employee-auth-password/index.ts
 //
-// Companion to provision-employee-auth: that one sets an employee's
-// INITIAL real Supabase Auth password at migration time. This one keeps
-// it in sync afterward — every place a password can be changed for an
-// already-migrated employee (self-service "Change Password", or an
-// admin's "Reset Password" in Employee Management) must call this too,
-// or the employee ends up locked out: the employees.password column
-// shows the new value, but the REAL login (which migrated employees
-// actually authenticate against) still has the old one.
+// Lets a company administrator reset an employee's login password (Employee
+// Management → Reset Password). Employees changing their OWN password do that
+// directly with supabase.auth.updateUser and never come through here.
 //
-// Requires the SERVICE ROLE key — never callable from the browser
-// directly, only via supabase.functions.invoke from already-authorized
-// app code. Uses the SAME secrets already configured for
-// provision-employee-auth (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) —
-// no additional setup needed.
+// Runs with the SERVICE ROLE key, so the caller is authenticated: they must be
+// an administrator of the target employee's company (or of the platform-
+// operator company). Without this check, anybody holding the public anon key
+// and an employee's auth id could take over that account.
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import {
+  assertCanAdminister,
+  corsHeaders,
+  HttpError,
+  jsonResponse,
+  requireEmployeeCaller,
+  serviceClient,
+} from "../_shared/auth.ts";
 
 interface UpdateRequest {
   authUserId: string;
@@ -35,33 +30,42 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Required secrets are not configured.");
-    }
+    const admin = serviceClient();
+    const caller = await requireEmployeeCaller(req, admin);
 
     const payload: UpdateRequest = await req.json();
     if (!payload.authUserId || !payload.newPassword) {
-      throw new Error("authUserId and newPassword are both required.");
+      throw new HttpError(400, "authUserId and newPassword are both required.");
+    }
+    if (payload.newPassword.length < 6) {
+      throw new HttpError(400, "Password must be at least 6 characters.");
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const { data: target, error: targetError } = await admin
+      .from("employees")
+      .select("id, company_id")
+      .eq("auth_user_id", payload.authUserId)
+      .maybeSingle();
+    if (targetError) throw new HttpError(500, "Could not load the employee.");
+    if (!target) throw new HttpError(404, "Employee not found.");
 
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(payload.authUserId, {
+    assertCanAdminister(caller, target.company_id as string);
+
+    const { error } = await admin.auth.admin.updateUserById(payload.authUserId, {
       password: payload.newPassword,
     });
+    if (error) throw new HttpError(400, error.message);
 
-    if (error) throw new Error(error.message);
+    await admin
+      .from("employees")
+      .update({ password_changed_at: new Date().toISOString() })
+      .eq("id", target.id);
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
+    return jsonResponse({ success: true });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-    );
+    if (err instanceof HttpError) {
+      return jsonResponse({ success: false, error: err.message }, err.status);
+    }
+    return jsonResponse({ success: false, error: err instanceof Error ? err.message : "Unknown error" }, 400);
   }
 });
