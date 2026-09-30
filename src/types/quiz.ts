@@ -295,8 +295,15 @@ export interface QuizSettings {
   exam_lobby_music: ChampMusic;
   exam_lobby_music_url: string | null;
   exam_lobby_music_volume: number;
+  /** Instant right/wrong feedback during an exam (never the running score/marks) — mcq/truefalse color the chosen option, hotspot colors each confirmed tap. */
+  exam_reveal_answers: boolean;
+  /** How long a hotspot tap's name/"wrong spot" label stays on screen before fading. 0 = stays until the next tap. */
+  exam_hotspot_feedback_seconds: number;
+  exam_hotspot_feedback_size: HotspotFeedbackSize;
   updated_at: string;
 }
+
+export type HotspotFeedbackSize = "small" | "medium" | "large";
 
 /** One saved certificate design. A company can keep several (e.g. a
  * "gold seal" version and a plain one) and switch which is_active one
@@ -387,6 +394,9 @@ export interface QuizPublicBranding {
   exam_lobby_music: ChampMusic;
   exam_lobby_music_url: string | null;
   exam_lobby_music_volume: number;
+  exam_reveal_answers: boolean;
+  exam_hotspot_feedback_seconds: number;
+  exam_hotspot_feedback_size: HotspotFeedbackSize;
 }
 
 export interface QuizCertificate {

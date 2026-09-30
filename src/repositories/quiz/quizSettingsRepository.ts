@@ -37,6 +37,9 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   exam_lobby_music: "builtin",
   exam_lobby_music_url: null,
   exam_lobby_music_volume: 60,
+  exam_reveal_answers: true,
+  exam_hotspot_feedback_seconds: 3,
+  exam_hotspot_feedback_size: "small",
 };
 
 /** Returns saved settings, or sensible defaults if this company has never saved any yet (no row exists until the first Save). */

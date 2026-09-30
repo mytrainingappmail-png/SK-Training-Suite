@@ -44,6 +44,7 @@ interface PaperRow {
   saved_flagged: boolean;
   saved_hotspot_taps: HotspotTap[] | null;
   hotspot_zone_count: number | null;
+  saved_is_correct: boolean | null;
 }
 
 export async function getExamPaper(sessionId: string): Promise<ExamPaperQuestion[]> {
@@ -69,6 +70,7 @@ export async function getExamPaper(sessionId: string): Promise<ExamPaperQuestion
           text: r.saved_text ?? "",
           image_paths: r.saved_image_paths ?? [],
           flagged: r.saved_flagged,
+          selected_is_correct: r.saved_is_correct,
         },
         hotspotZoneCount: r.hotspot_zone_count,
       };
@@ -79,8 +81,9 @@ export async function getExamPaper(sessionId: string): Promise<ExamPaperQuestion
   return [...byId.values()].sort((a, b) => a.position - b.position);
 }
 
-export async function saveExamAnswer(sessionId: string, questionId: string, draft: ExamAnswerDraft): Promise<void> {
-  const { error } = await supabaseQuizPlayer.rpc("save_exam_answer", {
+/** Returns is_correct for an mcq/truefalse save (null for other types, or when the answer was cleared). */
+export async function saveExamAnswer(sessionId: string, questionId: string, draft: ExamAnswerDraft): Promise<boolean | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("save_exam_answer", {
     p_session_id: sessionId,
     p_question_id: questionId,
     p_selected_option_id: draft.selected_option_id,
@@ -92,6 +95,20 @@ export async function saveExamAnswer(sessionId: string, questionId: string, draf
     p_hotspot_taps: draft.hotspot_taps,
   });
   if (error) fail("saveExamAnswer", error);
+  return (data as { saved_is_correct: boolean | null }[] | null)?.[0]?.saved_is_correct ?? null;
+}
+
+/** Judges one hotspot tap server-side — the zone geometry itself never reaches the browser, only whether it hit and that zone's own label (if the admin set one). */
+export async function checkHotspotTap(sessionId: string, questionId: string, x: number, y: number): Promise<{ correct: boolean; label: string | null }> {
+  const { data, error } = await supabaseQuizPlayer.rpc("check_hotspot_tap", {
+    p_session_id: sessionId,
+    p_question_id: questionId,
+    p_x: x,
+    p_y: y,
+  });
+  if (error) fail("checkHotspotTap", error);
+  const row = (data as { is_correct: boolean; zone_label: string | null }[] | null)?.[0];
+  return { correct: row?.is_correct ?? false, label: row?.zone_label ?? null };
 }
 
 export async function submitExam(sessionId: string, reason: "manual" | "timeout"): Promise<void> {

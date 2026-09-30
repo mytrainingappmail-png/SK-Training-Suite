@@ -6,7 +6,7 @@ import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
   getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult,
-  uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl,
+  uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap,
 } from "../../repositories/exam/examPlayRepository";
 import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
 import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
@@ -16,7 +16,7 @@ import type { QuizPublicBranding } from "../../types/quiz";
 type Phase = "loading" | "lobby" | "paper" | "submitted" | "result" | "error";
 type SaveStatus = "saved" | "saving" | "offline";
 
-const EMPTY_DRAFT: ExamAnswerDraft = { selected_option_id: null, click_x: null, click_y: null, hotspot_taps: [], text: "", image_paths: [], flagged: false };
+const EMPTY_DRAFT: ExamAnswerDraft = { selected_option_id: null, click_x: null, click_y: null, hotspot_taps: [], text: "", image_paths: [], flagged: false, selected_is_correct: null };
 const LOCKED_RE = /locked|already submitted|time is over|not started/i;
 
 function formatClock(totalSeconds: number): string {
@@ -120,9 +120,15 @@ export default function ExamPaperPage() {
         const qid = Object.keys(pendingRef.current)[0];
         const draft = pendingRef.current[qid];
         try {
-          await saveExamAnswer(sessionId, qid, draft);
+          const isCorrect = await saveExamAnswer(sessionId, qid, draft);
           if (pendingRef.current[qid] === draft) delete pendingRef.current[qid];
           try { localStorage.setItem(draftKey, JSON.stringify(pendingRef.current)); } catch { /* ignore */ }
+          // mcq/truefalse only — the server grades on save now, purely for instant reveal.
+          setAnswers((prev) => {
+            const cur = prev[qid];
+            if (!cur || cur.selected_is_correct === isCorrect) return prev;
+            return { ...prev, [qid]: { ...cur, selected_is_correct: isCorrect } };
+          });
         } catch (e) {
           if (e instanceof Error && LOCKED_RE.test(e.message)) {
             // The exam is over for this device — nothing more can be saved.
@@ -523,22 +529,32 @@ export default function ExamPaperPage() {
 
               {(q.type === "mcq" || q.type === "truefalse") && (() => {
                 const locked = isAnswered(d);
+                const revealOn = branding?.exam_reveal_answers ?? true;
                 return (
                   <div className="space-y-2">
                     {q.options.map((o) => {
                       const sel = d.selected_option_id === o.option_id;
+                      const reveal = revealOn && sel && d.selected_is_correct !== null;
+                      const selClass = !sel
+                        ? "border-slate-700 text-slate-200 hover:border-slate-500"
+                        : reveal
+                          ? d.selected_is_correct
+                            ? "border-emerald-500 bg-emerald-500/20 text-white font-semibold"
+                            : "border-red-500 bg-red-500/20 text-white font-semibold"
+                          : "border-violet-500 bg-violet-500/20 text-white font-semibold";
                       return (
                         <button
                           key={o.option_id}
                           onClick={() => {
                             if (locked) { flashBlocked(q.question_id); return; }
                             setDraft(q.question_id, { selected_option_id: o.option_id });
+                            // Skip the usual 700ms autosave debounce — an instant reveal needs the save (and its is_correct) right away.
+                            if (flushTimer.current) clearTimeout(flushTimer.current);
+                            void flush();
                           }}
-                          className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${
-                            sel ? "border-violet-500 bg-violet-500/20 text-white font-semibold" : "border-slate-700 text-slate-200 hover:border-slate-500"
-                          } ${locked && !sel ? "opacity-40" : ""}`}
+                          className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${selClass} ${locked && !sel ? "opacity-40" : ""}`}
                         >
-                          {sel ? "● " : "○ "}{o.option_text}
+                          {sel ? (reveal ? (d.selected_is_correct ? "✓ " : "✗ ") : "● ") : "○ "}{o.option_text}
                         </button>
                       );
                     })}
@@ -561,10 +577,22 @@ export default function ExamPaperPage() {
                       requireConfirm
                       maxTaps={maxTaps}
                       confirmedTaps={d.hotspot_taps}
+                      feedbackSeconds={branding?.exam_hotspot_feedback_seconds ?? 3}
+                      feedbackSize={branding?.exam_hotspot_feedback_size ?? "small"}
                       onTap={() => {}}
-                      onConfirmTap={(x, y) => {
+                      onConfirmTap={async (x, y) => {
                         if (d.hotspot_taps.length >= maxTaps) return;
-                        setDraft(q.question_id, { hotspot_taps: [...d.hotspot_taps, { x, y }] });
+                        const revealOn = branding?.exam_reveal_answers ?? true;
+                        let tap = { x, y } as ExamAnswerDraft["hotspot_taps"][number];
+                        if (revealOn) {
+                          try {
+                            const result = await checkHotspotTap(sessionId, q.question_id, x, y);
+                            tap = { x, y, correct: result.correct, label: result.label };
+                          } catch { /* offline/error — still record the tap, submit-time grading is authoritative anyway */ }
+                        }
+                        setDraft(q.question_id, { hotspot_taps: [...d.hotspot_taps, tap] });
+                        if (flushTimer.current) clearTimeout(flushTimer.current);
+                        void flush();
                       }}
                     />
                   </div>

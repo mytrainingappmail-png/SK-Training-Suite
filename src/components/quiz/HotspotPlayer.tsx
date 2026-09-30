@@ -16,7 +16,11 @@
 //    because trainees were getting wrong answers locked in from an
 //    accidental brush while scrolling past the map, with no way back.
 //    maxTaps/confirmedTaps let one question expect several distinct spots
-//    (e.g. 16 numbered landmarks on one map) instead of just one.
+//    (e.g. 16 numbered landmarks on one map) instead of just one. Once a
+//    tap in confirmedTaps carries a `correct` flag (the caller resolved it
+//    server-side — this component never sees zone geometry), the dot is
+//    colored and, for the tap that just landed, its name/"wrong spot"
+//    floats briefly above it.
 
 import { useEffect, useRef, useState } from "react";
 import type { HotspotZone } from "../../types/quiz";
@@ -36,6 +40,12 @@ const ZOOM_STEP = 1;
 // an intentional pan.
 const DRAG_THRESHOLD_PX = 12;
 
+const FEEDBACK_TEXT_SIZE: Record<"small" | "medium" | "large", string> = {
+  small: "text-[10px]",
+  medium: "text-xs",
+  large: "text-sm",
+};
+
 interface RevealMarker {
   x: number;
   y: number;
@@ -46,6 +56,9 @@ interface RevealMarker {
 interface Tap {
   x: number;
   y: number;
+  /** Known once resolved server-side. Undefined means "not judged" (reveal feedback is off) — rendered as a neutral dot. */
+  correct?: boolean;
+  label?: string | null;
 }
 
 interface Props {
@@ -62,30 +75,58 @@ interface Props {
   maxTaps?: number;
   /** Already-locked-in spots (exam mode) — persists across saves/reloads. */
   confirmedTaps?: Tap[];
-  /** Called instead of onTap, once the trainee taps Confirm, in exam mode. */
-  onConfirmTap?: (xPct: number, yPct: number) => void;
+  /** Called instead of onTap, once the trainee taps Confirm, in exam mode. May resolve asynchronously (the caller judges the tap server-side); the pending pin stays put until confirmedTaps actually grows. */
+  onConfirmTap?: (xPct: number, yPct: number) => void | Promise<void>;
+  /** How long a resolved tap's name/"wrong spot" label stays visible. 0 = stays until the next tap. Default 3. */
+  feedbackSeconds?: number;
+  feedbackSize?: "small" | "medium" | "large";
 }
 
 export default function HotspotPlayer({
   imageUrl, disabled, onTap, markers, zones,
   requireConfirm = false, maxTaps = 1, confirmedTaps, onConfirmTap,
+  feedbackSeconds = 3, feedbackSize = "small",
 }: Props) {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [blockedFlash, setBlockedFlash] = useState(false);
   const [pending, setPending] = useState<Tap | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [flashIndex, setFlashIndex] = useState<number | null>(null);
   const dragState = useRef<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(null);
   const blockedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevTapCount = useRef(0);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const taps = confirmedTaps ?? [];
   const maxed = requireConfirm && taps.length >= maxTaps;
   const effectiveDisabled = disabled || maxed;
 
-  useEffect(() => () => { if (blockedTimer.current) clearTimeout(blockedTimer.current); }, []);
+  useEffect(() => () => {
+    if (blockedTimer.current) clearTimeout(blockedTimer.current);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+  }, []);
   // Clears any pending (unconfirmed) pin once the question locks from outside
   // (time ran out, answer got disabled) so a stale pin never lingers.
   useEffect(() => { if (effectiveDisabled) setPending(null); }, [effectiveDisabled]);
+
+  // A new tap landed in confirmedTaps — the pending pin's job is done, and
+  // (if it was judged) its name/"wrong spot" gets a brief moment on screen.
+  useEffect(() => {
+    if (taps.length > prevTapCount.current) {
+      setPending(null);
+      setConfirming(false);
+      const newIdx = taps.length - 1;
+      if (taps[newIdx].correct !== undefined) {
+        setFlashIndex(newIdx);
+        if (flashTimer.current) clearTimeout(flashTimer.current);
+        if (feedbackSeconds > 0) flashTimer.current = setTimeout(() => setFlashIndex(null), feedbackSeconds * 1000);
+      }
+    }
+    prevTapCount.current = taps.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taps.length]);
 
   function flashBlocked() {
     setBlockedFlash(true);
@@ -130,8 +171,8 @@ export default function HotspotPlayer({
     dragState.current = null;
     if (!drag || drag.moved || !imgRef.current) return; // was a pan, not a tap — never scored, lock or no lock
 
-    if (effectiveDisabled) {
-      flashBlocked();
+    if (effectiveDisabled || confirming) {
+      if (effectiveDisabled) flashBlocked();
       return;
     }
 
@@ -151,11 +192,19 @@ export default function HotspotPlayer({
     }
   }
 
-  function confirmPending() {
-    if (!pending) return;
-    (onConfirmTap ?? onTap)(pending.x, pending.y);
-    setPending(null);
+  async function confirmPending() {
+    if (!pending || confirming) return;
+    setConfirming(true);
+    try {
+      await (onConfirmTap ?? onTap)(pending.x, pending.y);
+    } finally {
+      // Success clears `pending` via the confirmedTaps-growth effect above;
+      // on failure nothing grew, so unstick the button for a retry.
+      setConfirming(false);
+    }
   }
+
+  const sizeClass = FEEDBACK_TEXT_SIZE[feedbackSize];
 
   return (
     <div className="px-4">
@@ -196,15 +245,29 @@ export default function HotspotPlayer({
                 style={{ left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20 }}
               />
             ))}
-            {requireConfirm && taps.map((t, i) => (
+            {requireConfirm && taps.map((t, i) => {
+              const known = t.correct !== undefined;
+              const dotClass = !known ? "bg-slate-300 border-white" : t.correct ? "bg-emerald-500 border-white" : "bg-red-500 border-white";
+              return (
+                <div
+                  key={i}
+                  className={`absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 ${dotClass}`}
+                  style={{ left: `${t.x}%`, top: `${t.y}%`, width: 14, height: 14 }}
+                />
+              );
+            })}
+            {requireConfirm && flashIndex !== null && taps[flashIndex] && (
               <div
-                key={i}
-                className="absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 bg-emerald-500 border-2 border-white flex items-center justify-center text-[9px] font-bold text-white"
-                style={{ left: `${t.x}%`, top: `${t.y}%`, width: 18, height: 18 }}
+                className="absolute -translate-x-1/2 pointer-events-none whitespace-nowrap"
+                style={{ left: `${taps[flashIndex].x}%`, top: `${taps[flashIndex].y}%`, marginTop: -26 }}
               >
-                {i + 1}
+                <div className={`rounded-full px-2 py-0.5 font-semibold shadow-lg ${sizeClass} ${
+                  taps[flashIndex].correct ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+                }`}>
+                  {taps[flashIndex].correct ? (taps[flashIndex].label || "✓ Correct") : "✗ Not a match"}
+                </div>
               </div>
-            ))}
+            )}
             {requireConfirm && pending && (
               <div
                 className="absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-amber-400 bg-amber-400/30 animate-pulse"
@@ -213,6 +276,14 @@ export default function HotspotPlayer({
             )}
           </div>
         </div>
+
+        {requireConfirm && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none">
+            <div className="bg-slate-950/85 border border-slate-700 text-slate-200 text-[11px] font-semibold rounded-full px-3 py-1 shadow">
+              🎯 {taps.length} / {maxTaps} marked
+            </div>
+          </div>
+        )}
 
         <div className="absolute bottom-3 right-3 flex flex-col gap-2">
           <button
@@ -247,17 +318,18 @@ export default function HotspotPlayer({
             <div className="pointer-events-auto flex items-center gap-2 bg-slate-950/95 border border-amber-500/50 rounded-full pl-4 pr-2 py-2 shadow-lg">
               <span className="text-xs font-semibold text-amber-200">📍 Tap elsewhere to move, or</span>
               <button
-                onClick={confirmPending}
-                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-3 py-1.5"
+                onClick={() => void confirmPending()}
+                disabled={confirming}
+                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white rounded-full px-3 py-1.5"
               >
-                ✅ Confirm
+                {confirming ? "Checking…" : "✅ Confirm"}
               </button>
             </div>
           </div>
         )}
 
         {blockedFlash && (
-          <div className="absolute inset-x-0 top-3 flex justify-center pointer-events-none">
+          <div className="absolute inset-x-0 top-9 flex justify-center pointer-events-none">
             <div className="bg-slate-950/95 border border-amber-500/50 text-amber-200 text-xs font-semibold rounded-full px-4 py-2 shadow-lg">
               {maxed ? `🔒 All ${maxTaps} points already marked` : "🔒 Already answered — no changes allowed"}
             </div>
@@ -268,7 +340,7 @@ export default function HotspotPlayer({
         {effectiveDisabled
           ? "Answer locked in — you can still zoom/drag to look around."
           : requireConfirm
-            ? `Use +/− to zoom, drag to look around, tap a spot then Confirm. ${taps.length} / ${maxTaps} marked.`
+            ? "Use +/− to zoom, drag to look around, tap a spot then Confirm."
             : "Use +/− to zoom, drag to look around, tap the correct spot."}
       </p>
     </div>

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
-import { ZoneOverlay } from "../../components/quiz/hotspotZones";
+import { ZoneOverlay, pointInZone } from "../../components/quiz/hotspotZones";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
 import type { QuizResultFolder, HotspotZone } from "../../types/quiz";
@@ -466,13 +466,19 @@ export default function ExamHostPage() {
                             <div className="relative inline-block max-w-full rounded-lg overflow-hidden border border-slate-700">
                               <img src={d.image_url} alt="Map" className="block max-w-full h-auto max-h-64" />
                               {d.hotspot_zones && d.hotspot_zones.length > 0 && <ZoneOverlay zones={d.hotspot_zones as HotspotZone[]} tone="correct" />}
-                              {(d.hotspot_taps.length > 0 ? d.hotspot_taps : d.click_x !== null && d.click_y !== null ? [{ x: d.click_x, y: d.click_y }] : []).map((t, i) => (
-                                <span
-                                  key={i}
-                                  className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
-                                  style={{ left: `${t.x}%`, top: `${t.y}%`, background: "#f59e0b" }}
-                                />
-                              ))}
+                              {(d.hotspot_taps.length > 0 ? d.hotspot_taps : d.click_x !== null && d.click_y !== null ? [{ x: d.click_x, y: d.click_y }] : []).map((t, i) => {
+                                // Recomputed here (not trusting the trainee-side `correct` flag, which is only
+                                // set when live reveal was on) so this always matches what grading actually did.
+                                const zones = (d.hotspot_zones as HotspotZone[] | null) ?? [];
+                                const hit = zones.some((z) => pointInZone(z, t.x, t.y));
+                                return (
+                                  <span
+                                    key={i}
+                                    className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+                                    style={{ left: `${t.x}%`, top: `${t.y}%`, background: zones.length > 0 ? (hit ? "#10b981" : "#ef4444") : "#f59e0b" }}
+                                  />
+                                );
+                              })}
                             </div>
                           ) : <p className="text-xs text-slate-500">— Not answered</p>}
                           <p className={`text-xs mt-1 ${d.is_correct ? "text-emerald-300" : d.answered ? "text-amber-300" : "text-slate-500"}`}>

@@ -121,6 +121,10 @@ export interface ExamState {
 export interface HotspotTap {
   x: number;
   y: number;
+  /** Known once the tap is confirmed and reveal feedback is on — never sent back for a reveal-off save. */
+  correct?: boolean;
+  /** The tapped zone's own admin-set label, only present when correct is true and a label exists. */
+  label?: string | null;
 }
 
 /** What is saved for one question - mirrored locally so an offline phone loses nothing. */
@@ -133,6 +137,8 @@ export interface ExamAnswerDraft {
   text: string;
   image_paths: string[];
   flagged: boolean;
+  /** mcq/truefalse only — set once the answer is saved and graded, for instant reveal. Never the running score. */
+  selected_is_correct: boolean | null;
 }
 
 export interface ExamPaperQuestion {

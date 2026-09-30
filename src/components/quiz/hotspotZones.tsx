@@ -70,7 +70,7 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /** Point-in-shape test, all in the same 0-100 percent space the zones are stored in. */
-function pointInZone(z: HotspotZone, x: number, y: number): boolean {
+export function pointInZone(z: HotspotZone, x: number, y: number): boolean {
   if (z.shape === "circle") {
     const dx = x - z.x, dy = y - z.y;
     return dx * dx + dy * dy <= z.r * z.r;

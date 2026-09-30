@@ -7,7 +7,7 @@ import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz, duplicateQuiz } fr
 import { createExamSession, listExamSessions } from "../../repositories/exam/examAdminRepository";
 import { listFoldersForCompany } from "../../repositories/quiz/quizResultFolderRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
-import type { Quiz, ChampMusic } from "../../types/quiz";
+import type { Quiz, ChampMusic, HotspotFeedbackSize } from "../../types/quiz";
 import type { ExamSession } from "../../types/exam";
 
 type StartMode = "now" | "in" | "at";
@@ -47,6 +47,12 @@ export default function ExamListPage() {
   const [lobbyMusicSaving, setLobbyMusicSaving] = useState(false);
   const [lobbyMusicMessage, setLobbyMusicMessage] = useState("");
 
+  const [revealAnswers, setRevealAnswers] = useState(true);
+  const [feedbackSeconds, setFeedbackSeconds] = useState(3);
+  const [feedbackSize, setFeedbackSize] = useState<HotspotFeedbackSize>("small");
+  const [revealSaving, setRevealSaving] = useState(false);
+  const [revealMessage, setRevealMessage] = useState("");
+
   function refresh() {
     if (!admin) return;
     setLoading(true);
@@ -61,8 +67,27 @@ export default function ExamListPage() {
       setLobbyMusic(s.exam_lobby_music);
       setLobbyMusicUrl(s.exam_lobby_music_url ?? "");
       setLobbyMusicVolume(s.exam_lobby_music_volume);
+      setRevealAnswers(s.exam_reveal_answers);
+      setFeedbackSeconds(s.exam_hotspot_feedback_seconds);
+      setFeedbackSize(s.exam_hotspot_feedback_size);
     }).catch(() => {});
   }, [admin]);
+
+  async function handleSaveReveal() {
+    if (!admin) return;
+    setRevealSaving(true);
+    setRevealMessage("");
+    try {
+      await saveSettings(admin.company_id, {
+        exam_reveal_answers: revealAnswers,
+        exam_hotspot_feedback_seconds: feedbackSeconds,
+        exam_hotspot_feedback_size: feedbackSize,
+      });
+      setRevealMessage("Saved.");
+    } finally {
+      setRevealSaving(false);
+    }
+  }
 
   async function handleSaveLobbyMusic() {
     if (!admin) return;
@@ -201,6 +226,60 @@ export default function ExamListPage() {
             </button>
           )}
           {lobbyMusicMessage && <span className="text-xs text-emerald-300">{lobbyMusicMessage}</span>}
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">🎯 Instant Answer Feedback</div>
+        <p className="text-xs text-slate-500">Colors a trainee's answer green/red the moment they lock it in (mcq, true/false, and each hotspot tap) — never the running score or marks. Turn off any time to go back to fully hidden until you release results.</p>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <label className="flex items-center gap-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              disabled={!canEdit}
+              checked={revealAnswers}
+              onChange={(e) => setRevealAnswers(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Show correct/wrong instantly
+          </label>
+          {revealAnswers && (
+            <>
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Hotspot label stays
+                <input
+                  disabled={!canEdit}
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={feedbackSeconds}
+                  onChange={(e) => setFeedbackSeconds(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+                  className="w-16 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+                />
+                sec (0 = until next tap)
+              </label>
+              <select
+                disabled={!canEdit}
+                className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+                value={feedbackSize}
+                onChange={(e) => setFeedbackSize(e.target.value as HotspotFeedbackSize)}
+              >
+                <option value="small">Small text</option>
+                <option value="medium">Medium text</option>
+                <option value="large">Large text</option>
+              </select>
+            </>
+          )}
+          {canEdit && (
+            <button
+              onClick={handleSaveReveal}
+              disabled={revealSaving}
+              className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
+            >
+              💾 {revealSaving ? "Saving…" : "Save"}
+            </button>
+          )}
+          {revealMessage && <span className="text-xs text-emerald-300">{revealMessage}</span>}
         </div>
       </div>
 
