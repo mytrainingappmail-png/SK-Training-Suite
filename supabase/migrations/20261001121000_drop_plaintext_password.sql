@@ -7,12 +7,13 @@
 -- reset lockout counters) and deletes the plaintext password column itself.
 -- Passwords exist only on Supabase Auth logins from here on.
 
--- Safety: refuse to run while any active employee still has no real login —
+-- Safety: refuse to run while any active employee of a live company still has no real login —
 -- dropping the column would leave them with no way to sign in.
 do $$
 declare v_n int;
 begin
-  select count(*) into v_n from employees where active = true and auth_user_id is null;
+  select count(*) into v_n from employees e join companies c on c.id = e.company_id
+  where e.active = true and e.auth_user_id is null and c.active = true;  -- offboarded companies can't sign in anyway
   if v_n > 0 then
     raise exception '% active employee(s) still have no login (auth_user_id). Create their logins first.', v_n;
   end if;
