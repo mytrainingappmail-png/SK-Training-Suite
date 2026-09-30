@@ -61,6 +61,9 @@ export default function ExamPaperPage() {
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [photoError, setPhotoError] = useState<Record<string, string>>({});
+  // Kept so a failed upload can be retried without asking the trainee to
+  // reselect the same photo again — a real gap on a flaky connection.
+  const failedPhotoRef = useRef<Record<string, File>>({});
   const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
   const [musicOn, setMusicOn] = useState(true);
   const lobbyAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -384,11 +387,21 @@ export default function ExamPaperPage() {
       const path = await uploadAnswerPhoto(sessionId, state.participant_id, qid, file);
       const latest = pendingRef.current[qid] ?? answers[qid] ?? EMPTY_DRAFT;
       setDraft(qid, { image_paths: [...latest.image_paths, path] });
+      delete failedPhotoRef.current[qid];
     } catch (e) {
+      failedPhotoRef.current[qid] = file;
       setPhotoError((p) => ({ ...p, [qid]: e instanceof Error ? e.message : "Upload failed — check your connection and try again." }));
     } finally {
       setUploading((u) => ({ ...u, [qid]: false }));
     }
+  }
+
+  function retryPhoto(qid: string) {
+    const file = failedPhotoRef.current[qid];
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    void handlePhoto(qid, dt.files);
   }
 
   function handleRemovePhoto(qid: string, path: string) {
@@ -646,6 +659,21 @@ export default function ExamPaperPage() {
                         void flush();
                       }}
                     />
+                    {d.hotspot_taps.length > 0 && (
+                      <div className="flex justify-center mt-2">
+                        <button
+                          onClick={() => {
+                            const base = (pendingRef.current[q.question_id] ?? d).hotspot_taps;
+                            setDraft(q.question_id, { hotspot_taps: base.slice(0, -1) });
+                            if (flushTimer.current) clearTimeout(flushTimer.current);
+                            void flush();
+                          }}
+                          className="text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-full px-3 py-1.5"
+                        >
+                          ↩ Undo last tap
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -675,7 +703,20 @@ export default function ExamPaperPage() {
                         {uploading[q.question_id] && <span className="text-xs text-slate-400 self-center">Uploading…</span>}
                       </div>
                     )}
-                    {photoError[q.question_id] && <p className="text-xs text-red-300">{photoError[q.question_id]}</p>}
+                    {photoError[q.question_id] && (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-red-300 flex-1">{photoError[q.question_id]}</p>
+                        {failedPhotoRef.current[q.question_id] && (
+                          <button
+                            onClick={() => retryPhoto(q.question_id)}
+                            disabled={uploading[q.question_id]}
+                            className="text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+                          >
+                            🔁 Retry
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {d.image_paths.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {d.image_paths.map((p) => (
