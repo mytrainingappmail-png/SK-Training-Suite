@@ -10,7 +10,7 @@ import type { QuizResultFolder, HotspotZone } from "../../types/quiz";
 import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
-  getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls,
+  getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant,
 } from "../../repositories/exam/examAdminRepository";
 import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat } from "../../types/exam";
 
@@ -153,6 +153,24 @@ export default function ExamHostPage() {
       setError(e instanceof Error ? e.message : "Could not load the answers.");
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function regrade(questionId: string, mode: "full_marks" | "recompute") {
+    const ok = confirm(mode === "full_marks"
+      ? "Give EVERY employee full marks for this question? Use this when the question itself was wrong. It cannot be undone."
+      : "Mark this question again for everyone, using the correct answer as it is set now? Use this after fixing the answer key.");
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    try {
+      await regradeExamQuestion(sessionId, questionId, mode);
+      setResults(await getExamResults(sessionId));
+      if (openParticipant) await openDetail(openParticipant);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not regrade the question.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -305,7 +323,17 @@ export default function ExamHostPage() {
                     <td className="py-2 pr-3 font-medium">{p.display_name}</td>
                     <td className="py-2 pr-3">
                       {p.submitted_at
-                        ? <span className="text-emerald-300 text-xs">✓ Submitted{p.submit_reason === "timeout" ? " (time up)" : p.submit_reason === "ended_by_admin" ? " (you ended it)" : ""}</span>
+                        ? <span className="text-emerald-300 text-xs">✓ Submitted{p.submit_reason === "timeout" ? " (time up)" : p.submit_reason === "ended_by_admin" ? " (you ended it)" : ""}
+                            {live && session.status === "running" && (
+                              <button
+                                onClick={() => { if (confirm(`Let ${p.display_name} continue writing? Their submission is cancelled and they can answer again until time is up.`)) void act(() => reopenExamParticipant(p.participant_id)); }}
+                                disabled={busy}
+                                className="ml-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline disabled:opacity-50"
+                              >
+                                Reopen
+                              </button>
+                            )}
+                          </span>
                         : session.status === "lobby" ? <span className="text-slate-400 text-xs">Waiting</span> : <span className="text-amber-300 text-xs">✍️ Writing…</span>}
                     </td>
                     <td className="py-2 pr-3 font-mono text-xs text-slate-300">{p.answered_count}/{session.total_questions}</td>
@@ -427,6 +455,16 @@ export default function ExamHostPage() {
                         <p className="text-sm font-semibold">Q{d.question_order + 1}. {d.question_text}</p>
                         <span className="text-xs font-mono text-slate-400 shrink-0">{d.marks_awarded ?? 0}/{d.marks}</span>
                       </div>
+                      {d.type !== "written" && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button onClick={() => void regrade(d.question_id, "full_marks")} disabled={busy} className="text-[11px] font-semibold text-amber-300 border border-amber-500/40 hover:bg-amber-500/10 disabled:opacity-50 rounded-lg px-2.5 py-1">
+                            Question was wrong — full marks for everyone
+                          </button>
+                          <button onClick={() => void regrade(d.question_id, "recompute")} disabled={busy} className="text-[11px] font-semibold text-slate-300 border border-slate-700 hover:bg-slate-800 disabled:opacity-50 rounded-lg px-2.5 py-1">
+                            Re-mark from current answer key
+                          </button>
+                        </div>
+                      )}
 
                       {d.type === "written" ? (
                         <div className="mt-2 space-y-2">

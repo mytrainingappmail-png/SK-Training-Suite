@@ -3,6 +3,7 @@
 // ensureParticipantSession.
 
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
+import type { QuizPublicBranding } from "../../types/quiz";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow, HotspotTap } from "../../types/exam";
 
 function fail(label: string, error: { message: string }): never {
@@ -24,6 +25,13 @@ export async function getExamState(sessionId: string): Promise<ExamState> {
   const row = (data as ExamState[] | null)?.[0];
   if (!row) throw new Error("Exam not found.");
   return row;
+}
+
+/** This exam's own settings/branding (answer reveal, feedback, lobby music, logos) — taken from the session's company and the reveal choice frozen when the exam was scheduled. Only available once joined. */
+export async function getExamSessionSettings(sessionId: string): Promise<QuizPublicBranding | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_exam_session_settings", { p_session_id: sessionId });
+  if (error) fail("getExamSessionSettings", error);
+  return (data as QuizPublicBranding[] | null)?.[0] ?? null;
 }
 
 interface PaperRow {

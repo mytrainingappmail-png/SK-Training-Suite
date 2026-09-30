@@ -6,9 +6,8 @@ import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
   getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult,
-  uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap,
+  uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap, getExamSessionSettings,
 } from "../../repositories/exam/examPlayRepository";
-import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
 import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
 import FallingWords, { DEFAULT_MOTIVATIONAL_WORDS } from "../../components/quiz/FallingWords";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
@@ -104,6 +103,14 @@ export default function ExamPaperPage() {
   const clockOffsetMs = useRef(0);
   const pendingRef = useRef<Record<string, ExamAnswerDraft>>({});
   const flushingRef = useRef(false);
+  // Answers the server keeps refusing for a reason a retry can't fix (e.g. a
+  // removed question). They're set aside after a few tries so one bad answer
+  // can't stop every answer after it from saving.
+  const failCountRef = useRef<Record<string, number>>({});
+  const [rejectedQids, setRejectedQids] = useState<Set<string>>(new Set());
+  // Always points at the latest timeUp handler, so timers created once never
+  // call a stale copy of it.
+  const timeUpRef = useRef<() => Promise<void>>(async () => {});
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSubmitted = useRef(false);
   const draftKey = `exam-pending-${sessionId}`;
@@ -130,6 +137,7 @@ export default function ExamPaperPage() {
         const draft = pendingRef.current[qid];
         try {
           const isCorrect = await saveExamAnswer(sessionId, qid, draft);
+          failCountRef.current[qid] = 0;
           if (pendingRef.current[qid] === draft) delete pendingRef.current[qid];
           try { localStorage.setItem(draftKey, JSON.stringify(pendingRef.current)); } catch { /* ignore */ }
           // mcq/truefalse only — the server grades on save now, purely for instant reveal.
@@ -145,6 +153,19 @@ export default function ExamPaperPage() {
             try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
             setSaveStatus("saved");
             return false;
+          }
+          const msg = e instanceof Error ? e.message : "";
+          const looksOffline = !(e instanceof Error) || e instanceof TypeError
+            || /fetch|network|timed? ?out|failed to load|offline|50[234]/i.test(msg);
+          if (!looksOffline) {
+            failCountRef.current[qid] = (failCountRef.current[qid] ?? 0) + 1;
+            if (failCountRef.current[qid] >= 3) {
+              console.error("[ExamPaperPage] setting aside an answer the server keeps refusing:", qid, msg);
+              delete pendingRef.current[qid];
+              try { localStorage.setItem(draftKey, JSON.stringify(pendingRef.current)); } catch { /* ignore */ }
+              setRejectedQids((prev) => new Set(prev).add(qid));
+              continue;
+            }
           }
           setSaveStatus("offline");
           return false;
@@ -176,6 +197,11 @@ export default function ExamPaperPage() {
     const next = { ...(pendingRef.current[qid] ?? answers[qid] ?? EMPTY_DRAFT), ...patch };
     pendingRef.current[qid] = next;
     persistPending();
+    failCountRef.current[qid] = 0;
+    setRejectedQids((prev) => {
+      if (!prev.has(qid)) return prev;
+      const n = new Set(prev); n.delete(qid); return n;
+    });
     setAnswers((prev) => ({ ...prev, [qid]: next }));
     setSaveStatus("saving");
     if (flushTimer.current) clearTimeout(flushTimer.current);
@@ -236,7 +262,8 @@ export default function ExamPaperPage() {
 
   useEffect(() => { void bootstrap(); }, [bootstrap]);
 
-  useEffect(() => { getPublicQuizBranding().then(setBranding).catch(() => {}); }, []);
+  // This exam's own settings (not "the first company's") — needs the joined session.
+  useEffect(() => { getExamSessionSettings(sessionId).then(setBranding).catch(() => {}); }, [sessionId]);
 
   // Lobby wait music — admin-configurable (builtin/custom/off), starts once the
   // lobby screen is showing and settings have loaded, stops the moment the
@@ -280,7 +307,7 @@ export default function ExamPaperPage() {
       setSecondsLeft(left);
       if (left === 0 && !autoSubmitted.current) {
         autoSubmitted.current = true;
-        await doSubmit("timeout");
+        await timeUpRef.current();
       }
     }
     void tick();
@@ -290,25 +317,41 @@ export default function ExamPaperPage() {
   }, [state?.opens_at, state?.deadline_at, phase]);
 
   // Pick up an extension / early end from the trainer, and retry saves.
+  // Each device polls on its own jittered schedule (±30%) so a whole room
+  // doesn't hit the server on the same beat, and skips the state check while
+  // the tab is in the background (it re-syncs the moment it's visible again).
   useEffect(() => {
     if (phase !== "paper" && phase !== "submitted" && phase !== "lobby") return;
-    const t = setInterval(async () => {
-      try {
-        const before = Date.now();
-        const s = await getExamState(sessionId);
-        applyState(s, (before + Date.now()) / 2);
-        if (phase === "submitted" && s.results_released) {
-          setResult(await getMyExamResult(sessionId));
-          setPhase("result");
-        }
-        if (phase === "paper" && s.status === "finished" && !autoSubmitted.current) {
-          autoSubmitted.current = true;
-          await doSubmit("timeout");
-        }
-      } catch { /* transient — the next tick retries */ }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const base = phase === "paper" ? 15000 : 10000;
+
+    async function run() {
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const before = Date.now();
+          const s = await getExamState(sessionId);
+          applyState(s, (before + Date.now()) / 2);
+          if (phase === "submitted" && s.results_released) {
+            setResult(await getMyExamResult(sessionId));
+            setPhase("result");
+          }
+          if (phase === "paper" && s.submitted_at) {
+            // The trainer ended the exam (everyone is submitted server-side).
+            setPhase(s.results_released ? "result" : "submitted");
+          } else if (phase === "paper" && s.status === "finished" && !autoSubmitted.current) {
+            autoSubmitted.current = true;
+            await timeUpRef.current();
+          }
+        } catch { /* transient — the next tick retries */ }
+      }
       if (Object.keys(pendingRef.current).length > 0) void flush();
-    }, phase === "paper" ? 15000 : 10000);
-    return () => clearInterval(t);
+      if (!cancelled) timer = setTimeout(() => { void run(); }, base * (0.7 + Math.random() * 0.6));
+    }
+
+    timer = setTimeout(() => { void run(); }, base * (0.7 + Math.random() * 0.6));
+    return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, sessionId]);
 
@@ -368,12 +411,38 @@ export default function ExamPaperPage() {
       setPhase("submitted");
       window.scrollTo({ top: 0 });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not submit.");
+      const msg = e instanceof Error ? e.message : "Could not submit.";
+      if (reason === "timeout" && /not ended yet/i.test(msg)) {
+        // The server says there's still time (e.g. the trainer extended the exam) — carry on, don't show an error.
+        setError("");
+        try {
+          const before = Date.now();
+          applyState(await getExamState(sessionId), (before + Date.now()) / 2);
+        } catch { /* the poll will catch up */ }
+      } else {
+        setError(msg);
+      }
       autoSubmitted.current = false;
     } finally {
       setSubmitting(false);
     }
   }
+
+  // This device's clock says time is up. Ask the server before submitting: the
+  // trainer may have extended the exam, and only the server knows.
+  async function handleTimeUp() {
+    try {
+      const before = Date.now();
+      const s = await getExamState(sessionId);
+      applyState(s, (before + Date.now()) / 2);
+      if (s.submitted_at) { setPhase(s.results_released ? "result" : "submitted"); return; }
+      const stillOpen = s.status !== "finished"
+        && new Date(s.deadline_at).getTime() > Date.now() + clockOffsetMs.current + 1000;
+      if (stillOpen) { autoSubmitted.current = false; return; }
+    } catch { /* offline — fall through and try to submit anyway */ }
+    await doSubmit("timeout");
+  }
+  useEffect(() => { timeUpRef.current = handleTimeUp; });
 
   // ── Photos ──────────────────────────────────────────────────────────────
   async function handlePhoto(qid: string, files: FileList | null) {
@@ -521,6 +590,11 @@ export default function ExamPaperPage() {
             {saveStatus === "saved" && "✓ All answers saved"}
             {saveStatus === "saving" && "Saving…"}
             {saveStatus === "offline" && <span className="text-amber-300">⚠ Offline — answers are safe on this phone and will save when you're back online</span>}
+            {rejectedQids.size > 0 && (
+              <span className="block text-red-300 text-xs mt-1">
+                ⚠ {rejectedQids.size} answer{rejectedQids.size === 1 ? "" : "s"} couldn't be saved — answer {rejectedQids.size === 1 ? "that question" : "those questions"} again
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -563,7 +637,7 @@ export default function ExamPaperPage() {
 
               {(q.type === "mcq" || q.type === "truefalse") && (() => {
                 const locked = isAnswered(d);
-                const revealOn = branding?.exam_reveal_answers ?? true;
+                const revealOn = branding?.exam_reveal_answers ?? false;
                 const pendingOptionId = pendingMcq[q.question_id];
                 return (
                   <div className="space-y-2">
@@ -645,7 +719,7 @@ export default function ExamPaperPage() {
                         // network check below could otherwise leave one tap behind.
                         const latestTaps = (pendingRef.current[q.question_id] ?? d).hotspot_taps;
                         if (latestTaps.length >= maxTaps) return;
-                        const revealOn = branding?.exam_reveal_answers ?? true;
+                        const revealOn = branding?.exam_reveal_answers ?? false;
                         let tap = { x, y } as ExamAnswerDraft["hotspot_taps"][number];
                         if (revealOn) {
                           try {

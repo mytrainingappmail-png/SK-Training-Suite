@@ -40,6 +40,19 @@ export async function extendExamSession(sessionId: string, addSeconds: number): 
   if (error) fail("extendExamSession", error);
 }
 
+/** After the exam: give everyone full marks for a question ("full_marks", for a question that turned out wrong) or mark it again from the current answer key ("recompute"). Returns how many answers were touched. */
+export async function regradeExamQuestion(sessionId: string, questionId: string, mode: "full_marks" | "recompute"): Promise<number> {
+  const { data, error } = await supabaseQuiz.rpc("admin_regrade_question", { p_session_id: sessionId, p_question_id: questionId, p_mode: mode });
+  if (error) fail("regradeExamQuestion", error);
+  return Number(data ?? 0);
+}
+
+/** Undo an accidental Submit while the exam is still running. */
+export async function reopenExamParticipant(participantId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("reopen_exam_participant", { p_participant_id: participantId });
+  if (error) fail("reopenExamParticipant", error);
+}
+
 export async function endExamSession(sessionId: string): Promise<void> {
   const { error } = await supabaseQuiz.rpc("end_exam_session", { p_session_id: sessionId });
   if (error) fail("endExamSession", error);
