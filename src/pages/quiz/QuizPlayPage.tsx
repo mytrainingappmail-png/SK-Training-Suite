@@ -122,8 +122,20 @@ export default function QuizPlayPage() {
   // session keeps moving instead of getting stuck.
   useEffect(() => {
     if (!sessionId || session?.phase !== "question") return;
-    const id = setInterval(() => heartbeat(sessionId), 4000);
-    return () => clearInterval(id);
+    // Jittered (±25%) so a whole room doesn't ping on the same beat, and idle
+    // while this tab is in the background (a hidden tab is a poor safety net).
+    const sid = sessionId;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    function schedule() {
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        if (document.visibilityState === "visible") void heartbeat(sid);
+        schedule();
+      }, 4000 * (0.75 + Math.random() * 0.5));
+    }
+    schedule();
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [sessionId, session?.phase]);
 
   useEffect(() => {

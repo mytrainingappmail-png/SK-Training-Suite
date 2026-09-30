@@ -47,6 +47,18 @@ export async function regradeExamQuestion(sessionId: string, questionId: string,
   return Number(data ?? 0);
 }
 
+/** Fixes a mistyped participant name. */
+export async function renameExamParticipant(participantId: string, name: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("rename_exam_participant", { p_participant_id: participantId, p_name: name });
+  if (error) fail("renameExamParticipant", error);
+}
+
+/** Wipes one participant's answers so they can start over (only while the exam is running). */
+export async function resetExamParticipant(participantId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("reset_exam_participant", { p_participant_id: participantId });
+  if (error) fail("resetExamParticipant", error);
+}
+
 /** Undo an accidental Submit while the exam is still running. */
 export async function reopenExamParticipant(participantId: string): Promise<void> {
   const { error } = await supabaseQuiz.rpc("reopen_exam_participant", { p_participant_id: participantId });

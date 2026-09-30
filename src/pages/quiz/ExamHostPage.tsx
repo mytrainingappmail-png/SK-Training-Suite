@@ -10,7 +10,7 @@ import type { QuizResultFolder, HotspotZone } from "../../types/quiz";
 import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
-  getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant,
+  getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant, renameExamParticipant, resetExamParticipant,
 } from "../../repositories/exam/examAdminRepository";
 import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat } from "../../types/exam";
 
@@ -109,8 +109,18 @@ export default function ExamHostPage() {
 
   useEffect(() => {
     if (session?.status === "finished") return;
-    const t = setInterval(() => { void refresh(); }, POLL_MS);
-    return () => clearInterval(t);
+    // Jittered ±25%; pauses while the tab is in the background and catches up when it returns.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    function schedule() {
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        if (document.visibilityState === "visible") void refresh();
+        schedule();
+      }, POLL_MS * (0.75 + Math.random() * 0.5));
+    }
+    schedule();
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [session?.status, refresh]);
 
   useEffect(() => {
@@ -320,7 +330,25 @@ export default function ExamHostPage() {
               <tbody>
                 {participants.map((p) => (
                   <tr key={p.participant_id} className="border-b border-slate-800/60 last:border-0">
-                    <td className="py-2 pr-3 font-medium">{p.display_name}</td>
+                    <td className="py-2 pr-3 font-medium">
+                      {p.display_name}
+                      <button
+                        onClick={() => { const n = prompt("Correct name for this participant:", p.display_name); if (n && n.trim() && n.trim() !== p.display_name) void act(() => renameExamParticipant(p.participant_id, n.trim())); }}
+                        disabled={busy}
+                        className="ml-2 text-[11px] font-normal text-slate-400 hover:text-slate-200 underline disabled:opacity-50"
+                      >
+                        Rename
+                      </button>
+                      {live && session.status === "running" && (
+                        <button
+                          onClick={() => { if (confirm(`Start ${p.display_name} over? Their answers are erased and they can begin again until time is up.`)) void act(() => resetExamParticipant(p.participant_id)); }}
+                          disabled={busy}
+                          className="ml-2 text-[11px] font-normal text-red-300 hover:text-red-200 underline disabled:opacity-50"
+                        >
+                          Start over
+                        </button>
+                      )}
+                    </td>
                     <td className="py-2 pr-3">
                       {p.submitted_at
                         ? <span className="text-emerald-300 text-xs">✓ Submitted{p.submit_reason === "timeout" ? " (time up)" : p.submit_reason === "ended_by_admin" ? " (you ended it)" : ""}

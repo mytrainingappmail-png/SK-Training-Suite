@@ -81,7 +81,8 @@ export async function deleteDepartment(
     .eq("id", id);
 
   if (error) {
-    throw new Error(error.message);
+    // 23503 = still referenced (the database refuses instead of deleting people along with it)
+    throw new Error(error.code === "23503" ? "This department still has designations or employees. Move or remove them first." : error.message);
   }
 }
 
