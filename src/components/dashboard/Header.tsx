@@ -117,9 +117,13 @@ function Header() {
             aria-expanded={open}
           >
             {/* Avatar */}
-            <div className="w-11 h-11 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm select-none">
-              {initials}
-            </div>
+            {user?.profileImage ? (
+              <img src={user.profileImage} alt="" className="w-11 h-11 rounded-full object-cover" />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm select-none">
+                {initials}
+              </div>
+            )}
 
             {/* Name + role */}
             <div className="text-right hidden sm:block">

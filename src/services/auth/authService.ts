@@ -38,7 +38,7 @@ export interface LoginCredentials {
 
 export type LoginResult =
   | { success: true;  user: User;  error: null  }
-  | { success: false; user: null;  error: string };
+  | { success: false; user: null;  error: string; mfaFactorId?: string };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public functions
@@ -132,7 +132,21 @@ export async function login(
     return fail("Invalid employee ID/email or password.");
   }
 
-  // ── 4. Load the signed-in employee's own row (row-level security lets
+  // ── 4. Two-step verification: if this account has an authenticator app set up,
+  //      the password alone is not enough — the caller must enter the 6-digit
+  //      code before anything is stored or loaded. ─────────────────────────────
+  const mfaFactorId = await pendingMfaFactor();
+  if (mfaFactorId) {
+    return { success: false, user: null, error: "", mfaFactorId };
+  }
+
+  return finishLogin();
+}
+
+/** Steps after the password (and any two-step code) has been accepted: load the
+ *  employee's own row, check status, record the login, store the session. */
+async function finishLogin(): Promise<LoginResult> {
+  // ── Load the signed-in employee's own row (row-level security lets
   //      them read it) and validate active status ────────────────────────────
   const { data: userData } = await supabase.auth.getUser();
   const authUserId = userData?.user?.id;
@@ -174,7 +188,7 @@ export async function login(
     lastName:      (matched.last_name  as string | null) ?? "",
     email:         (matched.email      as string | null) ?? "",
     mobile:        (matched.mobile     as string | null) ?? "",
-    profileImage:  "",
+    profileImage:  (matched.profile_image_url as string | null) ?? "",
     status:        "active" as UserStatus,
   };
 
@@ -182,6 +196,30 @@ export async function login(
   setCurrentUser(user);
 
   return { success: true, user, error: null };
+}
+
+/** The id of the account's verified authenticator-app factor when this session
+ *  still has to pass it (signed in with a password only), otherwise null. */
+async function pendingMfaFactor(): Promise<string | null> {
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (!aal || aal.nextLevel !== "aal2" || aal.currentLevel === "aal2") return null;
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  return factors?.totp?.[0]?.id ?? null;
+}
+
+/** Second step of sign-in for accounts with two-step verification. */
+export async function completeMfaLogin(factorId: string, code: string): Promise<LoginResult> {
+  const cleaned = code.replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(cleaned)) return fail("Enter the 6-digit code from your authenticator app.");
+
+  const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+  if (challengeError || !challenge) {
+    return fail("Could not start verification. Please sign in again.");
+  }
+  const { error: verifyError } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code: cleaned });
+  if (verifyError) return fail("That code is not correct or has expired. Try the newest code.");
+
+  return finishLogin();
 }
 
 export async function logout(): Promise<void> {

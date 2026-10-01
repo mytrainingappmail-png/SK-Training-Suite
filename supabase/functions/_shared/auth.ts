@@ -81,13 +81,33 @@ export async function requireEmployeeCaller(req: Request, admin: SupabaseClient)
   const companies = emp.companies as { is_platform_operator?: boolean } | { is_platform_operator?: boolean }[] | null;
   const company = Array.isArray(companies) ? companies[0] : companies;
 
+  // Platform-operator powers need the same three things the database asks for:
+  // the operator flag, an administrator role, and — if the account has two-step
+  // verification set up — a session that actually passed it (aal2).
+  let companyIsOperator = company?.is_platform_operator === true && isSuperAdmin;
+  if (companyIsOperator && tokenAal(token) !== "aal2") {
+    const { data: factors, error: factorError } = await admin.auth.admin.mfa.listFactors({ userId: authUserId });
+    const hasVerifiedFactor = (factors?.factors ?? []).some((f: { status?: string }) => f.status === "verified");
+    // If we cannot tell, fail closed.
+    if (factorError || hasVerifiedFactor) companyIsOperator = false;
+  }
+
   return {
     authUserId,
     employeeId: emp.id as string,
     companyId: emp.company_id as string,
     isSuperAdmin,
-    companyIsOperator: company?.is_platform_operator === true,
+    companyIsOperator,
   };
+}
+
+function tokenAal(token: string): string {
+  try {
+    const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(part + "=".repeat((4 - (part.length % 4)) % 4)))?.aal ?? "aal1";
+  } catch {
+    return "aal1";
+  }
 }
 
 /** A company administrator may manage their own company's employees; the

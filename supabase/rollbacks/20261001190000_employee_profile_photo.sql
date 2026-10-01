@@ -1,0 +1,1 @@
+-- Rollback: alter table employees drop column if exists profile_image_url;

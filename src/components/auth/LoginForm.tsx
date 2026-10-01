@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import { BRAND } from '../../config/branding';
-import { login } from '../../services/auth/authService';
+import { login, completeMfaLogin, logout } from '../../services/auth/authService';
 import { useAuthorization } from '../../hooks/useAuthorization';
 import { loadBranding } from '../../services/branding/brandingService';
 import { requestPasswordReset } from '../../services/auth/passwordResetService';
@@ -208,6 +208,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, in
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  // Set when the password was right but the account needs its authenticator code too.
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   // From the active Theme (Admin → Theme) — falls back to the static
   // default until branding resolves (loadBranding() is cached, so this is
   // a cheap call — LoginPage already triggered the same fetch).
@@ -246,6 +249,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, onCompanyCodeChange, in
   password,
 });
 
+if (!result.success && result.mfaFactorId) {
+  setMfaFactorId(result.mfaFactorId);
+  setMfaCode('');
+  return;
+}
+
 if (!result.success) {
   setErrorMessage(result.error);
   if (result.error.startsWith('This account requires a Company Code')) {
@@ -264,6 +273,64 @@ navigate('/dashboard', { replace: true });
       setLoading(false);
     }
   };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading || !mfaFactorId) return;
+    setErrorMessage(null);
+    setLoading(true);
+    try {
+      const result = await completeMfaLogin(mfaFactorId, mfaCode);
+      if (!result.success) {
+        setErrorMessage(result.error || 'Verification failed. Please try again.');
+        return;
+      }
+      await refresh();
+      navigate('/dashboard', { replace: true });
+    } catch {
+      setErrorMessage('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (mfaFactorId) {
+    return (
+      <div className="backdrop-blur-2xl bg-white/[0.05] border border-white/[0.1] rounded-[24px] shadow-2xl shadow-black/50 p-8 lg:p-10">
+        <div className="mb-8 text-center">
+          <h2 className="text-2xl font-semibold text-white tracking-tight">Two-step verification</h2>
+          <p className="text-sm text-slate-400 mt-1.5">Enter the 6-digit code from your authenticator app</p>
+        </div>
+        <form onSubmit={handleMfaSubmit} className="space-y-5" noValidate>
+          <input
+            value={mfaCode}
+            onChange={(e) => { setMfaCode(e.target.value.replace(/[^\d ]/g, '').slice(0, 7)); setErrorMessage(null); }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            placeholder="123456"
+            className="w-full rounded-xl bg-white/[0.06] border border-white/[0.12] px-4 py-3.5 text-center text-2xl tracking-[0.4em] text-white outline-none focus:border-white/40"
+          />
+          {errorMessage !== null && <p className="text-sm text-red-300 text-center">{errorMessage}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3.5 rounded-xl font-semibold text-sm tracking-wide disabled:opacity-60"
+            style={{ background: `linear-gradient(to right, ${accentColor}, ${accentColor}CC)`, color: baseColor }}
+          >
+            {loading ? 'Verifying…' : 'Verify'}
+          </button>
+          <button
+            type="button"
+            onClick={async () => { await logout(); setMfaFactorId(null); setMfaCode(''); setErrorMessage(null); }}
+            className="w-full text-xs text-slate-400 hover:text-white"
+          >
+            ← Back to sign in
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="backdrop-blur-2xl bg-white/[0.05] border border-white/[0.1] rounded-[24px] shadow-2xl shadow-black/50 p-8 lg:p-10">

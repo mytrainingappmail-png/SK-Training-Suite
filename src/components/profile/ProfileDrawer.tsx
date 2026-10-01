@@ -8,6 +8,9 @@ import { designationService } from '../../services/designation/designationServic
 import { loadRoles }          from '../../services/role/roleService';
 import { updateEmployee }     from '../../repositories/employee/employeeRepository';
 import { changePassword }     from '../../services/auth/authService';
+import { uploadImage }        from '../../services/contentEditor/contentEditorService';
+import { setCurrentUser }     from '../../services/auth/session';
+import TwoStepVerification   from './TwoStepVerification';
 
 import type { Company }     from '../../types/company';
 import type { Branch }      from '../../types/branch';
@@ -74,7 +77,7 @@ function Divider() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
-  const { user } = useAuthorization();
+  const { user, refresh } = useAuthorization();
 
   // ── Profile form ──────────────────────────────────────────────────────────
   const [firstName,    setFirstName]    = useState('');
@@ -82,6 +85,7 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   const [email,        setEmail]        = useState('');
   const [mobile,       setMobile]       = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [profileErrors, setProfileErrors] = useState<{
@@ -176,12 +180,54 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   }, [open, onClose]);
 
   // ── Photo upload ──────────────────────────────────────────────────────────
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Uploads the picture and saves it on the employee right away (previously the
+  // picture was only previewed in the browser and was lost on reload).
+  async function savePhoto(url: string | null) {
+    if (!user) return;
+    await updateEmployee(user.id, { profile_image_url: url } as Parameters<typeof updateEmployee>[1]);
+    setCurrentUser({ ...user, profileImage: url ?? '' });
+    await refresh();
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPhotoPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    e.target.value = '';
+    if (!file || !user) return;
+    setProfileBanner(null);
+    setProfileBannerIsError(false);
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileBannerIsError(true);
+      setProfileBanner('That photo is larger than 2 MB. Please choose a smaller one.');
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const { url } = await uploadImage(file);
+      await savePhoto(url);
+      setPhotoPreview(url);
+      setProfileBanner('Profile photo saved.');
+    } catch (err) {
+      setProfileBannerIsError(true);
+      setProfileBanner(err instanceof Error ? err.message : 'Could not upload the photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoBusy(true);
+    setProfileBanner(null);
+    setProfileBannerIsError(false);
+    try {
+      await savePhoto(null);
+      setPhotoPreview(null);
+      setProfileBanner('Profile photo removed.');
+    } catch (err) {
+      setProfileBannerIsError(true);
+      setProfileBanner(err instanceof Error ? err.message : 'Could not remove the photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   // ── Validate profile ──────────────────────────────────────────────────────
@@ -353,15 +399,17 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               <button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 active:scale-95"
+                disabled={photoBusy}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
               >
-                Upload Photo
+                {photoBusy ? 'Saving…' : 'Upload Photo'}
               </button>
               {photoPreview && (
                 <button
                   type="button"
-                  onClick={() => { setPhotoPreview(null); if (photoInputRef.current) photoInputRef.current.value = ''; }}
-                  className="text-xs text-red-500 hover:underline text-left"
+                  onClick={() => { void handleRemovePhoto(); }}
+                  disabled={photoBusy}
+                  className="text-xs text-red-500 hover:underline text-left disabled:opacity-50"
                 >
                   Remove
                 </button>
@@ -454,6 +502,8 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
           </div>
 
           <Divider />
+
+          <TwoStepVerification />
 
           {/* ── Section 4: Change password ── */}
           <SectionTitle title="Change Password" />

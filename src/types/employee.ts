@@ -28,6 +28,9 @@ export interface Employee {
   /** Set once this employee has a real Supabase Auth login — null means an administrator still needs to create their login (Employee Management → edit → set a password). Passwords themselves are never stored on the employee row. */
   auth_user_id: string | null;
 
+  /** The employee's own profile photo (uploaded from the profile drawer). */
+  profile_image_url?: string | null;
+
   created_at: string;
   updated_at: string;
 }
