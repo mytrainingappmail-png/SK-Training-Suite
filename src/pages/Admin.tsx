@@ -44,6 +44,7 @@ import TrainerAssignmentManagement from "../components/superadmin/TrainerAssignm
 import PlanManagement from "../modules/license/PlanManagement";
 import CompanyOnboardingWizard from "../components/superadmin/CompanyOnboardingWizard";
 import CompanyLicenseManagement from "../modules/license/CompanyLicenseManagement";
+import CustomerDirectory from "../modules/platform/CustomerDirectory";
 import DiscountCodeManagement from "../modules/license/DiscountCodeManagement";
 import NotificationLog from "../modules/license/NotificationLog";
 import PaymentSettingsManagement from "../modules/payment/PaymentSettingsManagement";
@@ -517,7 +518,8 @@ function Admin() {
               </div>
             ) : null}
 
-            {(isPlatformOperator && matches("Plans")) ||
+            {(isPlatformOperator && matches("Customer Directory")) ||
+             (isPlatformOperator && matches("Plans")) ||
              (isPlatformOperator && matches("Add Company")) ||
              matches("Company Licenses") ||
              (isPlatformOperator && matches("Discount Codes")) ||
@@ -528,6 +530,9 @@ function Admin() {
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Billing & Licensing</p>
                 <div className="flex flex-wrap gap-3">
+                  {isPlatformOperator && matches("Customer Directory") && (
+                    <button onClick={() => setActiveTab("customer-directory")} className={getTabClass()} style={getTabStyle("customer-directory")}>Customer Directory</button>
+                  )}
                   {isPlatformOperator && matches("Plans") && (
                     <button onClick={() => setActiveTab("plans")} className={getTabClass()} style={getTabStyle("plans")}>Plans</button>
                   )}
@@ -659,6 +664,7 @@ function Admin() {
             {activeTab === "add-company" && isPlatformOperator && <CompanyOnboardingWizard />}
 
             {activeTab === "company-license" && <CompanyLicenseManagement />}
+            {activeTab === "customer-directory" && isPlatformOperator && <CustomerDirectory />}
 
             {activeTab === "discount-codes" && isPlatformOperator && <DiscountCodeManagement />}
 

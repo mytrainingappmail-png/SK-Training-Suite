@@ -55,6 +55,7 @@ export const ADMIN_MODULES: AdminModuleDefinition[] = [
   { id: "permissions",     label: "Permissions",       permission: PERMISSIONS.VIEW_PERMISSION },
   { id: "role-permission", label: "Permission Matrix", permission: PERMISSIONS.VIEW_PERMISSION },
 
+  { id: "customer-directory",       label: "Customer Directory" },
   { id: "plans",                    label: "Plans" },
   { id: "company-license",          label: "Company Licenses" },
   { id: "discount-codes",           label: "Discount Codes" },
