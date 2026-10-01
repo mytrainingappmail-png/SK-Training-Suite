@@ -592,8 +592,9 @@ function InductionManagement() {
           assessmentId = created.id;
         }
       }
+      let savedId = editingSectionId;
       if (editingSectionId === 'new') {
-        await saveSection({
+        const created = await saveSection({
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
@@ -601,6 +602,7 @@ function InductionManagement() {
           display_order: sections.length,
           ...protection,
         });
+        savedId = created.id;
       } else if (editingSectionId) {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
@@ -609,10 +611,20 @@ function InductionManagement() {
           ...protection,
         });
       }
-      setEditingSectionId(null);
-      setSectionDraft(null);
+
+      // A Test section stays open right after saving — settings alone create
+      // an (empty) assessment, so closing here would force the admin to
+      // re-open the section just to see the "Add Question" / CSV upload UI.
+      if (sectionDraft.section_type === 'test' && savedId) {
+        setEditingSectionId(savedId);
+        setSectionDraft((d) => (d ? { ...d, assessment_id: assessmentId } : d));
+        showToast('Test settings saved — now add your questions below.');
+      } else {
+        setEditingSectionId(null);
+        setSectionDraft(null);
+        showToast('Section saved.');
+      }
       fetchSections(editingDayId);
-      showToast('Section saved.');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to save section.');
     } finally {

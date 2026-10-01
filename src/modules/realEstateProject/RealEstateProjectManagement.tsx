@@ -556,15 +556,27 @@ function RealEstateProjectManagement() {
         }
         payload = { ...sectionDraft, assessment_id: assessmentId };
       }
+      let savedId = editingSectionId;
       if (editingSectionId === 'new') {
-        await saveSection(payload);
+        const created = await saveSection(payload);
+        savedId = created.id;
       } else if (editingSectionId) {
         await editSection(editingSectionId, payload);
       }
-      setEditingSectionId(null);
-      setSectionDraft(null);
+
+      // A Test section stays open right after saving — settings alone create
+      // an (empty) assessment, so closing here would force the admin to
+      // re-open the section just to see the "Add Question" UI.
+      if (sectionDraft.section_type === 'test' && savedId) {
+        setEditingSectionId(savedId);
+        setSectionDraft(payload);
+        showToast('Test settings saved — now add your questions below.');
+      } else {
+        setEditingSectionId(null);
+        setSectionDraft(null);
+        showToast('Section saved');
+      }
       if (editingProjectId && editingProjectId !== 'new') fetchSections(editingProjectId);
-      showToast('Section saved');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to save section.');
     } finally {
