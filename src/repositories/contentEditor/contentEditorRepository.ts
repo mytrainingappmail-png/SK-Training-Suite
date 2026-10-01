@@ -66,7 +66,7 @@ export async function updateLessonContent(
 export async function uploadContentMedia(
   kind: MediaUploadKind,
   file: File,
-  employeeId: string
+  _employeeId: string
 ): Promise<MediaUploadResult> {
   const formData = new FormData();
   formData.append('file', file);
@@ -75,8 +75,8 @@ export async function uploadContentMedia(
   const { data, error } = await supabase.functions.invoke<MediaUploadResult>(
     UPLOAD_FUNCTION,
     {
+      // The server identifies the caller from the signed-in session; no id header is sent.
       body: formData,
-      headers: { 'x-employee-id': employeeId },
     }
   );
 

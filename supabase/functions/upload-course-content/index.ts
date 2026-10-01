@@ -24,9 +24,12 @@ const FOLDER_BY_KIND: Record<string, string> = {
   audio: 'audio',
 };
 
+// x-employee-id is no longer used (the caller is identified from the session), but
+// browsers that still have the older app cached send it, and a preflight that
+// doesn't list it blocks the whole upload — so it stays allowed.
 const CORS_HEADERS = {
   ...SHARED_CORS,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-employee-id',
 };
 
 function json(body: unknown, status = 200): Response {
