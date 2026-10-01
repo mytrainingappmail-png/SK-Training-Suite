@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
+import { useServerClock } from "../../hooks/quiz/useServerClock";
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { getQuiz } from "../../services/quiz/quizService";
 import { startQuiz, advanceQuestion, endSession } from "../../services/quiz/quizSessionService";
@@ -24,12 +25,17 @@ import type { QuizWithQuestions, QuizGrade, QuizSettings } from "../../types/qui
 const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 const ANSWER_COLORS = ["#e11d48", "#2563eb", "#f59e0b", "#16a34a", "#8b5cf6", "#0891b2"];
 const UI_SCALES = [100, 115, 130, 150];
-const PRESENCE_STALE_MS = 12000;
+// Players report presence about every 8-12 seconds (the server only records it that often).
+const PRESENCE_STALE_MS = 25000;
 
 export default function QuizHostLivePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { session, participants, connected } = useQuizSessionRealtime(sessionId ?? null);
+  // Database time, so this screen's countdown can't be thrown off by the host PC's own clock.
+  const serverNow = useServerClock(supabaseQuiz);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const canEdit = canEditQuizContent();
   const admin = getCurrentQuizAdmin();
 
@@ -112,10 +118,13 @@ export default function QuizHostLivePage() {
     // Anchored off the server's question_started_at so the host's own
     // countdown display can't drift from what every participant sees.
     const elapsedSec = session.question_started_at
-      ? Math.floor((Date.now() - new Date(session.question_started_at).getTime()) / 1000)
+      ? Math.floor((serverNow() - new Date(session.question_started_at).getTime()) / 1000)
       : 0;
     setSecondsLeft(Math.max(0, total - Math.max(0, elapsedSec)));
     autoAdvancedRef.current = false;
+    // The question THIS timer belongs to. If the session has moved on by the time
+    // the reveal pause ends, the server ignores the request instead of skipping one.
+    const timerQuestionIndex = session.current_question_index;
 
     tickRef.current = setInterval(() => {
       setSecondsLeft((s) => {
@@ -125,7 +134,7 @@ export default function QuizHostLivePage() {
             // Pop the correct option in color for the host before auto-advancing,
             // instead of jumping straight to the next question.
             setRevealed(true);
-            revealTimerRef.current = setTimeout(() => handleNext(), REVEAL_PAUSE_MS);
+            revealTimerRef.current = setTimeout(() => handleNext(timerQuestionIndex), REVEAL_PAUSE_MS);
           }
           return 0;
         }
@@ -154,7 +163,10 @@ export default function QuizHostLivePage() {
         { event: "INSERT", schema: "public", table: "quiz_answers", filter: `session_id=eq.${sessionId}` },
         (payload) => {
           const row = payload.new as { question_id: string };
-          if (row.question_id === questionId) setAnsweredCount((c) => c + 1);
+          // With a per-player question order every player is on a different question at the
+          // same moment, so "answers to THIS question" would stay near zero — count the
+          // answers that came in while this slot of the quiz was live instead.
+          if (quiz?.shuffle_questions_per_participant || row.question_id === questionId) setAnsweredCount((c) => c + 1);
         }
       )
       .subscribe();
@@ -195,7 +207,7 @@ export default function QuizHostLivePage() {
     await startQuiz(sessionId);
   }
 
-  async function handleNext() {
+  async function handleNext(fromIndex?: number) {
     if (!sessionId || !quiz) return;
     if (advancingRef.current) return; // already advancing — ignore a racing second trigger
     advancingRef.current = true;
@@ -206,7 +218,7 @@ export default function QuizHostLivePage() {
     }
     autoAdvancedRef.current = true;
     try {
-      const result = await advanceQuestion(sessionId, totalQuestions);
+      const result = await advanceQuestion(sessionId, totalQuestions, fromIndex ?? sessionRef.current?.current_question_index);
       if (result === "ended") {
         // realtime pushes phase='ended' to this same page — stay here to show the podium
       }
@@ -402,7 +414,7 @@ export default function QuizHostLivePage() {
 
               <div className="flex justify-end">
                 <button
-                  onClick={handleNext}
+                  onClick={() => void handleNext()}
                   disabled={advancing}
                   className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-5 py-2.5"
                 >

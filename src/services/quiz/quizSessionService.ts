@@ -39,8 +39,8 @@ export async function startQuiz(sessionId: string): Promise<void> {
 }
 
 /** Advances to the next question, or ends the session when the current one was the last — totalQuestions is no longer taken on faith from the caller, the RPC resolves it itself from the session's own question_order. */
-export async function advanceQuestion(sessionId: string, _totalQuestions?: number): Promise<"question" | "ended"> {
-  return sessionRepo.advanceQuizSessionNow(sessionId);
+export async function advanceQuestion(sessionId: string, _totalQuestions?: number, fromIndex?: number): Promise<"question" | "ended"> {
+  return sessionRepo.advanceQuizSessionNow(sessionId, fromIndex);
 }
 
 export async function pauseSession(sessionId: string): Promise<void> {

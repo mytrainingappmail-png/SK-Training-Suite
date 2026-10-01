@@ -18,7 +18,32 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * participant — since Realtime enforces the same RLS as a normal query,
  * scoped to whichever identity the connection authenticated as.
  */
-export function useQuizSessionRealtime(sessionId: string | null, client: SupabaseClient = supabaseQuiz) {
+/**
+ * Realtime events can arrive late or out of order. A session only ever moves
+ * forward (question 5 never goes back to question 4, an ended session never
+ * restarts), so an older snapshot must never overwrite a newer one — that used
+ * to leave a screen briefly showing a question the quiz had already left.
+ */
+function newestSession(prev: QuizSession | null, next: QuizSession): QuizSession {
+  if (!prev || prev.id !== next.id) return next;
+  if (prev.phase === "ended" && next.phase !== "ended") return prev;
+  if (next.phase !== "ended" && next.current_question_index < prev.current_question_index) return prev;
+  return next;
+}
+
+export interface QuizRealtimeOptions {
+  /** The host needs live participant changes (leaderboard, presence); a player does
+   *  not, and subscribing every player to every other player's heartbeat made the
+   *  number of messages grow with the square of the class size. Default true. */
+  watchParticipants?: boolean;
+}
+
+export function useQuizSessionRealtime(
+  sessionId: string | null,
+  client: SupabaseClient = supabaseQuiz,
+  options: QuizRealtimeOptions = {},
+) {
+  const watchParticipants = options.watchParticipants !== false;
   const [session, setSession] = useState<QuizSession | null>(null);
   const [participants, setParticipants] = useState<QuizParticipant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,11 +75,14 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
     setLoading(true);
 
     function refetchAll() {
-      Promise.all([getSession(sessionId as string, client), listParticipants(sessionId as string, client)])
+      Promise.all([
+        getSession(sessionId as string, client),
+        watchParticipants ? listParticipants(sessionId as string, client) : Promise.resolve(null),
+      ])
         .then(([s, p]) => {
           if (cancelled) return;
-          setSession(s);
-          setParticipants(p);
+          if (s) setSession((prev) => newestSession(prev, s));
+          if (p) setParticipants(p);
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -101,14 +129,15 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
       }
 
       const mySeq = ++channelSeq;
-      const newChannel = client
+      let builder = client
         .channel(`quiz-session-${sessionId}-${mySeq}`)
         .on(
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "quiz_sessions", filter: `id=eq.${sessionId}` },
-          (payload) => setSession(payload.new as QuizSession)
-        )
-        .on(
+          (payload) => setSession((prev) => newestSession(prev, payload.new as QuizSession))
+        );
+      if (watchParticipants) {
+        builder = builder.on(
           "postgres_changes",
           { event: "*", schema: "public", table: "quiz_participants", filter: `session_id=eq.${sessionId}` },
           (payload) => {
@@ -123,7 +152,9 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
               return exists ? prev.map((p) => (p.id === row.id ? row : p)) : [...prev, row];
             });
           }
-        )
+        );
+      }
+      const newChannel = builder
         .subscribe((status) => {
           if (cancelled || mySeq !== channelSeq) return; // a stale callback from a channel we already replaced
           if (status === "SUBSCRIBED") {
@@ -184,7 +215,7 @@ export function useQuizSessionRealtime(sessionId: string | null, client: Supabas
       window.removeEventListener("online", handleReconnectSignal);
       if (channel) client.removeChannel(channel);
     };
-  }, [sessionId, client]);
+  }, [sessionId, client, watchParticipants]);
 
   return { session, participants, loading, connected };
 }

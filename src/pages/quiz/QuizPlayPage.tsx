@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
+import { useServerClock } from "../../hooks/quiz/useServerClock";
 import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat } from "../../services/quiz/quizPlayService";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
@@ -32,7 +33,12 @@ export default function QuizPlayPage() {
   const navigate = useNavigate();
   const locationState = (location.state as LocationState | null) ?? {};
 
-  const { session, participants, connected } = useQuizSessionRealtime(sessionId ?? null, supabaseQuizPlayer);
+  // A player doesn't need a live feed of every other player (it made traffic grow with the
+  // square of the class size); the final leaderboard is fetched once when the quiz ends.
+  const { session, connected } = useQuizSessionRealtime(sessionId ?? null, supabaseQuizPlayer, { watchParticipants: false });
+  const [participants, setParticipants] = useState<Awaited<ReturnType<typeof listParticipants>>>([]);
+  // Database time — a phone whose clock is fast no longer starts each question with seconds already gone.
+  const serverNow = useServerClock(supabaseQuizPlayer);
 
   const [participantId, setParticipantId] = useState<string | null>(locationState.participantId ?? null);
   const [question, setQuestion] = useState<PublicQuizQuestion | null>(null);
@@ -51,6 +57,8 @@ export default function QuizPlayPage() {
   const [endStep, setEndStep] = useState<"splash" | "details">("splash");
   const [justReconnected, setJustReconnected] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
+  // Shown instead of an endless "Recording your answer…" when the answer could not be sent.
+  const [submitProblem, setSubmitProblem] = useState<string | null>(null);
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -153,22 +161,40 @@ export default function QuizPlayPage() {
       setSelectedOptionId(null);
       setHotspotFeedback(null);
       setMyTap(null);
+      setSubmitProblem(null);
+      // Don't leave the PREVIOUS question on screen (answerable, with a fresh
+      // "unanswered" state) while the new one is being fetched — that is how a
+      // slow connection looked like "the question repeated" or "I got no question".
+      setQuestion(null);
     }
 
-    getCurrentQuestion(sessionId).then((q) => {
-      if (cancelled || !q) return;
-      setQuestion(q);
-      questionStartedAt.current = Date.now();
-      // Anchored off the server's question_started_at (when available)
-      // instead of always handing out a fresh full timer — a device that
-      // reconnects mid-question sees the actual time left, not an unfair
-      // extra full countdown.
-      const elapsedSec = session?.question_started_at
-        ? Math.floor((Date.now() - new Date(session.question_started_at).getTime()) / 1000)
-        : 0;
-      setSecondsLeft(Math.max(0, q.timer_seconds - Math.max(0, elapsedSec)));
-      if (isNewQuestion && playerSettings?.sound_enabled !== false) playTone("pop");
-    });
+    // The new question is fetched with a few retries: a single failed or empty
+    // response used to leave this player stuck without a question until the next
+    // one arrived, i.e. one silently missed question.
+    (async () => {
+      for (let attempt = 0; attempt < 6 && !cancelled; attempt++) {
+        try {
+          const q = await getCurrentQuestion(sessionId);
+          if (cancelled) return;
+          if (q) {
+            setQuestion(q);
+            questionStartedAt.current = Date.now();
+            // Anchored off the server's question_started_at (database time) instead
+            // of a fresh full timer — a device that reconnects mid-question sees the
+            // actual time left.
+            const elapsedSec = session?.question_started_at
+              ? Math.floor((serverNow() - new Date(session.question_started_at).getTime()) / 1000)
+              : 0;
+            setSecondsLeft(Math.max(0, q.timer_seconds - Math.max(0, elapsedSec)));
+            if (isNewQuestion && playerSettings?.sound_enabled !== false) playTone("pop");
+            return;
+          }
+        } catch {
+          // fall through to the retry below
+        }
+        await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -193,7 +219,7 @@ export default function QuizPlayPage() {
     if (!sessionId || !session || session.phase !== "question" || !question || answered) return;
     questionStartedAt.current = Date.now();
     const elapsedSec = session.question_started_at
-      ? Math.floor((Date.now() - new Date(session.question_started_at).getTime()) / 1000)
+      ? Math.floor((serverNow() - new Date(session.question_started_at).getTime()) / 1000)
       : 0;
     setSecondsLeft(Math.max(0, question.timer_seconds - Math.max(0, elapsedSec)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,6 +254,8 @@ export default function QuizPlayPage() {
 
     setShowConfetti(true);
     const confettiTimer = setTimeout(() => setShowConfetti(false), 4000);
+
+    listParticipants(sessionId, supabaseQuizPlayer).then(setParticipants).catch(() => {});
 
     getMyAnswerReview(sessionId)
       .then(setReviewQuestions)
@@ -264,6 +292,25 @@ export default function QuizPlayPage() {
     return () => clearInterval(t);
   }, [endStep, navigate, playerSettings?.result_close_minutes]);
 
+  // Sends an answer, retrying brief network failures. A refusal from the server (time is up,
+  // not the current question) is final and is explained to the player instead of failing silently.
+  async function sendWithRetry<T>(send: () => Promise<T>): Promise<T | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await send();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (/time is up|not the current one|no longer accepting|not a participant/i.test(msg)) {
+          setSubmitProblem("Your answer arrived after the time for this question was over, so it was not counted.");
+          return null;
+        }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    setSubmitProblem("Your answer could not be sent — check your internet connection.");
+    return null;
+  }
+
   async function handleSubmit(optionId: string | null) {
     if (!sessionId || !question || answered) return;
     setAnswered(true);
@@ -271,12 +318,10 @@ export default function QuizPlayPage() {
     if (tickRef.current) clearInterval(tickRef.current);
 
     const responseTimeMs = Date.now() - questionStartedAt.current;
-    try {
-      const result = await submitAnswer(sessionId, question.question_id, optionId, responseTimeMs);
+    const result = await sendWithRetry(() => submitAnswer(sessionId, question.question_id, optionId, responseTimeMs));
+    if (result) {
       setFeedback(result);
       if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
-    } catch {
-      // network hiccup — leave the answer locked, host will still advance the quiz for everyone
     }
   }
 
@@ -287,12 +332,10 @@ export default function QuizPlayPage() {
     if (tickRef.current) clearInterval(tickRef.current);
 
     const responseTimeMs = Date.now() - questionStartedAt.current;
-    try {
-      const result = await submitHotspotAnswer(sessionId, question.question_id, x, y, responseTimeMs);
+    const result = await sendWithRetry(() => submitHotspotAnswer(sessionId, question.question_id, x, y, responseTimeMs));
+    if (result) {
       setHotspotFeedback(result);
       if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
-    } catch {
-      // network hiccup — leave the answer locked, host will still advance the quiz for everyone
     }
   }
 
@@ -566,6 +609,8 @@ export default function QuizPlayPage() {
                   </div>
                 )}
               </>
+            ) : submitProblem ? (
+              <div className="text-amber-300 text-sm max-w-xs mx-auto">⚠ {submitProblem}</div>
             ) : (
               <div className="text-slate-400 text-sm">Recording your answer…</div>
             )}

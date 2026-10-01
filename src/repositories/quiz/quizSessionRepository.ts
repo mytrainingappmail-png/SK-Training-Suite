@@ -60,8 +60,12 @@ export async function startQuizSessionNow(sessionId: string): Promise<void> {
   }
 }
 
-export async function advanceQuizSessionNow(sessionId: string): Promise<"question" | "ended"> {
-  const { data, error } = await supabaseQuiz.rpc("advance_quiz_session", { p_session_id: sessionId });
+/** `fromIndex` = the question the caller is showing. If the session has already moved past it (the safety net or a double click got there first) the server does nothing instead of skipping a question. */
+export async function advanceQuizSessionNow(sessionId: string, fromIndex?: number): Promise<"question" | "ended"> {
+  const { data, error } = await supabaseQuiz.rpc("advance_quiz_session", {
+    p_session_id: sessionId,
+    ...(fromIndex === undefined ? {} : { p_from_index: fromIndex }),
+  });
   if (error) {
     console.error("[quizSessionRepository] advanceQuizSessionNow:", error);
     throw new Error(error.message);
