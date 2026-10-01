@@ -106,6 +106,7 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   }>({});
 
   const [profileBanner,  setProfileBanner]  = useState<string | null>(null);
+  const [profileBannerIsError, setProfileBannerIsError] = useState(false);
   const [passwordBanner, setPasswordBanner] = useState<string | null>(null);
 
   // ── Lookup data ───────────────────────────────────────────────────────────
@@ -188,9 +189,8 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
     const errs: typeof profileErrors = {};
     if (!firstName.trim())  errs.firstName = 'First Name is required.';
     if (!lastName.trim())   errs.lastName  = 'Last Name is required.';
-    if (!email.trim()) {
-      errs.email = 'Email is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    // Optional (the platform owner account, for one, has none) — but must be valid if given.
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errs.email = 'Enter a valid email address.';
     }
     if (mobile.trim() && mobile.trim().length < 7) {
@@ -218,18 +218,24 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   // ── Handlers ─────────────────────────────────────────────────────────────
   async function handleSave() {
     setProfileBanner(null);
-    if (!validateProfile()) return;
+    setProfileBannerIsError(false);
+    if (!validateProfile()) {
+      setProfileBannerIsError(true);
+      setProfileBanner('Please fix the highlighted fields, then press Save Profile again.');
+      return;
+    }
     if (!user) return;
 
     try {
       await updateEmployee(user.id, {
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
-        email:      email.trim(),
+        email:      email.trim() || null,
         mobile:     mobile.trim(),
-      });
+      } as Parameters<typeof updateEmployee>[1]);
       setProfileBanner('Profile updated successfully.');
     } catch (err) {
+      setProfileBannerIsError(true);
       setProfileBanner(
         err instanceof Error ? err.message : 'Failed to update profile.'
       );
@@ -377,9 +383,9 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
           <SectionTitle title="Personal Information" />
 
           {profileBanner && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <div className={`mb-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${profileBannerIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
               <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d={profileBannerIsError ? 'M12 9v3.75m0 3.75h.008M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' : 'm4.5 12.75 6 6 9-13.5'} />
               </svg>
               {profileBanner}
             </div>
@@ -406,7 +412,7 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 />
               </FL>
             </div>
-            <FL label="Email" required error={profileErrors.email}>
+            <FL label="Email" error={profileErrors.email}>
               <input
                 type="email"
                 value={email}
