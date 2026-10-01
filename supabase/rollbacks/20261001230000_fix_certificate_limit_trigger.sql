@@ -1,0 +1,1 @@
+-- Rollback: re-apply the enforce_certificate_limit() definition from 20261001150000_commercial_layer.sql (note: that version is the broken one).
