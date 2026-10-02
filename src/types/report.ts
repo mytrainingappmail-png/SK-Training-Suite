@@ -7,7 +7,8 @@ export type ReportType =
   | "learning_path"
   | "department"
   | "branch"
-  | "company";
+  | "company"
+  | "induction";
 
 export interface ReportFilters {
   company_id:      string;

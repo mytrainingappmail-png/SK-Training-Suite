@@ -11,8 +11,8 @@ import { getVideos } from "../../repositories/videoLibraryContent/videoLibraryCo
 import { loadProjects } from "../../services/realEstateProject/realEstateProjectService";
 import { loadDays } from "../../services/induction/inductionService";
 import type { InductionDay } from "../../types/induction";
-import { pushContentToCompany, loadDistributionLog } from "../../services/contentDistribution/contentDistributionService";
-import type { DistributionKind, DistributionLogRow } from "../../services/contentDistribution/contentDistributionService";
+import { pushContentToCompany, loadDistributionLog, loadContentChanges, syncContent } from "../../services/contentDistribution/contentDistributionService";
+import type { DistributionKind, DistributionLogRow, ContentChange } from "../../services/contentDistribution/contentDistributionService";
 import { disableAutoSend, enableAutoSend, listAutoSendTargets, runAutoSend } from "../../services/contentDistribution/autoSendService";
 import type { AutoSendTarget } from "../../services/contentDistribution/autoSendService";
 import type { Company } from "../../types/company";
@@ -45,6 +45,14 @@ function ContentDistributionManagement() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Items already sent whose master was corrected afterwards.
+  const [changes, setChanges] = useState<ContentChange[]>([]);
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+
+  async function refreshChanges() {
+    setChanges((await loadContentChanges()).filter((c) => c.changed));
+  }
+
   // Auto-send: companies that automatically receive everything the owner publishes.
   const [autoTargets, setAutoTargets] = useState<AutoSendTarget[]>([]);
   const [askingAutoFor, setAskingAutoFor] = useState<string | null>(null);
@@ -58,11 +66,14 @@ function ContentDistributionManagement() {
     setAutoBusy(true);
     setError("");
     try {
-      await enableAutoSend(companyId, mode);
+      const link = await enableAutoSend(companyId, mode);
       setAskingAutoFor(null);
       await refreshAuto();
       setLog(await loadDistributionLog());
-      setSuccessMsg(mode === "only_new" ? "Auto-send is on. Anything you publish from now on is sent there automatically." : "Auto-send is on. Everything published so far will be sent now.");
+      const linkNote = link.linked > 0 ? ` ${link.linked} of its existing items were matched with your master, so your later corrections reach them too.` : "";
+      if (link.skipped.length > 0) setError(`Not matched (they differ from your master, so they will not be updated): ${link.skipped.join("; ")}`);
+      setSuccessMsg((mode === "only_new" ? "Auto-send is on. Anything you publish from now on is sent there automatically." : "Auto-send is on. Everything published so far will be sent now.") + linkNote);
+      await refreshChanges();
       if (mode === "everything") await sendNow();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not turn auto-send on.");
@@ -84,8 +95,12 @@ function ContentDistributionManagement() {
       setLog(await loadDistributionLog());
       await refreshAuto();
       if (r.failed.length > 0) setError(`Not sent to: ${r.failed.join("; ")}`);
-      if (r.sentItems > 0) setSuccessMsg(`Sent ${r.sentItems} new item(s) to ${r.companies.join(", ")}.`);
-      else if (r.failed.length === 0) setSuccessMsg("Nothing new to send — everything published is already there.");
+      const parts: string[] = [];
+      if (r.sentItems > 0) parts.push(`Sent ${r.sentItems} new item(s) to ${r.companies.join(", ")}.`);
+      if (r.updatedItems > 0) parts.push(`Updated ${r.updatedItems} item(s) with your corrections.`);
+      if (parts.length > 0) setSuccessMsg(parts.join(" "));
+      else if (r.failed.length === 0) setSuccessMsg("Nothing new to send or update — everything is already up to date.");
+      await refreshChanges();
     } finally { setAutoBusy(false); }
   }
 
@@ -110,6 +125,7 @@ function ContentDistributionManagement() {
 
     void loadDistributionLog().then(setLog);
     void refreshAuto();
+    void refreshChanges();
   }, []);
 
   const filteredCompanies = useMemo(() => {
@@ -262,6 +278,55 @@ function ContentDistributionManagement() {
           })}
         </div>
       </div>
+
+      {/* Corrections waiting to be sent to copies */}
+      {changes.length > 0 && (
+        <div className="rounded-2xl bg-amber-50 p-5 shadow-sm ring-1 ring-amber-200">
+          <h3 className="text-sm font-bold text-amber-900">🔄 You changed these after sending them</h3>
+          <p className="mt-0.5 max-w-2xl text-xs text-amber-800">
+            Press Update to put your correction into the company's copy. The copy is changed in place, so employees keep their progress,
+            and anything the company has deleted from its copy stays deleted. Companies on Auto-send get these updates by themselves.
+          </p>
+          <div className="mt-3 space-y-2">
+            {changes.map((ch) => {
+              const key = `${ch.kind}:${ch.source_id}:${ch.target_company_id}`;
+              const name = ch.kind === "course" ? courses.find((x) => x.id === ch.source_id)?.course_name
+                : ch.kind === "induction_day" ? inductionDays.find((x) => x.id === ch.source_id)?.title
+                : ch.kind === "project" ? projects.find((x) => x.id === ch.source_id)?.project_name
+                : videos.find((x) => x.id === ch.source_id)?.title;
+              const company = companies.find((c) => c.id === ch.target_company_id)?.company_name ?? "a company";
+              return (
+                <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-2.5">
+                  <span className="text-sm text-slate-700">
+                    <span className="font-semibold">{name ?? "An item"}</span>{" "}
+                    <span className="text-xs text-slate-400">· {ch.kind.replace("_", " ")} · {company} · {ch.copies} cop{ch.copies === 1 ? "y" : "ies"}</span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={updatingKey !== null}
+                    onClick={async () => {
+                      setUpdatingKey(key);
+                      setError("");
+                      try {
+                        const r = await syncContent(ch.kind, ch.source_id, ch.target_company_id);
+                        setSuccessMsg(`Updated ${r.updated} cop${r.updated === 1 ? "y" : "ies"} at ${company}.${r.missing > 0 ? ` ${r.missing} copy was deleted there, so it was skipped.` : ""}`);
+                        await refreshChanges();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Could not update the copy.");
+                      } finally {
+                        setUpdatingKey(null);
+                      }
+                    }}
+                    className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+                  >
+                    {updatingKey === key ? "Updating…" : "Update"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
         {/* Company picker */}

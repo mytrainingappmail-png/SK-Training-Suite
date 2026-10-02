@@ -5,6 +5,8 @@
 // Rules, kept simple on purpose:
 //   * only items that are published (active) are sent — a draft stays private until it is switched on
 //   * an item is sent once per company (the distribution log remembers it, so nothing is duplicated)
+//   * when the owner later CORRECTS an item that was already sent, the company's copy is updated in place
+//     (same rows, so employees' progress is untouched; anything the company deleted stays deleted)
 //   * an item that was touched in the last 10 minutes waits, so a half-built course or induction day
 //     is never copied in the middle of being written
 //   * it runs while the owner has Admin open (checked every 10 minutes) and on the "Send now" button
@@ -12,7 +14,7 @@
 
 import { supabase } from "../../lib/supabase";
 import { loadCompanies, loadCompany } from "../company/companyService";
-import { loadDistributionLog, pushContentToCompany } from "./contentDistributionService";
+import { linkExistingCopies, loadContentChanges, loadDistributionLog, pushContentToCompany, syncContent } from "./contentDistributionService";
 import type { DistributionKind } from "./contentDistributionService";
 
 export interface AutoSendTarget {
@@ -23,6 +25,8 @@ export interface AutoSendTarget {
 
 export interface AutoSendResult {
   sentItems: number;
+  /** Already-sent items whose copies were corrected because the master changed. */
+  updatedItems: number;
   companies: string[];
   failed: string[];
 }
@@ -101,10 +105,13 @@ async function publishedCandidates(myCompanyId: string): Promise<Candidate[]> {
  *                this content, like the owner's own RMT001.
  *   everything — everything published so far is sent on the next run too.
  */
-export async function enableAutoSend(companyId: string, mode: "only_new" | "everything"): Promise<void> {
+export async function enableAutoSend(companyId: string, mode: "only_new" | "everything"): Promise<{ linked: number; skipped: string[] }> {
   const mine = await loadCompany();
   if (!mine) throw new Error("Could not find your company.");
+  let linkReport = { linked: 0, skipped: [] as string[] };
   if (mode === "only_new") {
+    // the company already has this content: tie each of its items to its master twin so later corrections reach it
+    linkReport = await linkExistingCopies(companyId).catch(() => linkReport);
     const [candidates, log] = await Promise.all([publishedCandidates(mine.id), loadDistributionLog()]);
     const known = new Set(log.filter((l) => l.target_company_id === companyId).map((l) => `${l.kind}:${l.source_id}`));
     const rows = candidates
@@ -117,6 +124,7 @@ export async function enableAutoSend(companyId: string, mode: "only_new" | "ever
   }
   const { error } = await supabase.from("platform_auto_send_targets").upsert({ company_id: companyId }, { onConflict: "company_id" });
   if (error) throw new Error(error.message);
+  return linkReport;
 }
 
 export async function disableAutoSend(companyId: string): Promise<void> {
@@ -144,7 +152,7 @@ function releaseLock(): void {
  * once-per-10-minutes limit (the "Send now" button).
  */
 export async function runAutoSend(force = false): Promise<AutoSendResult> {
-  const result: AutoSendResult = { sentItems: 0, companies: [], failed: [] };
+  const result: AutoSendResult = { sentItems: 0, updatedItems: 0, companies: [], failed: [] };
 
   if (!force) {
     try {
@@ -182,6 +190,21 @@ export async function runAutoSend(force = false): Promise<AutoSendResult> {
         await supabase.from("platform_auto_send_targets").update({ last_run_at: new Date().toISOString() }).eq("company_id", target.company_id);
       } catch (err) {
         result.failed.push(`${company.company_name} (${err instanceof Error ? err.message : "failed"})`);
+      }
+    }
+    // corrections to items that were already sent
+    const autoIds = new Set(targets.map((t) => t.company_id));
+    const touched = new Map(candidates.map((c) => [`${c.kind}:${c.id}`, c.touchedAt]));
+    for (const ch of await loadContentChanges()) {
+      if (!ch.changed || !autoIds.has(ch.target_company_id)) continue;
+      const t = touched.get(`${ch.kind}:${ch.source_id}`);
+      if (!force && t !== undefined && now - t < SETTLE_MS) continue; // still being worked on
+      try {
+        const r = await syncContent(ch.kind, ch.source_id, ch.target_company_id);
+        if (r.updated > 0) result.updatedItems += 1;
+      } catch (err) {
+        const name = companies.find((c) => c.id === ch.target_company_id)?.company_name ?? "a company";
+        result.failed.push(`${name} (${err instanceof Error ? err.message : "update failed"})`);
       }
     }
     return result;
