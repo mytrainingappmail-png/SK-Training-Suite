@@ -24,7 +24,18 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary] Caught a render error:", error, info.componentStack);
+    // Tell the platform owner (App Errors list). Loaded lazily so a failure here can never hide the
+    // fallback screen, and the same message is only sent once per page load.
+    const key = `${error.message}`;
+    if (!ErrorBoundary.reported.has(key)) {
+      ErrorBoundary.reported.add(key);
+      void import("../../repositories/platform/clientErrorRepository")
+        .then((m) => m.sendClientError(error.message, `${error.stack ?? ""}\n${info.componentStack ?? ""}`.trim(), window.location.pathname, navigator.userAgent))
+        .catch(() => undefined);
+    }
   }
+
+  private static reported = new Set<string>();
 
   handleReload = () => {
     this.setState({ error: null });

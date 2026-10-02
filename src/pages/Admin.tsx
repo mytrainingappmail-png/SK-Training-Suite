@@ -47,6 +47,7 @@ const PlanManagement = lazyWithRetry(() => import("../modules/license/PlanManage
 const CompanyOnboardingWizard = lazyWithRetry(() => import("../components/superadmin/CompanyOnboardingWizard"));
 const CompanyLicenseManagement = lazyWithRetry(() => import("../modules/license/CompanyLicenseManagement"));
 const CustomerDirectory = lazyWithRetry(() => import("../modules/platform/CustomerDirectory"));
+const AppErrors = lazyWithRetry(() => import("../modules/platform/AppErrors"));
 const DiscountCodeManagement = lazyWithRetry(() => import("../modules/license/DiscountCodeManagement"));
 const NotificationLog = lazyWithRetry(() => import("../modules/license/NotificationLog"));
 const PaymentSettingsManagement = lazyWithRetry(() => import("../modules/payment/PaymentSettingsManagement"));
@@ -524,6 +525,7 @@ function Admin() {
             ) : null}
 
             {(isPlatformOperator && matches("Customer Directory")) ||
+             (isPlatformOperator && matches("App Errors")) ||
              (isPlatformOperator && matches("Plans")) ||
              (isPlatformOperator && matches("Add Company")) ||
              matches("Company Licenses") ||
@@ -537,6 +539,9 @@ function Admin() {
                 <div className="flex flex-wrap gap-3">
                   {isPlatformOperator && matches("Customer Directory") && (
                     <button onClick={() => setActiveTab("customer-directory")} className={getTabClass()} style={getTabStyle("customer-directory")}>Customer Directory</button>
+                  )}
+                  {isPlatformOperator && matches("App Errors") && (
+                    <button onClick={() => setActiveTab("app-errors")} className={getTabClass()} style={getTabStyle("app-errors")}>App Errors</button>
                   )}
                   {isPlatformOperator && matches("Plans") && (
                     <button onClick={() => setActiveTab("plans")} className={getTabClass()} style={getTabStyle("plans")}>Plans</button>
@@ -673,6 +678,7 @@ function Admin() {
 
             {activeTab === "company-license" && <CompanyLicenseManagement />}
             {activeTab === "customer-directory" && isPlatformOperator && <CustomerDirectory />}
+            {activeTab === "app-errors" && isPlatformOperator && <AppErrors />}
 
             {activeTab === "discount-codes" && isPlatformOperator && <DiscountCodeManagement />}
 
