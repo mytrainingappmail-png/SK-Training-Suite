@@ -6,7 +6,7 @@
 import {
   getDays, createDay, updateDay, deleteDay, getDay,
   getSectionsForDay, getAllSections, createSection, updateSection, deleteSection, bulkApplySectionProtection,
-  getCompletionsForEmployee, markDayComplete,
+  getCompletionsForEmployee, markDayComplete, getViewedSectionIds, markSectionViewed,
   getAssignments, getMyAssignment, createAssignment, setAssignmentStatus, deleteAssignment,
 } from '../../repositories/induction/inductionRepository';
 import type {
@@ -76,6 +76,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
         page_content: s.page_content,
         assessment_id: s.assessment_id,
         faq_items: s.faq_items,
+        thumbnail_url: s.thumbnail_url,
         watermark_enabled: s.watermark_enabled,
         watermark_text: s.watermark_text,
         watermark_orientation: s.watermark_orientation,
@@ -130,6 +131,14 @@ export async function reorderSections(orderedIds: string[]): Promise<void> {
 
 export async function loadCompletions(employeeId: string): Promise<InductionDayCompletion[]> {
   return getCompletionsForEmployee(employeeId);
+}
+
+export async function loadViewedSectionIds(employeeId: string): Promise<string[]> {
+  return getViewedSectionIds(employeeId);
+}
+
+export async function recordSectionViewed(sectionId: string, employeeId: string): Promise<void> {
+  await markSectionViewed(sectionId, employeeId);
 }
 
 export async function markComplete(dayId: string, employeeId: string, companyId: string): Promise<void> {

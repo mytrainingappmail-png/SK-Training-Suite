@@ -45,6 +45,7 @@ import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
+import InductionDayPreview from './InductionDayPreview';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import { protectionPatchFromCompany, DEFAULT_WATERMARK } from '../../components/shared/ContentWatermark';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
@@ -317,9 +318,20 @@ function InductionManagement() {
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const [uploadingThumb, setUploadingThumb] = useState(false);
   const [pendingThumbFile, setPendingThumbFile] = useState<File | null>(null);
+  // Picture of the card a section becomes on the employee's screen.
+  const sectionThumbInputRef = useRef<HTMLInputElement>(null);
+  const [pendingSectionThumb, setPendingSectionThumb] = useState<File | null>(null);
+  // 'Preview' of a Day exactly as an employee sees it (nothing saved).
+  const [previewDay, setPreviewDay] = useState<InductionDay | null>(null);
+  const orderedDays = [...days].sort((a, b) => a.display_order - b.display_order);
+  const previewDayNumber = previewDay ? orderedDays.findIndex((d) => d.id === previewDay.id) + 1 : 0;
+  const previewModal = previewDay ? (
+    <InductionDayPreview day={previewDay} dayNumber={Math.max(1, previewDayNumber)} nextDay={orderedDays[previewDayNumber]} onClose={() => setPreviewDay(null)} />
+  ) : null;
+  const [uploadingSectionThumb, setUploadingSectionThumb] = useState(false);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
-  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
+  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; thumbnail_url: string | null; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
   const [isOperator, setIsOperator] = useState(false);
   const [company, setCompany] = useState<Company | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -444,6 +456,19 @@ function InductionManagement() {
     }
   }
 
+  async function handleSectionThumbnailEdited(file: File) {
+    setPendingSectionThumb(null);
+    setUploadingSectionThumb(true);
+    try {
+      const url = await uploadInlineImage(file);
+      setSectionDraft((d) => (d ? { ...d, thumbnail_url: url } : d));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to upload the picture.');
+    } finally {
+      setUploadingSectionThumb(false);
+    }
+  }
+
   async function handleSaveDay() {
     if (!user?.companyId) return;
     setSavingDay(true);
@@ -508,7 +533,7 @@ function InductionManagement() {
   function startNewSection() {
     setEditingSectionId('new');
     const defaults = company ? protectionPatchFromCompany(company) : { watermark_enabled: false, watermark_text: '', watermark_orientation: DEFAULT_WATERMARK.orientation, watermark_opacity: DEFAULT_WATERMARK.opacity, no_copy: false };
-    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], ...defaults });
+    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], thumbnail_url: null, ...defaults });
     resetTestState();
   }
 
@@ -524,7 +549,7 @@ function InductionManagement() {
   function startEditSection(s: InductionDaySection) {
     setEditingSectionId(s.id);
     setSectionDraft({
-      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items,
+      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items, thumbnail_url: s.thumbnail_url,
       watermark_enabled: s.watermark_enabled, watermark_text: s.watermark_text, watermark_orientation: s.watermark_orientation, watermark_opacity: s.watermark_opacity, no_copy: s.no_copy,
     });
     resetTestState();
@@ -618,7 +643,7 @@ function InductionManagement() {
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items,
+          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url,
           display_order: sections.length,
           ...protection,
         });
@@ -627,7 +652,7 @@ function InductionManagement() {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items,
+          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url,
           ...protection,
         });
       }
@@ -844,9 +869,15 @@ function InductionManagement() {
   if (editingDayId) {
     return (
       <div className="space-y-6">
-        <button onClick={() => { setEditingDayId(null); setSectionDraft(null); setEditingSectionId(null); }} className="text-sm font-semibold text-indigo-600 hover:underline">
-          ← Back to Days
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button onClick={() => { setEditingDayId(null); setSectionDraft(null); setEditingSectionId(null); }} className="text-sm font-semibold text-indigo-600 hover:underline">
+            ← Back to Days
+          </button>
+          {editingDayId !== 'new' && (() => { const current = days.find((d) => d.id === editingDayId); return current ? (
+            <button onClick={() => setPreviewDay(current)} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">👁 Preview as employee</button>
+          ) : null; })()}
+        </div>
+        {previewModal}
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-bold text-slate-900">{editingDayId === 'new' ? 'New Day' : 'Edit Day'}</h2>
@@ -933,6 +964,7 @@ function InductionManagement() {
                           ↓
                         </button>
                       </div>
+                      {s.thumbnail_url ? <img src={s.thumbnail_url} alt="" className="h-9 w-9 flex-shrink-0 rounded-lg object-cover" /> : <div className="h-9 w-9 flex-shrink-0 rounded-lg bg-slate-100" />}
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                         s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'
                       }`}>
@@ -963,6 +995,22 @@ function InductionManagement() {
                         <option value="faq">FAQ</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">Card picture — what the employee sees on this section's card</label>
+                    <div className="flex items-center gap-3">
+                      {sectionDraft.thumbnail_url && <img src={sectionDraft.thumbnail_url} alt="" className="h-14 w-24 rounded-xl object-cover" />}
+                      <input ref={sectionThumbInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setPendingSectionThumb(file); }} />
+                      <button type="button" onClick={() => sectionThumbInputRef.current?.click()} disabled={uploadingSectionThumb} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        {uploadingSectionThumb ? 'Uploading…' : sectionDraft.thumbnail_url ? 'Replace picture' : 'Add picture'}
+                      </button>
+                      {sectionDraft.thumbnail_url && <button type="button" onClick={() => setSectionDraft((d) => (d ? { ...d, thumbnail_url: null } : d))} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>}
+                      {!sectionDraft.thumbnail_url && <span className="text-xs text-slate-400">Optional — a colourful card is drawn if you skip it.</span>}
+                    </div>
+                    {pendingSectionThumb && (
+                      <ImageEditModal file={pendingSectionThumb} frames={['rectangle', 'rounded', 'square']} defaultFrame="rounded" title="Resize & Frame Card Picture" onCancel={() => setPendingSectionThumb(null)} onConfirm={handleSectionThumbnailEdited} />
+                    )}
                   </div>
 
                   {sectionDraft.section_type === 'page' && (
@@ -1215,6 +1263,7 @@ function InductionManagement() {
 
   return (
     <div className="space-y-6">
+      {previewModal}
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">Induction</h2>
         <p className="mt-1 text-sm text-slate-500">A simple, day-by-day onboarding program for new employees. For every Day you choose when it opens: anytime, right after the previous day, or on the next date.</p>
@@ -1333,6 +1382,7 @@ function InductionManagement() {
                       </button>
                     </>
                   )}
+                  <button onClick={() => setPreviewDay(d)} className="text-xs font-semibold text-emerald-700 hover:underline">👁 Preview</button>
                   <button onClick={() => startEditDay(d)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteDay(d.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                 </div>

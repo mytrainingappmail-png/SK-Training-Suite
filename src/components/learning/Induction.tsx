@@ -15,17 +15,16 @@
 
 import { useEffect, useState } from 'react';
 import {
-  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment,
+  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed,
 } from '../../services/induction/inductionService';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import { getCurrentUser } from '../../services/auth/session';
 import { resolveForBranch } from '../../utils/branchScoping';
-import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import { isDateUnlocked, nextUnlockDate, formatUnlockDate } from '../../utils/inductionDateGate';
 import SectionHeroBanner from './SectionHeroBanner';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import InductionDayView from './InductionDayView';
 import type { InductionDay, InductionDaySection, InductionDayCompletion } from '../../types/induction';
 
 function IconLock({ className = 'h-4 w-4' }: { className?: string }) {
@@ -37,22 +36,8 @@ function IconClock({ className = 'h-4 w-4' }: { className?: string }) {
 function IconCheck({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>);
 }
-function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
-  return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>);
-}
-function IconChevron({ className = 'h-4 w-4', open }: { className?: string; open: boolean }) {
-  return (<svg className={`${className} transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>);
-}
 
 type DayStatus = 'completed' | 'available' | 'date-locked' | 'locked';
-
-/** What the test card says about the NEXT day, according to how the admin set that day to open. */
-function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextNumber?: number): string {
-  if (!nextDay) return passed ? 'Passed — well done!' : 'Pass this test to finish the induction.';
-  if (nextDay.unlock_mode === 'anytime') return passed ? 'Passed — well done!' : 'Pass this test to complete this day.';
-  if (nextDay.unlock_mode === 'after_previous') return passed ? 'Passed — the next day is open now.' : `Pass this test to open Day ${nextNumber}.`;
-  return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then Day ${nextNumber} opens on the next date.`;
-}
 
 function Skeleton() {
   return (
@@ -72,7 +57,7 @@ function Induction() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [openDayId, setOpenDayId] = useState<string | null>(null);
-  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
+  const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const [toast, setToast] = useState('');
@@ -82,20 +67,13 @@ function Induction() {
     setTimeout(() => setToast(''), 3200);
   }
 
-  function toggleKey(key: string) {
-    setOpenKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  }
-
   function loadEverything() {
     if (!user?.id) { setError('No active session.'); setLoading(false); return; }
     setLoading(true);
     setError('');
-    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id)])
-      .then(async ([assignment, allDays, allSections, comps]) => {
+    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id)])
+      .then(async ([assignment, allDays, allSections, comps, viewed]) => {
+        setViewedIds(new Set(viewed));
         setHasAssignment(!!assignment && assignment.status === 'active');
         const scoped = resolveForBranch(allDays, user.branchId || null);
         const active = scoped.filter((d) => d.active).sort((a, b) => a.display_order - b.display_order);
@@ -153,6 +131,13 @@ function Induction() {
     showToast(`Complete Day ${index} first to unlock Day ${index + 1}.`);
   }
 
+  // Opening a card is remembered, so 'Mark Day Complete' only unlocks once every reading card was opened.
+  function handleOpenSection(section: InductionDaySection) {
+    if (!user?.id) return;
+    setViewedIds((prev) => (prev.has(section.id) ? prev : new Set(prev).add(section.id)));
+    if (!viewedIds.has(section.id)) void recordSectionViewed(section.id, user.id).catch(() => undefined);
+  }
+
   async function handleMarkComplete(dayId: string) {
     if (!user?.id || !user.companyId) return;
     setMarking(true);
@@ -198,113 +183,21 @@ function Induction() {
     const dayNumber = openDayIndex + 1;
     return (
       <>
-        <button onClick={() => setOpenDayId(null)} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800">
-          <IconArrowLeft className="h-3.5 w-3.5" /> Back to Induction
-        </button>
-
-        <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
-          <div
-            className="relative bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-8 text-white"
-            style={openDay.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.75), rgba(124,58,237,.8)), url(${openDay.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-          >
-            <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">DAY {dayNumber}</span>
-            <h2 className="mt-3 text-2xl font-bold">{openDay.title}</h2>
-            {openDay.description && <p className="mt-1 text-sm text-white/80">{openDay.description}</p>}
-          </div>
-
-          <div className="space-y-5 p-8">
-            {openSections.length === 0 && <p className="text-sm text-slate-400">No content added for this day yet.</p>}
-
-            {openSections.map((section) => {
-              if (section.section_type === 'page') {
-                const key = `page-${section.id}`;
-                return (
-                  <div key={section.id}>
-                    <button onClick={() => toggleKey(key)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 hover:underline">
-                      <IconChevron className="h-3.5 w-3.5" open={openKeys.has(key)} /> {section.title}
-                    </button>
-                    {openKeys.has(key) && (
-                      <div className="relative">
-                        <div
-                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed"
-                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
-                          {...noCopyProps(section.no_copy)}
-                        />
-                        <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (section.section_type === 'faq') {
-                return (
-                  <div key={section.id}>
-                    <p className="mb-2 text-sm font-semibold text-slate-700">{section.title}</p>
-                    <div className="space-y-2">
-                      {section.faq_items.map((item, i) => {
-                        const key = `faq-${section.id}-${i}`;
-                        return (
-                          <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                            <button onClick={() => toggleKey(key)} className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-slate-800">
-                              {item.question}
-                              <IconChevron className="h-3.5 w-3.5 flex-shrink-0" open={openKeys.has(key)} />
-                            </button>
-                            {openKeys.has(key) && <p className="mt-2 text-sm text-slate-600">{item.answer}</p>}
-                          </div>
-                        );
-                      })}
-                      {section.faq_items.length === 0 && <p className="text-xs text-slate-400">No questions added yet.</p>}
-                    </div>
-                  </div>
-                );
-              }
-
-              // section_type === 'test'
-              const passed = section.assessment_id ? passedTestIds.has(section.assessment_id) : false;
-              return (
-                <div key={section.id} className={`flex items-center justify-between gap-3 rounded-xl p-4 ${openCompleted ? 'bg-amber-50' : 'bg-slate-100'}`}>
-                  <div>
-                    <p className={`text-sm font-semibold ${openCompleted ? 'text-amber-900' : 'text-slate-500'}`}>
-                      {openCompleted ? (passed ? '✅ ' : '') : '🔒 '}{section.title}
-                    </p>
-                    <p className={`text-xs ${openCompleted ? 'text-amber-700' : 'text-slate-400'}`}>
-                      {!openCompleted
-                        ? 'Mark this day complete above to unlock the test.'
-                        : passed
-                        ? afterTestNote(days[openDayIndex + 1], true)
-                        : afterTestNote(days[openDayIndex + 1], false, dayNumber + 1)}
-                    </p>
-                  </div>
-                  {section.assessment_id && (
-                    <button
-                      onClick={() => openCompleted && setActiveTestAssessmentId(section.assessment_id!)}
-                      disabled={!openCompleted}
-                      className={`flex-shrink-0 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 ${
-                        openCompleted ? 'bg-amber-500 text-white hover:bg-amber-600' : 'cursor-not-allowed bg-slate-200 text-slate-400'
-                      }`}
-                    >
-                      {!openCompleted ? 'Locked' : passed ? 'Retake Test' : 'Take Test'}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-
-            {!openCompleted && (
-              <div className="rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4 text-center">
-                <p className="mb-3 text-sm font-medium text-indigo-900">Read through this day's material, then mark it complete.</p>
-                <button
-                  onClick={() => handleMarkComplete(openDay.id)}
-                  disabled={marking}
-                  className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {marking ? 'Marking…' : '✓ Mark Day Complete'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <InductionDayView
+          day={openDay}
+          dayNumber={dayNumber}
+          nextDay={days[openDayIndex + 1]}
+          sections={openSections}
+          viewedIds={viewedIds}
+          completed={openCompleted}
+          passedTestIds={passedTestIds}
+          marking={marking}
+          onBack={() => setOpenDayId(null)}
+          onOpenSection={handleOpenSection}
+          onMarkComplete={() => handleMarkComplete(openDay.id)}
+          onStartTest={setActiveTestAssessmentId}
+          showToast={showToast}
+        />
 
         {activeTestAssessmentId && user?.id && (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">

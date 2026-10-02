@@ -6,6 +6,7 @@
 // formatting toolbar for the description — everything an Admin needs
 // to add a new project without ever touching code.
 
+import ProjectPreview from './ProjectPreview';
 import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
@@ -241,6 +242,8 @@ function ReorderProjectsModal({
 
 function RealEstateProjectManagement() {
   const user = getCurrentUser();
+  // 'Preview' of a project exactly as an employee sees it (nothing saved).
+  const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
   const [brochures, setBrochures] = useState<RealEstateProjectBrochure[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -736,9 +739,15 @@ function RealEstateProjectManagement() {
   if (editingProjectId) {
     return (
       <div className="space-y-6">
-        <button onClick={() => setEditingProjectId(null)} className="text-sm font-semibold text-slate-500 hover:text-slate-800">
-          ← Back to Projects
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button onClick={() => setEditingProjectId(null)} className="text-sm font-semibold text-slate-500 hover:text-slate-800">
+            ← Back to Projects
+          </button>
+          {editingProjectId !== 'new' && (
+            <button onClick={() => setPreviewProjectId(editingProjectId)} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">👁 Preview as employee</button>
+          )}
+        </div>
+        {previewProjectId && <ProjectPreview projectId={previewProjectId} onClose={() => setPreviewProjectId(null)} />}
 
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-lg font-bold text-slate-900">{editingProjectId === 'new' ? 'New Project' : 'Edit Project'}</h2>
@@ -1165,6 +1174,7 @@ function RealEstateProjectManagement() {
 
   return (
     <div className="space-y-6">
+      {previewProjectId && <ProjectPreview projectId={previewProjectId} onClose={() => setPreviewProjectId(null)} />}
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">Projects</h2>
         <p className="mt-1 text-sm text-slate-500">Browsable reference material — no test, no duration, no certificate. Read anytime.</p>
@@ -1234,6 +1244,7 @@ function RealEstateProjectManagement() {
                       </button>
                     </>
                   )}
+                  <button onClick={() => setPreviewProjectId(p.id)} className="text-xs font-semibold text-emerald-700 hover:underline">👁 Preview</button>
                   <button onClick={() => startEditProject(p)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteProject(p.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                 </div>

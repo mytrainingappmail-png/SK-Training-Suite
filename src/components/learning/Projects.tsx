@@ -81,7 +81,7 @@ interface ProjectDetailCardProps {
   onRemove?: () => void;
 }
 
-function ProjectDetailCard({
+export function ProjectDetailCard({
   project, gradient, completed, marking, onMarkComplete, onLaunchQuiz, indexBadge, onRemove,
 }: ProjectDetailCardProps) {
   const [showFullDetails, setShowFullDetails] = useState(false);

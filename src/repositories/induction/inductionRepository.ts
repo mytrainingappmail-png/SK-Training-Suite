@@ -112,6 +112,21 @@ export async function markDayComplete(dayId: string, employeeId: string, company
   if (error) throw new Error(error.message);
 }
 
+// ── Which section cards an employee has opened (gates 'Mark Day Complete') ─
+
+export async function getViewedSectionIds(employeeId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('induction_section_views').select('section_id').eq('employee_id', employeeId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.section_id as string);
+}
+
+export async function markSectionViewed(sectionId: string, employeeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('induction_section_views')
+    .upsert({ section_id: sectionId, employee_id: employeeId }, { onConflict: 'employee_id,section_id', ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+}
+
 // ── Assignments (who's currently in induction — drives the sidebar) ─────────
 
 export async function getAssignments(): Promise<InductionAssignment[]> {

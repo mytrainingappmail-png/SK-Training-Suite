@@ -1,3 +1,4 @@
+import CoursePreview from "../../modules/courses/CoursePreview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
@@ -1213,6 +1214,8 @@ type ModalKind =
   | null;
 
 export default function CourseManagement() {
+  // 'Preview' of a course the way an employee sees it (nothing saved).
+  const [previewCourseId, setPreviewCourseId] = useState<string | null>(null);
 
   // ── Single source of truth — loaded once, never duplicated
   const [courses,    setCourses]    = useState<Course[]>([]);
@@ -1574,6 +1577,17 @@ export default function CourseManagement() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            onClick={() => setPreviewCourseId(course.id)}
+                            aria-label="Preview course"
+                            title="Preview as employee"
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            </svg>
+                          </button>
+                          <button
                             onClick={() => openModal({ type: "convert", course })}
                             disabled={busy}
                             aria-label="Convert to module"
@@ -1635,6 +1649,8 @@ export default function CourseManagement() {
           </div>
         </div>
       )}
+
+      {previewCourseId && <CoursePreview courseId={previewCourseId} onClose={() => setPreviewCourseId(null)} />}
 
       {/* Add / Edit modal */}
       {(modal?.type === "add" || modal?.type === "edit") && (

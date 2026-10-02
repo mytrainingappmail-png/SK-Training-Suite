@@ -15,6 +15,7 @@ import { getMyCompanyId } from '../../services/company/currentCompanyContext';
 import { loadCompany } from '../../services/company/companyService';
 import { loadTemplates } from '../../services/certificateTemplate/certificateTemplateService';
 import FinalTestCard from './FinalTestCard';
+import CoursePreview from './CoursePreview';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import { uploadDocument, uploadImage, uploadVideo } from '../../services/contentEditor/contentEditorService';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
@@ -180,6 +181,7 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
   // Brand watermark / copy-block: only the platform owner's own account sees these controls.
   const [isOwner, setIsOwner] = useState(false);
   const [certificateReady, setCertificateReady] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [protection, setProtection] = useState<CourseProtection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -282,7 +284,11 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
 
   return (
     <div className="space-y-5">
-      <button type="button" onClick={onBack} className="text-sm font-semibold text-slate-600 hover:text-slate-900">← All courses</button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className="text-sm font-semibold text-slate-600 hover:text-slate-900">← All courses</button>
+        <button type="button" onClick={() => setPreviewOpen(true)} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">👁 Preview as employee</button>
+      </div>
+      {previewOpen && <CoursePreview courseId={courseId} onClose={() => setPreviewOpen(false)} />}
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {notice && <p className="rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{notice}</p>}

@@ -63,6 +63,8 @@ export interface InductionDaySection {
   page_content: string;
   assessment_id: string | null;
   faq_items: InductionFaqItem[];
+  // The card picture shown to the employee for this section (null = a colourful default).
+  thumbnail_url: string | null;
   // Content protection — set only via the platform operator's own account (Admin UI hides
   // these for everyone else); survives being cloned to another company since a clone copies
   // every column of the source row.
@@ -86,6 +88,7 @@ export const defaultInductionDaySectionForm: InductionDaySectionForm = {
   page_content: '',
   assessment_id: null,
   faq_items: [],
+  thumbnail_url: null,
   watermark_enabled: false,
   watermark_text: '',
   watermark_orientation: 'diagonal',
