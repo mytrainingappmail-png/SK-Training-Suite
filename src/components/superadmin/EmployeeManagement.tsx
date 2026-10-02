@@ -833,6 +833,10 @@ export default function EmployeeManagement() {
   const [search, setSearch] = useState("");
   const [page,   setPage]   = useState(1);
   const [banner, setBanner] = useState("");
+  // A temporary password is shown exactly once, right after an admin issues it.
+  const [issuedPw, setIssuedPw] = useState<{ name: string; code: string; password: string; created: boolean } | null>(null);
+  const [pwBusyId, setPwBusyId] = useState<string | null>(null);
+  const [pwCopied, setPwCopied] = useState(false);
   const [modal,  setModal]  = useState<ModalKind>(null);
   const addBtnRef  = useRef<HTMLButtonElement>(null);
   const openerRef  = useRef<Element | null>(null);
@@ -909,6 +913,32 @@ export default function EmployeeManagement() {
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
+
+  // Passwords are never stored anywhere, so an existing one can't be shown. What an
+  // admin can do instead: issue a fresh temporary password (or create the login for
+  // someone who has none) and see it once, ready to copy and hand over.
+  async function issueTemporaryPassword(emp: Employee) {
+    const name = displayName(emp.first_name, emp.last_name) || emp.employee_code;
+    const hasLogin = !!emp.auth_user_id;
+    const ok = confirm(hasLogin
+      ? `Set a new temporary password for ${name}? Their current password stops working immediately.`
+      : `Create a login for ${name} with a temporary password?`);
+    if (!ok) return;
+    setPwBusyId(emp.id);
+    setBanner("");
+    setPwCopied(false);
+    try {
+      const password = generateTemporaryPassword();
+      if (emp.auth_user_id) await employeeService.resetPassword(emp.auth_user_id, password);
+      else await employeeService.createLogin(emp.id, password);
+      setIssuedPw({ name, code: emp.employee_code, password, created: !hasLogin });
+      if (!hasLogin) await load();
+    } catch (err) {
+      setBanner(err instanceof Error ? err.message : "Could not set the password.");
+    } finally {
+      setPwBusyId(null);
+    }
+  }
 
   async function handleSave(data: EmployeeForm) {
     setSaving(true);
@@ -1046,6 +1076,37 @@ export default function EmployeeManagement() {
         )}
       </div>
 
+      {issuedPw && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setIssuedPw(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-slate-900">{issuedPw.created ? "Login created" : "New temporary password"}</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              {issuedPw.name} · Employee ID <span className="font-mono font-semibold">{issuedPw.code}</span>
+            </p>
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+              <span className="font-mono text-lg font-bold tracking-wide text-slate-900 select-all">{issuedPw.password}</span>
+              <button
+                type="button"
+                onClick={() => { void navigator.clipboard.writeText(issuedPw.password); setPwCopied(true); }}
+                className="text-xs font-semibold text-indigo-600 hover:underline"
+              >
+                {pwCopied ? "Copied ✓" : "Copy"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Shown only now — copy it and share it with the employee. Passwords are stored securely and can't be viewed later; ask them to change it after signing in (Profile → Change Password).
+            </p>
+            <button
+              type="button"
+              onClick={() => setIssuedPw(null)}
+              className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error banner */}
       {banner && (
         <div className="mx-6 mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -1110,18 +1171,25 @@ export default function EmployeeManagement() {
                         {emp.email  && <p className="text-xs text-slate-400">{emp.email}</p>}
                       </td>
                       <td className="px-4 py-3">
-                        {emp.auth_user_id ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                            Can sign in
-                          </span>
-                        ) : (
-                          <span
-                            className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700"
-                            title="Open Edit and set a password to create this employee's login."
+                        <div className="flex flex-col items-start gap-1">
+                          {emp.auth_user_id ? (
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                              Can sign in
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                              No login yet
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => { void issueTemporaryPassword(emp); }}
+                            disabled={pwBusyId === emp.id}
+                            className="text-[11px] font-semibold text-indigo-600 hover:underline disabled:opacity-50"
                           >
-                            No login yet
-                          </span>
-                        )}
+                            {pwBusyId === emp.id ? "Working…" : emp.auth_user_id ? "Reset password" : "Create login"}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {findName(companies,    emp.company_id,     "company_name")}
