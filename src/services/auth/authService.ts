@@ -195,6 +195,11 @@ async function finishLogin(): Promise<LoginResult> {
   // ── 8. Store session ───────────────────────────────────────────────────────
   setCurrentUser(user);
 
+  // The login page cached the DEFAULT company's name/logo before anyone was signed in; without
+  // this, the header and sidebar kept showing that company until the page was reloaded.
+  const { invalidateBrandingCache } = await import("../branding/brandingService");
+  invalidateBrandingCache();
+
   return { success: true, user, error: null };
 }
 
@@ -233,6 +238,9 @@ export async function logout(): Promise<void> {
 
   const { invalidateMyCompanyId } = await import("../company/currentCompanyContext");
   invalidateMyCompanyId();
+
+  const { invalidateBrandingCache } = await import("../branding/brandingService");
+  invalidateBrandingCache();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

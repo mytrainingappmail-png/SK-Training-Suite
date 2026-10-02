@@ -279,7 +279,9 @@ export default function LearningHome() {
             ? `${summary.inProgressCourses} course${summary.inProgressCourses > 1 ? 's' : ''} in progress`
             : summary.totalCourses === 0
             ? 'No courses assigned yet'
-            : 'All courses completed — great work!'
+            : summary.completedCourses >= summary.totalCourses
+            ? 'All courses completed — great work!'
+            : `${summary.totalCourses - summary.completedCourses} course${summary.totalCourses - summary.completedCourses > 1 ? 's' : ''} waiting for you — start whenever you are ready`
         }
         statLabel="Overall Progress"
         statValue={`${summary.overallProgressPct}%`}
