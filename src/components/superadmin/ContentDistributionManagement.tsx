@@ -249,7 +249,7 @@ function ContentDistributionManagement() {
               <div className="rounded-2xl bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-5 py-3">
                   <h3 className="text-sm font-bold text-slate-800">Induction Days ({inductionDays.length})</h3>
-                  <p className="text-xs text-slate-400">Copied with their pages. A Test section keeps its place but needs an Assessment attached by the receiving company.</p>
+                  <p className="text-xs text-slate-400">Copied with their pages and tests (questions included).</p>
                 </div>
                 <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
                   {inductionDays.map((d, i) => (

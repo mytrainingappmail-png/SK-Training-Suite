@@ -13,6 +13,8 @@ import RichTextEditor from '../../components/shared/RichTextEditor';
 import { useAuthorization } from '../../hooks/useAuthorization';
 import { getMyCompanyId } from '../../services/company/currentCompanyContext';
 import { loadCompany } from '../../services/company/companyService';
+import { loadTemplates } from '../../services/certificateTemplate/certificateTemplateService';
+import FinalTestCard from './FinalTestCard';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import { uploadDocument, uploadImage, uploadVideo } from '../../services/contentEditor/contentEditorService';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
@@ -177,6 +179,7 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
   const [search, setSearch] = useState('');
   // Brand watermark / copy-block: only the platform owner's own account sees these controls.
   const [isOwner, setIsOwner] = useState(false);
+  const [certificateReady, setCertificateReady] = useState(true);
   const [protection, setProtection] = useState<CourseProtection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -209,6 +212,7 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
           watermark_orientation: course.watermark_orientation, watermark_opacity: course.watermark_opacity, no_copy: course.no_copy,
         });
         loadCompany().then((c) => { if (!cancelled) setIsOwner(c?.is_platform_operator ?? false); }).catch(() => undefined);
+        loadTemplates().then((t) => { if (!cancelled) setCertificateReady(t.length > 0); }).catch(() => undefined);
         setOutline(mods);
         setPeople(emps);
         setAssignments(assigned);
@@ -431,6 +435,8 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
           </button>
         )}
       </div>
+
+      <FinalTestCard courseId={courseId} courseName={name} companyId={companyId} canEdit={canEdit} hasChapter={outline.length > 0} certificateReady={certificateReady} />
 
       {canDelete && (
         <div className="pt-4 text-right">

@@ -79,8 +79,10 @@ function CertificateRenderer({ template, data }: CertificateRendererProps) {
     employeeName: data.employeeName, courseName: data.courseName, issueDate: data.issueDate, certificateNo: data.certificateNo,
   });
 
-  const qrX = template.qr_position.includes('left') ? 60 : width - 140;
-  const qrY = template.qr_position.includes('top') ? 60 : template.qr_position === 'center' ? height / 2 - 40 : height - 130;
+  // A design saved without a QR position must not crash the page — default to bottom-right.
+  const qrPosition = template.qr_position || 'bottom-right';
+  const qrX = qrPosition.includes('left') ? 60 : width - 140;
+  const qrY = qrPosition.includes('top') ? 60 : qrPosition === 'center' ? height / 2 - 40 : height - 130;
 
   const fontFamily = template.font_family || 'Arial';
   const fontSize = template.font_size || 14;

@@ -848,7 +848,8 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   </button>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    {!activeLesson.completed && (
+                    {/* A test lesson is completed by PASSING the test, never by pressing this button. */}
+                    {!activeLesson.completed && !(activeLesson.lessonType === 'quiz' && activeLesson.assessmentId) && (
                       <button
                         onClick={handleMarkComplete}
                         disabled={completing}

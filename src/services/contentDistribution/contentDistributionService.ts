@@ -14,10 +14,9 @@
 // Deliberately simple for v1: a one-time copy, not a live/synced link.
 // Editing the operator's original later does NOT update copies already
 // pushed -- push again to send an update. Category/subject links aren't
-// carried over (the target company's categories are different rows), and
-// a "quiz"-type lesson's actual quiz questions aren't cloned (assessments
-// are their own larger structure) -- the lesson itself copies, the target
-// admin re-attaches a quiz to it if needed.
+// carried over (the target company's categories are different rows). A test
+// (course final test, induction Test section, project test) is copied WITH its
+// questions and answers into the target company via platform_clone_assessment.
 
 import { supabase } from "../../lib/supabase";
 
@@ -43,6 +42,12 @@ export async function loadDistributionLog(): Promise<DistributionLogRow[]> {
 // about it could not be saved.
 async function logPush(kind: DistributionKind, sourceId: string, targetCompanyId: string): Promise<void> {
   await supabase.from("content_distribution_log").insert({ kind, source_id: sourceId, target_company_id: targetCompanyId });
+}
+
+async function cloneAssessmentFor(sourceAssessmentId: string, targetCompanyId: string, newLessonId: string | null): Promise<string> {
+  const { data, error } = await supabase.rpc("platform_clone_assessment", { p_source: sourceAssessmentId, p_target_company: targetCompanyId, p_lesson: newLessonId });
+  if (error) throw new Error(error.message);
+  return data as string;
 }
 
 async function cloneCourse(courseId: string, targetCompanyId: string, targetCompanyCode: string): Promise<void> {
@@ -95,10 +100,16 @@ async function cloneCourse(courseId: string, targetCompanyId: string, targetComp
 
     for (const lesson of lessons ?? []) {
       const { id: _lessonId, created_at: _lc, module_id: _lModuleId, ...lessonRest } = lesson;
+      const newLessonId = crypto.randomUUID();
       const { error: insertLessonError } = await supabase
         .from("lessons")
-        .insert({ ...lessonRest, id: crypto.randomUUID(), module_id: newModuleId });
+        .insert({ ...lessonRest, id: newLessonId, module_id: newModuleId });
       if (insertLessonError) throw new Error(insertLessonError.message);
+      // the lesson's test (questions and answers included) goes along with it
+      if (lesson.lesson_type === "quiz") {
+        const { data: sourceTest } = await supabase.from("assessments").select("id").eq("lesson_id", lesson.id).maybeSingle();
+        if (sourceTest) await cloneAssessmentFor(sourceTest.id, targetCompanyId, newLessonId);
+      }
     }
   }
 }
@@ -177,10 +188,11 @@ async function cloneRealEstateProject(projectId: string, targetCompanyId: string
   if (insertProjectError) throw new Error(insertProjectError.message);
 
   for (const section of sections ?? []) {
-    const { id: _sid, created_at: _sc, updated_at: _su, company_id: _scid, project_id: _sprojId, assessment_id: _said, ...sectionRest } = section;
+    const { id: _sid, created_at: _sc, updated_at: _su, company_id: _scid, project_id: _sprojId, assessment_id: sourceTestId, ...sectionRest } = section;
+    const clonedTestId = sourceTestId ? await cloneAssessmentFor(sourceTestId, targetCompanyId, null) : null;
     const { error: insertSectionError } = await supabase
       .from("real_estate_project_sections")
-      .insert({ ...sectionRest, id: crypto.randomUUID(), company_id: targetCompanyId, project_id: newProjectId, assessment_id: null });
+      .insert({ ...sectionRest, id: crypto.randomUUID(), company_id: targetCompanyId, project_id: newProjectId, assessment_id: clonedTestId });
     if (insertSectionError) throw new Error(insertSectionError.message);
   }
 
@@ -193,8 +205,7 @@ async function cloneRealEstateProject(projectId: string, targetCompanyId: string
   }
 }
 
-// An Induction Day copies with all its Page / FAQ sections. A Test section's linked Assessment belongs to
-// the source company, so the copy keeps the section but the target admin re-attaches an Assessment.
+// An Induction Day copies with all its Page / FAQ / Test sections; a Test section brings its own copy of the test.
 async function cloneInductionDay(dayId: string, targetCompanyId: string): Promise<void> {
   const { data: day, error: dayError } = await supabase.from("induction_days").select("*").eq("id", dayId).single();
   if (dayError) throw new Error(dayError.message);
@@ -214,10 +225,11 @@ async function cloneInductionDay(dayId: string, targetCompanyId: string): Promis
   if (insertDayError) throw new Error(insertDayError.message);
 
   for (const section of sections ?? []) {
-    const { id: _sId, created_at: _sc, updated_at: _su, company_id: _scid, day_id: _sday, assessment_id: _said, ...sectionRest } = section;
+    const { id: _sId, created_at: _sc, updated_at: _su, company_id: _scid, day_id: _sday, assessment_id: sourceTestId, ...sectionRest } = section;
+    const clonedTestId = sourceTestId ? await cloneAssessmentFor(sourceTestId, targetCompanyId, null) : null;
     const { error: insertSectionError } = await supabase
       .from("induction_day_sections")
-      .insert({ ...sectionRest, id: crypto.randomUUID(), company_id: targetCompanyId, day_id: newDayId, assessment_id: null });
+      .insert({ ...sectionRest, id: crypto.randomUUID(), company_id: targetCompanyId, day_id: newDayId, assessment_id: clonedTestId });
     if (insertSectionError) throw new Error(insertSectionError.message);
   }
 }

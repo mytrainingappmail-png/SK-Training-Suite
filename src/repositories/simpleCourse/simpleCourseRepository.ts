@@ -177,7 +177,7 @@ export async function getOutline(courseId: string): Promise<SimpleModule[]> {
   return mods.map((m) => ({
     ...m,
     lessons: (lessons ?? [])
-      .filter((l) => l.module_id === m.id)
+      .filter((l) => l.module_id === m.id && l.lesson_type !== "quiz") // the course's final test has its own card
       .map((l) => ({ ...l, resources: ((resources ?? []) as SimpleResource[]).filter((r) => r.lesson_id === l.id) })),
   })) as SimpleModule[];
 }
