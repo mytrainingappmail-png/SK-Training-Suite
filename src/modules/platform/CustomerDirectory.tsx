@@ -17,6 +17,7 @@ import { generateTemporaryPassword } from '../../utils/passwordGenerator';
 import {
   addPayment, deletePayment, getCompanyDirectory, listPayments, saveCompanyNote,
 } from '../../repositories/platform/customerDirectoryRepository';
+import { exportCompanyData, offboardCompany, reinstateCompany } from '../../repositories/platform/accountLifecycleRepository';
 import type {
   DirectoryAdmin, DirectoryRow, PlatformPayment,
 } from '../../repositories/platform/customerDirectoryRepository';
@@ -346,8 +347,49 @@ function DetailDrawer({ row, onClose, onChanged }: { row: DirectoryRow; onClose:
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ code: string; password: string } | null>(null);
   const [pwMsg, setPwMsg] = useState('');
+  const [lifeMsg, setLifeMsg] = useState('');
 
   const st = statusOf(row);
+
+  async function downloadData() {
+    setBusy(true);
+    setLifeMsg('');
+    try {
+      const data = await exportCompanyData(row.company_id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${row.company_code}-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setLifeMsg('Downloaded.');
+    } catch (e) {
+      setLifeMsg(e instanceof Error ? e.message : 'Could not export the data.');
+    } finally { setBusy(false); }
+  }
+
+  async function closeAccount() {
+    const typed = prompt(`This stops ${row.company_name} from signing in. Nothing is deleted and you can reopen it any time.\n\nType the company code (${row.company_code}) to confirm:`);
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== row.company_code.toLowerCase()) { setLifeMsg('The code did not match, so nothing was changed.'); return; }
+    setBusy(true);
+    setLifeMsg('');
+    try { await offboardCompany(row.company_id); setLifeMsg('Account closed.'); onChanged(); }
+    catch (e) { setLifeMsg(e instanceof Error ? e.message : 'Could not close the account.'); }
+    finally { setBusy(false); }
+  }
+
+  async function reopenAccount() {
+    if (!confirm(`Let ${row.company_name} sign in again?`)) return;
+    setBusy(true);
+    setLifeMsg('');
+    try { await reinstateCompany(row.company_id); setLifeMsg('Account reopened.'); onChanged(); }
+    catch (e) { setLifeMsg(e instanceof Error ? e.message : 'Could not reopen the account.'); }
+    finally { setBusy(false); }
+  }
 
   const loadPayments = useCallback(async () => {
     try { setPayments(await listPayments(row.company_id)); } catch { setPayments([]); }
@@ -521,6 +563,19 @@ function DetailDrawer({ row, onClose, onChanged }: { row: DirectoryRow; onClose:
               <button type="button" onClick={() => void submitPayment()} disabled={busy} className="col-span-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">Record payment</button>
             </div>
             {payMsg && <p className="mt-2 text-xs text-red-600">{payMsg}</p>}
+          </Section>
+
+          <Section title="Account">
+            <p className="text-sm text-slate-600">Hand a customer their data when they leave, or pause their access without deleting anything.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void downloadData()} disabled={busy} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Download all their data</button>
+              {row.company_active ? (
+                <button type="button" onClick={() => void closeAccount()} disabled={busy} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Close this account</button>
+              ) : (
+                <button type="button" onClick={() => void reopenAccount()} disabled={busy} className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">Reopen this account</button>
+              )}
+            </div>
+            {lifeMsg && <p className="mt-2 text-xs text-slate-600">{lifeMsg}</p>}
           </Section>
 
           <Section title="Private notes & follow-up">
