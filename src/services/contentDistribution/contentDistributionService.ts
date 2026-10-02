@@ -21,6 +21,30 @@
 
 import { supabase } from "../../lib/supabase";
 
+export type DistributionKind = "course" | "video" | "project" | "induction_day";
+
+export interface DistributionLogRow {
+  kind: DistributionKind;
+  source_id: string;
+  target_company_id: string;
+  pushed_at: string;
+}
+
+/** Everything the owner has already sent, so the screen can show it and skip duplicates. */
+export async function loadDistributionLog(): Promise<DistributionLogRow[]> {
+  const { data, error } = await supabase
+    .from("content_distribution_log")
+    .select("kind, source_id, target_company_id, pushed_at");
+  if (error) return []; // the log is a convenience: never block the screen on it
+  return (data as DistributionLogRow[] | null) ?? [];
+}
+
+// Best effort: a copy that was delivered must never be reported as failed just because the note
+// about it could not be saved.
+async function logPush(kind: DistributionKind, sourceId: string, targetCompanyId: string): Promise<void> {
+  await supabase.from("content_distribution_log").insert({ kind, source_id: sourceId, target_company_id: targetCompanyId });
+}
+
 async function cloneCourse(courseId: string, targetCompanyId: string, targetCompanyCode: string): Promise<void> {
   const { data: course, error: courseError } = await supabase
     .from("courses")
@@ -212,16 +236,20 @@ export async function pushContentToCompany(
 ): Promise<PushResult> {
   for (const courseId of selection.courseIds) {
     await cloneCourse(courseId, targetCompanyId, targetCompanyCode);
+    await logPush("course", courseId, targetCompanyId);
   }
   const subjectCache = new Map<string, string>();
   for (const videoId of selection.videoIds) {
     await cloneVideo(videoId, targetCompanyId, subjectCache);
+    await logPush("video", videoId, targetCompanyId);
   }
   for (const projectId of selection.projectIds) {
     await cloneRealEstateProject(projectId, targetCompanyId);
+    await logPush("project", projectId, targetCompanyId);
   }
   for (const dayId of selection.inductionDayIds ?? []) {
     await cloneInductionDay(dayId, targetCompanyId);
+    await logPush("induction_day", dayId, targetCompanyId);
   }
   return {
     courses: selection.courseIds.length,
