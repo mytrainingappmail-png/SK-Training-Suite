@@ -113,7 +113,7 @@ export async function login(
       continue;
     }
     firstTried = firstTried ?? candidate;
-    if (await validateViaSupabaseAuth(candidate.company_code, candidate.employee_code, password)) {
+    if (await validateViaSupabaseAuth(candidate.login_email ?? internalEmailFor(candidate.company_code, candidate.employee_code), password)) {
       signedInAs = candidate;
       break;
     }
@@ -251,12 +251,11 @@ export function internalEmailFor(companyCode: string, employeeCode: string): str
  * lets RLS policies scope data to the employee's own company.
  */
 async function validateViaSupabaseAuth(
-  companyCode: string,
-  employeeCode: string,
+  email: string,
   password: string
 ): Promise<boolean> {
   const { error } = await supabase.auth.signInWithPassword({
-    email: internalEmailFor(companyCode, employeeCode),
+    email,
     password,
   });
 
@@ -300,6 +299,8 @@ interface LoginCandidate {
   locked_until:   string | null;
   is_super_admin: boolean;
   has_login:      boolean;
+  /** The account's real sign-in email (stays valid even if the company code is renamed). */
+  login_email:    string | null;
 }
 
 /** Searches by employee code or email — inside one company when a company
@@ -406,7 +407,7 @@ export async function changePassword(
 
   const { data: emp, error: fetchError } = await supabase
     .from("employees")
-    .select("id, auth_user_id, employee_code, companies(company_code)")
+    .select("id, auth_user_id")
     .eq("id", employeeId)
     .maybeSingle();
 
@@ -417,16 +418,15 @@ export async function changePassword(
     return { success: false, error: "Your login has not been set up yet. Contact your administrator." };
   }
 
-  const companiesJoin = emp.companies as { company_code: string } | { company_code: string }[] | null;
-  const companyCode = Array.isArray(companiesJoin) ? companiesJoin[0]?.company_code : companiesJoin?.company_code;
-  if (!companyCode) {
-    return { success: false, error: "Could not resolve your company. Please contact support." };
-  }
-
   // Verify the current password by signing in with it, then change it on the
-  // real login. (Nothing about the password is stored anywhere else.)
+  // real login. The account's own email is used (not one rebuilt from the company code).
+  const { data: sessionUser } = await supabase.auth.getUser();
+  const accountEmail = sessionUser?.user?.email;
+  if (!accountEmail) {
+    return { success: false, error: "Your session has expired. Please sign in again." };
+  }
   const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: internalEmailFor(companyCode, emp.employee_code as string),
+    email: accountEmail,
     password: currentPassword,
   });
   if (signInError) {

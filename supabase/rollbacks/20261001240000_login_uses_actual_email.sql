@@ -1,0 +1,1 @@
+-- Rollback: re-apply the login_lookup definition from 20261001120000_login_rpc_hardening.sql (without login_email).
