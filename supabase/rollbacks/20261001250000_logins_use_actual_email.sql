@@ -1,0 +1,1 @@
+-- Rollback: restore the previous two-column definitions of get_quiz_admin_login_info / get_calling_app_admin_login_info (see git history).

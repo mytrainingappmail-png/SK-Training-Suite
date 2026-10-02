@@ -62,13 +62,13 @@ serve(async (req) => {
     // text can never alter the query itself.
     const byEmail = await supabaseAdmin
       .from("quiz_admins")
-      .select("username, contact_email, contact_mobile, status, companies(company_code)")
+      .select("username, auth_user_id, contact_email, contact_mobile, status, companies(company_code)")
       .ilike("contact_email", escapeLike(identifier))
       .eq("status", "active")
       .limit(2);
     const byMobile = byEmail.data && byEmail.data.length > 0 ? { data: [] as typeof byEmail.data } : await supabaseAdmin
       .from("quiz_admins")
-      .select("username, contact_email, contact_mobile, status, companies(company_code)")
+      .select("username, auth_user_id, contact_email, contact_mobile, status, companies(company_code)")
       .eq("contact_mobile", identifier)
       .eq("status", "active")
       .limit(2);
@@ -85,7 +85,12 @@ serve(async (req) => {
       });
     }
 
-    const internalEmail = `quiz.${companyCode.toLowerCase()}.${admin.username.toLowerCase()}@internal.sktraining`;
+    // The account's real sign-in email — it keeps its original company code even after a rename.
+    let internalEmail = `quiz.${companyCode.toLowerCase()}.${admin.username.toLowerCase()}@internal.sktraining`;
+    if (admin.auth_user_id) {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(admin.auth_user_id as string);
+      if (authUser?.user?.email) internalEmail = authUser.user.email;
+    }
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",

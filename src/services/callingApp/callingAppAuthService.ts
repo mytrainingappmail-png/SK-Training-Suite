@@ -71,12 +71,13 @@ export async function login(credentials: CallingAppLoginCredentials): Promise<Ca
     return fail("Invalid username or password.");
   }
 
-  const info = (infoRows as { company_code: string; module_enabled: boolean }[] | null)?.[0];
+  const info = (infoRows as { company_code: string; module_enabled: boolean; login_email: string | null }[] | null)?.[0];
   if (!info) return fail("Invalid username or password.");
   if (!info.module_enabled) return fail("Calling App is not enabled for this company. Contact your administrator.");
 
   const { error: signInError } = await supabaseCallingApp.auth.signInWithPassword({
-    email: internalEmailFor(info.company_code, username.trim()),
+    // The account's real email (survives a company-code rename); rebuilt only as a fallback.
+    email: info.login_email ?? internalEmailFor(info.company_code, username.trim()),
     password,
   });
 

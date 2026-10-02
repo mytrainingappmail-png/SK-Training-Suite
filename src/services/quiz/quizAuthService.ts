@@ -19,6 +19,7 @@ function internalEmailFor(companyCode: string, username: string): string {
 interface LoginInfoRow {
   company_code: string;
   live_quiz_enabled: boolean;
+  login_email: string | null;
 }
 
 export async function login(credentials: QuizLoginCredentials): Promise<QuizLoginResult> {
@@ -43,7 +44,8 @@ export async function login(credentials: QuizLoginCredentials): Promise<QuizLogi
   if (!info.live_quiz_enabled) return fail("Live Quiz is not enabled for this company. Contact your administrator.");
 
   const { error: signInError } = await supabaseQuiz.auth.signInWithPassword({
-    email: internalEmailFor(info.company_code, username.trim()),
+    // The account's real email (survives a company-code rename); rebuilt only as a fallback.
+    email: info.login_email ?? internalEmailFor(info.company_code, username.trim()),
     password,
   });
 
