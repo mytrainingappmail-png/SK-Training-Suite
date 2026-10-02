@@ -13,6 +13,7 @@ import EmployeeManagement from "../components/superadmin/EmployeeManagement";
 import CategoryManagement from "../components/superadmin/CategoryManagement";
 import CourseManagement from "../components/superadmin/CourseManagement";
 import CourseBuilder from "../components/admin/coursebuilder/CourseBuilder";
+import SimpleCourses from "../modules/courses/SimpleCourses";
 import RoleManagement from "../components/superadmin/RoleManagement";
 import ThemeManagement from "../components/superadmin/ThemeManagement";
 import PlatformMarketingManagement from "../components/superadmin/PlatformMarketingManagement";
@@ -77,7 +78,7 @@ import { loadCompanyModuleFlags } from "../services/company/appModuleService";
 // content are separate render trees, but both must genuinely hide a
 // company-disabled module, not just its shortcut link).
 const TAB_MODULE_MAP: Record<string, string> = {
-  category: "courses", course: "courses", "course-builder": "courses", resource: "courses",
+  category: "courses", course: "courses", "simple-courses": "courses", "course-builder": "courses", resource: "courses",
   "course-visibility": "courses", "video-library-content": "courses",
   "real-estate-projects": "projects",
   brainstorming: "brainstorming",
@@ -273,7 +274,7 @@ function Admin() {
             ) : null}
 
             {(can(PERMISSIONS.VIEW_CATEGORY) && matches("Categories")) ||
-             (can(PERMISSIONS.VIEW_COURSE) && (matches("Courses") || matches("Course Builder"))) ||
+             (can(PERMISSIONS.VIEW_COURSE) && (matches("Courses") || matches("Course Builder") || matches("My Courses"))) ||
              (can(PERMISSIONS.VIEW_RESOURCE) && matches("Resources")) ||
              matches("Course Visibility") || matches("Video Library") ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
@@ -281,6 +282,9 @@ function Admin() {
                 <div className="flex flex-wrap gap-3">
                   {can(PERMISSIONS.VIEW_CATEGORY) && matches("Categories") && (
                     <button onClick={() => setActiveTab("category")} className={getTabClass()} style={getTabStyle("category")}>Categories</button>
+                  )}
+                  {can(PERMISSIONS.VIEW_COURSE) && matches("My Courses") && (
+                    <button onClick={() => setActiveTab("simple-courses")} className={getTabClass()} style={getTabStyle("simple-courses")}>My Courses</button>
                   )}
                   {can(PERMISSIONS.VIEW_COURSE) && matches("Courses") && (
                     <button onClick={() => setActiveTab("course")} className={getTabClass()} style={getTabStyle("course")}>Courses</button>
@@ -580,6 +584,8 @@ function Admin() {
             {activeTab === "employee-of-the-month" && can(PERMISSIONS.VIEW_EMPLOYEE) && moduleAllowed("employee-of-the-month") && <EmployeeOfTheMonthManagement />}
 
             {activeTab === "category" && can(PERMISSIONS.VIEW_CATEGORY) && moduleAllowed("category") && <CategoryManagement />}
+
+            {activeTab === "simple-courses" && can(PERMISSIONS.VIEW_COURSE) && moduleAllowed("simple-courses") && <SimpleCourses />}
 
             {activeTab === "course" && can(PERMISSIONS.VIEW_COURSE) && moduleAllowed("course") && <CourseManagement />}
 

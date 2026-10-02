@@ -25,6 +25,7 @@ export const ADMIN_MODULES: AdminModuleDefinition[] = [
   { id: "employee",     label: "Employees",     permission: PERMISSIONS.VIEW_EMPLOYEE },
   { id: "category",     label: "Categories",    permission: PERMISSIONS.VIEW_CATEGORY },
 
+  { id: "simple-courses", label: "My Courses",      permission: PERMISSIONS.VIEW_COURSE },
   { id: "course",         label: "Courses",         permission: PERMISSIONS.VIEW_COURSE },
   { id: "course-builder", label: "Course Builder",  permission: PERMISSIONS.VIEW_COURSE },
   { id: "resource",       label: "Resources",       permission: PERMISSIONS.VIEW_RESOURCE },
