@@ -65,10 +65,17 @@ async function cloneCourse(courseId: string, targetCompanyId: string, targetComp
   // course_code is unique PLATFORM-WIDE (not per company), so the source
   // code would collide with itself once copied elsewhere -- prefix with
   // the target company's own code to guarantee uniqueness.
-  const clonedCourseCode = `${targetCompanyCode}-${sourceCode}`;
-  const { error: insertCourseError } = await supabase
-    .from("courses")
-    .insert({ ...courseRest, id: newCourseId, company_id: targetCompanyId, category_id: null, created_by: null, course_code: clonedCourseCode });
+  // A deliberate second copy ("send again") would repeat that code, so it gets a short suffix.
+  // (The owner cannot read the customer's courses, so the clash is detected by the insert itself.)
+  let insertCourseError: { message: string; code?: string } | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const suffix = attempt === 0 ? "" : `-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const { error } = await supabase
+      .from("courses")
+      .insert({ ...courseRest, id: newCourseId, company_id: targetCompanyId, category_id: null, created_by: null, course_code: `${targetCompanyCode}-${sourceCode}${suffix}` });
+    insertCourseError = error;
+    if (!error || error.code !== "23505") break;
+  }
   if (insertCourseError) throw new Error(insertCourseError.message);
 
   for (const module of modules ?? []) {

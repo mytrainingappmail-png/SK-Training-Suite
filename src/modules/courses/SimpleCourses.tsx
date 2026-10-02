@@ -12,9 +12,11 @@ import SectionHeroBanner from '../../components/learning/SectionHeroBanner';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import { useAuthorization } from '../../hooks/useAuthorization';
 import { getMyCompanyId } from '../../services/company/currentCompanyContext';
+import { loadCompany } from '../../services/company/companyService';
+import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import { uploadDocument, uploadImage, uploadVideo } from '../../services/contentEditor/contentEditorService';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
-import type { AssignableEmployee, CourseAssignment, SimpleCourse, SimpleLesson, SimpleLessonType, SimpleModule } from '../../repositories/simpleCourse/simpleCourseRepository';
+import type { AssignableEmployee, CourseAssignment, CourseProtection, SimpleCourse, SimpleLesson, SimpleLessonType, SimpleModule } from '../../repositories/simpleCourse/simpleCourseRepository';
 
 const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400';
 const BTN = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50';
@@ -73,7 +75,9 @@ export default function SimpleCourses() {
     setBusy(true);
     setError('');
     try {
-      const id = await repo.createCourse(companyId, newName, newDesc);
+      // A new course starts with the company's own content-protection defaults (same as the older Course screen).
+      const company = await loadCompany().catch(() => null);
+      const id = await repo.createCourse(companyId, newName, newDesc, company ? protectionPatchFromCompany(company) : {});
       setCreating(false);
       setNewName('');
       setNewDesc('');
@@ -171,6 +175,9 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
   const [people, setPeople] = useState<AssignableEmployee[]>([]);
   const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
   const [search, setSearch] = useState('');
+  // Brand watermark / copy-block: only the platform owner's own account sees these controls.
+  const [isOwner, setIsOwner] = useState(false);
+  const [protection, setProtection] = useState<CourseProtection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -197,6 +204,11 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
         setName(course.course_name);
         setDescription(course.short_description ?? '');
         setActive(course.active);
+        setProtection({
+          watermark_enabled: course.watermark_enabled, watermark_text: course.watermark_text,
+          watermark_orientation: course.watermark_orientation, watermark_opacity: course.watermark_opacity, no_copy: course.no_copy,
+        });
+        loadCompany().then((c) => { if (!cancelled) setIsOwner(c?.is_platform_operator ?? false); }).catch(() => undefined);
         setOutline(mods);
         setPeople(emps);
         setAssignments(assigned);
@@ -219,6 +231,12 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
       setActive(!active);
     }, !active ? 'Published — now give it to the people who should take it.' : 'Unpublished — employees no longer see it.');
     setBusy(false);
+  }
+
+  function changeProtection(patch: Partial<CourseProtection>, saveNow = true) {
+    if (!protection) return;
+    setProtection({ ...protection, ...patch });
+    if (saveNow) void guard(() => repo.updateCourse(courseId, patch), 'Saved');
   }
 
   async function assign(list: AssignableEmployee[]) {
@@ -293,6 +311,56 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
           </div>
         </div>
       </div>
+
+      {/* Protect the content — owner only. Shown on reading pages (never on video); travels with every copy you send to a customer. */}
+      {isOwner && protection && (
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox" className="mt-1" disabled={!canEdit} checked={protection.watermark_enabled}
+              onChange={(e) => changeProtection({ watermark_enabled: e.target.checked })}
+            />
+            <span>
+              <span className="block text-sm font-bold text-slate-800">Protect this course with my watermark</span>
+              <span className="block text-xs text-slate-500">Your name across every reading page. It stays on the copies customers receive, and they cannot remove it.</span>
+            </span>
+          </label>
+          {protection.watermark_enabled && (
+            <div className="mt-4 space-y-3 pl-7">
+              <input
+                value={protection.watermark_text ?? ''} disabled={!canEdit} className={INPUT} placeholder="Watermark text, e.g. your brand name"
+                onChange={(e) => changeProtection({ watermark_text: e.target.value }, false)}
+                onBlur={() => changeProtection({ watermark_text: (protection.watermark_text ?? '').trim() })}
+              />
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex gap-1">
+                  {(['horizontal', 'diagonal', 'vertical'] as const).map((o) => (
+                    <button
+                      key={o} type="button" disabled={!canEdit} onClick={() => changeProtection({ watermark_orientation: o })}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize ${protection.watermark_orientation === o ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >{o}</button>
+                  ))}
+                </div>
+                <div className="flex flex-1 items-center gap-2 text-xs text-slate-500">
+                  Light
+                  <input
+                    type="range" min={3} max={40} className="flex-1" disabled={!canEdit} value={protection.watermark_opacity}
+                    onChange={(e) => changeProtection({ watermark_opacity: Number(e.target.value) }, false)}
+                    onMouseUp={() => changeProtection({ watermark_opacity: protection.watermark_opacity })}
+                    onTouchEnd={() => changeProtection({ watermark_opacity: protection.watermark_opacity })}
+                    onKeyUp={() => changeProtection({ watermark_opacity: protection.watermark_opacity })}
+                  />
+                  Dark
+                </div>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" disabled={!canEdit} checked={protection.no_copy} onChange={(e) => changeProtection({ no_copy: e.target.checked })} />
+                Do not allow copying or right-click on reading pages
+              </label>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Who takes it */}
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">

@@ -85,7 +85,7 @@ export async function listCourses(companyId: string): Promise<SimpleCourse[]> {
 }
 
 /** Creates a course as a DRAFT with sensible defaults (the customer is never asked for a code, level, category…). */
-export async function createCourse(companyId: string, name: string, description: string): Promise<string> {
+export async function createCourse(companyId: string, name: string, description: string, protection: object = {}): Promise<string> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data, error } = await supabase
       .from("courses")
@@ -102,6 +102,7 @@ export async function createCourse(companyId: string, name: string, description:
         passing_percentage: 50,
         certificate_enabled: false,
         active: false,
+        ...protection,
       })
       .select("id")
       .single();
@@ -120,10 +121,22 @@ export async function updateCourse(id: string, patch: Record<string, unknown>): 
   if (error) fail("updateCourse", error);
 }
 
-export async function getCourse(id: string): Promise<{ id: string; course_name: string; short_description: string | null; active: boolean }> {
-  const { data, error } = await supabase.from("courses").select("id, course_name, short_description, active").eq("id", id).single();
+export interface CourseProtection {
+  watermark_enabled: boolean;
+  watermark_text: string | null;
+  watermark_orientation: "horizontal" | "vertical" | "diagonal";
+  watermark_opacity: number;
+  no_copy: boolean;
+}
+
+export async function getCourse(id: string): Promise<{ id: string; course_name: string; short_description: string | null; active: boolean } & CourseProtection> {
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id, course_name, short_description, active, watermark_enabled, watermark_text, watermark_orientation, watermark_opacity, no_copy")
+    .eq("id", id)
+    .single();
   if (error) fail("getCourse", error);
-  return data as { id: string; course_name: string; short_description: string | null; active: boolean };
+  return data as { id: string; course_name: string; short_description: string | null; active: boolean } & CourseProtection;
 }
 
 export async function enrolledCount(courseId: string): Promise<number> {
