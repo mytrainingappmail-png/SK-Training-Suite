@@ -122,11 +122,19 @@ export interface ChangePasswordResult {
 export async function changeOwnPassword(newPassword: string): Promise<ChangePasswordResult> {
   if (newPassword.length < 8) return { success: false, error: "Password must be at least 8 characters." };
 
+  const { data: current } = await supabaseCallingApp.auth.getUser();
+  const accountEmail = current?.user?.email;
   const { error } = await supabaseCallingApp.auth.updateUser({ password: newPassword });
   if (error) {
     console.error("[callingAppAuthService] changeOwnPassword:", error.message);
     return { success: false, error: error.message };
   }
+  // Changing a password can end the existing session on the server; sign in again with the new one
+  // so this browser stays signed in instead of failing on the next server-checked action.
+  if (accountEmail) {
+    await supabaseCallingApp.auth.signInWithPassword({ email: accountEmail, password: newPassword }).catch(() => undefined);
+  }
+
   return { success: true, error: null };
 }
 

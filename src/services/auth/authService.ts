@@ -387,7 +387,8 @@ export interface ChangePasswordPayload {
 }
 
 export type ChangePasswordResult =
-  | { success: true;  error: null   }
+  /** signedOut: the password changed but this browser could not be kept signed in — the caller should send the user to the login page. */
+  | { success: true;  error: null; signedOut?: boolean }
   | { success: false; error: string };
 
 export async function changePassword(
@@ -440,6 +441,17 @@ export async function changePassword(
   if (updateAuthError) {
     console.error("[authService] changePassword (auth):", updateAuthError.message);
     return { success: false, error: "Failed to update password. Please try again." };
+  }
+
+  // The sign-in service can end the existing session when a password changes. The page
+  // would then look signed in while every server-checked action ("add employee", uploads…)
+  // failed with "session is not valid". Sign in again with the NEW password so this
+  // browser carries on seamlessly, with a fresh session.
+  const { error: reSignInError } = await supabase.auth.signInWithPassword({ email: accountEmail, password: newPassword });
+  if (reSignInError) {
+    console.error("[authService] changePassword (re-sign-in):", reSignInError.message);
+    await supabase.auth.signOut({ scope: "local" });
+    return { success: true, error: null, signedOut: true };
   }
 
   const { error: updateError } = await supabase

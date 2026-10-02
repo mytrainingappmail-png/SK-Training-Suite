@@ -311,10 +311,15 @@ function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
         return;
       }
 
-      setPasswordBanner('Password changed successfully.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      if (result.signedOut) {
+        setPasswordBanner('Password changed. Please sign in again with your new password.');
+        setTimeout(() => { window.location.assign('/'); }, 2500);
+        return;
+      }
+      setPasswordBanner('Password changed successfully.');
     } catch (err) {
       setPasswordBanner(
         err instanceof Error ? err.message : 'An unexpected error occurred.'
