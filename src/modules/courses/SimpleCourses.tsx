@@ -12,11 +12,9 @@ import SectionHeroBanner from '../../components/learning/SectionHeroBanner';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import { useAuthorization } from '../../hooks/useAuthorization';
 import { getMyCompanyId } from '../../services/company/currentCompanyContext';
-import { designationService } from '../../services/designation/designationService';
 import { uploadDocument, uploadImage, uploadVideo } from '../../services/contentEditor/contentEditorService';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
-import type { SimpleCourse, SimpleLesson, SimpleLessonType, SimpleModule } from '../../repositories/simpleCourse/simpleCourseRepository';
-import type { Designation } from '../../types/designation';
+import type { AssignableEmployee, CourseAssignment, SimpleCourse, SimpleLesson, SimpleLessonType, SimpleModule } from '../../repositories/simpleCourse/simpleCourseRepository';
 
 const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400';
 const BTN = 'rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50';
@@ -102,7 +100,7 @@ export default function SimpleCourses() {
       <SectionHeroBanner
         eyebrow="Courses"
         title="My Courses"
-        subtitle="Create a course, add your videos and reading, choose who sees it, publish."
+        subtitle="Create a course, add your videos and reading, publish, then give it to your team."
         statLabel="Courses"
         statValue={courses.length}
       />
@@ -170,9 +168,9 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
   const [description, setDescription] = useState('');
   const [active, setActive] = useState(false);
   const [outline, setOutline] = useState<SimpleModule[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [visibleTo, setVisibleTo] = useState<string[]>([]);
-  const [restricted, setRestricted] = useState(false);
+  const [people, setPeople] = useState<AssignableEmployee[]>([]);
+  const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -190,17 +188,18 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
     let cancelled = false;
     (async () => {
       try {
-        const [course, mods, vis, allDesignations] = await Promise.all([
-          repo.getCourse(courseId), repo.getOutline(courseId), repo.getVisibility(courseId), designationService.getAll().catch(() => [] as Designation[]),
+        const [course, mods, emps, assigned] = await Promise.all([
+          repo.getCourse(courseId), repo.getOutline(courseId),
+          companyId ? repo.listEmployees(companyId) : Promise.resolve([] as AssignableEmployee[]),
+          repo.getAssignments(courseId),
         ]);
         if (cancelled) return;
         setName(course.course_name);
         setDescription(course.short_description ?? '');
         setActive(course.active);
         setOutline(mods);
-        setVisibleTo(vis);
-        setRestricted(vis.length > 0);
-        setDesignations(allDesignations.filter((d) => !companyId || !d.company_id || d.company_id === companyId));
+        setPeople(emps);
+        setAssignments(assigned);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Could not open this course.');
       } finally {
@@ -218,14 +217,24 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
     await guard(async () => {
       await repo.updateCourse(courseId, { active: !active });
       setActive(!active);
-    }, !active ? 'Published — employees can see it now.' : 'Unpublished — employees no longer see it.');
+    }, !active ? 'Published — now give it to the people who should take it.' : 'Unpublished — employees no longer see it.');
     setBusy(false);
   }
 
-  async function saveVisibility(next: string[], isRestricted: boolean) {
-    setRestricted(isRestricted);
-    setVisibleTo(next);
-    await guard(async () => { await repo.setVisibility(courseId, isRestricted ? next : []); }, 'Saved');
+  async function assign(list: AssignableEmployee[]) {
+    if (!companyId || list.length === 0) return;
+    await guard(async () => {
+      const added = await repo.assignEmployees(companyId, courseId, list);
+      setAssignments(await repo.getAssignments(courseId));
+      flash(added === 0 ? 'They already have this course.' : `Given to ${added} employee${added === 1 ? '' : 's'}.`);
+    });
+  }
+
+  async function takeAway(employeeId: string) {
+    await guard(async () => {
+      await repo.unassignEmployee(courseId, employeeId);
+      setAssignments(await repo.getAssignments(courseId));
+    }, 'Removed');
   }
 
   async function removeCourse() {
@@ -285,30 +294,51 @@ function CourseEditor({ courseId, companyId, canEdit, canDelete, onBack }: {
         </div>
       </div>
 
-      {/* Who can see it */}
+      {/* Who takes it */}
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h3 className="text-sm font-bold text-slate-800">Who can see this course?</h3>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="radio" checked={!restricted} disabled={!canEdit} onChange={() => void saveVisibility([], false)} /> Everyone
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="radio" checked={restricted} disabled={!canEdit} onChange={() => void saveVisibility(visibleTo, true)} /> Only certain roles
-          </label>
-        </div>
-        {restricted && (
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {designations.length === 0 && <p className="col-span-full text-sm text-slate-500">No designations found. Add them in Organization Setup first.</p>}
-            {designations.map((d) => (
-              <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <input
-                  type="checkbox" disabled={!canEdit} checked={visibleTo.includes(d.id)}
-                  onChange={() => void saveVisibility(visibleTo.includes(d.id) ? visibleTo.filter((x) => x !== d.id) : [...visibleTo, d.id], true)}
-                />
-                {d.designation_name}
-              </label>
-            ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Who should take this course?</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {assignments.length === 0
+                ? 'Nobody yet — employees see the course only after you give it to them.'
+                : `${assignments.length} of ${people.length} employees have this course.`}
+            </p>
           </div>
+          {canEdit && people.length > 0 && (
+            <button type="button" onClick={() => void assign(people)} className={`${BTN} bg-slate-900 text-white hover:bg-slate-700`}>
+              Give to everyone
+            </button>
+          )}
+        </div>
+        {people.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No employees found. Add employees first.</p>
+        ) : (
+          <>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} className={`${INPUT} mt-3`} placeholder="Or find a person to give it to…" />
+            <div className="mt-3 max-h-64 space-y-1 overflow-y-auto">
+              {people
+                .filter((p) => `${p.first_name} ${p.last_name ?? ''} ${p.employee_code}`.toLowerCase().includes(search.trim().toLowerCase()))
+                .map((p) => {
+                  const a = assignments.find((x) => x.employee_id === p.id);
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      <span>{p.first_name} {p.last_name ?? ''} <span className="text-xs text-slate-400">· {p.employee_code}</span></span>
+                      {a ? (
+                        <span className="flex items-center gap-3 text-xs">
+                          <span className="font-semibold text-emerald-700">✓ Has this course</span>
+                          {canEdit && a.status === 'PENDING' && (
+                            <button type="button" onClick={() => void takeAway(p.id)} className="text-red-600 hover:underline">Remove</button>
+                          )}
+                        </span>
+                      ) : canEdit ? (
+                        <button type="button" onClick={() => void assign([p])} className="text-xs font-semibold text-slate-700 hover:underline">Give course</button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+            </div>
+          </>
         )}
       </div>
 
@@ -443,13 +473,19 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
     setSaving(false);
   }
 
+  // A lesson still called "New lesson" (or empty) is named after its file; a title the person typed is kept.
+  const titleFor = (f: File) => {
+    const typed = title.trim();
+    return typed && typed !== 'New lesson' ? typed : f.name.replace(/\.[^.]+$/, '');
+  };
+
   async function uploadVideoFile(f: File | undefined) {
     if (!f) return;
     setUploading(true);
     await guard(async () => {
       const r = await uploadVideo(f);
       setLink(r.url);
-      await repo.updateLesson(lesson.id, { video_url: r.url, lesson_title: title.trim() || f.name.replace(/\.[^.]+$/, '') });
+      await repo.updateLesson(lesson.id, { video_url: r.url, lesson_title: titleFor(f) });
       await refresh();
     }, 'Video uploaded');
     setUploading(false);
@@ -461,7 +497,7 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
     await guard(async () => {
       const r = await uploadDocument(f);
       await repo.setLessonFile(lesson.id, r.url, r.fileName || f.name, resourceTypeFor(f.name));
-      await repo.updateLesson(lesson.id, { lesson_title: title.trim() || f.name.replace(/\.[^.]+$/, '') });
+      await repo.updateLesson(lesson.id, { lesson_title: titleFor(f) });
       await refresh();
     }, 'File uploaded');
     setUploading(false);

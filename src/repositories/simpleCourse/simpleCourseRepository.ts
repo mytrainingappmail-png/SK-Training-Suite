@@ -241,19 +241,64 @@ export async function setLessonFile(lessonId: string, fileUrl: string, title: st
   if (error) fail("setLessonFile", error);
 }
 
-/** Designation ids a course is restricted to (empty = everyone can see it). */
-export async function getVisibility(courseId: string): Promise<string[]> {
-  const { data, error } = await supabase.from("course_visibility").select("designation_id").eq("course_id", courseId);
-  if (error) fail("getVisibility", error);
-  return (data ?? []).map((r) => r.designation_id as string);
+// ── Who takes the course ─────────────────────────────────────────────────────
+// A published course only shows up for an employee once they are enrolled in it
+// (that is how the learner screens find their courses), so "give the course" = enrol.
+
+export interface AssignableEmployee {
+  id: string;
+  employee_code: string;
+  first_name: string;
+  last_name: string | null;
+  branch_id: string | null;
 }
 
-export async function setVisibility(courseId: string, designationIds: string[]): Promise<void> {
-  const { error: delError } = await supabase.from("course_visibility").delete().eq("course_id", courseId);
-  if (delError) fail("setVisibility (clear)", delError);
-  if (designationIds.length === 0) return;
-  const { error } = await supabase
-    .from("course_visibility")
-    .insert(designationIds.map((designation_id) => ({ course_id: courseId, designation_id })));
-  if (error) fail("setVisibility", error);
+export interface CourseAssignment {
+  employee_id: string;
+  status: string;
+}
+
+export async function listEmployees(companyId: string): Promise<AssignableEmployee[]> {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id, employee_code, first_name, last_name, branch_id")
+    .eq("company_id", companyId)
+    .eq("active", true)
+    .order("first_name", { ascending: true });
+  if (error) fail("listEmployees", error);
+  return (data ?? []) as AssignableEmployee[];
+}
+
+export async function getAssignments(courseId: string): Promise<CourseAssignment[]> {
+  const { data, error } = await supabase.from("enrollments").select("employee_id, status").eq("course_id", courseId).eq("enrollment_type", "COURSE");
+  if (error) fail("getAssignments", error);
+  return (data ?? []) as CourseAssignment[];
+}
+
+/** Enrols the given employees; anyone already enrolled is skipped. Returns how many were newly added. */
+export async function assignEmployees(companyId: string, courseId: string, employees: AssignableEmployee[]): Promise<number> {
+  const existing = new Set((await getAssignments(courseId)).map((a) => a.employee_id));
+  const fresh = employees.filter((e) => !existing.has(e.id));
+  if (fresh.length === 0) return 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const { error } = await supabase.from("enrollments").insert(
+    fresh.map((e) => ({
+      company_id: companyId,
+      branch_id: e.branch_id,
+      employee_id: e.id,
+      course_id: courseId,
+      assignment_type: "MANUAL",
+      enrollment_type: "COURSE",
+      status: "PENDING",
+      start_date: today,
+    })),
+  );
+  if (error) fail("assignEmployees", error);
+  return fresh.length;
+}
+
+/** Takes the course away from someone who has not started it (progress is never deleted here). */
+export async function unassignEmployee(courseId: string, employeeId: string): Promise<void> {
+  const { error } = await supabase.from("enrollments").delete().eq("course_id", courseId).eq("employee_id", employeeId).eq("status", "PENDING");
+  if (error) fail("unassignEmployee", error);
 }
