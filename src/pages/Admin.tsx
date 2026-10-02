@@ -133,6 +133,16 @@ function Admin() {
   // Management is already hidden for non-operator companies.
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
 
+  // Owner only: while Admin is open, quietly send newly published content to the companies set to
+  // "Auto-send" (Content Distribution). Cheap when nothing is switched on; never shows an error.
+  useEffect(() => {
+    if (!isPlatformOperator) return;
+    const tick = () => { void import("../services/contentDistribution/autoSendService").then((m) => m.runAutoSend(false)).catch(() => undefined); };
+    tick();
+    const id = setInterval(tick, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isPlatformOperator]);
+
   // Per-company Super Admin Console colors — every subscribing company
   // picks its own via Company Management, defaulting to a blue/gold look
   // until they do.

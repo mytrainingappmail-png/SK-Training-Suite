@@ -13,6 +13,8 @@ import { loadDays } from "../../services/induction/inductionService";
 import type { InductionDay } from "../../types/induction";
 import { pushContentToCompany, loadDistributionLog } from "../../services/contentDistribution/contentDistributionService";
 import type { DistributionKind, DistributionLogRow } from "../../services/contentDistribution/contentDistributionService";
+import { disableAutoSend, enableAutoSend, listAutoSendTargets, runAutoSend } from "../../services/contentDistribution/autoSendService";
+import type { AutoSendTarget } from "../../services/contentDistribution/autoSendService";
 import type { Company } from "../../types/company";
 import type { Course } from "../../types/course";
 import type { LibraryVideo } from "../../types/videoLibraryContent";
@@ -43,6 +45,50 @@ function ContentDistributionManagement() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Auto-send: companies that automatically receive everything the owner publishes.
+  const [autoTargets, setAutoTargets] = useState<AutoSendTarget[]>([]);
+  const [askingAutoFor, setAskingAutoFor] = useState<string | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+
+  async function refreshAuto() {
+    try { setAutoTargets(await listAutoSendTargets()); } catch { setAutoTargets([]); }
+  }
+
+  async function turnOnAuto(companyId: string, mode: "only_new" | "everything") {
+    setAutoBusy(true);
+    setError("");
+    try {
+      await enableAutoSend(companyId, mode);
+      setAskingAutoFor(null);
+      await refreshAuto();
+      setLog(await loadDistributionLog());
+      setSuccessMsg(mode === "only_new" ? "Auto-send is on. Anything you publish from now on is sent there automatically." : "Auto-send is on. Everything published so far will be sent now.");
+      if (mode === "everything") await sendNow();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not turn auto-send on.");
+    } finally { setAutoBusy(false); }
+  }
+
+  async function turnOffAuto(companyId: string) {
+    setAutoBusy(true);
+    try { await disableAutoSend(companyId); await refreshAuto(); setSuccessMsg("Auto-send is off for that company."); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not turn auto-send off."); }
+    finally { setAutoBusy(false); }
+  }
+
+  async function sendNow() {
+    setAutoBusy(true);
+    setError("");
+    try {
+      const r = await runAutoSend(true);
+      setLog(await loadDistributionLog());
+      await refreshAuto();
+      if (r.failed.length > 0) setError(`Not sent to: ${r.failed.join("; ")}`);
+      if (r.sentItems > 0) setSuccessMsg(`Sent ${r.sentItems} new item(s) to ${r.companies.join(", ")}.`);
+      else if (r.failed.length === 0) setSuccessMsg("Nothing new to send — everything published is already there.");
+    } finally { setAutoBusy(false); }
+  }
+
   useEffect(() => {
     Promise.all([loadCompanies(), loadCompany()])
       .then(([rows, mine]) => {
@@ -63,6 +109,7 @@ function ContentDistributionManagement() {
       .finally(() => setLoadingContent(false));
 
     void loadDistributionLog().then(setLog);
+    void refreshAuto();
   }, []);
 
   const filteredCompanies = useMemo(() => {
@@ -162,6 +209,59 @@ function ContentDistributionManagement() {
 
       {error && <div className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
       {successMsg && <div className="rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{successMsg}</div>}
+
+      {/* Auto-send */}
+      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">⚡ Auto-send</h3>
+            <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
+              Pick companies (for example your own RMT001) that should automatically get everything you publish — courses, induction days, videos and projects.
+              A copy goes out once your item has been left alone for 10 minutes, so half-written content is never sent. Drafts are never sent.
+            </p>
+          </div>
+          {autoTargets.length > 0 && (
+            <button type="button" onClick={() => void sendNow()} disabled={autoBusy} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+              {autoBusy ? "Sending…" : "Send now"}
+            </button>
+          )}
+        </div>
+        <div className="mt-3 space-y-2">
+          {companies.length === 0 && <p className="text-sm text-slate-400">No other companies yet.</p>}
+          {companies.map((c) => {
+            const target = autoTargets.find((t) => t.company_id === c.id);
+            return (
+              <div key={c.id} className="rounded-xl bg-slate-50 px-4 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-700">{c.company_name} <span className="text-xs text-slate-400">· {c.company_code}</span></span>
+                  {target ? (
+                    <span className="flex items-center gap-3 text-xs">
+                      <span className="font-semibold text-emerald-700">ON{target.last_run_at ? ` · last checked ${new Date(target.last_run_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span>
+                      <button type="button" disabled={autoBusy} onClick={() => void turnOffAuto(c.id)} className="font-semibold text-red-600 hover:underline">Turn off</button>
+                    </span>
+                  ) : (
+                    <button type="button" disabled={autoBusy} onClick={() => setAskingAutoFor(askingAutoFor === c.id ? null : c.id)} className="text-xs font-semibold text-indigo-600 hover:underline">Turn on</button>
+                  )}
+                </div>
+                {askingAutoFor === c.id && !target && (
+                  <div className="mt-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                    <p className="text-xs text-slate-600">Does {c.company_name} already have the content you have built so far?</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" disabled={autoBusy} onClick={() => void turnOnAuto(c.id, "only_new")} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                        Yes — send only new things from now
+                      </button>
+                      <button type="button" disabled={autoBusy} onClick={() => void turnOnAuto(c.id, "everything")} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        No — send everything published so far too
+                      </button>
+                      <button type="button" onClick={() => setAskingAutoFor(null)} className="px-2 text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
         {/* Company picker */}

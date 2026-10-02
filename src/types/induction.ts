@@ -3,6 +3,12 @@
 // learning-path machinery). A Day is like a Project; each Day has
 // Page/Test sections exactly like a Project's sections.
 
+// When an employee may open a Day (admin chooses, day by day):
+//   next_day       — after the previous Day was completed on an EARLIER date (the original behaviour)
+//   after_previous — right after the previous Day is completed and its test passed, no waiting
+//   anytime        — open from the start, no conditions at all
+export type InductionUnlockMode = 'next_day' | 'after_previous' | 'anytime';
+
 export interface InductionDay {
   id: string;
   company_id: string;
@@ -13,6 +19,7 @@ export interface InductionDay {
   thumbnail_url: string | null;
   display_order: number;
   active: boolean;
+  unlock_mode: InductionUnlockMode;
   // null = shared across every branch (the default). Set = visible only
   // to employees in that one branch.
   branch_id: string | null;
@@ -34,6 +41,7 @@ export const defaultInductionDayForm: InductionDayForm = {
   thumbnail_url: null,
   display_order: 0,
   active: true,
+  unlock_mode: 'next_day',
   branch_id: null,
   source_id: null,
 };

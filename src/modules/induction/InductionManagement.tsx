@@ -48,7 +48,7 @@ import ImageEditModal from '../../components/shared/ImageEditModal';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import { protectionPatchFromCompany, DEFAULT_WATERMARK } from '../../components/shared/ContentWatermark';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
-import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment, InductionFaqItem } from '../../types/induction';
+import type { InductionDay, InductionDaySection, InductionSectionType, InductionAssignment, InductionFaqItem, InductionUnlockMode } from '../../types/induction';
 import { defaultAssessmentForm } from '../../types/assessment';
 import type { Question, QuestionWithOptionsForm } from '../../types/question';
 import { defaultQuestionForm } from '../../types/question';
@@ -56,7 +56,14 @@ import type { Employee } from '../../types/employee';
 import type { Branch } from '../../types/branch';
 import type { Company } from '../../types/company';
 
-const INPUT_CLS = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
+// How a Day opens for employees — the admin picks this day by day.
+const UNLOCK_CHOICES: { value: InductionUnlockMode; title: string; short: string; help: string }[] = [
+  { value: 'anytime', title: 'Anytime — open from the start', short: 'Opens anytime', help: 'No conditions at all. Good for short things like a company overview.' },
+  { value: 'after_previous', title: 'As soon as the previous day is done', short: 'After previous day', help: 'Opens right after the previous day is completed and its test passed — no waiting for another date.' },
+  { value: 'next_day', title: 'On the next date', short: 'Next date', help: 'One new day per calendar date: the employee comes back the day after finishing the previous day.' },
+];
+
+const INPUT_CLS ='w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
 async function uploadInlineImage(file: File): Promise<string> {
   const { url } = await uploadImage(file);
@@ -303,7 +310,7 @@ function InductionManagement() {
   const [toast, setToast] = useState('');
 
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean }>({ title: '', description: '', thumbnail_url: null, active: true });
+  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day' });
   const [savingDay, setSavingDay] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -378,6 +385,19 @@ function InductionManagement() {
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load sections.'));
   }
 
+  /** One click for the whole program: every day opens the same way. */
+  async function handleSetAllUnlock(mode: InductionUnlockMode) {
+    const label = UNLOCK_CHOICES.find((c) => c.value === mode)?.title ?? mode;
+    if (!confirm(`Set all ${days.length} days to: "${label}"?`)) return;
+    try {
+      await Promise.all(days.map((d) => editDay(d.id, { unlock_mode: mode })));
+      showToast('All days updated.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not update the days.');
+    }
+    fetchAll();
+  }
+
   async function handleReorderDays(ordered: InductionDay[]) {
     setReordering(true);
     setDays(ordered);
@@ -393,13 +413,13 @@ function InductionManagement() {
 
   function startNewDay() {
     setEditingDayId('new');
-    setDraft({ title: '', description: '', thumbnail_url: null, active: true });
+    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day' });
     setSections([]);
   }
 
   function startEditDay(day: InductionDay) {
     setEditingDayId(day.id);
-    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active });
+    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day' });
     fetchSections(day.id);
   }
 
@@ -429,12 +449,12 @@ function InductionManagement() {
     setSavingDay(true);
     try {
       if (editingDayId === 'new') {
-        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, branch_id: null, source_id: null });
+        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.unlock_mode, branch_id: null, source_id: null });
         showToast('Day added.');
         setEditingDayId(created.id);
         fetchSections(created.id);
       } else if (editingDayId) {
-        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active });
+        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.unlock_mode });
         showToast('Day saved.');
       }
       fetchAll();
@@ -865,6 +885,20 @@ function InductionManagement() {
                 />
               )}
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">When can an employee open this day?</label>
+              <div className="space-y-2">
+                {UNLOCK_CHOICES.map((c) => (
+                  <label key={c.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${draft.unlock_mode === c.value ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <input type="radio" className="mt-1" name="unlock-mode" checked={draft.unlock_mode === c.value} onChange={() => setDraft((d) => ({ ...d, unlock_mode: c.value }))} />
+                    <span>
+                      <span className="block font-semibold text-slate-800">{c.title}</span>
+                      <span className="block text-xs text-slate-500">{c.help}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))} />
               Active (visible to employees)
@@ -1183,7 +1217,7 @@ function InductionManagement() {
     <div className="space-y-6">
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">Induction</h2>
-        <p className="mt-1 text-sm text-slate-500">A simple, day-by-day onboarding program for new employees — each Day unlocks the next once its test is passed.</p>
+        <p className="mt-1 text-sm text-slate-500">A simple, day-by-day onboarding program for new employees. For every Day you choose when it opens: anytime, right after the previous day, or on the next date.</p>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -1240,6 +1274,17 @@ function InductionManagement() {
             <button onClick={startNewDay} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">+ New Day</button>
           </div>
         </div>
+        {days.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <span className="font-semibold text-slate-700">Set every day to:</span>
+            {UNLOCK_CHOICES.map((c) => (
+              <button key={c.value} type="button" onClick={() => void handleSetAllUnlock(c.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                {c.short}
+              </button>
+            ))}
+            <span className="w-full text-xs text-slate-400">Or choose it day by day with Edit.</span>
+          </div>
+        )}
         <div className="space-y-2">
           {days.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">No days yet — add one above.</p>
@@ -1260,6 +1305,9 @@ function InductionManagement() {
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
                       {branchName(d.branch_id)}
+                    </span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.unlock_mode === 'anytime' ? 'bg-emerald-50 text-emerald-700' : d.unlock_mode === 'after_previous' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {UNLOCK_CHOICES.find((c) => c.value === (d.unlock_mode ?? 'next_day'))?.short}
                     </span>
                     {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
                   </div>

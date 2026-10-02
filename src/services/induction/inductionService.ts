@@ -60,6 +60,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
     thumbnail_url: source.thumbnail_url,
     display_order: source.display_order,
     active: source.active,
+    unlock_mode: source.unlock_mode,
     branch_id: branchId,
     source_id: source.id,
   });

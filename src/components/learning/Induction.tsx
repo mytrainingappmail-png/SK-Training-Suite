@@ -1,15 +1,17 @@
 // src/components/learning/Induction.tsx
 //
 // Employee-facing Induction — a card grid (same visual language as
-// Projects, via the shared ThumbnailCard) of a SEQUENTIAL day-by-day
-// onboarding program. Day N+1 requires, in order:
-//   1. Day N marked complete (an explicit "I've read this" attestation)
-//   2. Day N's Test (if it has one) passed — attempts are governed by
-//      that Test's own Assessment.maximum_attempts, set in Admin →
-//      Assessments, same as everywhere else in the app
-//   3. Today's calendar date has reached the day AFTER Day N was
-//      completed — so passing every test back-to-back in one sitting
-//      still can't unlock more than one new Day per calendar day.
+// Projects, via the shared ThumbnailCard) of a day-by-day onboarding
+// program. HOW each Day opens is chosen by the admin, day by day
+// (induction_days.unlock_mode):
+//   anytime        — open from the start, nothing required
+//   after_previous — Day N+1 opens once Day N is marked complete ("I've read
+//                    this") and Day N's Test (if any) is passed — attempts are
+//                    governed by that Test's own Assessment.maximum_attempts
+//   next_day       — as after_previous, AND today's calendar date must have
+//                    reached the day after Day N was completed, so passing
+//                    everything in one sitting can't unlock more than one new
+//                    Day per date (the original behaviour, still the default)
 
 import { useEffect, useState } from 'react';
 import {
@@ -43,6 +45,14 @@ function IconChevron({ className = 'h-4 w-4', open }: { className?: string; open
 }
 
 type DayStatus = 'completed' | 'available' | 'date-locked' | 'locked';
+
+/** What the test card says about the NEXT day, according to how the admin set that day to open. */
+function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextNumber?: number): string {
+  if (!nextDay) return passed ? 'Passed — well done!' : 'Pass this test to finish the induction.';
+  if (nextDay.unlock_mode === 'anytime') return passed ? 'Passed — well done!' : 'Pass this test to complete this day.';
+  if (nextDay.unlock_mode === 'after_previous') return passed ? 'Passed — the next day is open now.' : `Pass this test to open Day ${nextNumber}.`;
+  return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then Day ${nextNumber} opens on the next date.`;
+}
 
 function Skeleton() {
   return (
@@ -114,6 +124,8 @@ function Induction() {
   function dayStatus(index: number): DayStatus {
     const day = days[index];
     if (completionByDay.has(day.id)) return 'completed';
+    // The admin chooses, day by day, how a Day opens (see InductionUnlockMode).
+    if (day.unlock_mode === 'anytime') return 'available';
     if (index === 0) return 'available';
 
     const prevDay = days[index - 1];
@@ -123,7 +135,7 @@ function Induction() {
     const prevTest = (sectionsByDay[prevDay.id] ?? []).find((s) => s.section_type === 'test');
     if (prevTest?.assessment_id && !passedTestIds.has(prevTest.assessment_id)) return 'locked';
 
-    if (!isDateUnlocked(prevCompletedAt)) return 'date-locked';
+    if (day.unlock_mode !== 'after_previous' && !isDateUnlocked(prevCompletedAt)) return 'date-locked';
     return 'available';
   }
 
@@ -257,7 +269,11 @@ function Induction() {
                       {openCompleted ? (passed ? '✅ ' : '') : '🔒 '}{section.title}
                     </p>
                     <p className={`text-xs ${openCompleted ? 'text-amber-700' : 'text-slate-400'}`}>
-                      {!openCompleted ? 'Mark this day complete above to unlock the test.' : passed ? 'Passed — the next day unlocks tomorrow.' : `Pass this test, then Day ${dayNumber + 1} opens the day after.`}
+                      {!openCompleted
+                        ? 'Mark this day complete above to unlock the test.'
+                        : passed
+                        ? afterTestNote(days[openDayIndex + 1], true)
+                        : afterTestNote(days[openDayIndex + 1], false, dayNumber + 1)}
                     </p>
                   </div>
                   {section.assessment_id && (
@@ -305,7 +321,7 @@ function Induction() {
 
   return (
     <div className="space-y-6">
-      <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program — one day at a time." statLabel="Days" statValue={days.length} />
+      <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program." statLabel="Days" statValue={days.length} />
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
 
@@ -334,6 +350,8 @@ function Induction() {
                   </span>
                 ) : status === 'locked' ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-white"><IconLock className="h-3 w-3" /> Locked</span>
+                ) : day.unlock_mode === 'anytime' && i > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/90 px-2.5 py-1 text-[11px] font-bold text-white">Open anytime</span>
                 ) : null
               }
             >

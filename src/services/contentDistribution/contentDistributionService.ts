@@ -44,6 +44,14 @@ async function logPush(kind: DistributionKind, sourceId: string, targetCompanyId
   await supabase.from("content_distribution_log").insert({ kind, source_id: sourceId, target_company_id: targetCompanyId });
 }
 
+// A copy is ADDED AFTER whatever the company already has. The owner's own order numbers (0, 1, 2…) would otherwise
+// slot a new induction day or course in between the company's existing ones — confusing for employees who are
+// half-way through. A time-based base keeps several items sent together in the owner's relative order, and the
+// company's admin can still reorder them freely.
+function appendedOrder(sourceOrder: number | null | undefined): number {
+  return Math.floor(Date.now() / 1000) + Math.max(0, Number(sourceOrder ?? 0));
+}
+
 async function cloneAssessmentFor(sourceAssessmentId: string, targetCompanyId: string, newLessonId: string | null): Promise<string> {
   const { data, error } = await supabase.rpc("platform_clone_assessment", { p_source: sourceAssessmentId, p_target_company: targetCompanyId, p_lesson: newLessonId });
   if (error) throw new Error(error.message);
@@ -77,7 +85,7 @@ async function cloneCourse(courseId: string, targetCompanyId: string, targetComp
     const suffix = attempt === 0 ? "" : `-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const { error } = await supabase
       .from("courses")
-      .insert({ ...courseRest, id: newCourseId, company_id: targetCompanyId, category_id: null, created_by: null, course_code: `${targetCompanyCode}-${sourceCode}${suffix}` });
+      .insert({ ...courseRest, id: newCourseId, company_id: targetCompanyId, category_id: null, created_by: null, display_order: appendedOrder(course.display_order), course_code: `${targetCompanyCode}-${sourceCode}${suffix}` });
     insertCourseError = error;
     if (!error || error.code !== "23505") break;
   }
@@ -184,7 +192,7 @@ async function cloneRealEstateProject(projectId: string, targetCompanyId: string
   const { id: _pid, created_at: _pc, updated_at: _pu, company_id: _pcid, category_id: _pcat, ...projectRest } = project;
   const { error: insertProjectError } = await supabase
     .from("real_estate_projects")
-    .insert({ ...projectRest, id: newProjectId, company_id: targetCompanyId, category_id: null });
+    .insert({ ...projectRest, id: newProjectId, company_id: targetCompanyId, category_id: null, display_order: appendedOrder(project.display_order) });
   if (insertProjectError) throw new Error(insertProjectError.message);
 
   for (const section of sections ?? []) {
@@ -221,7 +229,7 @@ async function cloneInductionDay(dayId: string, targetCompanyId: string): Promis
   const { id: _id, created_at: _c, updated_at: _u, company_id: _cid, branch_id: _bid, source_id: _sid, ...dayRest } = day;
   const { error: insertDayError } = await supabase
     .from("induction_days")
-    .insert({ ...dayRest, id: newDayId, company_id: targetCompanyId, branch_id: null, source_id: null });
+    .insert({ ...dayRest, id: newDayId, company_id: targetCompanyId, branch_id: null, source_id: null, display_order: appendedOrder(day.display_order) });
   if (insertDayError) throw new Error(insertDayError.message);
 
   for (const section of sections ?? []) {
