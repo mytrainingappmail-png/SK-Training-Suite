@@ -54,6 +54,27 @@ export function invalidateBrandingCache(): void {
   window.dispatchEvent(new CustomEvent(BRANDING_CHANGED_EVENT));
 }
 
+// The last branding this browser resolved, so the next page load can paint the right name and logo
+// straight away instead of waiting for the network (and never flashes a stranger's default).
+const LAST_BRANDING_KEY = "sk:branding:last";
+
+export function peekBranding(): ResolvedBranding | null {
+  try {
+    const raw = localStorage.getItem(LAST_BRANDING_KEY);
+    return raw ? (JSON.parse(raw) as ResolvedBranding) : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberBranding(b: ResolvedBranding): void {
+  try {
+    localStorage.setItem(LAST_BRANDING_KEY, JSON.stringify(b));
+  } catch {
+    // private window / storage full — the page just waits for the network as before
+  }
+}
+
 export async function loadBranding(companyCode?: string): Promise<ResolvedBranding> {
   if (!companyCode && cached) return cached;
 
@@ -83,6 +104,7 @@ export async function loadBranding(companyCode?: string): Promise<ResolvedBrandi
   };
 
   if (!companyCode) cached = resolved;
+  if (row) rememberBranding(resolved);
   return resolved;
 }
 

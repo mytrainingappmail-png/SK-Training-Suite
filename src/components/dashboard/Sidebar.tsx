@@ -1,5 +1,4 @@
 import { BRAND } from "../../config/branding";
-import logo from "../../assets/logo.png";
 import { MENU } from "../../config/menu";
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -7,7 +6,8 @@ import { useAuthorization } from "../../hooks/useAuthorization";
 import { PERMISSIONS } from "../../constants/permissions";
 import { getCurrentUser } from "../../services/auth/session";
 import { loadRoles } from "../../services/role/roleService";
-import { loadBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/brandingService";
+import { loadBranding, peekBranding, BRANDING_CHANGED_EVENT } from "../../services/branding/brandingService";
+import BrandLogo from "../shared/BrandLogo";
 import { loadCompany } from "../../services/company/companyService";
 import { loadCompanyModuleFlags } from "../../services/company/appModuleService";
 import { getMyEmployeeLinkedGrant } from "../../repositories/callingApp/callingAppAdminRepository";
@@ -126,8 +126,10 @@ function Sidebar() {
   const [lockToast, setLockToast] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [companyName, setCompanyName] = useState(BRAND.companyName);
-  const [logoUrl, setLogoUrl] = useState('');
+  const remembered = peekBranding();
+  const [companyName, setCompanyName] = useState(remembered?.companyName ?? BRAND.companyName);
+  const [logoUrl, setLogoUrl] = useState(remembered?.logoUrl ?? '');
+  const [brandReady, setBrandReady] = useState(false);
   const [namePosition, setNamePosition] = useState<"left" | "center">("left");
   const [menuOrder, setMenuOrder] = useState<string[] | null>(null);
   // From the active Theme (Admin → Theme) — falls back to the static
@@ -145,6 +147,7 @@ function Sidebar() {
       loadBranding().then((b) => {
         setCompanyName(b.companyName);
         setLogoUrl(b.logoUrl);
+        setBrandReady(true);
         setSidebarColor(b.sidebarColor);
         setAccentColor(b.secondaryColor);
       });
@@ -282,11 +285,7 @@ function Sidebar() {
         <div className="p-6 border-b border-slate-800 flex items-start gap-3">
 
           <div className="flex-1 flex flex-col items-center gap-2 min-w-0">
-            <img
-              src={logoUrl || logo}
-              alt="logo"
-              className="w-12 h-12 rounded-xl object-contain bg-white flex-shrink-0"
-            />
+            <BrandLogo src={logoUrl} ready={brandReady} name={companyName} className="w-12 h-12 rounded-xl object-contain bg-white flex-shrink-0" />
 
             <div className="w-full min-w-0">
               <FitText text={companyName} align={namePosition} className="text-white font-semibold" />

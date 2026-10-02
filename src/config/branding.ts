@@ -13,7 +13,7 @@ export interface BrandConfig {
 }
 
 export const BRAND: BrandConfig = {
-  companyName: 'Siddharth & Kunal Enterprise',
+  companyName: 'RealTrainer',
   tagline: 'Building Skills. Building Futures.',
   logo: 'logo.png',
   primaryColor: '#0F172A',
@@ -23,6 +23,6 @@ export const BRAND: BrandConfig = {
     { title: 'Performance', description: 'Track growth with real-time insights' },
     { title: 'Growth', description: 'Unlock career paths and certifications' },
   ],
-  footerText: 'Siddharth & Kunal Enterprise',
+  footerText: 'RealTrainer',
   version: '1.0.0',
 };

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { BRAND } from '../config/branding';
-import logo from '../assets/logo.png';
 import LoginForm from '../components/auth/LoginForm';
-import { loadBranding } from '../services/branding/brandingService';
+import { loadBranding, peekBranding } from '../services/branding/brandingService';
+import BrandLogo from '../components/shared/BrandLogo';
 
 const FeatureIcon: React.FC<{ index: number }> = ({ index }) => {
   const icons = [
@@ -62,12 +62,14 @@ export const LoginPage: React.FC = () => {
   // Present only when reached via the /:companyCode branded login link
   // (see ROUTES.COMPANY_LOGIN) — undefined on the plain /login route.
   const { companyCode: routeCompanyCode } = useParams<{ companyCode?: string }>();
-  const [companyName, setCompanyName] = useState(BRAND.companyName);
-  const [loginLogoUrl, setLoginLogoUrl] = useState('');
+  const remembered = peekBranding();
+  const [companyName, setCompanyName] = useState(remembered?.companyName ?? BRAND.companyName);
+  const [loginLogoUrl, setLoginLogoUrl] = useState(remembered?.loginLogoUrl ?? '');
+  const [brandReady, setBrandReady] = useState(false);
   // From the active Theme (Admin → Theme) — fall back to the static
   // defaults until branding resolves, so nothing flashes unstyled.
-  const [primaryColor, setPrimaryColor] = useState(BRAND.primaryColor);
-  const [secondaryColor, setSecondaryColor] = useState(BRAND.secondaryColor);
+  const [primaryColor, setPrimaryColor] = useState(remembered?.primaryColor ?? BRAND.primaryColor);
+  const [secondaryColor, setSecondaryColor] = useState(remembered?.secondaryColor ?? BRAND.secondaryColor);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,6 +78,7 @@ export const LoginPage: React.FC = () => {
     setLoginLogoUrl(b.loginLogoUrl);
     setPrimaryColor(b.primaryColor);
     setSecondaryColor(b.secondaryColor);
+    setBrandReady(true);
   }
 
   useEffect(() => {
@@ -124,12 +127,7 @@ export const LoginPage: React.FC = () => {
 
         <div className="relative z-10 w-full max-w-lg flex flex-col items-center text-center">
           <div className="mb-7">
-            <img
-              src={loginLogoUrl || logo}
-              alt={companyName}
-              className="h-44 w-44 object-contain"
-              style={loginLogoUrl ? undefined : { boxShadow: `0 0 0 1px ${secondaryColor}4D` }}
-            />
+            <BrandLogo src={loginLogoUrl} ready={brandReady} name={companyName} className="h-44 w-44 rounded-3xl object-contain" />
           </div>
 
           <h1
