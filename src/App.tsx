@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 import { ROUTES } from "./constants/routes";
@@ -15,37 +15,7 @@ import LoginPage from "./pages/LoginPage";
 import MarketingHomePage from "./pages/MarketingHomePage";
 import DashboardRouter from "./pages/DashboardRouter";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-
-// Cloudflare Workers assets serve only the CURRENT build's files — a
-// deploy replaces ./dist outright rather than keeping old chunk files
-// around. A tab left open across a deploy already has the new
-// index.html's JS in memory, but navigating to a route it hasn't loaded
-// yet triggers a dynamic import() for a chunk hash from the OLD build,
-// which now 404s ("Failed to fetch dynamically imported module"). This
-// wrapper retries once via a full reload (which picks up the new
-// index.html + current chunk hashes) instead of that surfacing as a
-// crash; a `sessionStorage` flag stops it from looping if the reload
-// itself doesn't fix it (e.g. a real network outage).
-function lazyWithRetry<T extends { default: ComponentType<any> }>(
-  factory: () => Promise<T>
-): LazyExoticComponent<T["default"]> {
-  return lazy(async () => {
-    const RELOAD_FLAG = "sk-chunk-reload-attempted";
-    try {
-      const module = await factory();
-      sessionStorage.removeItem(RELOAD_FLAG);
-      return module;
-    } catch (error) {
-      if (!sessionStorage.getItem(RELOAD_FLAG)) {
-        sessionStorage.setItem(RELOAD_FLAG, "1");
-        window.location.reload();
-        // Never resolves — the reload navigates away before this matters.
-        return new Promise<T>(() => {});
-      }
-      throw error;
-    }
-  });
-}
+import { lazyWithRetry } from "./utils/lazyWithRetry";
 
 const Employees = lazyWithRetry(() => import("./pages/Employees"));
 const Training = lazyWithRetry(() => import("./pages/Training"));

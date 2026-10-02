@@ -1,73 +1,74 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
 // import Sidebar from "../components/dashboard/Sidebar";
 // import Header from "../components/dashboard/Header";
 
-import CompanyManagement from "../components/superadmin/CompanyManagement";
-import BranchManagement from "../components/superadmin/BranchManagement";
-import DepartmentManagement from "../components/superadmin/DepartmentManagement";
-import DesignationManagement from "../components/superadmin/DesignationManagement";
-import EmployeeManagement from "../components/superadmin/EmployeeManagement";
-import CategoryManagement from "../components/superadmin/CategoryManagement";
-import CourseManagement from "../components/superadmin/CourseManagement";
-import CourseBuilder from "../components/admin/coursebuilder/CourseBuilder";
-import SimpleCourses from "../modules/courses/SimpleCourses";
-import RoleManagement from "../components/superadmin/RoleManagement";
-import ThemeManagement from "../components/superadmin/ThemeManagement";
-import PlatformMarketingManagement from "../components/superadmin/PlatformMarketingManagement";
-import MenuManagement from "../components/superadmin/MenuManagement";
-import SettingsManagement from "../components/settings/SettingsManagement";
-import PermissionManagement from "../modules/permissions/PermissionManagement";
-import PermissionMatrix from "../modules/permissions/PermissionMatrix";
-import ResourceManagement from "../components/superadmin/ResourceManagement";
-import AssessmentManagement from "../components/admin/assessment/AssessmentManagement";
-import QuestionManagement from "../components/superadmin/QuestionManagement";
-import AssessmentAssignmentManagement from "../components/superadmin/AssessmentAssignmentManagement";
-import EvaluationRuleManagement from "../components/superadmin/EvaluationRuleManagement";
-import AssessmentResultManagement from "../components/superadmin/AssessmentResultManagement";
-import CertificateManagement from "../components/superadmin/CertificateManagement";
-import CertificateTemplateManagement from "../components/superadmin/CertificateTemplateManagement";
-import CertificateGenerationManagement from "../components/superadmin/CertificateGenerationManagement";
-import CertificateVerificationManagement from "../components/superadmin/CertificateVerificationManagement";
-import LearningPathManagement from "../components/superadmin/LearningPathManagement";
-import LearningPathCourseManagement from "../components/superadmin/LearningPathCourseManagement";
-import LearningPathEnrollmentManagement from "../components/superadmin/LearningPathEnrollmentManagement";
-import LearningPathProgressManagement from "../components/superadmin/LearningPathProgressManagement";
-import EnrollmentManagement from "../components/superadmin/EnrollmentManagement";
-import AssignTrainingManagement from "../components/superadmin/AssignTrainingManagement";
-import TrainingBatchManagement from "../components/superadmin/TrainingBatchManagement";
-import EmployeeRoleManagement from "../components/superadmin/EmployeeRoleManagement";
-import ReportManagement from "../components/superadmin/ReportManagement";
-import TrainerAssignmentManagement from "../components/superadmin/TrainerAssignmentManagement";
+const CompanyManagement = lazyWithRetry(() => import("../components/superadmin/CompanyManagement"));
+const BranchManagement = lazyWithRetry(() => import("../components/superadmin/BranchManagement"));
+const DepartmentManagement = lazyWithRetry(() => import("../components/superadmin/DepartmentManagement"));
+const DesignationManagement = lazyWithRetry(() => import("../components/superadmin/DesignationManagement"));
+const EmployeeManagement = lazyWithRetry(() => import("../components/superadmin/EmployeeManagement"));
+const CategoryManagement = lazyWithRetry(() => import("../components/superadmin/CategoryManagement"));
+const CourseManagement = lazyWithRetry(() => import("../components/superadmin/CourseManagement"));
+const CourseBuilder = lazyWithRetry(() => import("../components/admin/coursebuilder/CourseBuilder"));
+const SimpleCourses = lazyWithRetry(() => import("../modules/courses/SimpleCourses"));
+const RoleManagement = lazyWithRetry(() => import("../components/superadmin/RoleManagement"));
+const ThemeManagement = lazyWithRetry(() => import("../components/superadmin/ThemeManagement"));
+const PlatformMarketingManagement = lazyWithRetry(() => import("../components/superadmin/PlatformMarketingManagement"));
+const MenuManagement = lazyWithRetry(() => import("../components/superadmin/MenuManagement"));
+const SettingsManagement = lazyWithRetry(() => import("../components/settings/SettingsManagement"));
+const PermissionManagement = lazyWithRetry(() => import("../modules/permissions/PermissionManagement"));
+const PermissionMatrix = lazyWithRetry(() => import("../modules/permissions/PermissionMatrix"));
+const ResourceManagement = lazyWithRetry(() => import("../components/superadmin/ResourceManagement"));
+const AssessmentManagement = lazyWithRetry(() => import("../components/admin/assessment/AssessmentManagement"));
+const QuestionManagement = lazyWithRetry(() => import("../components/superadmin/QuestionManagement"));
+const AssessmentAssignmentManagement = lazyWithRetry(() => import("../components/superadmin/AssessmentAssignmentManagement"));
+const EvaluationRuleManagement = lazyWithRetry(() => import("../components/superadmin/EvaluationRuleManagement"));
+const AssessmentResultManagement = lazyWithRetry(() => import("../components/superadmin/AssessmentResultManagement"));
+const CertificateManagement = lazyWithRetry(() => import("../components/superadmin/CertificateManagement"));
+const CertificateTemplateManagement = lazyWithRetry(() => import("../components/superadmin/CertificateTemplateManagement"));
+const CertificateGenerationManagement = lazyWithRetry(() => import("../components/superadmin/CertificateGenerationManagement"));
+const CertificateVerificationManagement = lazyWithRetry(() => import("../components/superadmin/CertificateVerificationManagement"));
+const LearningPathManagement = lazyWithRetry(() => import("../components/superadmin/LearningPathManagement"));
+const LearningPathCourseManagement = lazyWithRetry(() => import("../components/superadmin/LearningPathCourseManagement"));
+const LearningPathEnrollmentManagement = lazyWithRetry(() => import("../components/superadmin/LearningPathEnrollmentManagement"));
+const LearningPathProgressManagement = lazyWithRetry(() => import("../components/superadmin/LearningPathProgressManagement"));
+const EnrollmentManagement = lazyWithRetry(() => import("../components/superadmin/EnrollmentManagement"));
+const AssignTrainingManagement = lazyWithRetry(() => import("../components/superadmin/AssignTrainingManagement"));
+const TrainingBatchManagement = lazyWithRetry(() => import("../components/superadmin/TrainingBatchManagement"));
+const EmployeeRoleManagement = lazyWithRetry(() => import("../components/superadmin/EmployeeRoleManagement"));
+const ReportManagement = lazyWithRetry(() => import("../components/superadmin/ReportManagement"));
+const TrainerAssignmentManagement = lazyWithRetry(() => import("../components/superadmin/TrainerAssignmentManagement"));
 
-import PlanManagement from "../modules/license/PlanManagement";
-import CompanyOnboardingWizard from "../components/superadmin/CompanyOnboardingWizard";
-import CompanyLicenseManagement from "../modules/license/CompanyLicenseManagement";
-import CustomerDirectory from "../modules/platform/CustomerDirectory";
-import DiscountCodeManagement from "../modules/license/DiscountCodeManagement";
-import NotificationLog from "../modules/license/NotificationLog";
-import PaymentSettingsManagement from "../modules/payment/PaymentSettingsManagement";
-import CompanyModulesManagement from "../components/superadmin/CompanyModulesManagement";
-import ContentDistributionManagement from "../components/superadmin/ContentDistributionManagement";
-import CourseVisibilityMatrix from "../modules/courseVisibility/CourseVisibilityMatrix";
-import RealEstateProjectManagement from "../modules/realEstateProject/RealEstateProjectManagement";
-import InductionManagement from "../modules/induction/InductionManagement";
-import BrainstormingManagement from "../components/admin/brainstorming/BrainstormingManagement";
-import EmployeeOfTheMonthManagement from "../components/admin/employeeOfTheMonth/EmployeeOfTheMonthManagement";
-import LegalDocumentManagement from "../components/admin/legal/LegalDocumentManagement";
-import VideoLibraryManagement from "../modules/videoLibraryContent/VideoLibraryManagement";
-import BulkCertificateIssue from "../modules/certificate/BulkCertificateIssue";
-import AttendanceManagement from "../modules/attendance/AttendanceManagement";
-import GeofenceManagement from "../modules/geofence/GeofenceManagement";
-import NotificationCenter from "../components/admin/notifications/NotificationCenter";
-import TicketManagement from "../components/admin/support/TicketManagement";
-import EmailTemplateBuilder from "../components/admin/email/EmailTemplateBuilder";
-import MarketDataManagement from "../components/admin/marketData/MarketDataManagement";
-import QuizAdminSetupPanel from "../components/quiz/QuizAdminSetupPanel";
-import CallingAppAdminSetupPanel from "../components/callingApp/CallingAppAdminSetupPanel";
-import AuditLogCenter from "../components/admin/audit/AuditLogCenter";
+const PlanManagement = lazyWithRetry(() => import("../modules/license/PlanManagement"));
+const CompanyOnboardingWizard = lazyWithRetry(() => import("../components/superadmin/CompanyOnboardingWizard"));
+const CompanyLicenseManagement = lazyWithRetry(() => import("../modules/license/CompanyLicenseManagement"));
+const CustomerDirectory = lazyWithRetry(() => import("../modules/platform/CustomerDirectory"));
+const DiscountCodeManagement = lazyWithRetry(() => import("../modules/license/DiscountCodeManagement"));
+const NotificationLog = lazyWithRetry(() => import("../modules/license/NotificationLog"));
+const PaymentSettingsManagement = lazyWithRetry(() => import("../modules/payment/PaymentSettingsManagement"));
+const CompanyModulesManagement = lazyWithRetry(() => import("../components/superadmin/CompanyModulesManagement"));
+const ContentDistributionManagement = lazyWithRetry(() => import("../components/superadmin/ContentDistributionManagement"));
+const CourseVisibilityMatrix = lazyWithRetry(() => import("../modules/courseVisibility/CourseVisibilityMatrix"));
+const RealEstateProjectManagement = lazyWithRetry(() => import("../modules/realEstateProject/RealEstateProjectManagement"));
+const InductionManagement = lazyWithRetry(() => import("../modules/induction/InductionManagement"));
+const BrainstormingManagement = lazyWithRetry(() => import("../components/admin/brainstorming/BrainstormingManagement"));
+const EmployeeOfTheMonthManagement = lazyWithRetry(() => import("../components/admin/employeeOfTheMonth/EmployeeOfTheMonthManagement"));
+const LegalDocumentManagement = lazyWithRetry(() => import("../components/admin/legal/LegalDocumentManagement"));
+const VideoLibraryManagement = lazyWithRetry(() => import("../modules/videoLibraryContent/VideoLibraryManagement"));
+const BulkCertificateIssue = lazyWithRetry(() => import("../modules/certificate/BulkCertificateIssue"));
+const AttendanceManagement = lazyWithRetry(() => import("../modules/attendance/AttendanceManagement"));
+const GeofenceManagement = lazyWithRetry(() => import("../modules/geofence/GeofenceManagement"));
+const NotificationCenter = lazyWithRetry(() => import("../components/admin/notifications/NotificationCenter"));
+const TicketManagement = lazyWithRetry(() => import("../components/admin/support/TicketManagement"));
+const EmailTemplateBuilder = lazyWithRetry(() => import("../components/admin/email/EmailTemplateBuilder"));
+const MarketDataManagement = lazyWithRetry(() => import("../components/admin/marketData/MarketDataManagement"));
+const QuizAdminSetupPanel = lazyWithRetry(() => import("../components/quiz/QuizAdminSetupPanel"));
+const CallingAppAdminSetupPanel = lazyWithRetry(() => import("../components/callingApp/CallingAppAdminSetupPanel"));
+const AuditLogCenter = lazyWithRetry(() => import("../components/admin/audit/AuditLogCenter"));
 
 import { useAuthorization } from "../hooks/useAuthorization";
 import { loadCompany } from "../services/company/companyService";
@@ -569,6 +570,7 @@ function Admin() {
 
           {activeTab && (
           <div className="mt-8">
+            <Suspense fallback={<div className="flex min-h-[30vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" /></div>}>
             {activeTab === "company" && can(PERMISSIONS.VIEW_COMPANY) && <CompanyManagement />}
 
             {activeTab === "branch" && can(PERMISSIONS.VIEW_BRANCH) && <BranchManagement />}
@@ -696,6 +698,7 @@ function Admin() {
 
 
             {activeTab === "geofence" && moduleAllowed("geofence") && <GeofenceManagement />}
+            </Suspense>
           </div>
           )}
         </main>
