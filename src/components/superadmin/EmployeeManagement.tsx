@@ -6,6 +6,7 @@ import { branchService } from "../../services/branch/branchService";
 import { departmentService } from "../../services/department/departmentService";
 import { designationService } from "../../services/designation/designationService";
 import { generateTemporaryPassword } from "../../utils/passwordGenerator";
+import { getCurrentUser } from "../../services/auth/session";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 
 import type { Employee, EmployeeForm } from "../../types/employee";
@@ -919,6 +920,11 @@ export default function EmployeeManagement() {
   // someone who has none) and see it once, ready to copy and hand over.
   async function issueTemporaryPassword(emp: Employee) {
     const name = displayName(emp.first_name, emp.last_name) || emp.employee_code;
+    // Resetting your OWN password here would end your own sign-in session (the server revokes it).
+    if (getCurrentUser()?.id === emp.id) {
+      setBanner("To change your own password use Profile → Change Password. Resetting it from this list signs you out.");
+      return;
+    }
     const hasLogin = !!emp.auth_user_id;
     const ok = confirm(hasLogin
       ? `Set a new temporary password for ${name}? Their current password stops working immediately.`

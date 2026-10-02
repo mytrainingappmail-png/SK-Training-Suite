@@ -155,15 +155,15 @@ async function finishLogin(): Promise<LoginResult> {
     : { data: null, error: null };
 
   if (rowError || !matched) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     return fail("Could not load your profile. Please try again or contact your administrator.");
   }
   if (!matched.active) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     return fail("Your account is inactive. Contact your administrator.");
   }
   if (matched.account_locked) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     return fail(
       "Your account has been locked. Contact your administrator to unlock it."
     );
@@ -223,7 +223,10 @@ export async function completeMfaLogin(factorId: string, code: string): Promise<
 }
 
 export async function logout(): Promise<void> {
-  await supabase.auth.signOut();
+  // "local": ends THIS browser's session only. The default (global) also killed every other
+  // open tab/device of the same account, which made their next admin action fail with
+  // "session is not valid" even though the page still looked signed in.
+  await supabase.auth.signOut({ scope: "local" });
 
   const { logout: clearSession } = await import("./session");
   clearSession();

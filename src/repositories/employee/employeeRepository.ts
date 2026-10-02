@@ -88,6 +88,7 @@ export async function updateEmployee(
  * that flow can't sign in AS the employee to change it directly. Uses a
  * service-role Edge Function; never callable with just the anon key. */
 export async function syncEmployeeAuthPassword(authUserId: string, newPassword: string): Promise<void> {
+  await ensureLiveSession();
   const { data, error } = await supabase.functions.invoke("update-employee-auth-password", {
     body: { authUserId, newPassword },
   });
@@ -103,6 +104,7 @@ export async function syncEmployeeAuthPassword(authUserId: string, newPassword: 
 /** Creates the employee's real login with the given password (admin only —
  * the edge function checks the caller). For an employee that has no login yet. */
 export async function provisionEmployeeLogin(employeeDbId: string, password: string): Promise<void> {
+  await ensureLiveSession();
   const { data, error } = await supabase.functions.invoke("provision-employee-auth", {
     body: { employeeDbId, password },
   });
@@ -122,12 +124,27 @@ async function readFunctionError(error: unknown): Promise<string> {
   if (ctx && typeof ctx.json === "function") {
     try {
       const body = await ctx.json();
-      if (body?.error) return String(body.error);
+      if (body?.error) return friendlySessionMessage(String(body.error));
     } catch {
       // fall through
     }
   }
   return error instanceof Error ? error.message : "Request failed.";
+}
+
+const SESSION_ENDED_MESSAGE =
+  "Your sign-in session has ended (for example you signed out or signed in somewhere else). Please log out, sign in again, then retry.";
+
+function friendlySessionMessage(message: string): string {
+  return /session is not valid|sign in to continue|sign in again/i.test(message) ? SESSION_ENDED_MESSAGE : message;
+}
+
+/** Asks the sign-in service whether this browser's session is still alive (and refreshes it if it can).
+ *  Used BEFORE actions that need the server to know who you are, so the problem is explained up front
+ *  instead of after a half-finished save. */
+export async function ensureLiveSession(): Promise<void> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) throw new Error(SESSION_ENDED_MESSAGE);
 }
 
 export async function deleteEmployee(

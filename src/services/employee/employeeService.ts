@@ -9,6 +9,7 @@ import {
   toggleEmployeeStatus,
   syncEmployeeAuthPassword,
   provisionEmployeeLogin,
+  ensureLiveSession,
 } from "../../repositories/employee/employeeRepository";
 
 class EmployeeService {
@@ -33,6 +34,8 @@ class EmployeeService {
     this.validate(employee);
 
     const password = employee.password?.trim();
+    // Check the sign-in first, so a dead session is reported BEFORE anything is saved.
+    if (password) await ensureLiveSession();
     const created = await createEmployee(employee);
 
     if (password) {
