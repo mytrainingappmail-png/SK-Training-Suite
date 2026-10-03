@@ -1,7 +1,12 @@
-// The frame around every "Preview as employee" — a full-height panel with a clear "nothing here is
+// The frame around every "Preview as employee" — a full-screen panel with a clear "nothing here is
 // saved" bar, so the owner/admin sees exactly what an employee sees without touching any real progress.
+//
+// It is drawn through a portal straight into <body>. Inside the admin page a parent can carry a CSS
+// transform/animation, which makes a "fixed" child size itself to that parent instead of the screen —
+// the page's own sidebar then peeks out at the edges of the preview.
 
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function PreviewModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -12,8 +17,8 @@ export default function PreviewModal({ title, onClose, children }: { title: stri
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-slate-100">
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex flex-col bg-slate-100" role="dialog" aria-modal="true">
       <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 bg-slate-900 px-5 py-3 text-white">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">👁 Preview — this is how employees see it</p>
@@ -27,6 +32,7 @@ export default function PreviewModal({ title, onClose, children }: { title: stri
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
