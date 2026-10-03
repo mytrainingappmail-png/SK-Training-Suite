@@ -32,6 +32,7 @@
 // No repository, service, or database changes.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import TestQuestionsEditor from '../../shared/TestQuestionsEditor';
 
 import {
   loadAssessments,
@@ -604,6 +605,9 @@ function AssessmentManagement() {
   const [deletingAssessment, setDeletingAssessment] = useState(false);
 
   const [optionsByQuestion, setOptionsByQuestion] = useState<Record<string, QuestionOption[]>>({});
+  // "Edit all at once" (default): every question with its options on one screen, one Save button.
+  const [quickEdit, setQuickEdit] = useState(true);
+  const [quickOptions, setQuickOptions] = useState<Record<string, QuestionOption[]> | null>(null);
   const [questionModalForm, setQuestionModalForm] = useState<QuestionWithOptionsForm | null>(null);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
@@ -619,6 +623,19 @@ function AssessmentManagement() {
   function showToast(message: string) {
     setToast(message);
     setTimeout(() => setToast(''), 2400);
+  }
+
+  async function reloadQuick(assessmentId: string) {
+    try {
+      const rows = await loadQuestions();
+      const mine = rows.filter((q) => q.assessment_id === assessmentId);
+      const entries = await Promise.all(mine.map(async (q) => [q.id, await loadOptionsByQuestion(q.id)] as const));
+      setOptionsByQuestion({});
+      setQuickOptions(Object.fromEntries(entries));
+      setQuestions(rows);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load questions.');
+    }
   }
 
   function fetchAll() {
@@ -644,6 +661,14 @@ function AssessmentManagement() {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Make sure the options of every question of the open assessment are loaded for the all-at-once editor.
+  useEffect(() => {
+    if (!quickEdit || activeTab !== 'questions' || !activeAssessmentId) return;
+    const mine = questions.filter((q) => q.assessment_id === activeAssessmentId);
+    if (quickOptions === null || mine.some((q) => !(q.id in quickOptions))) void reloadQuick(activeAssessmentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickEdit, activeTab, activeAssessmentId, questions, quickOptions]);
 
   // ── Course / Category resolution (assessment -> lesson -> module -> course -> category) ──
 
@@ -1103,11 +1128,24 @@ function AssessmentManagement() {
                         <SecondaryButton onClick={() => importInputRef.current?.click()}><IconUpload className="h-3.5 w-3.5" /> Bulk Import</SecondaryButton>
                         <input ref={importInputRef} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void handleBulkImport(f); }} />
                         <SecondaryButton onClick={handleBulkExport}><IconDownload className="h-3.5 w-3.5" /> Bulk Export</SecondaryButton>
-                        <PrimaryButton onClick={openCreateQuestion}><IconPlus className="h-3.5 w-3.5" /> Add Question</PrimaryButton>
+                        <SecondaryButton onClick={() => setQuickEdit((v) => !v)}>{quickEdit ? 'Detailed list (all settings)' : 'Edit all at once'}</SecondaryButton>
+                        {!quickEdit && <PrimaryButton onClick={openCreateQuestion}><IconPlus className="h-3.5 w-3.5" /> Add Question</PrimaryButton>}
                       </div>
                     </div>
 
-                    {activeQuestions.length === 0 ? (
+                    {quickEdit ? (
+                      quickOptions && activeQuestions.every((q) => q.id in quickOptions) ? (
+                        <TestQuestionsEditor
+                          assessmentId={activeAssessmentId}
+                          questions={activeQuestions}
+                          optionsByQuestion={quickOptions}
+                          onSaved={() => reloadQuick(activeAssessmentId)}
+                          showToast={showToast}
+                        />
+                      ) : (
+                        <p className="text-sm text-slate-400">Loading questions…</p>
+                      )
+                    ) : activeQuestions.length === 0 ? (
                       <EmptyState message="No questions yet — add one or bulk import a CSV." />
                     ) : (
                       <div className="space-y-2">

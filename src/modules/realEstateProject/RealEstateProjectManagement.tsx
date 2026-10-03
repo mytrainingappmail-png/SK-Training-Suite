@@ -39,21 +39,21 @@ import {
   saveAssessment as saveAssessmentSettings, removeAssessment as removeAssessmentSvc,
 } from '../../services/assessment/assessmentService';
 import {
-  loadQuestions, loadOptionsByQuestion, createQuestion as createQuestionSvc,
-  saveQuestion as saveQuestionSvc, removeQuestion as removeQuestionSvc,
+  loadQuestions, loadOptionsByQuestion,
 } from '../../services/question/questionService';
 import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
+import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
+import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
-import type { RealEstateProjectSection, RealEstateProjectSectionForm, ProjectSectionFaqItem } from '../../types/realEstateProjectSection';
+import type { RealEstateProjectSection, RealEstateProjectSectionForm } from '../../types/realEstateProjectSection';
 import { defaultProjectSectionForm } from '../../types/realEstateProjectSection';
 import type { Company } from '../../types/company';
 import { defaultAssessmentForm } from '../../types/assessment';
-import type { Question, QuestionOption, QuestionWithOptionsForm } from '../../types/question';
-import { defaultQuestionForm } from '../../types/question';
+import type { Question, QuestionOption } from '../../types/question';
 
 function IconSpinner({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z" /></svg>);
@@ -280,9 +280,6 @@ function RealEstateProjectManagement() {
   const [testSettingsDraft, setTestSettingsDraft] = useState(DEFAULT_TEST_SETTINGS);
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [testQuestionOptions, setTestQuestionOptions] = useState<Record<string, QuestionOption[]>>({});
-  const [questionDraft, setQuestionDraft] = useState<QuestionWithOptionsForm | null>(null);
-  const [editingQuestionId, setEditingQuestionId] = useState<string | 'new' | null>(null);
-  const [savingQuestion, setSavingQuestion] = useState(false);
 
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const brochureInputRef = useRef<HTMLInputElement>(null);
@@ -351,6 +348,19 @@ function RealEstateProjectManagement() {
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load sections.'));
   }
 
+  /** Reload just the questions (keeps whatever is typed in the test settings). */
+  async function reloadTestQuestions(assessmentId: string) {
+    try {
+      const allQuestions = await loadQuestions();
+      const qs = allQuestions.filter((q) => q.assessment_id === assessmentId).sort((x, y) => x.display_order - y.display_order);
+      const entries = await Promise.all(qs.map(async (q) => [q.id, await loadOptionsByQuestion(q.id)] as const));
+      setTestQuestionOptions(Object.fromEntries(entries));
+      setTestQuestions(qs);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load questions.');
+    }
+  }
+
   async function fetchTestData(assessmentId: string) {
     try {
       const [allAssessments, allQuestions] = await Promise.all([loadAssessments(), loadQuestions()]);
@@ -376,8 +386,6 @@ function RealEstateProjectManagement() {
     setTestSettingsDraft(DEFAULT_TEST_SETTINGS);
     setTestQuestions([]);
     setTestQuestionOptions({});
-    setQuestionDraft(null);
-    setEditingQuestionId(null);
   }
 
   function startNewProject() {
@@ -627,104 +635,8 @@ function RealEstateProjectManagement() {
     fetchSections(editingProjectId);
   }
 
-  function startNewQuestion() {
-    const assessmentId = sectionDraft?.assessment_id;
-    if (!assessmentId) return;
-    setEditingQuestionId('new');
-    setQuestionDraft({
-      ...defaultQuestionForm,
-      assessment_id: assessmentId,
-      question_code: `q-${Date.now().toString(36)}`,
-      display_order: testQuestions.length + 1,
-      marks: 1,
-      options: [
-        { option_text: '', is_correct: true, display_order: 1 },
-        { option_text: '', is_correct: false, display_order: 2 },
-        { option_text: '', is_correct: false, display_order: 3 },
-        { option_text: '', is_correct: false, display_order: 4 },
-      ],
-    });
-  }
 
-  function startEditQuestion(q: Question) {
-    const opts = testQuestionOptions[q.id] ?? [];
-    setEditingQuestionId(q.id);
-    setQuestionDraft({
-      assessment_id: q.assessment_id,
-      question_code: q.question_code,
-      question_text: q.question_text,
-      question_type: 'mcq',
-      difficulty_level: q.difficulty_level,
-      marks: q.marks,
-      negative_marks: q.negative_marks,
-      time_limit_seconds: q.time_limit_seconds,
-      explanation: q.explanation,
-      hint: q.hint,
-      display_order: q.display_order,
-      mandatory: q.mandatory,
-      randomize_options: q.randomize_options,
-      attachment_url: q.attachment_url,
-      image_url: q.image_url,
-      active: q.active,
-      options: opts.length ? opts.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct, display_order: o.display_order })) : defaultQuestionForm.options,
-    });
-  }
 
-  async function handleSaveQuestion() {
-    if (!questionDraft) return;
-    setSavingQuestion(true);
-    try {
-      if (editingQuestionId === 'new') {
-        await createQuestionSvc(questionDraft);
-      } else if (editingQuestionId) {
-        await saveQuestionSvc(editingQuestionId, questionDraft);
-      }
-      const assessmentId = questionDraft.assessment_id;
-      setEditingQuestionId(null);
-      setQuestionDraft(null);
-      await fetchTestData(assessmentId);
-      showToast('Question saved');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to save question.');
-    } finally {
-      setSavingQuestion(false);
-    }
-  }
-
-  async function handleDeleteQuestion(id: string, assessmentId: string) {
-    try {
-      await removeQuestionSvc(id);
-      await fetchTestData(assessmentId);
-      showToast('Question deleted');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete question.');
-    }
-  }
-
-  function setCorrectOption(index: number) {
-    setQuestionDraft((d) => d && { ...d, options: d.options.map((o, i) => ({ ...o, is_correct: i === index })) });
-  }
-
-  function updateOptionText(index: number, text: string) {
-    setQuestionDraft((d) => d && { ...d, options: d.options.map((o, i) => (i === index ? { ...o, option_text: text } : o)) });
-  }
-
-  function updateFaqItem(index: number, field: keyof ProjectSectionFaqItem, value: string) {
-    setSectionDraft((d) => {
-      if (!d) return d;
-      const items = [...d.faq_items];
-      items[index] = { ...items[index], [field]: value };
-      return { ...d, faq_items: items };
-    });
-  }
-
-  function addFaqItem() {
-    setSectionDraft((d) => (d ? { ...d, faq_items: [...d.faq_items, { question: '', answer: '' }] } : d));
-  }
-
-  function removeFaqItem(index: number) {
-    setSectionDraft((d) => (d ? { ...d, faq_items: d.faq_items.filter((_, i) => i !== index) } : d));
-  }
 
   function sectionTypeLabel(t: string): string {
     if (t === 'page') return 'Page';
@@ -1017,88 +929,13 @@ function RealEstateProjectManagement() {
                         {sectionDraft.assessment_id ? (
                           <div>
                             <p className="mb-2 text-xs font-semibold text-slate-500">Questions ({testQuestions.length})</p>
-                            <div className="mb-3 space-y-2">
-                              {testQuestions.length === 0 && (
-                                <p className="text-xs text-slate-400">No questions yet — add one below.</p>
-                              )}
-                              {testQuestions.map((q) => {
-                                const opts = testQuestionOptions[q.id] ?? [];
-                                const correct = opts.find((o) => o.is_correct);
-                                return (
-                                  <div key={q.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3">
-                                    <div className="min-w-0 flex-1">
-                                      <p className="truncate text-sm font-medium text-slate-800">{q.question_text}</p>
-                                      <p className="text-xs text-slate-400">{q.marks} mark(s) · Correct: {correct?.option_text ?? '—'}</p>
-                                    </div>
-                                    <div className="flex flex-shrink-0 gap-2">
-                                      <button onClick={() => startEditQuestion(q)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
-                                      <button onClick={() => handleDeleteQuestion(q.id, q.assessment_id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {questionDraft ? (
-                              <div className="rounded-xl border border-slate-200 p-4">
-                                <label className="mb-1 block text-xs font-semibold text-slate-500">Question</label>
-                                <textarea
-                                  value={questionDraft.question_text}
-                                  onChange={(e) => setQuestionDraft((d) => d && { ...d, question_text: e.target.value })}
-                                  placeholder="Question"
-                                  rows={2}
-                                  className={`${INPUT_CLS} mb-3`}
-                                />
-                                <label className="mb-1 block text-xs font-semibold text-slate-500">Options — mark the correct one</label>
-                                <div className="space-y-2">
-                                  {questionDraft.options.map((opt, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => setCorrectOption(i)}
-                                        title="Mark as correct"
-                                        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold transition ${
-                                          opt.is_correct ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                        }`}
-                                      >
-                                        {String.fromCharCode(65 + i)}
-                                      </button>
-                                      <input
-                                        value={opt.option_text}
-                                        onChange={(e) => updateOptionText(i, e.target.value)}
-                                        placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                                        className={INPUT_CLS}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="mt-3 flex items-center gap-2">
-                                  <label className="text-xs font-semibold text-slate-500">Marks for this question</label>
-                                  <input
-                                    type="number" min={1}
-                                    value={questionDraft.marks}
-                                    onChange={(e) => setQuestionDraft((d) => d && { ...d, marks: Number(e.target.value) })}
-                                    className="w-20 rounded-lg bg-slate-50 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-                                  />
-                                </div>
-                                <div className="mt-4 flex justify-end gap-2">
-                                  <button onClick={() => { setEditingQuestionId(null); setQuestionDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={handleSaveQuestion}
-                                    disabled={savingQuestion}
-                                    className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                                  >
-                                    {savingQuestion ? 'Saving…' : 'Save Question'}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button onClick={startNewQuestion} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                + Add Question
-                              </button>
-                            )}
+                          <TestQuestionsEditor
+                            assessmentId={sectionDraft.assessment_id}
+                            questions={testQuestions}
+                            optionsByQuestion={testQuestionOptions}
+                            onSaved={() => reloadTestQuestions(sectionDraft.assessment_id!)}
+                            showToast={showToast}
+                          />
                           </div>
                         ) : (
                           <p className="text-xs text-slate-400">Save this section once (below) to unlock adding questions.</p>
@@ -1108,43 +945,35 @@ function RealEstateProjectManagement() {
 
                     {sectionDraft.section_type === 'faq' && (
                       <div className="space-y-3">
-                        {sectionDraft.faq_items.map((item, i) => (
-                          <div key={i} className="rounded-lg bg-slate-50 p-3">
-                            <div className="mb-2 flex items-center justify-between">
-                              <span className="text-xs font-semibold text-slate-500">Question {i + 1}</span>
-                              <button onClick={() => removeFaqItem(i)} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>
-                            </div>
-                            <input
-                              value={item.question}
-                              onChange={(e) => updateFaqItem(i, 'question', e.target.value)}
-                              placeholder="Question"
-                              className={`${INPUT_CLS} mb-2`}
-                            />
-                            <textarea
-                              value={item.answer}
-                              onChange={(e) => updateFaqItem(i, 'answer', e.target.value)}
-                              placeholder="Answer"
-                              rows={2}
-                              className={INPUT_CLS}
-                            />
-                          </div>
-                        ))}
-                        <button onClick={addFaqItem} className="text-xs font-semibold text-indigo-600 hover:underline">+ Add Question</button>
+                      <FaqItemsEditor
+                        items={sectionDraft.faq_items}
+                        onChange={(next) => setSectionDraft((d) => (d ? { ...d, faq_items: next } : d))}
+                        footer={(
+                          <>
+                            <button type="button" onClick={() => { setEditingSectionId(null); setSectionDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                            <button type="button" onClick={handleSaveSection} disabled={savingSection} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                              {savingSection ? 'Saving…' : 'Save Section'}
+                            </button>
+                          </>
+                        )}
+                      />
                       </div>
                     )}
 
-                    <div className="mt-4 flex justify-end gap-2">
-                      <button onClick={() => { setEditingSectionId(null); setSectionDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSaveSection}
-                        disabled={savingSection}
-                        className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                      >
-                        {savingSection ? 'Saving…' : 'Save Section'}
-                      </button>
-                    </div>
+                    {sectionDraft.section_type !== 'faq' && (
+                      <div className="mt-4 flex justify-end gap-2">
+                        <button onClick={() => { setEditingSectionId(null); setSectionDraft(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSaveSection}
+                          disabled={savingSection}
+                          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {savingSection ? 'Saving…' : 'Save Section'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <button onClick={startNewSection} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
