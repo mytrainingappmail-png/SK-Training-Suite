@@ -25,7 +25,7 @@ import SectionHeroBanner from './SectionHeroBanner';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import InductionDayView from './InductionDayView';
-import { dayLabels, refName, withLabel } from '../../utils/inductionDayLabel';
+import { dayLabels, isStandaloneDay, nextInOrder, previousInOrder, refName, withLabel } from '../../utils/inductionDayLabel';
 import type { InductionDay, InductionDaySection, InductionDayCompletion } from '../../types/induction';
 
 function IconLock({ className = 'h-4 w-4' }: { className?: string }) {
@@ -106,11 +106,15 @@ function Induction() {
   function dayStatus(index: number): DayStatus {
     const day = days[index];
     if (completionByDay.has(day.id)) return 'completed';
+    // A standalone part (no label, e.g. a company overview) is always open and outside the day-by-day order.
+    if (isStandaloneDay(day)) return 'available';
     // The admin chooses, day by day, how a Day opens (see InductionUnlockMode).
     if (day.unlock_mode === 'anytime') return 'available';
-    if (index === 0) return 'available';
+    // The first day IN THE ORDER is open from the start; later ones follow the previous day in the order.
+    const prevIndex = previousInOrder(days, index);
+    if (prevIndex < 0) return 'available';
 
-    const prevDay = days[index - 1];
+    const prevDay = days[prevIndex];
     const prevCompletedAt = completionByDay.get(prevDay.id);
     if (!prevCompletedAt) return 'locked';
 
@@ -128,11 +132,11 @@ function Induction() {
       return;
     }
     if (status === 'date-locked') {
-      const prevCompletedAt = completionByDay.get(days[index - 1].id)!;
+      const prevCompletedAt = completionByDay.get(days[previousInOrder(days, index)].id)!;
       showToast(`${nameOf(index)} unlocks on ${formatUnlockDate(nextUnlockDate(prevCompletedAt))} — one new day at a time, so it actually sinks in.`);
       return;
     }
-    showToast(`Complete ${nameOf(index - 1)} first to unlock ${nameOf(index)}.`);
+    showToast(`Complete ${nameOf(previousInOrder(days, index))} first to unlock ${nameOf(index)}.`);
   }
 
   // Opening a card is remembered, so 'Mark Day Complete' only unlocks once every reading card was opened.
@@ -189,8 +193,8 @@ function Induction() {
         <InductionDayView
           day={openDay}
           dayLabel={labels[openDayIndex] ?? ''}
-          nextName={nameOf(openDayIndex + 1)}
-          nextDay={days[openDayIndex + 1]}
+          nextName={nameOf(isStandaloneDay(openDay) ? -1 : nextInOrder(days, openDayIndex))}
+          nextDay={isStandaloneDay(openDay) ? undefined : days[nextInOrder(days, openDayIndex)]}
           sections={openSections}
           viewedIds={viewedIds}
           completed={openCompleted}
@@ -243,7 +247,7 @@ function Induction() {
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white"><IconCheck className="h-3 w-3" /> Completed</span>
                 ) : status === 'date-locked' ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-2.5 py-1 text-[11px] font-bold text-white">
-                    <IconClock className="h-3 w-3" /> Opens {formatUnlockDate(nextUnlockDate(completionByDay.get(days[i - 1]?.id ?? '') ?? ''))}
+                    <IconClock className="h-3 w-3" /> Opens {formatUnlockDate(nextUnlockDate(completionByDay.get(days[previousInOrder(days, i)]?.id ?? '') ?? ''))}
                   </span>
                 ) : status === 'locked' ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-white"><IconLock className="h-3 w-3" /> Locked</span>
@@ -254,7 +258,7 @@ function Induction() {
             >
               {status !== 'completed' && status !== 'available' && (
                 <p className="text-xs text-slate-400">
-                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : `Complete ${nameOf(i - 1)} first.`}
+                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : `Complete ${nameOf(previousInOrder(days, i))} first.`}
                 </p>
               )}
             </ThumbnailCard>

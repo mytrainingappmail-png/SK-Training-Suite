@@ -46,7 +46,7 @@ import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
-import { dayLabels, refName, withLabel } from '../../utils/inductionDayLabel';
+import { dayLabels, isStandaloneDay, nextInOrder, refName, withLabel } from '../../utils/inductionDayLabel';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import { protectionPatchFromCompany, DEFAULT_WATERMARK } from '../../components/shared/ContentWatermark';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
@@ -313,7 +313,7 @@ function InductionManagement() {
   const [toast, setToast] = useState('');
 
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode; label_mode: 'auto' | 'custom' | 'none'; label_text: string }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '' });
+  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode; label_mode: 'auto' | 'custom' | 'none'; label_text: string; standalone: boolean }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false });
   const [savingDay, setSavingDay] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -328,10 +328,11 @@ function InductionManagement() {
   const orderedDays = [...days].sort((a, b) => a.display_order - b.display_order);
   const previewIndex = previewDay ? orderedDays.findIndex((d) => d.id === previewDay.id) : -1;
   const orderedLabels = dayLabels(orderedDays);
+  const nextPreviewIndex = previewIndex >= 0 && !isStandaloneDay(orderedDays[previewIndex]) ? nextInOrder(orderedDays, previewIndex) : -1;
   // the labels of the rows actually shown in the list (after the branch filter), in the same order
   const listLabels = dayLabels(orderedDays.filter((d) => branchFilter === 'all' || (branchFilter === 'generic' ? !d.branch_id : d.branch_id === branchFilter)));
   const previewModal = previewDay ? (
-    <InductionDayPreview day={previewDay} dayLabel={orderedLabels[previewIndex] ?? ''} nextName={orderedDays[previewIndex + 1] ? refName(orderedLabels[previewIndex + 1], orderedDays[previewIndex + 1].title) : undefined} nextDay={orderedDays[previewIndex + 1]} onClose={() => setPreviewDay(null)} />
+    <InductionDayPreview day={previewDay} dayLabel={orderedLabels[previewIndex] ?? ''} nextName={nextPreviewIndex >= 0 ? refName(orderedLabels[nextPreviewIndex], orderedDays[nextPreviewIndex].title) : undefined} nextDay={nextPreviewIndex >= 0 ? orderedDays[nextPreviewIndex] : undefined} onClose={() => setPreviewDay(null)} />
   ) : null;
   const [uploadingSectionThumb, setUploadingSectionThumb] = useState(false);
 
@@ -405,9 +406,10 @@ function InductionManagement() {
   /** One click for the whole program: every day opens the same way. */
   async function handleSetAllUnlock(mode: InductionUnlockMode) {
     const label = UNLOCK_CHOICES.find((c) => c.value === mode)?.title ?? mode;
-    if (!confirm(`Set all ${days.length} days to: "${label}"?`)) return;
+    const target = days.filter((d) => !isStandaloneDay(d)); // a standalone part (no label) is always open, leave it alone
+    if (!confirm(`Set all ${target.length} days (not the ones without a label) to: "${label}"?`)) return;
     try {
-      await Promise.all(days.map((d) => editDay(d.id, { unlock_mode: mode })));
+      await Promise.all(target.map((d) => editDay(d.id, { unlock_mode: mode })));
       showToast('All days updated.');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not update the days.');
@@ -430,13 +432,13 @@ function InductionManagement() {
 
   function startNewDay() {
     setEditingDayId('new');
-    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '' });
+    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false });
     setSections([]);
   }
 
   function startEditDay(day: InductionDay) {
     setEditingDayId(day.id);
-    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day', label_mode: day.day_label == null ? 'auto' : day.day_label === '' ? 'none' : 'custom', label_text: day.day_label ?? '' });
+    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day', label_mode: day.day_label == null ? 'auto' : day.day_label === '' ? 'none' : 'custom', label_text: day.day_label ?? '', standalone: day.standalone === true });
     fetchSections(day.id);
   }
 
@@ -486,12 +488,12 @@ function InductionManagement() {
     setSavingDay(true);
     try {
       if (editingDayId === 'new') {
-        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.unlock_mode, day_label: draftDayLabel(), branch_id: null, source_id: null });
+        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.standalone ? 'anytime' : draft.unlock_mode, day_label: draftDayLabel(), standalone: draft.standalone, branch_id: null, source_id: null });
         showToast('Day added.');
         setEditingDayId(created.id);
         fetchSections(created.id);
       } else if (editingDayId) {
-        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.unlock_mode, day_label: draftDayLabel() });
+        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.standalone ? 'anytime' : draft.unlock_mode, day_label: draftDayLabel(), standalone: draft.standalone });
         showToast('Day saved.');
       }
       fetchAll();
@@ -929,7 +931,7 @@ function InductionManagement() {
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Label shown before the title (optional)</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Label shown before the title (optional) — this day only</label>
               <div className="flex flex-wrap items-center gap-2">
                 {([['auto', 'Automatic (Day 1, Day 2…)'], ['custom', 'My own text'], ['none', 'No label']] as const).map(([mode, text]) => (
                   <label key={mode} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${draft.label_mode === mode ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'}`}>
@@ -942,11 +944,24 @@ function InductionManagement() {
                 )}
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                Use "No label" for something that is not part of any day, like a company overview — the days after it then start from Day 1.
+                "No label" only hides the label (use it when the title already says "Day 2 - …"). If this is not a day at all, tick "Standalone" below.
               </p>
             </div>
+            <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${draft.standalone ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+              <input type="checkbox" className="mt-1" checked={draft.standalone} onChange={(e) => setDraft((d) => ({ ...d, standalone: e.target.checked }))} />
+              <span>
+                <span className="block font-semibold text-slate-800">Standalone — this is not one of the days</span>
+                <span className="block text-xs text-slate-500">For a company overview or a welcome video: always open, nothing needed before it, and it does not hold the next day back. The other days keep their own Day 1, Day 2… order.</span>
+              </span>
+            </label>
+            {draft.standalone ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                <p className="font-semibold">Always open</p>
+                <p className="text-xs">Employees can open this any time. The days around it keep their own order and rules.</p>
+              </div>
+            ) : (
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">When can an employee open this day?</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">When can an employee open this day? — this day only</label>
               <div className="space-y-2">
                 {UNLOCK_CHOICES.map((c) => (
                   <label key={c.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${draft.unlock_mode === c.value ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'}`}>
@@ -959,6 +974,7 @@ function InductionManagement() {
                 ))}
               </div>
             </div>
+            )}
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))} />
               Active (visible to employees)
@@ -1384,8 +1400,8 @@ function InductionManagement() {
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
                       {branchName(d.branch_id)}
                     </span>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.unlock_mode === 'anytime' ? 'bg-emerald-50 text-emerald-700' : d.unlock_mode === 'after_previous' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'}`}>
-                      {UNLOCK_CHOICES.find((c) => c.value === (d.unlock_mode ?? 'next_day'))?.short}
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${isStandaloneDay(d) || d.unlock_mode === 'anytime' ? 'bg-emerald-50 text-emerald-700' : d.unlock_mode === 'after_previous' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {isStandaloneDay(d) ? 'Standalone · always open' : UNLOCK_CHOICES.find((c) => c.value === (d.unlock_mode ?? 'next_day'))?.short}
                     </span>
                     {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
                   </div>

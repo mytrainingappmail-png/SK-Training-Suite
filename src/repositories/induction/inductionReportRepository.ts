@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 
 export interface ReportAssignment { employee_id: string; status: string; assigned_at: string; completed_at: string | null }
 export interface ReportEmployee { id: string; employee_code: string; first_name: string; last_name: string | null; branch_id: string | null; active: boolean }
-export interface ReportDay { id: string; title: string; display_order: number; active: boolean; branch_id: string | null; source_id: string | null; day_label: string | null }
+export interface ReportDay { id: string; title: string; display_order: number; active: boolean; branch_id: string | null; source_id: string | null; day_label: string | null; standalone: boolean }
 export interface ReportSection { id: string; day_id: string; section_type: string; title: string; assessment_id: string | null; display_order: number }
 export interface ReportCompletion { employee_id: string; day_id: string; completed_at: string }
 export interface ReportView { employee_id: string; section_id: string; viewed_at: string }
@@ -30,7 +30,7 @@ function must<T>(label: string, res: { data: T[] | null; error: { message: strin
 export async function loadInductionReportData(): Promise<InductionReportData> {
   const [assignments, days, sections, completions, views, branches] = await Promise.all([
     supabase.from('induction_assignments').select('employee_id, status, assigned_at, completed_at'),
-    supabase.from('induction_days').select('id, title, display_order, active, branch_id, source_id, day_label').order('display_order', { ascending: true }),
+    supabase.from('induction_days').select('id, title, display_order, active, branch_id, source_id, day_label, standalone').order('display_order', { ascending: true }),
     supabase.from('induction_day_sections').select('id, day_id, section_type, title, assessment_id, display_order').order('display_order', { ascending: true }),
     supabase.from('induction_day_completions').select('employee_id, day_id, completed_at'),
     supabase.from('induction_section_views').select('employee_id, section_id, viewed_at'),
