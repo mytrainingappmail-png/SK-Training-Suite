@@ -20,6 +20,8 @@ export interface InductionDay {
   display_order: number;
   active: boolean;
   unlock_mode: InductionUnlockMode;
+  // The label before the title: null = automatic ("Day 1", "Day 2"…), '' = none, any text = as typed.
+  day_label: string | null;
   // null = shared across every branch (the default). Set = visible only
   // to employees in that one branch.
   branch_id: string | null;
@@ -42,6 +44,7 @@ export const defaultInductionDayForm: InductionDayForm = {
   display_order: 0,
   active: true,
   unlock_mode: 'next_day',
+  day_label: null,
   branch_id: null,
   source_id: null,
 };

@@ -11,6 +11,7 @@ import { getVideos } from "../../repositories/videoLibraryContent/videoLibraryCo
 import { loadProjects } from "../../services/realEstateProject/realEstateProjectService";
 import { loadDays } from "../../services/induction/inductionService";
 import type { InductionDay } from "../../types/induction";
+import { dayLabels, withLabel } from "../../utils/inductionDayLabel";
 import { pushContentToCompany, loadDistributionLog, loadContentChanges, syncContent } from "../../services/contentDistribution/contentDistributionService";
 import type { DistributionKind, DistributionLogRow, ContentChange } from "../../services/contentDistribution/contentDistributionService";
 import { disableAutoSend, enableAutoSend, listAutoSendTargets, runAutoSend } from "../../services/contentDistribution/autoSendService";
@@ -420,7 +421,7 @@ function ContentDistributionManagement() {
                   {inductionDays.map((d, i) => (
                     <label key={d.id} className="flex cursor-pointer items-center gap-3 px-5 py-3 text-sm hover:bg-slate-50">
                       <input type="checkbox" checked={selectedDayIds.has(d.id)} onChange={() => toggle(selectedDayIds, setSelectedDayIds, d.id)} />
-                      <span className="flex-1 truncate text-slate-700">Day {i + 1}: {d.title}</span>
+                      <span className="flex-1 truncate text-slate-700">{withLabel(dayLabels(inductionDays)[i], d.title)}</span>
                       <span className="text-xs text-emerald-600">{sentNote("induction_day", d.id)}</span>
                     </label>
                   ))}

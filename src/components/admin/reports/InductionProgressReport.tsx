@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { loadInductionReportData } from '../../../repositories/induction/inductionReportRepository';
 import type { InductionReportData } from '../../../repositories/induction/inductionReportRepository';
 import { resolveForBranch } from '../../../utils/branchScoping';
+import { dayLabels, withLabel } from '../../../utils/inductionDayLabel';
 import { csvEscape, downloadCsvFile } from '../../../services/quiz/quizCsvService';
 
 type Status = 'completed' | 'in_progress' | 'not_started' | 'stuck';
@@ -20,7 +21,7 @@ const STATUS_META: Record<Status, { label: string; cls: string }> = {
   stuck: { label: `No activity ${STUCK_AFTER_DAYS}+ days`, cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
 };
 
-interface DayDetail { dayId: string; title: string; number: number; completedAt: string | null; testsPassed: number; testsTotal: number; opened: number; reading: number }
+interface DayDetail { dayId: string; title: string; label: string; completedAt: string | null; testsPassed: number; testsTotal: number; opened: number; reading: number }
 interface Row {
   employeeId: string;
   name: string;
@@ -69,12 +70,13 @@ function buildRows(data: InductionReportData): Row[] {
       const doneAt = new Map(data.completions.filter((c) => c.employee_id === e.id).map((c) => [c.day_id, c.completed_at]));
       const myViews = viewed.get(e.id) ?? new Set<string>();
 
+      const labels = dayLabels(days);
       const details: DayDetail[] = days.map((d, i) => {
         const secs = sectionsByDay.get(d.id) ?? [];
         const tests = secs.filter((s) => s.section_type === 'test' && s.assessment_id);
         const reading = secs.filter((s) => s.section_type !== 'test');
         return {
-          dayId: d.id, title: d.title, number: i + 1, completedAt: doneAt.get(d.id) ?? null,
+          dayId: d.id, title: d.title, label: labels[i], completedAt: doneAt.get(d.id) ?? null,
           testsPassed: tests.filter((t) => passed.has(`${e.id}:${t.assessment_id}`)).length, testsTotal: tests.length,
           opened: reading.filter((s) => myViews.has(s.id)).length, reading: reading.length,
         };
@@ -99,7 +101,7 @@ function buildRows(data: InductionReportData): Row[] {
         status,
         daysDone,
         daysTotal: details.length,
-        currentDay: current ? `Day ${current.number}: ${current.title}` : details.length ? 'All days done' : '—',
+        currentDay: current ? withLabel(current.label, current.title) : details.length ? 'All days done' : '—',
         testsPassed: details.reduce((n, d) => n + d.testsPassed, 0),
         testsTotal: details.reduce((n, d) => n + d.testsTotal, 0),
         lastActivity,
@@ -200,7 +202,7 @@ export default function InductionProgressReport() {
                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {r.details.map((d) => (
                             <div key={d.dayId} className={`rounded-xl border p-3 text-xs ${d.completedAt ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                              <p className="font-semibold text-slate-800">Day {d.number}: {d.title}</p>
+                              <p className="font-semibold text-slate-800">{withLabel(d.label, d.title)}</p>
                               <p className="mt-1 text-slate-600">{d.completedAt ? `✓ Completed ${fmt(d.completedAt)}` : 'Not completed yet'}</p>
                               {d.reading > 0 && <p className="text-slate-500">Cards opened: {d.opened}/{d.reading}</p>}
                               {d.testsTotal > 0 && <p className="text-slate-500">Test: {d.testsPassed}/{d.testsTotal} passed</p>}

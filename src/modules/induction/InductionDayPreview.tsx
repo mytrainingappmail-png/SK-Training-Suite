@@ -8,7 +8,7 @@ import InductionDayView from '../../components/learning/InductionDayView';
 import { loadSectionsForDay } from '../../services/induction/inductionService';
 import type { InductionDay, InductionDaySection } from '../../types/induction';
 
-export default function InductionDayPreview({ day, dayNumber, nextDay, onClose }: { day: InductionDay; dayNumber: number; nextDay?: InductionDay; onClose: () => void }) {
+export default function InductionDayPreview({ day, dayLabel, nextName, nextDay, onClose }: { day: InductionDay; dayLabel: string; nextName?: string; nextDay?: InductionDay; onClose: () => void }) {
   const [sections, setSections] = useState<InductionDaySection[] | null>(null);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [completed, setCompleted] = useState(false);
@@ -27,13 +27,14 @@ export default function InductionDayPreview({ day, dayNumber, nextDay, onClose }
   }
 
   return (
-    <PreviewModal title={`Day ${dayNumber}: ${day.title}`} onClose={onClose}>
+    <PreviewModal title={dayLabel ? `${dayLabel}: ${day.title}` : day.title} onClose={onClose}>
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {!sections && !error && <p className="text-sm text-slate-500">Loading…</p>}
       {sections && (
         <InductionDayView
           day={day}
-          dayNumber={dayNumber}
+          dayLabel={dayLabel}
+          nextName={nextName}
           nextDay={nextDay}
           sections={sections}
           viewedIds={viewed}

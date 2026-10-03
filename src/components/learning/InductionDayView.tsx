@@ -19,18 +19,21 @@ function IconChevron({ className = 'h-4 w-4', open }: { className?: string; open
 }
 
 /** What the test card says about the NEXT day, according to how the admin set that day to open. */
-function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextNumber: number): string {
+function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextName: string): string {
   if (!nextDay) return passed ? 'Passed — well done!' : 'Pass this test to finish the induction.';
   if (nextDay.unlock_mode === 'anytime') return passed ? 'Passed — well done!' : 'Pass this test to complete this day.';
-  if (nextDay.unlock_mode === 'after_previous') return passed ? 'Passed — the next day is open now.' : `Pass this test to open Day ${nextNumber}.`;
-  return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then Day ${nextNumber} opens on the next date.`;
+  if (nextDay.unlock_mode === 'after_previous') return passed ? 'Passed — the next day is open now.' : `Pass this test to open ${nextName}.`;
+  return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then ${nextName} opens on the next date.`;
 }
 
 const TYPE_LABEL: Record<string, string> = { page: 'Reading', faq: 'Questions & answers', test: 'Test' };
 
 interface InductionDayViewProps {
   day: InductionDay;
-  dayNumber: number;
+  /** The day's label as the admin set it ("Day 1", "Day 0", "" for none). */
+  dayLabel: string;
+  /** How the next day is named in a sentence (its label, or its title when it has none). */
+  nextName?: string;
   nextDay?: InductionDay;
   sections: InductionDaySection[];
   viewedIds: Set<string>;
@@ -48,7 +51,7 @@ interface InductionDayViewProps {
 }
 
 export default function InductionDayView({
-  day, dayNumber, nextDay, sections, viewedIds, completed, passedTestIds, marking = false, preview = false,
+  day, dayLabel, nextName, nextDay, sections, viewedIds, completed, passedTestIds, marking = false, preview = false,
   onBack, onOpenSection, onMarkComplete, onStartTest, showToast,
 }: InductionDayViewProps) {
   const [openSectionId, setOpenSectionId] = useState<string | null>(null);
@@ -79,14 +82,14 @@ export default function InductionDayView({
     return (
       <>
         <button onClick={() => setOpenSectionId(null)} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-800">
-          <IconArrowLeft className="h-3.5 w-3.5" /> Back to Day {dayNumber}
+          <IconArrowLeft className="h-3.5 w-3.5" /> Back to {dayLabel || day.title}
         </button>
         <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
           <div
             className="bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-7 text-white"
             style={openSection.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.78), rgba(124,58,237,.82)), url(${openSection.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
           >
-            <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">DAY {dayNumber} · {idx + 1} OF {sections.length}</span>
+            <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel ? `${dayLabel.toUpperCase()} · ` : ''}{idx + 1} OF {sections.length}</span>
             <h2 className="mt-3 text-2xl font-bold">{openSection.title}</h2>
           </div>
           <div className="p-8">
@@ -146,8 +149,8 @@ export default function InductionDayView({
           className="relative bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-8 text-white"
           style={day.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.75), rgba(124,58,237,.8)), url(${day.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
         >
-          <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">DAY {dayNumber}</span>
-          <h2 className="mt-3 text-2xl font-bold">{day.title}</h2>
+          {dayLabel && <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel.toUpperCase()}</span>}
+          <h2 className={`${dayLabel ? 'mt-3' : ''} text-2xl font-bold`}>{day.title}</h2>
           {day.description && <p className="mt-1 text-sm text-white/80">{day.description}</p>}
           {reading.length > 0 && (
             <p className="mt-3 text-xs font-semibold text-white/90">{opened} of {reading.length} cards opened</p>
@@ -184,7 +187,7 @@ export default function InductionDayView({
                 >
                   {isTest && (
                     <p className="text-xs text-slate-500">
-                      {!completed ? 'Complete the day above to unlock.' : afterTestNote(nextDay, passed, dayNumber + 1)}
+                      {!completed ? 'Complete the day above to unlock.' : afterTestNote(nextDay, passed, nextName ?? 'the next day')}
                     </p>
                   )}
                 </ThumbnailCard>

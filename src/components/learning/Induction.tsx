@@ -25,6 +25,7 @@ import SectionHeroBanner from './SectionHeroBanner';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import InductionDayView from './InductionDayView';
+import { dayLabels, refName, withLabel } from '../../utils/inductionDayLabel';
 import type { InductionDay, InductionDaySection, InductionDayCompletion } from '../../types/induction';
 
 function IconLock({ className = 'h-4 w-4' }: { className?: string }) {
@@ -98,6 +99,9 @@ function Induction() {
   useEffect(() => { loadEverything(); }, [user?.id]);
 
   const completionByDay = new Map(completions.map((c) => [c.day_id, c.completed_at]));
+  // The admin decides each day's label ("Day 1", "Day 0", none…); see utils/inductionDayLabel.
+  const labels = dayLabels(days);
+  const nameOf = (i: number) => (days[i] ? refName(labels[i], days[i].title) : 'the next day');
 
   function dayStatus(index: number): DayStatus {
     const day = days[index];
@@ -125,10 +129,10 @@ function Induction() {
     }
     if (status === 'date-locked') {
       const prevCompletedAt = completionByDay.get(days[index - 1].id)!;
-      showToast(`Day ${index + 1} unlocks on ${formatUnlockDate(nextUnlockDate(prevCompletedAt))} — one new day at a time, so it actually sinks in.`);
+      showToast(`${nameOf(index)} unlocks on ${formatUnlockDate(nextUnlockDate(prevCompletedAt))} — one new day at a time, so it actually sinks in.`);
       return;
     }
-    showToast(`Complete Day ${index} first to unlock Day ${index + 1}.`);
+    showToast(`Complete ${nameOf(index - 1)} first to unlock ${nameOf(index)}.`);
   }
 
   // Opening a card is remembered, so 'Mark Day Complete' only unlocks once every reading card was opened.
@@ -180,12 +184,12 @@ function Induction() {
   }
 
   if (openDay) {
-    const dayNumber = openDayIndex + 1;
     return (
       <>
         <InductionDayView
           day={openDay}
-          dayNumber={dayNumber}
+          dayLabel={labels[openDayIndex] ?? ''}
+          nextName={nameOf(openDayIndex + 1)}
           nextDay={days[openDayIndex + 1]}
           sections={openSections}
           viewedIds={viewedIds}
@@ -230,7 +234,7 @@ function Induction() {
           return (
             <ThumbnailCard
               key={day.id}
-              title={`Day ${i + 1}: ${day.title}`}
+              title={withLabel(labels[i], day.title)}
               subtitle={day.description || undefined}
               thumbnailUrl={day.thumbnail_url}
               onClick={() => handleDayClick(i)}
@@ -250,7 +254,7 @@ function Induction() {
             >
               {status !== 'completed' && status !== 'available' && (
                 <p className="text-xs text-slate-400">
-                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : `Complete Day ${i} first.`}
+                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : `Complete ${nameOf(i - 1)} first.`}
                 </p>
               )}
             </ThumbnailCard>

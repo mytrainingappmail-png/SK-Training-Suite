@@ -46,6 +46,7 @@ import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
+import { dayLabels, refName, withLabel } from '../../utils/inductionDayLabel';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import { protectionPatchFromCompany, DEFAULT_WATERMARK } from '../../components/shared/ContentWatermark';
 import { uploadImage } from '../../services/contentEditor/contentEditorService';
@@ -226,6 +227,7 @@ function ReorderDaysModal({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const ordered = [...days].sort((a, b) => a.display_order - b.display_order);
+  const reorderLabels = dayLabels(ordered);
 
   function moveDay(dayId: string, direction: 'up' | 'down') {
     const index = ordered.findIndex((d) => d.id === dayId);
@@ -280,7 +282,7 @@ function ReorderDaysModal({
                           </button>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-800">Day {i + 1}: {day.title}</p>
+                          <p className="truncate text-sm font-semibold text-slate-800">{withLabel(reorderLabels[i], day.title)}</p>
                         </div>
                       </div>
                     )}
@@ -311,7 +313,7 @@ function InductionManagement() {
   const [toast, setToast] = useState('');
 
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day' });
+  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode; label_mode: 'auto' | 'custom' | 'none'; label_text: string }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '' });
   const [savingDay, setSavingDay] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -324,9 +326,12 @@ function InductionManagement() {
   // 'Preview' of a Day exactly as an employee sees it (nothing saved).
   const [previewDay, setPreviewDay] = useState<InductionDay | null>(null);
   const orderedDays = [...days].sort((a, b) => a.display_order - b.display_order);
-  const previewDayNumber = previewDay ? orderedDays.findIndex((d) => d.id === previewDay.id) + 1 : 0;
+  const previewIndex = previewDay ? orderedDays.findIndex((d) => d.id === previewDay.id) : -1;
+  const orderedLabels = dayLabels(orderedDays);
+  // the labels of the rows actually shown in the list (after the branch filter), in the same order
+  const listLabels = dayLabels(orderedDays.filter((d) => branchFilter === 'all' || (branchFilter === 'generic' ? !d.branch_id : d.branch_id === branchFilter)));
   const previewModal = previewDay ? (
-    <InductionDayPreview day={previewDay} dayNumber={Math.max(1, previewDayNumber)} nextDay={orderedDays[previewDayNumber]} onClose={() => setPreviewDay(null)} />
+    <InductionDayPreview day={previewDay} dayLabel={orderedLabels[previewIndex] ?? ''} nextName={orderedDays[previewIndex + 1] ? refName(orderedLabels[previewIndex + 1], orderedDays[previewIndex + 1].title) : undefined} nextDay={orderedDays[previewIndex + 1]} onClose={() => setPreviewDay(null)} />
   ) : null;
   const [uploadingSectionThumb, setUploadingSectionThumb] = useState(false);
 
@@ -425,13 +430,13 @@ function InductionManagement() {
 
   function startNewDay() {
     setEditingDayId('new');
-    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day' });
+    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '' });
     setSections([]);
   }
 
   function startEditDay(day: InductionDay) {
     setEditingDayId(day.id);
-    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day' });
+    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day', label_mode: day.day_label == null ? 'auto' : day.day_label === '' ? 'none' : 'custom', label_text: day.day_label ?? '' });
     fetchSections(day.id);
   }
 
@@ -469,17 +474,24 @@ function InductionManagement() {
     }
   }
 
+  /** What gets stored: null = automatic ("Day 1"…), '' = no label, otherwise the typed text. */
+  function draftDayLabel(): string | null {
+    if (draft.label_mode === 'auto') return null;
+    if (draft.label_mode === 'none') return '';
+    return draft.label_text.trim();
+  }
+
   async function handleSaveDay() {
     if (!user?.companyId) return;
     setSavingDay(true);
     try {
       if (editingDayId === 'new') {
-        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.unlock_mode, branch_id: null, source_id: null });
+        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.unlock_mode, day_label: draftDayLabel(), branch_id: null, source_id: null });
         showToast('Day added.');
         setEditingDayId(created.id);
         fetchSections(created.id);
       } else if (editingDayId) {
-        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.unlock_mode });
+        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.unlock_mode, day_label: draftDayLabel() });
         showToast('Day saved.');
       }
       fetchAll();
@@ -917,6 +929,23 @@ function InductionManagement() {
               )}
             </div>
             <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Label shown before the title (optional)</label>
+              <div className="flex flex-wrap items-center gap-2">
+                {([['auto', 'Automatic (Day 1, Day 2…)'], ['custom', 'My own text'], ['none', 'No label']] as const).map(([mode, text]) => (
+                  <label key={mode} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${draft.label_mode === mode ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <input type="radio" name="day-label-mode" checked={draft.label_mode === mode} onChange={() => setDraft((d) => ({ ...d, label_mode: mode }))} />
+                    {text}
+                  </label>
+                ))}
+                {draft.label_mode === 'custom' && (
+                  <input value={draft.label_text} onChange={(e) => setDraft((d) => ({ ...d, label_text: e.target.value }))} placeholder="e.g. Day 0, Week 1, Orientation" className={`${INPUT_CLS} w-56`} />
+                )}
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Use "No label" for something that is not part of any day, like a company overview — the days after it then start from Day 1.
+              </p>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">When can an employee open this day?</label>
               <div className="space-y-2">
                 {UNLOCK_CHOICES.map((c) => (
@@ -1350,7 +1379,7 @@ function InductionManagement() {
                     <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-slate-100" />
                   )}
                   <div>
-                  <p className="text-sm font-semibold text-slate-800">Day {i + 1}: {d.title}</p>
+                  <p className="text-sm font-semibold text-slate-800">{withLabel(listLabels[i], d.title)}</p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
                       {branchName(d.branch_id)}
