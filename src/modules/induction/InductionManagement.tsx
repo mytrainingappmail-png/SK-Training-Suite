@@ -46,6 +46,8 @@ import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
+import LocationPicker from '../../components/shared/LocationPicker';
+import { locationLabel } from '../../constants/locations';
 import { dayLabels, isStandaloneDay, nextInOrder, refName, withLabel } from '../../utils/inductionDayLabel';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import { protectionPatchFromCompany, DEFAULT_WATERMARK } from '../../components/shared/ContentWatermark';
@@ -313,7 +315,7 @@ function InductionManagement() {
   const [toast, setToast] = useState('');
 
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode; label_mode: 'auto' | 'custom' | 'none'; label_text: string; standalone: boolean }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false });
+  const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode; label_mode: 'auto' | 'custom' | 'none'; label_text: string; standalone: boolean; locations: string[] | null }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false, locations: null });
   const [savingDay, setSavingDay] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -337,7 +339,7 @@ function InductionManagement() {
   const [uploadingSectionThumb, setUploadingSectionThumb] = useState(false);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
-  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; thumbnail_url: string | null; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
+  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; thumbnail_url: string | null; locations: string[] | null; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
   const [isOperator, setIsOperator] = useState(false);
   const [company, setCompany] = useState<Company | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -432,13 +434,13 @@ function InductionManagement() {
 
   function startNewDay() {
     setEditingDayId('new');
-    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false });
+    setDraft({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false, locations: null });
     setSections([]);
   }
 
   function startEditDay(day: InductionDay) {
     setEditingDayId(day.id);
-    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day', label_mode: day.day_label == null ? 'auto' : day.day_label === '' ? 'none' : 'custom', label_text: day.day_label ?? '', standalone: day.standalone === true });
+    setDraft({ title: day.title, description: day.description, thumbnail_url: day.thumbnail_url, active: day.active, unlock_mode: day.unlock_mode ?? 'next_day', label_mode: day.day_label == null ? 'auto' : day.day_label === '' ? 'none' : 'custom', label_text: day.day_label ?? '', standalone: day.standalone === true, locations: day.locations && day.locations.length > 0 ? day.locations : null });
     fetchSections(day.id);
   }
 
@@ -476,6 +478,11 @@ function InductionManagement() {
     }
   }
 
+  /** Nothing ticked = no limit (stored as null). */
+  function cleanLocations(l: string[] | null): string[] | null {
+    return l && l.length > 0 ? l : null;
+  }
+
   /** What gets stored: null = automatic ("Day 1"…), '' = no label, otherwise the typed text. */
   function draftDayLabel(): string | null {
     if (draft.label_mode === 'auto') return null;
@@ -488,12 +495,12 @@ function InductionManagement() {
     setSavingDay(true);
     try {
       if (editingDayId === 'new') {
-        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.standalone ? 'anytime' : draft.unlock_mode, day_label: draftDayLabel(), standalone: draft.standalone, branch_id: null, source_id: null });
+        const created = await saveDay({ company_id: user.companyId, title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, display_order: days.length, active: draft.active, unlock_mode: draft.standalone ? 'anytime' : draft.unlock_mode, day_label: draftDayLabel(), standalone: draft.standalone, locations: isOperator ? cleanLocations(draft.locations) : null, branch_id: null, source_id: null });
         showToast('Day added.');
         setEditingDayId(created.id);
         fetchSections(created.id);
       } else if (editingDayId) {
-        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.standalone ? 'anytime' : draft.unlock_mode, day_label: draftDayLabel(), standalone: draft.standalone });
+        await editDay(editingDayId, { title: draft.title, description: draft.description, thumbnail_url: draft.thumbnail_url, active: draft.active, unlock_mode: draft.standalone ? 'anytime' : draft.unlock_mode, day_label: draftDayLabel(), standalone: draft.standalone, ...(isOperator ? { locations: cleanLocations(draft.locations) } : {}) });
         showToast('Day saved.');
       }
       fetchAll();
@@ -547,7 +554,7 @@ function InductionManagement() {
   function startNewSection() {
     setEditingSectionId('new');
     const defaults = company ? protectionPatchFromCompany(company) : { watermark_enabled: false, watermark_text: '', watermark_orientation: DEFAULT_WATERMARK.orientation, watermark_opacity: DEFAULT_WATERMARK.opacity, no_copy: false };
-    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], thumbnail_url: null, ...defaults });
+    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], thumbnail_url: null, locations: null, ...defaults });
     resetTestState();
   }
 
@@ -563,7 +570,7 @@ function InductionManagement() {
   function startEditSection(s: InductionDaySection) {
     setEditingSectionId(s.id);
     setSectionDraft({
-      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items, thumbnail_url: s.thumbnail_url,
+      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items, thumbnail_url: s.thumbnail_url, locations: s.locations && s.locations.length > 0 ? s.locations : null,
       watermark_enabled: s.watermark_enabled, watermark_text: s.watermark_text, watermark_orientation: s.watermark_orientation, watermark_opacity: s.watermark_opacity, no_copy: s.no_copy,
     });
     resetTestState();
@@ -657,7 +664,7 @@ function InductionManagement() {
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url,
+          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url, locations: isOperator ? cleanLocations(sectionDraft.locations) : null,
           display_order: sections.length,
           ...protection,
         });
@@ -666,7 +673,7 @@ function InductionManagement() {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url,
+          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url, ...(isOperator ? { locations: cleanLocations(sectionDraft.locations) } : {}),
           ...protection,
         });
       }
@@ -975,6 +982,7 @@ function InductionManagement() {
               </div>
             </div>
             )}
+            {isOperator && <LocationPicker value={draft.locations} onChange={(next) => setDraft((d) => ({ ...d, locations: next }))} subject="day" />}
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))} />
               Active (visible to employees)
@@ -1016,6 +1024,7 @@ function InductionManagement() {
                         {s.section_type === 'test' ? 'Test' : s.section_type === 'faq' ? 'FAQ' : 'Page'}
                       </span>
                       <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+                      {s.locations && s.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {s.locations.map(locationLabel).join(', ')}</span>}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => startEditSection(s)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
@@ -1057,6 +1066,12 @@ function InductionManagement() {
                       <ImageEditModal file={pendingSectionThumb} frames={['rectangle', 'rounded', 'square']} defaultFrame="rounded" title="Resize & Frame Card Picture" onCancel={() => setPendingSectionThumb(null)} onConfirm={handleSectionThumbnailEdited} />
                     )}
                   </div>
+
+                  {isOperator && (
+                    <div className="mb-3">
+                      <LocationPicker value={sectionDraft.locations} onChange={(next) => setSectionDraft((d) => (d ? { ...d, locations: next } : d))} subject="section" />
+                    </div>
+                  )}
 
                   {sectionDraft.section_type === 'page' && (
                     <RichTextEditor
@@ -1403,6 +1418,7 @@ function InductionManagement() {
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${isStandaloneDay(d) || d.unlock_mode === 'anytime' ? 'bg-emerald-50 text-emerald-700' : d.unlock_mode === 'after_previous' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'}`}>
                       {isStandaloneDay(d) ? 'Standalone · always open' : UNLOCK_CHOICES.find((c) => c.value === (d.unlock_mode ?? 'next_day'))?.short}
                     </span>
+                    {d.locations && d.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {d.locations.map(locationLabel).join(', ')}</span>}
                     {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
                   </div>
                   </div>

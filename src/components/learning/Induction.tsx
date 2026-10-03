@@ -15,11 +15,12 @@
 
 import { useEffect, useState } from 'react';
 import {
-  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed,
+  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed, loadMyLocationKey,
 } from '../../services/induction/inductionService';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import { getCurrentUser } from '../../services/auth/session';
 import { resolveForBranch } from '../../utils/branchScoping';
+import { visibleInLocation } from '../../constants/locations';
 import { isDateUnlocked, nextUnlockDate, formatUnlockDate } from '../../utils/inductionDateGate';
 import SectionHeroBanner from './SectionHeroBanner';
 import ThumbnailCard from '../shared/ThumbnailCard';
@@ -72,12 +73,18 @@ function Induction() {
     if (!user?.id) { setError('No active session.'); setLoading(false); return; }
     setLoading(true);
     setError('');
-    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id)])
-      .then(async ([assignment, allDays, allSections, comps, viewed]) => {
+    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null)])
+      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation]) => {
+        // Days and sections limited to other locations are simply not there for this employee.
+        const allSections = allSectionsRaw.filter((s) => visibleInLocation(s.locations, myLocation));
         setViewedIds(new Set(viewed));
         setHasAssignment(!!assignment && assignment.status === 'active');
         const scoped = resolveForBranch(allDays, user.branchId || null);
-        const active = scoped.filter((d) => d.active).sort((a, b) => a.display_order - b.display_order);
+        const active = scoped
+          .filter((d) => d.active && visibleInLocation(d.locations, myLocation))
+          // A day whose every section is for other locations has nothing left to show this employee.
+          .filter((d) => !allSectionsRaw.some((s) => s.day_id === d.id) || allSections.some((s) => s.day_id === d.id))
+          .sort((a, b) => a.display_order - b.display_order);
         setDays(active);
         const grouped: Record<string, InductionDaySection[]> = {};
         for (const s of allSections) {

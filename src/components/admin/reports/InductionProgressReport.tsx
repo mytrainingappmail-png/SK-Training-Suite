@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { loadInductionReportData } from '../../../repositories/induction/inductionReportRepository';
 import type { InductionReportData } from '../../../repositories/induction/inductionReportRepository';
 import { resolveForBranch } from '../../../utils/branchScoping';
+import { employeeLocationKey, visibleInLocation } from '../../../constants/locations';
 import { dayLabels, withLabel } from '../../../utils/inductionDayLabel';
 import { csvEscape, downloadCsvFile } from '../../../services/quiz/quizCsvService';
 
@@ -50,6 +51,7 @@ function ago(iso: string | null): string {
 
 function buildRows(data: InductionReportData): Row[] {
   const branchName = new Map(data.branches.map((b) => [b.id, b.branch_name]));
+  const branchLocation = new Map(data.branches.map((b) => [b.id, employeeLocationKey(b)]));
   const emp = new Map(data.employees.map((e) => [e.id, e]));
   const sectionsByDay = new Map<string, typeof data.sections>();
   for (const s of data.sections) sectionsByDay.set(s.day_id, [...(sectionsByDay.get(s.day_id) ?? []), s]);
@@ -66,13 +68,18 @@ function buildRows(data: InductionReportData): Row[] {
     .map((a): Row | null => {
       const e = emp.get(a.employee_id);
       if (!e) return null;
-      const days = resolveForBranch(data.days, e.branch_id).filter((d) => d.active).sort((x, y) => x.display_order - y.display_order);
+      // Same rule the employee sees: only the days / cards meant for their location count.
+      const myLocation = e.branch_id ? branchLocation.get(e.branch_id) ?? null : null;
+      const days = resolveForBranch(data.days, e.branch_id)
+        .filter((d) => d.active && visibleInLocation(d.locations, myLocation))
+        .filter((d) => { const all = sectionsByDay.get(d.id) ?? []; return all.length === 0 || all.some((s) => visibleInLocation(s.locations, myLocation)); })
+        .sort((x, y) => x.display_order - y.display_order);
       const doneAt = new Map(data.completions.filter((c) => c.employee_id === e.id).map((c) => [c.day_id, c.completed_at]));
       const myViews = viewed.get(e.id) ?? new Set<string>();
 
       const labels = dayLabels(days);
       const details: DayDetail[] = days.map((d, i) => {
-        const secs = sectionsByDay.get(d.id) ?? [];
+        const secs = (sectionsByDay.get(d.id) ?? []).filter((s) => visibleInLocation(s.locations, myLocation));
         const tests = secs.filter((s) => s.section_type === 'test' && s.assessment_id);
         const reading = secs.filter((s) => s.section_type !== 'test');
         return {

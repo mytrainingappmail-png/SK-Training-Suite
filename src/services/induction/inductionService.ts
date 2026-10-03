@@ -9,11 +9,24 @@ import {
   getCompletionsForEmployee, markDayComplete, getViewedSectionIds, markSectionViewed,
   getAssignments, getMyAssignment, createAssignment, setAssignmentStatus, deleteAssignment,
 } from '../../repositories/induction/inductionRepository';
+import { supabase } from '../../lib/supabase';
+import { employeeLocationKey } from '../../constants/locations';
 import type {
   InductionDay, InductionDayForm,
   InductionDaySection, InductionDaySectionForm,
   InductionAssignment, InductionDayCompletion,
 } from '../../types/induction';
+
+/** The employee's location key (city of their branch), or null when unknown. Never throws — no location just means "All locations" content only. */
+export async function loadMyLocationKey(branchId: string | null | undefined): Promise<string | null> {
+  if (!branchId) return null;
+  try {
+    const { data } = await supabase.from('branches').select('city, branch_name').eq('id', branchId).maybeSingle();
+    return employeeLocationKey(data);
+  } catch {
+    return null;
+  }
+}
 
 export async function loadDays(): Promise<InductionDay[]> {
   return getDays();
@@ -63,6 +76,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
     unlock_mode: source.unlock_mode,
     day_label: source.day_label,
     standalone: source.standalone,
+    locations: source.locations,
     branch_id: branchId,
     source_id: source.id,
   });
@@ -79,6 +93,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
         assessment_id: s.assessment_id,
         faq_items: s.faq_items,
         thumbnail_url: s.thumbnail_url,
+        locations: s.locations,
         watermark_enabled: s.watermark_enabled,
         watermark_text: s.watermark_text,
         watermark_orientation: s.watermark_orientation,

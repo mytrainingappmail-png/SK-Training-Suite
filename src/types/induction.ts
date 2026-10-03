@@ -24,6 +24,8 @@ export interface InductionDay {
   day_label: string | null;
   // A standalone part (company overview…): always open, outside the day-by-day order, not numbered.
   standalone: boolean;
+  // Limited to certain locations (city keys, see constants/locations): null / empty = shown to everyone.
+  locations: string[] | null;
   // null = shared across every branch (the default). Set = visible only
   // to employees in that one branch.
   branch_id: string | null;
@@ -48,6 +50,7 @@ export const defaultInductionDayForm: InductionDayForm = {
   unlock_mode: 'next_day',
   day_label: null,
   standalone: false,
+  locations: null,
   branch_id: null,
   source_id: null,
 };
@@ -71,6 +74,8 @@ export interface InductionDaySection {
   faq_items: InductionFaqItem[];
   // The card picture shown to the employee for this section (null = a colourful default).
   thumbnail_url: string | null;
+  // Limited to certain locations (city keys): null / empty = shown to everyone.
+  locations: string[] | null;
   // Content protection — set only via the platform operator's own account (Admin UI hides
   // these for everyone else); survives being cloned to another company since a clone copies
   // every column of the source row.
@@ -95,6 +100,7 @@ export const defaultInductionDaySectionForm: InductionDaySectionForm = {
   assessment_id: null,
   faq_items: [],
   thumbnail_url: null,
+  locations: null,
   watermark_enabled: false,
   watermark_text: '',
   watermark_orientation: 'diagonal',
