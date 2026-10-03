@@ -700,7 +700,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                   {q.is_hidden ? "🙈 Hidden" : "👁 Visible"}
                 </button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
                   value={q.type}

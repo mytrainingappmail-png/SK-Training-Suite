@@ -52,13 +52,13 @@ export default function QuizAdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <nav className="flex items-center justify-between gap-4 px-6 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+      <nav className="flex items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />
           <span className="font-semibold tracking-wide">Live Quiz</span>
         </div>
 
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto sm:flex-none">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -134,7 +134,7 @@ export default function QuizAdminLayout() {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
         <Outlet />
       </main>
 

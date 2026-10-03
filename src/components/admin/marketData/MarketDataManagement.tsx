@@ -183,7 +183,7 @@ function MarketDataManagement() {
   if (error) return <div className="rounded-2xl border border-red-800 bg-red-950 p-6 text-sm text-red-300">{error}</div>;
 
   return (
-    <div className="-m-8 space-y-6 p-8" style={{ background: PAGE_BG, minHeight: '100%' }}>
+    <div className="space-y-6 p-3 sm:p-5 lg:p-8" style={{ background: PAGE_BG, minHeight: '100%' }}>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 shadow-xl ring-1 ring-white/5" style={{ backgroundColor: CARD_BG }}>
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: '#D4AF37' }}>📊 Market Analytics Data</h2>

@@ -551,11 +551,11 @@ export default function AssessmentPlayer({
   const timerWarning = overallSecondsLeft > 0 && overallSecondsLeft <= 120;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-900 text-white">
+    <div className="flex h-dvh flex-col overflow-hidden bg-slate-900 text-white">
 
       {/* ── Header ── */}
-      <header className="flex flex-shrink-0 items-center justify-between border-b border-slate-700 bg-slate-800 px-6 py-3">
-        <div className="min-w-0 flex-1">
+      <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-y-2 border-b border-slate-700 bg-slate-800 px-3 py-2 sm:px-6 sm:py-3">
+        <div className="min-w-0 flex-1 basis-40">
           <h1 className="truncate text-base font-bold text-white">{assessment.assessment_title}</h1>
           <p className="text-xs text-slate-400">
             Question {currentIdx + 1} of {totalCount}
@@ -565,7 +565,7 @@ export default function AssessmentPlayer({
         {/* Overall timer */}
         {overallSecondsLeft > 0 && (
           <div
-            className={`mx-4 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${
+            className={`mx-2 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold sm:mx-4 sm:px-4 ${
               timerWarning ? "bg-red-600 text-white" : "bg-slate-700 text-white"
             }`}
           >
@@ -594,10 +594,10 @@ export default function AssessmentPlayer({
       </div>
 
       {/* ── Body ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
 
         {/* ── Question Panel ── */}
-        <main className="flex flex-1 flex-col overflow-y-auto p-6">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6">
 
           {/* Per-question timer */}
           {assessment.question_timer_enabled && questionSecondsLeft > 0 && (
@@ -711,13 +711,13 @@ export default function AssessmentPlayer({
         </main>
 
         {/* ── Question Palette ── */}
-        <aside className="flex w-64 flex-shrink-0 flex-col border-l border-slate-700 bg-slate-800 p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <aside className="flex w-full flex-shrink-0 flex-col border-t border-slate-700 bg-slate-800 p-2 md:w-64 md:border-l md:border-t-0 md:p-4">
+          <p className="mb-3 hidden text-xs font-semibold uppercase tracking-wider text-slate-400 md:block">
             Question Palette
           </p>
 
           {/* Legend */}
-          <div className="mb-4 space-y-1.5 text-xs text-slate-400">
+          <div className="mb-4 hidden space-y-1.5 text-xs text-slate-400 md:block">
             <div className="flex items-center gap-2">
               <span className="h-4 w-4 rounded bg-emerald-500" />Answered ({answeredCount})
             </div>
@@ -734,8 +734,8 @@ export default function AssessmentPlayer({
           </div>
 
           {/* Grid */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-5 gap-1.5">
+          <div className="overflow-x-auto md:flex-1 md:overflow-y-auto md:overflow-x-visible">
+            <div className="flex gap-1.5 md:grid md:grid-cols-5">
               {questions.map((q, idx) => {
                 const state = getQuestionState(q);
                 const isCurrent = idx === currentIdx;
@@ -744,7 +744,7 @@ export default function AssessmentPlayer({
                     key={q.id}
                     onClick={() => goTo(idx)}
                     aria-label={`Go to question ${idx + 1}`}
-                    className={`flex h-9 w-full items-center justify-center rounded-lg text-xs font-semibold transition hover:opacity-80 ${paletteCls(state, isCurrent)}`}
+                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-xs font-semibold transition hover:opacity-80 md:h-9 md:w-full ${paletteCls(state, isCurrent)}`}
                   >
                     {idx + 1}
                   </button>
@@ -754,7 +754,7 @@ export default function AssessmentPlayer({
           </div>
 
           {/* Summary stats */}
-          <div className="mt-4 border-t border-slate-700 pt-4">
+          <div className="mt-4 hidden border-t border-slate-700 pt-4 md:block">
             <div className="mb-2 flex justify-between text-xs text-slate-400">
               <span>Progress</span>
               <span>{progress}%</span>

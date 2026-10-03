@@ -81,9 +81,9 @@ export function AreaChart({ data, color = "#8b5cf6" }: { data: ChartPoint[]; col
           />
         ))}
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-slate-500">
+      <div className="mt-1 flex justify-between overflow-hidden text-[10px] text-slate-500">
         {data.map((d, i) => (
-          <span key={d.label + i} className={i % showEveryNth === 0 ? "" : "invisible"}>
+          <span key={d.label + i} className={`min-w-0 flex-1 basis-0 whitespace-nowrap text-center ${i % showEveryNth === 0 ? "" : "invisible"}`}>
             {d.label}
           </span>
         ))}

@@ -3110,12 +3110,12 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
         </div>
       </div>
 
-      <div className="relative flex items-start gap-0 p-6">
+      <div className="relative flex flex-col gap-0 p-3 sm:p-4 lg:flex-row lg:items-start lg:p-6">
 
         {/* LEFT PANEL — Course Structure */}
         <aside
-          style={{ width: leftCollapsed ? 56 : leftWidth }}
-          className={`flex-shrink-0 rounded-2xl border border-slate-800 bg-slate-900 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.4)] lg:sticky lg:top-24 lg:h-fit ${isDragging === 'left' ? '' : 'transition-[width] duration-300 ease-in-out'}`}
+          style={{ ['--lw' as string]: `${leftCollapsed ? 56 : leftWidth}px` }}
+          className={`w-full flex-shrink-0 rounded-2xl lg:w-[var(--lw)] border border-slate-800 bg-slate-900 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.4)] lg:sticky lg:top-24 lg:h-fit ${isDragging === 'left' ? '' : 'transition-[width] duration-300 ease-in-out'}`}
         >
           <div className="flex items-center gap-1 border-b border-slate-800 p-2">
             <button

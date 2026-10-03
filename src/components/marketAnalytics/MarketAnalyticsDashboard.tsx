@@ -167,7 +167,7 @@ function MarketAnalyticsDashboard() {
   }
 
   return (
-    <div className="-m-8 space-y-6 p-8" style={{ background: PAGE_BG, minHeight: '100%' }}>
+    <div className="-m-3 space-y-6 p-3 sm:-m-5 sm:p-5 lg:-m-8 lg:p-8" style={{ background: PAGE_BG, minHeight: '100%' }}>
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-6 text-white shadow-xl" style={{ background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)', border: '1px solid #33415580' }}>
         <div className="space-y-1">
           <p className="text-sm text-amber-400">📈 Live Market Intelligence</p>

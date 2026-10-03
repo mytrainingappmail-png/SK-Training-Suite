@@ -135,7 +135,7 @@ function PerformanceTrackerLayout() {
     // container grows to fit the widest descendant instead of honoring
     // the real viewport, and this subtree's own overflow-x-auto never
     // gets a chance to kick in. Classic flexbox min-width:auto gotcha.
-    <div className="-m-8 min-h-screen min-w-0 bg-slate-50">
+    <div className="-m-3 min-h-screen min-w-0 bg-slate-50 sm:-m-5 lg:-m-8">
       <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950 px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">

@@ -82,3 +82,22 @@
   background: #E2E8F0;
   font-weight: 600;
 }
+
+/* Fit any screen: pictures, videos and pasted tables inside page content can never be wider than the screen
+   (a wide table scrolls inside its own box instead of pushing the whole page sideways). */
+html, body { max-width: 100%; }
+/* <fieldset> defaults to min-width:min-content, which stops it shrinking on a narrow screen */
+fieldset { min-width: 0; }
+main img, main video { max-width: 100%; }
+main [contenteditable="true"], .prose { max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; }
+main [contenteditable="true"] img, .prose img { max-width: 100%; height: auto; }
+main [contenteditable="true"] table, .prose table { display: block; max-width: 100%; overflow-x: auto; }
+
+/* Phones: cards inside the page use less padding so the content gets the width (desktop is unchanged). */
+@media (max-width: 639px) {
+  main .p-8 { padding: 1rem; }
+  main .p-6 { padding: 1rem; }
+  main .px-8 { padding-left: 1rem; padding-right: 1rem; }
+  main .px-6 { padding-left: 1rem; padding-right: 1rem; }
+  main .py-8 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+}

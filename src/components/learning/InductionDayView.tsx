@@ -86,13 +86,13 @@ export default function InductionDayView({
         </button>
         <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
           <div
-            className="bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-7 text-white"
+            className="bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-5 sm:px-8 sm:py-7 text-white"
             style={openSection.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.78), rgba(124,58,237,.82)), url(${openSection.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
           >
             <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel ? `${dayLabel.toUpperCase()} · ` : ''}{idx + 1} OF {sections.length}</span>
             <h2 className="mt-3 text-2xl font-bold">{openSection.title}</h2>
           </div>
-          <div className="p-8">
+          <div className="p-3 sm:p-8">
             {openSection.section_type === 'page' && (
               <div className="relative">
                 <div
@@ -146,7 +146,7 @@ export default function InductionDayView({
 
       <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
         <div
-          className="relative bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-8 text-white"
+          className="relative bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-6 sm:px-8 sm:py-8 text-white"
           style={day.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.75), rgba(124,58,237,.8)), url(${day.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
         >
           {dayLabel && <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel.toUpperCase()}</span>}
@@ -157,7 +157,7 @@ export default function InductionDayView({
           )}
         </div>
 
-        <div className="space-y-6 p-8">
+        <div className="space-y-6 p-3 sm:p-8">
           {sections.length === 0 && <p className="text-sm text-slate-400">No content added for this day yet.</p>}
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

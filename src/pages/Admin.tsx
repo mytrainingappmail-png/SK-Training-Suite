@@ -207,10 +207,11 @@ function Admin() {
     <div className="flex min-h-screen bg-slate-100">
       <></>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <></>
 
-        <main className="p-8">
+        {/* The page already sits inside the app layout's own padding, so no extra padding here; min-w-0 lets it shrink to the screen. */}
+        <main className="min-w-0 p-0">
           {!activeTab ? (
             <div
               className="rounded-2xl p-6"
@@ -237,7 +238,7 @@ function Admin() {
             </div>
           ) : (
             <div
-              className="flex items-center justify-between rounded-2xl p-4"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4"
               style={{ backgroundColor: consoleColors.bg, border: `2px solid ${consoleColors.border}` }}
             >
               <button

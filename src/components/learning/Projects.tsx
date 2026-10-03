@@ -474,8 +474,8 @@ function Projects() {
       />
 
       {activeTestAssessmentId && user?.id && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-0 backdrop-blur-sm sm:p-4">
+          <div className="mx-auto max-w-4xl rounded-none bg-white p-0 shadow-2xl sm:rounded-2xl sm:p-6">
             <AssessmentPlayer
               assessmentId={activeTestAssessmentId}
               employeeId={user.id}

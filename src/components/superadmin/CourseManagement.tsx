@@ -1391,7 +1391,7 @@ export default function CourseManagement() {
           <h2 className="text-xl font-bold text-slate-800">Course Management</h2>
           <p className="mt-0.5 text-sm text-slate-500">Create, manage and publish learning courses.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => load()}
             disabled={loading}

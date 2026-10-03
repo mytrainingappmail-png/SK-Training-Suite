@@ -265,7 +265,7 @@ export default function SurveyBuilderPage() {
           <div key={q.localId} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
                   value={q.type}

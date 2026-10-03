@@ -270,7 +270,7 @@ export default function QuizDashboardPage() {
           <option value="custom">Custom Range</option>
         </select>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs text-slate-500">From</label>
           <input
             type="date"
