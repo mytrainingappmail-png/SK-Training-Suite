@@ -953,8 +953,8 @@ function InductionManagement() {
               <div className="mb-3 space-y-2">
                 {sections.length === 0 && <p className="text-xs text-slate-400">No sections yet — add one below.</p>}
                 {sections.map((s, i) => (
-                  <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <div className="flex items-center gap-3">
+                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-slate-100 p-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                       <div className="flex flex-col gap-0.5">
                         <button
                           onClick={() => handleMoveSection(s.id, 'up')}
