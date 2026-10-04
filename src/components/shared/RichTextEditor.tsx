@@ -109,6 +109,18 @@ const FONT_SIZES = [
 ];
 
 const TEXT_COLORS = ['#0F172A', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777'];
+// Full text-colour menu: greys, then every hue from dark to light.
+const TEXT_PALETTE = [
+  '#000000', '#334155', '#64748B', '#94A3B8', '#CBD5E1', '#FFFFFF',
+  '#7F1D1D', '#B91C1C', '#DC2626', '#EF4444', '#F87171', '#FCA5A5',
+  '#7C2D12', '#C2410C', '#EA580C', '#F97316', '#FB923C', '#FDBA74',
+  '#713F12', '#A16207', '#CA8A04', '#EAB308', '#FACC15', '#FDE047',
+  '#14532D', '#15803D', '#16A34A', '#22C55E', '#4ADE80', '#86EFAC',
+  '#134E4A', '#0F766E', '#0D9488', '#14B8A6', '#2DD4BF', '#5EEAD4',
+  '#1E3A8A', '#1D4ED8', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD',
+  '#312E81', '#4338CA', '#6366F1', '#7C3AED', '#A78BFA', '#C4B5FD',
+  '#831843', '#BE185D', '#DB2777', '#EC4899', '#F472B6', '#F9A8D4',
+];
 const HIGHLIGHT_COLORS = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA'];
 const CELL_COLORS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3', '#FFEDD5', '#FFFFFF'];
 const SHAPE_COLORS = ['#1E293B', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED'];
@@ -458,8 +470,9 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         .rte-content ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
         .rte-content ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
         .rte-content li { margin: 0.15rem 0; }
-        .rte-content table { margin: 0.75rem 0; }
-        .rte-content td, .rte-content th { position: relative; }
+        .rte-content table { margin: 0.75rem 0; width: 100% !important; min-width: 0 !important; max-width: 100%; table-layout: fixed; }
+        .rte-content col { width: auto !important; min-width: 0 !important; }
+        .rte-content td, .rte-content th { position: relative; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
         .rte-content .selectedCell { background: #E0E7FF; }
         .rte-content img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; }
         .rte-content p.is-editor-empty:first-child::before { color: #94A3B8; content: attr(data-placeholder); float: left; pointer-events: none; height: 0; }
@@ -541,11 +554,22 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
             <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-red-600">A</span>
           </ToolbarButton>
           {showTextColors && (
-            <div className="absolute left-0 top-full z-20 mt-1 flex gap-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
-              {TEXT_COLORS.map((c) => (
-                <button key={c} onClick={() => { editor.chain().focus().setColor(c).run(); setShowTextColors(false); }}
-                  style={{ backgroundColor: c }} className="h-6 w-6 rounded-full border border-slate-200" />
-              ))}
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+              <div className="grid grid-cols-6 gap-1.5">
+                {TEXT_PALETTE.map((c) => (
+                  <button key={c} type="button" title={c} onClick={() => { editor.chain().focus().setColor(c).run(); setShowTextColors(false); }}
+                    style={{ backgroundColor: c }} className="h-7 w-7 rounded-full border border-slate-200 transition hover:scale-110" />
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600" title="Pick any colour">
+                  <input type="color" aria-label="Custom text colour" className="h-7 w-9 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                    onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} />
+                  Any colour
+                </label>
+                <button type="button" onClick={() => { editor.chain().focus().unsetColor().run(); setShowTextColors(false); }}
+                  className="rounded-md px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">Default</button>
+              </div>
             </div>
           )}
         </div>

@@ -91,7 +91,10 @@ fieldset { min-width: 0; }
 main img, main video { max-width: 100%; }
 main [contenteditable="true"], .prose { max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; }
 main [contenteditable="true"] img, .prose img { max-width: 100%; height: auto; }
-main [contenteditable="true"] table, .prose table { display: block; max-width: 100%; overflow-x: auto; }
+/* Tables in written content always fit the screen: the text wraps onto the next line inside its cell. */
+main [contenteditable="true"] table, .prose table { width: 100% !important; min-width: 0 !important; max-width: 100%; table-layout: fixed; }
+main [contenteditable="true"] col, .prose col { width: auto !important; min-width: 0 !important; }
+main [contenteditable="true"] td, main [contenteditable="true"] th, .prose td, .prose th { overflow-wrap: anywhere; word-break: break-word; min-width: 0; width: auto !important; }
 
 /* Phones: cards inside the page use less padding so the content gets the width (desktop is unchanged). */
 @media (max-width: 639px) {

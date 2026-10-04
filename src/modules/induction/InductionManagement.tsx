@@ -36,7 +36,7 @@ import {
   saveAssessment as saveAssessmentSettings, removeAssessment as removeAssessmentSvc,
 } from '../../services/assessment/assessmentService';
 import {
-  loadQuestions, loadOptionsByQuestion, createQuestion as createQuestionSvc,
+  loadQuestionsWithOptions, createQuestionsBulk,
 } from '../../services/question/questionService';
 import { employeeService } from '../../services/employee/employeeService';
 import { branchService } from '../../services/branch/branchService';
@@ -524,10 +524,8 @@ function InductionManagement() {
   /** Reload just the questions (keeps whatever is typed in the test settings). */
   async function reloadTestQuestions(assessmentId: string) {
     try {
-      const allQuestions = await loadQuestions();
-      const qs = allQuestions.filter((q) => q.assessment_id === assessmentId).sort((x, y) => x.display_order - y.display_order);
-      const entries = await Promise.all(qs.map(async (q) => [q.id, await loadOptionsByQuestion(q.id)] as const));
-      setTestQuestionOptions(Object.fromEntries(entries));
+      const { questions: qs, optionsByQuestion } = await loadQuestionsWithOptions(assessmentId);
+      setTestQuestionOptions(optionsByQuestion);
       setTestQuestions(qs);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load questions.');
@@ -536,7 +534,7 @@ function InductionManagement() {
 
   async function fetchTestData(assessmentId: string) {
     try {
-      const [allAssessments, allQuestions] = await Promise.all([loadAssessments(), loadQuestions()]);
+      const [allAssessments, loaded] = await Promise.all([loadAssessments(), loadQuestionsWithOptions(assessmentId)]);
       const a = allAssessments.find((x) => x.id === assessmentId);
       if (a) {
         setTestSettingsDraft({
@@ -546,10 +544,8 @@ function InductionManagement() {
           shuffle_options: a.shuffle_options,
         });
       }
-      const qs = allQuestions.filter((q) => q.assessment_id === assessmentId).sort((x, y) => x.display_order - y.display_order);
-      setTestQuestions(qs);
-      const entries = await Promise.all(qs.map(async (q) => [q.id, await loadOptionsByQuestion(q.id)] as const));
-      setTestQuestionOptions(Object.fromEntries(entries));
+      setTestQuestions(loaded.questions);
+      setTestQuestionOptions(loaded.optionsByQuestion);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load test.');
     }
@@ -741,9 +737,7 @@ function InductionManagement() {
         showToast('No valid rows found in that CSV.');
         return;
       }
-      for (const form of forms) {
-        await createQuestionSvc(form);
-      }
+      await createQuestionsBulk(forms);
       await fetchTestData(assessmentId);
       showToast(`Imported ${forms.length} question(s).`);
     } catch (err) {

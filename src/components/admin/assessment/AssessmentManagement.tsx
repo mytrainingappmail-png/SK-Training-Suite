@@ -45,6 +45,8 @@ import {
   loadQuestions,
   loadOptionsByQuestion,
   createQuestion,
+  createQuestionsBulk,
+  loadQuestionsWithOptions,
   saveQuestion,
   removeQuestion,
   toggleQuestionStatus,
@@ -627,11 +629,9 @@ function AssessmentManagement() {
 
   async function reloadQuick(assessmentId: string) {
     try {
-      const rows = await loadQuestions();
-      const mine = rows.filter((q) => q.assessment_id === assessmentId);
-      const entries = await Promise.all(mine.map(async (q) => [q.id, await loadOptionsByQuestion(q.id)] as const));
+      const [rows, loaded] = await Promise.all([loadQuestions(), loadQuestionsWithOptions(assessmentId)]);
       setOptionsByQuestion({});
-      setQuickOptions(Object.fromEntries(entries));
+      setQuickOptions(loaded.optionsByQuestion);
       setQuestions(rows);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load questions.');
@@ -935,7 +935,7 @@ function AssessmentManagement() {
       const text = await file.text();
       const forms = csvToQuestionForms(text, activeAssessmentId);
       if (forms.length === 0) { showToast('No valid questions found in file.'); return; }
-      for (const form of forms) await createQuestion(form);
+      await createQuestionsBulk(forms);
       fetchAll();
       showToast(`Imported ${forms.length} question(s)`);
     } catch (err) {
