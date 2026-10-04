@@ -60,7 +60,7 @@ async function publishedCandidates(myCompanyId: string): Promise<Candidate[]> {
     supabase.from("induction_days").select("id, updated_at, created_at").eq("company_id", myCompanyId).eq("active", true).is("branch_id", null),
     supabase.from("induction_day_sections").select("day_id, updated_at, created_at").eq("company_id", myCompanyId),
     supabase.from("library_videos").select("id, updated_at, created_at").eq("company_id", myCompanyId).eq("active", true),
-    supabase.from("real_estate_projects").select("id, updated_at, created_at").eq("company_id", myCompanyId).eq("active", true).is("branch_id", null),
+    supabase.from("real_estate_projects").select("id, updated_at, created_at").eq("company_id", myCompanyId).eq("active", true).is("branch_id", null).is("induction_section_id", null),
     supabase.from("real_estate_project_sections").select("project_id, updated_at, created_at").eq("company_id", myCompanyId),
   ]);
 

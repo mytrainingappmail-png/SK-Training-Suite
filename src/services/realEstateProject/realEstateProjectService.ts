@@ -56,8 +56,20 @@ export async function removeCategory(id: string): Promise<void> {
   await deleteCategory(id);
 }
 
-export async function loadProjects(): Promise<RealEstateProject[]> {
-  return getProjects();
+import { supabase } from '../../lib/supabase';
+
+export async function loadProjects(opts: { inductionSectionId?: string; includeInduction?: boolean } = {}): Promise<RealEstateProject[]> {
+  return getProjects(opts);
+}
+
+/**
+ * A fully independent copy of a project (its pages, tests and brochures too) — from the main Projects into an
+ * Induction card, or (intoSectionId = null) from a card into the main Projects. Nothing stays linked afterwards.
+ */
+export async function copyProjectIndependent(projectId: string, intoSectionId: string | null): Promise<string> {
+  const { data, error } = await supabase.rpc('copy_project_independent', { p_project: projectId, p_into_section: intoSectionId });
+  if (error) throw new Error(error.message);
+  return data as string;
 }
 
 function validateProjectForm(form: RealEstateProjectForm): void {
@@ -110,6 +122,7 @@ export async function cloneProjectToBranch(projectId: string, branchId: string, 
     display_order: source.display_order,
     branch_id: branchId,
     source_id: source.id,
+    induction_section_id: null,
   });
 
   await Promise.all([

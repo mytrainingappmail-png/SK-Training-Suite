@@ -13,7 +13,7 @@ export default function ProjectPreview({ projectId, onClose }: { projectId: stri
   const [toast, setToast] = useState('');
 
   useEffect(() => {
-    Promise.all([loadProjects(), loadAllBrochures(), loadAllSections()])
+    Promise.all([loadProjects({ includeInduction: true }), loadAllBrochures(), loadAllSections()])
       .then(([projects, brochures, sections]) => {
         const p = projects.find((x) => x.id === projectId);
         if (!p) { setError('Project not found.'); return; }

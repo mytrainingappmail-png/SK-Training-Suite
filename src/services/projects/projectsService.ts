@@ -29,9 +29,13 @@ export interface Project {
   sections: RealEstateProjectSection[];
 }
 
-export async function loadProjectsForEmployee(_employeeId: string, employeeBranchId: string | null = null): Promise<Project[]> {
+export async function loadProjectsForEmployee(
+  _employeeId: string,
+  employeeBranchId: string | null = null,
+  opts: { includeInduction?: boolean } = {},
+): Promise<Project[]> {
   const [projects, brochures, sections] = await Promise.all([
-    loadProjects(),
+    loadProjects({ includeInduction: opts.includeInduction }),
     loadAllBrochures(),
     loadAllSections(),
   ]);

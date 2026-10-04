@@ -26,7 +26,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  loadProjects, saveProject, editProject, removeProject, reorderProjects,
+  loadProjects, saveProject, editProject, removeProject, reorderProjects, copyProjectIndependent,
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
   loadSectionsForProject, saveSection, editSection, removeSection, reorderSections,
@@ -240,8 +240,24 @@ function ReorderProjectsModal({
   );
 }
 
-function RealEstateProjectManagement() {
+/**
+ * Used inside an Induction "Focused projects" card: the screen then lists / creates / edits ONLY the projects that
+ * belong to that card (they are separate from the main Projects section — editing or deleting them never touches it).
+ */
+export interface ProjectManagerScope {
+  inductionSectionId: string;
+  /** The card's projects (in order) whenever they change, so the card can remember them. */
+  onChanged?: (orderedIds: string[]) => void;
+  /** What the card already remembers, so nothing is re-saved needlessly. */
+  initialIds?: string[];
+}
+
+function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } = {}) {
   const user = getCurrentUser();
+  const lastNotified = useRef((scope?.initialIds ?? []).join(','));
+  const [pickOpen, setPickOpen] = useState(false);
+  const [mainProjects, setMainProjects] = useState<RealEstateProject[] | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
   // 'Preview' of a project exactly as an employee sees it (nothing saved).
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
@@ -291,9 +307,14 @@ function RealEstateProjectManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadProjects(), loadAllBrochures(), branchService.getAll(), loadCompany()])
+    Promise.all([loadProjects(scope ? { inductionSectionId: scope.inductionSectionId } : undefined), loadAllBrochures(), branchService.getAll(), loadCompany()])
       .then(([p, b, br, co]) => {
         setProjects(p);
+        if (scope?.onChanged) {
+          const ids = p.map((x) => x.id);
+          const key = ids.join(',');
+          if (key !== lastNotified.current) { lastNotified.current = key; scope.onChanged(ids); }
+        }
         setBrochures(b);
         setBranches(br);
         setPdfUploadEnabled(co?.brochure_pdf_upload_enabled ?? false);
@@ -424,7 +445,7 @@ function RealEstateProjectManagement() {
     setSavingProject(true);
     try {
       if (editingProjectId === 'new') {
-        await saveProject({ ...draft, company_id: user.companyId, active: true, display_order: projects.length, branch_id: null, source_id: null });
+        await saveProject({ ...draft, company_id: user.companyId, active: true, display_order: projects.length, branch_id: null, source_id: null, induction_section_id: scope?.inductionSectionId ?? null });
       } else if (editingProjectId) {
         await editProject(editingProjectId, draft);
       }
@@ -438,7 +459,42 @@ function RealEstateProjectManagement() {
     }
   }
 
+  async function openPicker() {
+    setPickOpen(true);
+    setMainProjects(null);   // always reload: a project may have just been copied to the main section
+    try { setMainProjects(await loadProjects()); } catch (err) { showToast(err instanceof Error ? err.message : 'Could not load your projects.'); }
+  }
+
+  /** Main Projects -> this card: an independent copy (pages, tests, brochures included). */
+  async function handleCopyIntoCard(projectId: string) {
+    if (!scope) return;
+    setCopyingId(projectId);
+    try {
+      await copyProjectIndependent(projectId, scope.inductionSectionId);
+      showToast('Copied into this card — it is separate from your Projects section, edit it freely.');
+      fetchAll();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not copy the project.');
+    } finally {
+      setCopyingId(null);
+    }
+  }
+
+  /** This card -> main Projects: an independent copy, so the work is done once. */
+  async function handleCopyToMain(projectId: string) {
+    setCopyingId(projectId);
+    try {
+      await copyProjectIndependent(projectId, null);
+      showToast('Copied to your Projects section — it is a separate project there now.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not copy the project.');
+    } finally {
+      setCopyingId(null);
+    }
+  }
+
   async function handleDeleteProject(id: string) {
+    if (scope && !window.confirm('Delete this project from the card? Your Projects section is not affected.')) return;
     try {
       await removeProject(id);
       fetchAll();
@@ -1001,15 +1057,19 @@ function RealEstateProjectManagement() {
     <div className="space-y-6">
       {previewProjectId && <ProjectPreview projectId={previewProjectId} onClose={() => setPreviewProjectId(null)} />}
       <div className="rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-900">Projects</h2>
-        <p className="mt-1 text-sm text-slate-500">Browsable reference material — no test, no duration, no certificate. Read anytime.</p>
+        <h2 className="text-lg font-bold text-slate-900">{scope ? 'Projects in this card' : 'Projects'}</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {scope
+            ? 'These projects belong only to this induction card. Adding, editing or deleting them never changes your main Projects section — use the copy buttons to move a project between the two.'
+            : 'Browsable reference material — no test, no duration, no certificate. Read anytime.'}
+        </p>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-slate-700">All Projects</p>
+          <p className="text-sm font-semibold text-slate-700">{scope ? 'Card projects' : 'All Projects'}</p>
           <div className="flex flex-wrap gap-2">
-            {branches.length > 1 && (
+            {!scope && branches.length > 1 && (
               <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className={`${INPUT_CLS} w-auto`}>
                 <option value="all">All branches</option>
                 <option value="generic">Shared only</option>
@@ -1023,6 +1083,11 @@ function RealEstateProjectManagement() {
             >
               Reorder Projects
             </button>
+            {scope && (
+              <button onClick={openPicker} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+                Copy from Projects section
+              </button>
+            )}
             <button onClick={startNewProject} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
               + New Project
             </button>
@@ -1030,7 +1095,7 @@ function RealEstateProjectManagement() {
         </div>
         <div className="space-y-2">
           {projects.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">No projects yet — add one above.</p>
+            <p className="py-8 text-center text-sm text-slate-400">{scope ? 'No projects in this card yet — add a new one, or copy one from your Projects section.' : 'No projects yet — add one above.'}</p>
           ) : (
             projects
               .filter((p) => branchFilter === 'all' || (branchFilter === 'generic' ? !p.branch_id : p.branch_id === branchFilter))
@@ -1044,13 +1109,16 @@ function RealEstateProjectManagement() {
                   )}
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{p.project_name}</p>
-                    <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {branchName(p.branch_id)}
-                    </span>
+                    {!scope && (
+                      <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {branchName(p.branch_id)}
+                      </span>
+                    )}
+                    {scope && !p.active && <span className="text-[11px] font-semibold text-amber-600">Inactive</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {branches.length > 1 && !p.branch_id && (
+                  {!scope && branches.length > 1 && !p.branch_id && (
                     <>
                       <select
                         value={cloneTargets[p.id] ?? ''}
@@ -1070,6 +1138,11 @@ function RealEstateProjectManagement() {
                     </>
                   )}
                   <button onClick={() => setPreviewProjectId(p.id)} className="text-xs font-semibold text-emerald-700 hover:underline">👁 Preview</button>
+                  {scope && (
+                    <button onClick={() => handleCopyToMain(p.id)} disabled={copyingId === p.id} className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-40">
+                      {copyingId === p.id ? 'Copying…' : 'Copy to Projects section'}
+                    </button>
+                  )}
                   <button onClick={() => startEditProject(p)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteProject(p.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                 </div>
@@ -1078,6 +1151,34 @@ function RealEstateProjectManagement() {
           )}
         </div>
       </div>
+
+      {scope && pickOpen && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setPickOpen(false)} />
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900">Copy from your Projects section</h3>
+            <p className="mb-3 text-xs text-slate-500">Each one is copied in full (pages, tests, brochures) as a separate project in this card.</p>
+            <div className="flex-1 space-y-2 overflow-y-auto">
+              {!mainProjects && <p className="text-sm text-slate-400">Loading…</p>}
+              {mainProjects && mainProjects.length === 0 && <p className="text-sm text-slate-400">Your Projects section has no projects yet.</p>}
+              {(mainProjects ?? []).map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-2.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {m.thumbnail_url ? <img src={m.thumbnail_url} alt="" className="h-10 w-12 flex-shrink-0 rounded-lg object-cover" /> : <div className="h-10 w-12 flex-shrink-0 rounded-lg bg-slate-100" />}
+                    <p className="truncate text-sm font-semibold text-slate-800">{m.project_name}</p>
+                  </div>
+                  <button onClick={() => handleCopyIntoCard(m.id)} disabled={copyingId === m.id} className="flex-shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                    {copyingId === m.id ? 'Copying…' : 'Copy here'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={() => setPickOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {reorderOpen && (
         <ReorderProjectsModal

@@ -49,6 +49,9 @@ export interface RealEstateProject {
   // employee-facing query can prefer this branch's own customized clone
   // over the generic version instead of showing both.
   source_id: string | null;
+  // Set = this project lives only inside that Induction "Focused projects" card (hidden from the main
+  // Projects list, removed with the card). null = an ordinary project.
+  induction_section_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -66,4 +69,5 @@ export const defaultRealEstateProjectForm: RealEstateProjectForm = {
   display_order: 0,
   branch_id: null,
   source_id: null,
+  induction_section_id: null,
 };

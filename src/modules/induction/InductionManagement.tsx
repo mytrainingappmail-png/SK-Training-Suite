@@ -46,7 +46,7 @@ import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
 import LocationPicker from '../../components/shared/LocationPicker';
-import InductionProjectPicker from './InductionProjectPicker';
+import InductionCardProjects from './InductionCardProjects';
 import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
 import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { locationLabel } from '../../constants/locations';
@@ -607,12 +607,16 @@ function InductionManagement() {
     downloadTextFile(sampleFaqCsv(), 'induction-faq-sample.csv', 'text/csv');
   }
 
+  /** The card's projects changed (added / deleted in "Manage projects"): remember them on the card right away. */
+  async function handleCardProjectsChanged(ids: string[]) {
+    setSectionDraft((d) => (d ? { ...d, project_ids: ids } : d));
+    if (editingSectionId && editingSectionId !== 'new') {
+      try { await editSection(editingSectionId, { project_ids: ids }); } catch (err) { showToast(err instanceof Error ? err.message : 'Could not update the card.'); }
+    }
+  }
+
   async function handleSaveSection() {
     if (!sectionDraft || !editingDayId || editingDayId === 'new' || !user?.companyId) return;
-    if (sectionDraft.section_type === 'projects' && !(sectionDraft.project_ids && sectionDraft.project_ids.length > 0)) {
-      showToast('Tick at least one project for this card.');
-      return;
-    }
     setSavingSection(true);
     try {
       const protection = {
@@ -677,10 +681,10 @@ function InductionManagement() {
       // A Test section stays open right after saving — settings alone create
       // an (empty) assessment, so closing here would force the admin to
       // re-open the section just to see the "Add Question" / CSV upload UI.
-      if (sectionDraft.section_type === 'test' && savedId) {
+      if ((sectionDraft.section_type === 'test' || sectionDraft.section_type === 'projects') && savedId) {
         setEditingSectionId(savedId);
         setSectionDraft((d) => (d ? { ...d, assessment_id: assessmentId } : d));
-        showToast('Test settings saved — now add your questions below.');
+        showToast(sectionDraft.section_type === 'projects' ? 'Card saved — now add its projects below.' : 'Test settings saved — now add your questions below.');
       } else {
         setEditingSectionId(null);
         setSectionDraft(null);
@@ -1100,7 +1104,11 @@ function InductionManagement() {
                   )}
 
                   {sectionDraft.section_type === 'projects' && (
-                    <InductionProjectPicker value={sectionDraft.project_ids ?? []} onChange={(ids) => setSectionDraft((d) => (d ? { ...d, project_ids: ids } : d))} />
+                    <InductionCardProjects
+                      sectionId={editingSectionId && editingSectionId !== 'new' ? editingSectionId : null}
+                      projectIds={sectionDraft.project_ids ?? []}
+                      onIdsChange={handleCardProjectsChanged}
+                    />
                   )}
 
                   {sectionDraft.section_type === 'faq' && (

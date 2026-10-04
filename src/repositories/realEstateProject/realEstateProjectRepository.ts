@@ -48,11 +48,12 @@ export async function deleteCategory(id: string): Promise<void> {
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
-export async function getProjects(): Promise<RealEstateProject[]> {
-  const { data, error } = await supabase
-    .from('real_estate_projects')
-    .select('*')
-    .order('display_order', { ascending: true });
+// By default only the ordinary (main Projects) ones; projects that live inside an Induction card are asked for explicitly.
+export async function getProjects(opts: { inductionSectionId?: string; includeInduction?: boolean } = {}): Promise<RealEstateProject[]> {
+  let q = supabase.from('real_estate_projects').select('*');
+  if (opts.inductionSectionId) q = q.eq('induction_section_id', opts.inductionSectionId);
+  else if (!opts.includeInduction) q = q.is('induction_section_id', null);
+  const { data, error } = await q.order('display_order', { ascending: true });
   if (error) throw new Error(error.message);
   return data ?? [];
 }

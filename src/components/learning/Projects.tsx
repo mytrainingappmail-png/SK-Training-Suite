@@ -392,7 +392,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
     }
     setLoading(true);
     setError('');
-    loadProjectsForEmployee(user.id, user.branchId || null)
+    loadProjectsForEmployee(user.id, user.branchId || null, { includeInduction: !!onlyProjectIds })
       .then((all) => setProjects(onlyProjectIds
         ? onlyProjectIds.map((id) => all.find((p) => p.projectId === id)).filter((p): p is Project => !!p)
         : all))
