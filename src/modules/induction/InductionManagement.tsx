@@ -47,6 +47,7 @@ import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
 import LocationPicker from '../../components/shared/LocationPicker';
 import InductionCardProjects from './InductionCardProjects';
+import InductionCompletionSettings from './InductionCompletionSettings';
 import { RequirementSelect, AcknowledgeSettings, FeedbackBuilder, TaskSettings, ContactSettings } from './cards/CardSettingsEditors';
 import InductionResponsesModal from './cards/InductionResponsesModal';
 import { COMPLETABLE_TYPES, isFormCard, newQuestionId, standardFeedbackQuestions } from '../../utils/inductionCards';
@@ -1235,6 +1236,8 @@ function InductionManagement() {
         <h2 className="text-lg font-bold text-slate-900">Induction</h2>
         <p className="mt-1 text-sm text-slate-500">A simple, day-by-day onboarding program for new employees. For every Day you choose when it opens: anytime, right after the previous day, or on the next date.</p>
       </div>
+
+      {user?.companyId && <InductionCompletionSettings companyId={user.companyId} showToast={showToast} />}
 
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <p className="mb-3 text-sm font-semibold text-slate-700">Employees in Induction</p>

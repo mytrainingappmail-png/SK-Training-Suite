@@ -13,12 +13,14 @@
 //                    everything in one sitting can't unlock more than one new
 //                    Day per date (the original behaviour, still the default)
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed, loadMyLocationKey,
 } from '../../services/induction/inductionService';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import { getMyCardResponses, saveMyCardResponse } from '../../repositories/induction/inductionCardRepository';
+import { getMyInductionCertificate } from '../../repositories/induction/inductionSettingsRepository';
+import { Link } from 'react-router-dom';
 import { getCurrentUser } from '../../services/auth/session';
 import { resolveForBranch } from '../../utils/branchScoping';
 import { visibleInLocation } from '../../constants/locations';
@@ -62,6 +64,9 @@ function Induction() {
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
   const [responses, setResponses] = useState<Record<string, InductionCardResponse>>({});
+  const [certificate, setCertificate] = useState<{ id: string; title: string; number: string } | null>(null);
+  const certKnown = useRef<boolean | null>(null);
+  const [assignmentDone, setAssignmentDone] = useState(false);
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const [toast, setToast] = useState('');
@@ -75,13 +80,17 @@ function Induction() {
     if (!user?.id) { setError('No active session.'); setLoading(false); return; }
     setLoading(true);
     setError('');
-    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null), getMyCardResponses(user.id).catch(() => [] as InductionCardResponse[])])
-      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation, myResponses]) => {
+    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null), getMyCardResponses(user.id).catch(() => [] as InductionCardResponse[]), getMyInductionCertificate(user.id).catch(() => null)])
+      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation, myResponses, myCertificate]) => {
         setResponses(Object.fromEntries(myResponses.map((r) => [r.section_id, r])));
+        setCertificate(myCertificate);
+        if (certKnown.current === false && myCertificate) showToast('🎉 Induction complete — your certificate is ready!');
+        certKnown.current = !!myCertificate;
         // Days and sections limited to other locations are simply not there for this employee.
         const allSections = allSectionsRaw.filter((s) => visibleInLocation(s.locations, myLocation));
         setViewedIds(new Set(viewed));
         setHasAssignment(!!assignment && assignment.status === 'active');
+        setAssignmentDone(!!assignment && assignment.status === 'completed');
         const scoped = resolveForBranch(allDays, user.branchId || null);
         const active = scoped
           .filter((d) => d.active && visibleInLocation(d.locations, myLocation))
@@ -200,10 +209,17 @@ function Induction() {
   if (hasAssignment === false) {
     return (
       <div className="space-y-6">
-        <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program." statLabel="Days" statValue={0} />
+        <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program." statLabel="Days" statValue={assignmentDone ? days.length : 0} />
+        {certificate && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-semibold text-emerald-800">🎉 You have completed the induction! Your certificate “{certificate.title}” is ready.</p>
+            <Link to={`/learning/certificate/${certificate.id}`} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">View certificate</Link>
+          </div>
+        )}
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-16 text-center text-slate-400">
-          You're not currently assigned to an Induction program.
+          {assignmentDone ? 'You have completed your Induction program. Well done!' : "You're not currently assigned to an Induction program."}
         </div>
+        {toast && <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">{toast}</div>}
       </div>
     );
   }
@@ -246,6 +262,13 @@ function Induction() {
   return (
     <div className="space-y-6">
       <SectionHeroBanner title="Induction" subtitle="Your day-by-day onboarding program." statLabel="Days" statValue={days.length} />
+
+      {certificate && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm font-semibold text-emerald-800">🎉 You have completed the induction! Your certificate “{certificate.title}” is ready.</p>
+          <Link to={`/learning/certificate/${certificate.id}`} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">View certificate</Link>
+        </div>
+      )}
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
 

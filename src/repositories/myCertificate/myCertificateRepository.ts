@@ -111,7 +111,7 @@ function normaliseCertificate(row: SBCertificateRow): MyCertificate {
     id:                row.id,
     certificateNumber: row.certificate_no    ?? '',
     certificateTitle:  row.certificate_title ?? 'Certificate',
-    courseName:        course?.course_name   ?? '',
+    courseName:        course?.course_name   ?? (row.assessment_id ? '' : row.certificate_title ?? ''),
     courseCode:        course?.course_code   ?? '',
     issueDate:         row.issue_date        ?? '',
     expiryDate:        row.expiry_date       ?? null,

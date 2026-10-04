@@ -61,7 +61,7 @@ export async function loadCertificatesForView(certificateIds: string[]): Promise
     const employeeName = employee ? `${employee.first_name} ${employee.last_name}`.trim() : 'Employee';
 
     const assessment = assessments.find((a) => a.id === certificate.assessment_id);
-    const courseName = assessment?.assessment_title ?? '';
+    const courseName = assessment?.assessment_title ?? (certificate.assessment_id ? '' : certificate.certificate_title ?? '');
 
     result.set(certificate.id, { certificate, template, employeeName, courseName });
   }
