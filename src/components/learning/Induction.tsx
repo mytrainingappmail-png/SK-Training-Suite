@@ -18,6 +18,7 @@ import {
   loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed, loadMyLocationKey,
 } from '../../services/induction/inductionService';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
+import { getMyCardResponses, saveMyCardResponse } from '../../repositories/induction/inductionCardRepository';
 import { getCurrentUser } from '../../services/auth/session';
 import { resolveForBranch } from '../../utils/branchScoping';
 import { visibleInLocation } from '../../constants/locations';
@@ -27,7 +28,7 @@ import ThumbnailCard from '../shared/ThumbnailCard';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import InductionDayView from './InductionDayView';
 import { dayLabels, isStandaloneDay, nextInOrder, previousInOrder, refName, withLabel } from '../../utils/inductionDayLabel';
-import type { InductionDay, InductionDaySection, InductionDayCompletion } from '../../types/induction';
+import type { InductionDay, InductionDaySection, InductionDayCompletion, InductionCardResponse, InductionResponseKind } from '../../types/induction';
 
 function IconLock({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>);
@@ -60,6 +61,7 @@ function Induction() {
   const [error, setError] = useState('');
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
+  const [responses, setResponses] = useState<Record<string, InductionCardResponse>>({});
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const [toast, setToast] = useState('');
@@ -73,8 +75,9 @@ function Induction() {
     if (!user?.id) { setError('No active session.'); setLoading(false); return; }
     setLoading(true);
     setError('');
-    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null)])
-      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation]) => {
+    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null), getMyCardResponses(user.id).catch(() => [] as InductionCardResponse[])])
+      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation, myResponses]) => {
+        setResponses(Object.fromEntries(myResponses.map((r) => [r.section_id, r])));
         // Days and sections limited to other locations are simply not there for this employee.
         const allSections = allSectionsRaw.filter((s) => visibleInLocation(s.locations, myLocation));
         setViewedIds(new Set(viewed));
@@ -153,6 +156,17 @@ function Induction() {
     if (!viewedIds.has(section.id)) void recordSectionViewed(section.id, user.id).catch(() => undefined);
   }
 
+  // An acknowledgment / feedback / task answer is saved right away and counts toward finishing the day.
+  async function handleSubmitResponse(section: InductionDaySection, payload: Record<string, unknown>) {
+    if (!user?.id || !user.companyId) throw new Error('No active session.');
+    const saved = await saveMyCardResponse({
+      sectionId: section.id, employeeId: user.id, companyId: user.companyId,
+      kind: section.section_type as InductionResponseKind, response: payload,
+    });
+    setResponses((prev) => ({ ...prev, [section.id]: saved }));
+    showToast(section.section_type === 'task' ? 'Sent.' : 'Saved — thank you.');
+  }
+
   async function handleMarkComplete(dayId: string) {
     if (!user?.id || !user.companyId) return;
     setMarking(true);
@@ -206,6 +220,8 @@ function Induction() {
           viewedIds={viewedIds}
           completed={openCompleted}
           passedTestIds={passedTestIds}
+          responses={responses}
+          onSubmitResponse={handleSubmitResponse}
           marking={marking}
           onBack={() => setOpenDayId(null)}
           onOpenSection={handleOpenSection}

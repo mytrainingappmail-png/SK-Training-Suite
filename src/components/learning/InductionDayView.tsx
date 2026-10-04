@@ -8,9 +8,14 @@
 import { useState } from 'react';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import Projects from './Projects';
+import AcknowledgeCard from './inductionCards/AcknowledgeCard';
+import FeedbackCard from './inductionCards/FeedbackCard';
+import TaskCard from './inductionCards/TaskCard';
+import ContactCard from './inductionCards/ContactCard';
+import { cardDone, cardRequirement } from '../../utils/inductionCards';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
-import type { InductionDay, InductionDaySection } from '../../types/induction';
+import type { InductionCardResponse, InductionDay, InductionDaySection } from '../../types/induction';
 
 function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>);
@@ -27,7 +32,10 @@ function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextN
   return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then ${nextName} opens on the next date.`;
 }
 
-const TYPE_LABEL: Record<string, string> = { page: 'Reading', faq: 'Questions & answers', projects: 'Focused projects', test: 'Test' };
+const TYPE_LABEL: Record<string, string> = {
+  page: 'Reading', faq: 'Questions & answers', projects: 'Focused projects', test: 'Test',
+  acknowledge: 'Read & agree', feedback: 'Feedback', task: 'Task', contact: 'Your buddy',
+};
 
 interface InductionDayViewProps {
   day: InductionDay;
@@ -40,6 +48,10 @@ interface InductionDayViewProps {
   viewedIds: Set<string>;
   completed: boolean;
   passedTestIds: Set<string>;
+  /** What the employee has submitted for acknowledgment / feedback / task cards, by card id. */
+  responses?: Record<string, InductionCardResponse>;
+  /** Saves an answer for one of those cards (rejects with a readable message when it fails). */
+  onSubmitResponse?: (section: InductionDaySection, payload: Record<string, unknown>) => Promise<void>;
   marking?: boolean;
   /** Preview: nothing is saved and the buttons only say what they would do. */
   preview?: boolean;
@@ -52,16 +64,23 @@ interface InductionDayViewProps {
 }
 
 export default function InductionDayView({
-  day, dayLabel, nextName, nextDay, sections, viewedIds, completed, passedTestIds, marking = false, preview = false,
+  day, dayLabel, nextName, nextDay, sections, viewedIds, completed, passedTestIds, responses = {}, onSubmitResponse, marking = false, preview = false,
   onBack, onOpenSection, onMarkComplete, onStartTest, showToast,
 }: InductionDayViewProps) {
   const [openSectionId, setOpenSectionId] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<Set<number>>(new Set());
 
-  const reading = sections.filter((s) => s.section_type !== 'test');
-  const opened = reading.filter((s) => viewedIds.has(s.id)).length;
+  // The cards needed to finish the day (the admin can mark any card optional), and how many are done:
+  // "opened" for reading cards, "filled in" for acknowledgment / feedback / task cards set to must-complete.
+  const reading = sections.filter((s) => s.section_type !== 'test' && cardRequirement(s) !== 'none');
+  const opened = reading.filter((s) => cardDone(s, viewedIds.has(s.id), responses[s.id])).length;
   const allOpened = opened >= reading.length;
   const openSection = sections.find((s) => s.id === openSectionId) ?? null;
+
+  async function submitFor(s: InductionDaySection, payload: Record<string, unknown>) {
+    if (!onSubmitResponse) throw new Error('Saving is not available here.');
+    await onSubmitResponse(s, payload);
+  }
 
   function openCard(s: InductionDaySection) {
     if (s.section_type === 'test') {
@@ -107,6 +126,16 @@ export default function InductionDayView({
             {openSection.section_type === 'projects' && (
               <Projects embedded onlyProjectIds={openSection.project_ids ?? []} />
             )}
+            {openSection.section_type === 'acknowledge' && (
+              <AcknowledgeCard section={openSection} response={responses[openSection.id]} onSubmit={(p) => submitFor(openSection, p)} showToast={showToast} />
+            )}
+            {openSection.section_type === 'feedback' && (
+              <FeedbackCard section={openSection} response={responses[openSection.id]} onSubmit={(p) => submitFor(openSection, p)} showToast={showToast} />
+            )}
+            {openSection.section_type === 'task' && (
+              <TaskCard section={openSection} response={responses[openSection.id]} onSubmit={(p) => submitFor(openSection, p)} showToast={showToast} preview={preview} />
+            )}
+            {openSection.section_type === 'contact' && <ContactCard section={openSection} />}
             {openSection.section_type === 'faq' && (
               <div className="space-y-2">
                 {openSection.faq_items.map((item, i) => (
@@ -157,7 +186,7 @@ export default function InductionDayView({
           <h2 className={`${dayLabel ? 'mt-3' : ''} text-2xl font-bold`}>{day.title}</h2>
           {day.description && <p className="mt-1 text-sm text-white/80">{day.description}</p>}
           {reading.length > 0 && (
-            <p className="mt-3 text-xs font-semibold text-white/90">{opened} of {reading.length} cards opened</p>
+            <p className="mt-3 text-xs font-semibold text-white/90">{opened} of {reading.length} required cards done</p>
           )}
         </div>
 
@@ -169,6 +198,9 @@ export default function InductionDayView({
               const isTest = s.section_type === 'test';
               const passed = isTest && s.assessment_id ? passedTestIds.has(s.assessment_id) : false;
               const seen = !isTest && viewedIds.has(s.id);
+              const needsFilling = !isTest && cardRequirement(s) === 'complete';
+              const filled = needsFilling && cardDone(s, seen, responses[s.id]);
+              const resp = responses[s.id];
               return (
                 <ThumbnailCard
                   key={s.id}
@@ -183,8 +215,18 @@ export default function InductionDayView({
                         : !completed
                         ? <span className="rounded-full bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-white">🔒 Locked</span>
                         : <span className="rounded-full bg-amber-500/90 px-2.5 py-1 text-[11px] font-bold text-white">Test</span>
+                    ) : needsFilling ? (
+                      filled
+                        ? <span className="rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white">✓ Done</span>
+                        : resp?.status === 'needs_work'
+                        ? <span className="rounded-full bg-amber-500/90 px-2.5 py-1 text-[11px] font-bold text-white">↻ Try again</span>
+                        : resp
+                        ? <span className="rounded-full bg-indigo-500/90 px-2.5 py-1 text-[11px] font-bold text-white">⏳ In review</span>
+                        : <span className="rounded-full bg-rose-500/90 px-2.5 py-1 text-[11px] font-bold text-white">To do</span>
                     ) : seen ? (
                       <span className="rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white">✓ Opened</span>
+                    ) : !isTest && cardRequirement(s) === 'none' ? (
+                      <span className="rounded-full bg-slate-700/70 px-2.5 py-1 text-[11px] font-bold text-white">Optional</span>
                     ) : null
                   }
                   onClick={() => openCard(s)}
@@ -203,8 +245,8 @@ export default function InductionDayView({
             <div className="rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4 text-center">
               <p className="mb-3 text-sm font-medium text-indigo-900">
                 {allOpened
-                  ? "You've opened everything for this day. Mark it complete to move on."
-                  : `Open every card to finish this day — ${opened} of ${reading.length} opened.`}
+                  ? "You've finished everything needed for this day. Mark it complete to move on."
+                  : `Finish every required card to complete this day — ${opened} of ${reading.length} done.`}
               </p>
               <button
                 onClick={onMarkComplete}

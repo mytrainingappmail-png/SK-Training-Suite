@@ -7,12 +7,14 @@ import PreviewModal from '../../components/shared/PreviewModal';
 import InductionDayView from '../../components/learning/InductionDayView';
 import { loadSectionsForDay } from '../../services/induction/inductionService';
 import { LOCATIONS, visibleInLocation } from '../../constants/locations';
-import type { InductionDay, InductionDaySection } from '../../types/induction';
+import type { InductionCardResponse, InductionDay, InductionDaySection, InductionResponseKind } from '../../types/induction';
 
 export default function InductionDayPreview({ day, dayLabel, nextName, nextDay, onClose }: { day: InductionDay; dayLabel: string; nextName?: string; nextDay?: InductionDay; onClose: () => void }) {
   const [sections, setSections] = useState<InductionDaySection[] | null>(null);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [completed, setCompleted] = useState(false);
+  // Answers typed in the preview live only here — nothing is saved.
+  const [responses, setResponses] = useState<Record<string, InductionCardResponse>>({});
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   // '' = everything (as the owner sees it); a city key = only what an employee in that location would see.
@@ -56,6 +58,12 @@ export default function InductionDayPreview({ day, dayLabel, nextName, nextDay, 
           viewedIds={viewed}
           completed={completed}
           passedTestIds={new Set()}
+          responses={responses}
+          onSubmitResponse={async (s, payload) => {
+            const now = new Date().toISOString();
+            setResponses((prev) => ({ ...prev, [s.id]: { id: s.id, company_id: s.company_id, section_id: s.id, employee_id: 'preview', kind: s.section_type as InductionResponseKind, response: payload, status: 'submitted', reviewer_comment: null, reviewed_by: null, reviewed_at: null, created_at: now, updated_at: now } }));
+            showToast('Preview: answer shown here only — nothing was saved.');
+          }}
           preview
           onBack={onClose}
           onOpenSection={(s) => setViewed((prev) => new Set(prev).add(s.id))}

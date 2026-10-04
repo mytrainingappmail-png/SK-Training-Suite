@@ -55,7 +55,67 @@ export const defaultInductionDayForm: InductionDayForm = {
   source_id: null,
 };
 
-export type InductionSectionType = 'page' | 'test' | 'faq' | 'projects';
+export type InductionSectionType = 'page' | 'test' | 'faq' | 'projects' | 'acknowledge' | 'feedback' | 'task' | 'contact';
+
+// How much a card matters for finishing its day: none = optional, open = must be opened, complete = must be filled in.
+export type InductionRequirement = 'none' | 'open' | 'complete';
+
+export type FeedbackQuestionType = 'stars' | 'scale' | 'text' | 'yesno' | 'choice';
+export interface FeedbackQuestion {
+  id: string;
+  type: FeedbackQuestionType;
+  label: string;
+  required: boolean;
+  /** stars: 3-10 stars; scale: 1 to this number (default 5 / 10) */
+  max?: number;
+  low_label?: string;
+  high_label?: string;
+  /** choice: the options to pick from */
+  options?: string[];
+}
+
+// Settings of the newer card kinds — everything is optional and every wording is the admin's own.
+export interface InductionCardConfig {
+  // acknowledge
+  checkbox_label?: string;
+  button_label?: string;
+  // feedback
+  intro?: string;
+  thanks?: string;
+  anonymous?: boolean;
+  questions?: FeedbackQuestion[];
+  // task
+  allow_text?: boolean;
+  allow_link?: boolean;
+  allow_file?: boolean;
+  must_be_approved?: boolean;
+  submit_label?: string;
+  // contact (the picture is the card picture)
+  name?: string;
+  role?: string;
+  phone?: string;
+  whatsapp?: string;
+  note?: string;
+}
+
+export type InductionResponseKind = 'acknowledge' | 'feedback' | 'task';
+export type InductionResponseStatus = 'submitted' | 'approved' | 'needs_work';
+
+// What an employee submitted for an acknowledgment / feedback / task card (one per card per employee).
+export interface InductionCardResponse {
+  id: string;
+  company_id: string;
+  section_id: string;
+  employee_id: string;
+  kind: InductionResponseKind;
+  response: Record<string, unknown>;
+  status: InductionResponseStatus;
+  reviewer_comment: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface InductionFaqItem {
   question: string;
@@ -72,6 +132,10 @@ export interface InductionDaySection {
   page_content: string;
   assessment_id: string | null;
   faq_items: InductionFaqItem[];
+  // Settings of acknowledgment / feedback / task / contact cards.
+  config: InductionCardConfig;
+  // Is this card needed to finish the day?
+  requirement: InductionRequirement;
   // Only for a "Focused projects" section: which projects it shows (in this order).
   project_ids: string[] | null;
   // The card picture shown to the employee for this section (null = a colourful default).
@@ -101,6 +165,8 @@ export const defaultInductionDaySectionForm: InductionDaySectionForm = {
   page_content: '',
   assessment_id: null,
   faq_items: [],
+  config: {},
+  requirement: 'open',
   project_ids: null,
   thumbnail_url: null,
   locations: null,
