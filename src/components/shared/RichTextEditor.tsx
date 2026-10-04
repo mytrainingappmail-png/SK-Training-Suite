@@ -513,7 +513,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           not a `sticky` element inside it, which is what let a dropdown here (Table, Colors)
           spill out and be visible below the toolbar instead of getting clipped at the
           content box's edge. */}
-      <div className="flex flex-wrap items-center gap-1 rounded-t-xl border-b border-slate-100 bg-white p-2">
+      <div className="relative flex flex-wrap items-center gap-1 rounded-t-xl border-b border-slate-100 bg-white p-2">
 
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)"><IconUndo /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)"><IconRedo /></ToolbarButton>
@@ -549,12 +549,12 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
 
         <div className="mx-1 h-5 w-px bg-slate-200" />
 
-        <div className="relative">
+        <div>
           <ToolbarButton onClick={() => { setShowTextColors((v) => !v); setShowHighlights(false); }} title="Text color">
             <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-red-600">A</span>
           </ToolbarButton>
           {showTextColors && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 max-w-full rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
               <div className="grid grid-cols-6 gap-1.5">
                 {TEXT_PALETTE.map((c) => (
                   <button key={c} type="button" title={c} onClick={() => { editor.chain().focus().setColor(c).run(); setShowTextColors(false); }}
@@ -574,7 +574,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           )}
         </div>
 
-        <div className="relative">
+        <div>
           <ToolbarButton onClick={() => { setShowHighlights((v) => !v); setShowTextColors(false); }} active={editor.isActive('highlight')} title="Highlight">
             <span className="flex h-4 w-4 items-center justify-center rounded bg-yellow-200 text-[10px] font-bold">H</span>
           </ToolbarButton>
@@ -602,12 +602,13 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align right"><IconAlignRight /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('justify').run()} active={editor.isActive({ textAlign: 'justify' })} title="Justify"><IconAlignJustify /></ToolbarButton>
 
-        <div className="mx-1 h-5 w-px bg-slate-200" />
+        {/* line break: Table, Image, Shapes and the watermark lock sit on their own second row */}
+        <div className="h-0 basis-full" />
 
-        <div className="relative">
+        <div>
           <ToolbarButton onClick={() => setShowTableMenu((v) => !v)} title="Table options"><IconTable /></ToolbarButton>
           {showTableMenu && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl">
+            <div className="absolute left-0 top-full z-20 mt-1 max-h-[70vh] w-56 max-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl">
               <button onClick={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); setShowTableMenu(false); }}
                 className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">Insert Table</button>
               <div className="my-1 border-t border-slate-100" />
@@ -661,10 +662,10 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           {uploadingImage ? <IconSpinner /> : <IconImage />}
         </ToolbarButton>
 
-        <div className="relative">
+        <div>
           <ToolbarButton onClick={() => setShowShapesMenu((v) => !v)} title="Insert shape"><IconShapes /></ToolbarButton>
           {showShapesMenu && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+            <div className="absolute left-0 top-full z-20 mt-1 w-72 max-w-full rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
               <div className="mb-3 flex items-center gap-1.5">
                 <span className="mr-1 text-xs font-semibold text-slate-400">Color</span>
                 {SHAPE_COLORS.map((c) => (
@@ -701,12 +702,12 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         {showProtectControl && (
           <>
             <div className="mx-1 h-5 w-px bg-slate-200" />
-            <div className="relative">
+            <div>
               <ToolbarButton onClick={() => setShowProtectMenu((v) => !v)} active={watermark!.enabled || !!noCopy} title="Protect this content (watermark, disable copying)">
                 🔒
               </ToolbarButton>
               {showProtectMenu && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                <div className="absolute right-0 top-full z-20 mt-1 w-72 max-w-full rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
                   <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Content Protection</p>
                   <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
                     <input type="checkbox" checked={watermark!.enabled} onChange={(e) => onWatermarkChange!({ ...watermark!, enabled: e.target.checked })} />
