@@ -36,7 +36,9 @@ export async function saveAssessment(
   data: Partial<AssessmentForm>
 ): Promise<Assessment> {
   if (!id) throw new Error("Invalid Assessment ID.");
-  validateAssessmentForm(data);
+  // An update may carry only the fields being changed (e.g. a test's pass %, timer…), so code / title / type
+  // are checked only when they are part of it — a missing one just stays as it is.
+  validateAssessmentForm(data, true);
 
   // Reject duplicate assessment_code on update (excluding self)
   if (data.assessment_code) {
@@ -66,10 +68,10 @@ export async function toggleAssessmentStatus(
   return await repositoryToggleAssessmentStatus(id, active);
 }
 
-function validateAssessmentForm(data: Partial<AssessmentForm>): void {
-  if (!data.assessment_code?.trim()) throw new Error("Assessment Code is required.");
-  if (!data.assessment_title?.trim()) throw new Error("Assessment Title is required.");
-  if (!data.assessment_type)         throw new Error("Assessment Type is required.");
+function validateAssessmentForm(data: Partial<AssessmentForm>, partial = false): void {
+  if (!partial || data.assessment_code !== undefined)  { if (!data.assessment_code?.trim()) throw new Error("Assessment Code is required."); }
+  if (!partial || data.assessment_title !== undefined) { if (!data.assessment_title?.trim()) throw new Error("Assessment Title is required."); }
+  if (!partial || data.assessment_type !== undefined)  { if (!data.assessment_type)         throw new Error("Assessment Type is required."); }
 
   if (
     data.passing_percentage !== undefined &&
