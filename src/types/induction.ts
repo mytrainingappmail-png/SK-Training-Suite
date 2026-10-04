@@ -55,7 +55,7 @@ export const defaultInductionDayForm: InductionDayForm = {
   source_id: null,
 };
 
-export type InductionSectionType = 'page' | 'test' | 'faq';
+export type InductionSectionType = 'page' | 'test' | 'faq' | 'projects';
 
 export interface InductionFaqItem {
   question: string;
@@ -72,6 +72,8 @@ export interface InductionDaySection {
   page_content: string;
   assessment_id: string | null;
   faq_items: InductionFaqItem[];
+  // Only for a "Focused projects" section: which projects it shows (in this order).
+  project_ids: string[] | null;
   // The card picture shown to the employee for this section (null = a colourful default).
   thumbnail_url: string | null;
   // Limited to certain locations (city keys): null / empty = shown to everyone.
@@ -99,6 +101,7 @@ export const defaultInductionDaySectionForm: InductionDaySectionForm = {
   page_content: '',
   assessment_id: null,
   faq_items: [],
+  project_ids: null,
   thumbnail_url: null,
   locations: null,
   watermark_enabled: false,

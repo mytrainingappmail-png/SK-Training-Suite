@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import ThumbnailCard from '../shared/ThumbnailCard';
+import Projects from './Projects';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type { InductionDay, InductionDaySection } from '../../types/induction';
@@ -26,7 +27,7 @@ function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextN
   return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then ${nextName} opens on the next date.`;
 }
 
-const TYPE_LABEL: Record<string, string> = { page: 'Reading', faq: 'Questions & answers', test: 'Test' };
+const TYPE_LABEL: Record<string, string> = { page: 'Reading', faq: 'Questions & answers', projects: 'Focused projects', test: 'Test' };
 
 interface InductionDayViewProps {
   day: InductionDay;
@@ -102,6 +103,9 @@ export default function InductionDayView({
                 />
                 <ContentWatermark config={{ enabled: openSection.watermark_enabled, text: openSection.watermark_text, orientation: openSection.watermark_orientation, opacity: openSection.watermark_opacity }} />
               </div>
+            )}
+            {openSection.section_type === 'projects' && (
+              <Projects embedded onlyProjectIds={openSection.project_ids ?? []} />
             )}
             {openSection.section_type === 'faq' && (
               <div className="space-y-2">

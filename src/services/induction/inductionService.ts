@@ -94,6 +94,7 @@ export async function cloneDayToBranch(dayId: string, branchId: string, companyI
         faq_items: s.faq_items,
         thumbnail_url: s.thumbnail_url,
         locations: s.locations,
+        project_ids: s.project_ids,
         watermark_enabled: s.watermark_enabled,
         watermark_text: s.watermark_text,
         watermark_orientation: s.watermark_orientation,

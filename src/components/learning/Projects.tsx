@@ -340,7 +340,14 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
 // Main Projects
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Projects() {
+interface ProjectsProps {
+  /** Show only these projects, in this order (used by an Induction "Focused projects" card). */
+  onlyProjectIds?: string[];
+  /** Inside another screen: no page banner. */
+  embedded?: boolean;
+}
+
+function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
   const user = getCurrentUser();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -386,11 +393,13 @@ function Projects() {
     setLoading(true);
     setError('');
     loadProjectsForEmployee(user.id, user.branchId || null)
-      .then(setProjects)
+      .then((all) => setProjects(onlyProjectIds
+        ? onlyProjectIds.map((id) => all.find((p) => p.projectId === id)).filter((p): p is Project => !!p)
+        : all))
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load projects.'))
       .finally(() => setLoading(false));
     loadCompletedProjectIds(user.id).then((ids) => setCompletedProjectIds(new Set(ids))).catch(() => {});
-  }, [user?.id]);
+  }, [user?.id, (onlyProjectIds ?? []).join(',')]);
 
   async function handleMarkComplete(projectId: string) {
     if (!user?.id) return;
@@ -490,12 +499,14 @@ function Projects() {
 
   return (
     <div className="space-y-6">
-      <SectionHeroBanner
-        title="Projects"
-        subtitle="Browse training by project, with brochures to download."
-        statLabel="Projects"
-        statValue={projects.length}
-      />
+      {!embedded && (
+        <SectionHeroBanner
+          title="Projects"
+          subtitle="Browse training by project, with brochures to download."
+          statLabel="Projects"
+          statValue={projects.length}
+        />
+      )}
 
     <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
@@ -533,7 +544,7 @@ function Projects() {
 
       {!loading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-slate-400">
-          {search ? `No projects match "${search}".` : 'No projects available yet.'}
+          {search ? `No projects match "${search}".` : onlyProjectIds ? 'No focused projects are available here yet.' : 'No projects available yet.'}
         </div>
       )}
 

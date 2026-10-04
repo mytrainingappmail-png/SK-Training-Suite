@@ -46,6 +46,7 @@ import RichTextEditor from '../../components/shared/RichTextEditor';
 import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
 import LocationPicker from '../../components/shared/LocationPicker';
+import InductionProjectPicker from './InductionProjectPicker';
 import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
 import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { locationLabel } from '../../constants/locations';
@@ -340,7 +341,7 @@ function InductionManagement() {
   const [uploadingSectionThumb, setUploadingSectionThumb] = useState(false);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
-  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; thumbnail_url: string | null; locations: string[] | null; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
+  const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; project_ids: string[] | null; thumbnail_url: string | null; locations: string[] | null; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
   const [isOperator, setIsOperator] = useState(false);
   const [company, setCompany] = useState<Company | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -563,7 +564,7 @@ function InductionManagement() {
   function startNewSection() {
     setEditingSectionId('new');
     const defaults = company ? protectionPatchFromCompany(company) : { watermark_enabled: false, watermark_text: '', watermark_orientation: DEFAULT_WATERMARK.orientation, watermark_opacity: DEFAULT_WATERMARK.opacity, no_copy: false };
-    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], thumbnail_url: null, locations: null, ...defaults });
+    setSectionDraft({ section_type: 'page', title: '', page_content: '', assessment_id: null, faq_items: [], project_ids: null, thumbnail_url: null, locations: null, ...defaults });
     resetTestState();
   }
 
@@ -579,7 +580,7 @@ function InductionManagement() {
   function startEditSection(s: InductionDaySection) {
     setEditingSectionId(s.id);
     setSectionDraft({
-      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items, thumbnail_url: s.thumbnail_url, locations: s.locations && s.locations.length > 0 ? s.locations : null,
+      section_type: s.section_type, title: s.title, page_content: s.page_content, assessment_id: s.assessment_id, faq_items: s.faq_items, project_ids: s.project_ids, thumbnail_url: s.thumbnail_url, locations: s.locations && s.locations.length > 0 ? s.locations : null,
       watermark_enabled: s.watermark_enabled, watermark_text: s.watermark_text, watermark_orientation: s.watermark_orientation, watermark_opacity: s.watermark_opacity, no_copy: s.no_copy,
     });
     resetTestState();
@@ -612,6 +613,10 @@ function InductionManagement() {
 
   async function handleSaveSection() {
     if (!sectionDraft || !editingDayId || editingDayId === 'new' || !user?.companyId) return;
+    if (sectionDraft.section_type === 'projects' && !(sectionDraft.project_ids && sectionDraft.project_ids.length > 0)) {
+      showToast('Tick at least one project for this card.');
+      return;
+    }
     setSavingSection(true);
     try {
       const protection = {
@@ -659,7 +664,7 @@ function InductionManagement() {
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url, locations: isOperator ? cleanLocations(sectionDraft.locations) : null,
+          faq_items: sectionDraft.faq_items, project_ids: sectionDraft.section_type === 'projects' ? sectionDraft.project_ids : null, thumbnail_url: sectionDraft.thumbnail_url, locations: isOperator ? cleanLocations(sectionDraft.locations) : null,
           display_order: sections.length,
           ...protection,
         });
@@ -668,7 +673,7 @@ function InductionManagement() {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items, thumbnail_url: sectionDraft.thumbnail_url, ...(isOperator ? { locations: cleanLocations(sectionDraft.locations) } : {}),
+          faq_items: sectionDraft.faq_items, project_ids: sectionDraft.section_type === 'projects' ? sectionDraft.project_ids : null, thumbnail_url: sectionDraft.thumbnail_url, ...(isOperator ? { locations: cleanLocations(sectionDraft.locations) } : {}),
           ...protection,
         });
       }
@@ -943,9 +948,9 @@ function InductionManagement() {
                       </div>
                       {s.thumbnail_url ? <img src={s.thumbnail_url} alt="" className="h-9 w-9 flex-shrink-0 rounded-lg object-cover" /> : <div className="h-9 w-9 flex-shrink-0 rounded-lg bg-slate-100" />}
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                        s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'
+                        s.section_type === 'test' ? 'bg-amber-50 text-amber-700' : s.section_type === 'faq' ? 'bg-violet-50 text-violet-700' : s.section_type === 'projects' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
                       }`}>
-                        {s.section_type === 'test' ? 'Test' : s.section_type === 'faq' ? 'FAQ' : 'Page'}
+                        {s.section_type === 'test' ? 'Test' : s.section_type === 'faq' ? 'FAQ' : s.section_type === 'projects' ? 'Projects' : 'Page'}
                       </span>
                       <p className="text-sm font-semibold text-slate-800">{s.title}</p>
                       {s.locations && s.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {s.locations.map(locationLabel).join(', ')}</span>}
@@ -971,6 +976,7 @@ function InductionManagement() {
                         <option value="page">Page (training material)</option>
                         <option value="test">Test</option>
                         <option value="faq">FAQ</option>
+                        <option value="projects">Focused projects</option>
                       </select>
                     </div>
                   </div>
@@ -1097,6 +1103,10 @@ function InductionManagement() {
                         <p className="text-xs text-slate-400">Save this section once (below) to unlock adding questions.</p>
                       )}
                     </div>
+                  )}
+
+                  {sectionDraft.section_type === 'projects' && (
+                    <InductionProjectPicker value={sectionDraft.project_ids ?? []} onChange={(ids) => setSectionDraft((d) => (d ? { ...d, project_ids: ids } : d))} />
                   )}
 
                   {sectionDraft.section_type === 'faq' && (
