@@ -154,11 +154,10 @@ export function ProjectDetailCard({
                   key={b.resourceId}
                   href={link.href}
                   {...(link.direct ? { download: link.fileName } : { target: '_blank', rel: 'noopener noreferrer' })}
-                  title={b.title}
                   className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
                 >
                   <IconPdf className="h-4 w-4" />
-                  {project.brochures.length > 1 && b.title ? `Download: ${b.title}` : 'Download Brochure'}
+                  Download
                   <IconDownload className="h-3.5 w-3.5" />
                 </a>
               );
@@ -325,11 +324,10 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
                   key={b.resourceId}
                   href={link.href}
                   {...(link.direct ? { download: link.fileName } : { target: '_blank', rel: 'noopener noreferrer' })}
-                  title={b.title}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
                 >
                   <IconPdf className="h-3.5 w-3.5" />
-                  {project.brochures.length > 1 && b.title ? `Download: ${b.title}` : 'Download Brochure'}
+                  Download
                   <IconDownload className="h-3 w-3" />
                 </a>
               );

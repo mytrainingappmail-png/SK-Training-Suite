@@ -278,7 +278,6 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   const [reorderOpen, setReorderOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
 
-  const [brochureTitleDraft, setBrochureTitleDraft] = useState('');
   const [brochureLinkDraft, setBrochureLinkDraft] = useState('');
   const [brochureMode, setBrochureMode] = useState<'upload' | 'link'>('link');
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
@@ -512,22 +511,25 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   }
 
   async function handleBrochureFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !editingProjectId || editingProjectId === 'new') {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';                         // so the same file can be picked again later
+    if (files.length === 0) return;
+    if (!editingProjectId || editingProjectId === 'new') {
       showToast('Save the project first, then add brochures.');
       return;
     }
     setUploadingBrochure(true);
-    try {
-      await addBrochure(editingProjectId, brochureTitleDraft || file.name, file);
-      setBrochureTitleDraft('');
-      fetchAll();
-      showToast('Brochure uploaded');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to upload brochure.');
-    } finally {
-      setUploadingBrochure(false);
+    let done = 0;
+    const failed: string[] = [];
+    for (const file of files) {
+      try { await addBrochure(editingProjectId, file.name, file); done++; }
+      catch (err) { failed.push(`${file.name}${err instanceof Error ? ` (${err.message})` : ''}`); }
     }
+    fetchAll();
+    setUploadingBrochure(false);
+    showToast(failed.length === 0
+      ? `${done} brochure${done === 1 ? '' : 's'} uploaded`
+      : `${done} uploaded, ${failed.length} failed: ${failed.join('; ')}`);
   }
 
   async function handleAddBrochureLink() {
@@ -541,8 +543,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     }
     setUploadingBrochure(true);
     try {
-      await addBrochureLink(editingProjectId, brochureTitleDraft || 'Brochure', brochureLinkDraft.trim());
-      setBrochureTitleDraft('');
+      await addBrochureLink(editingProjectId, linkLabel(brochureLinkDraft.trim()), brochureLinkDraft.trim());
       setBrochureLinkDraft('');
       fetchAll();
       showToast('Brochure link added');
@@ -554,6 +555,12 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   }
 
   const projectBrochures = brochures.filter((b) => b.project_id === editingProjectId);
+
+  /** A short name for a pasted link, only so the admin can tell their brochures apart (employees never see it). */
+  function linkLabel(url: string): string {
+    try { const u = new URL(url); return `${u.hostname.replace(/^www\./, '')}${u.pathname.length > 1 ? u.pathname.slice(0, 24) : ''}`; }
+    catch { return 'Brochure link'; }
+  }
 
   function startNewSection() {
     if (!editingProjectId || editingProjectId === 'new' || !user?.companyId) return;
@@ -771,14 +778,16 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
 
             {editingProjectId !== 'new' && (
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">Brochures</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Brochure — optional (employees see a <b>Download</b> button for each one)</label>
                 <div className="mb-2 flex flex-wrap gap-2">
                   {projectBrochures.map((b) => (
-                    <span key={b.id} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs">
-                      {b.title}
-                      <button onClick={() => removeBrochure(b.id).then(fetchAll)} className="text-red-500 hover:text-red-700">✕</button>
+                    <span key={b.id} className="inline-flex max-w-full items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs">
+                      <span>{/\/storage\/v1\/object\/public\//.test(b.file_url) ? '📄' : '🔗'}</span>
+                      <span className="truncate">{b.title}</span>
+                      <button onClick={() => removeBrochure(b.id).then(fetchAll)} className="text-red-500 hover:text-red-700" aria-label="Remove brochure">✕</button>
                     </span>
                   ))}
+                  {projectBrochures.length === 0 && <span className="text-xs text-slate-400">No brochure — employees won't see a Download button.</span>}
                 </div>
 
                 <div className="mb-2 flex flex-wrap gap-2">
@@ -790,7 +799,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                         brochureMode === 'upload' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      Upload PDF
+                      Upload PDFs
                     </button>
                   )}
                   <button
@@ -804,26 +813,19 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                   </button>
                 </div>
                 <p className="mb-2 text-[11px] text-slate-400">
-                  💡 A Google Drive link is free — an uploaded PDF stays in storage forever and counts toward your plan's limit. Prefer the link when you can.
+                  💡 Use whichever suits you — a link or uploaded PDFs. A Google Drive link is free; an uploaded PDF stays in storage and counts toward your plan's limit.
                   {!pdfUploadEnabled && ' PDF upload is currently turned off for your company (Admin → Company → Storage).'}
                 </p>
 
-                <input
-                  value={brochureTitleDraft}
-                  onChange={(e) => setBrochureTitleDraft(e.target.value)}
-                  placeholder="Brochure title..."
-                  className={`${INPUT_CLS} mb-2`}
-                />
-
                 {brochureMode === 'upload' && pdfUploadEnabled ? (
                   <div className="flex gap-2">
-                    <input ref={brochureInputRef} type="file" accept="application/pdf" onChange={handleBrochureFileChange} className="hidden" />
+                    <input ref={brochureInputRef} type="file" accept="application/pdf" multiple onChange={handleBrochureFileChange} className="hidden" />
                     <button
                       onClick={() => brochureInputRef.current?.click()}
                       disabled={uploadingBrochure}
                       className="flex-shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
-                      {uploadingBrochure ? <IconSpinner className="h-3.5 w-3.5" /> : 'Upload PDF'}
+                      {uploadingBrochure ? <IconSpinner className="h-3.5 w-3.5" /> : 'Choose PDFs (one or many)'}
                     </button>
                   </div>
                 ) : (
