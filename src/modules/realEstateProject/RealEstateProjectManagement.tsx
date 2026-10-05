@@ -279,7 +279,6 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   const [reordering, setReordering] = useState(false);
 
   const [brochureLinkDraft, setBrochureLinkDraft] = useState('');
-  const [brochureMode, setBrochureMode] = useState<'upload' | 'link'>('link');
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
   const [pdfUploadEnabled, setPdfUploadEnabled] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
@@ -790,61 +789,41 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                   {projectBrochures.length === 0 && <span className="text-xs text-slate-400">No brochure — employees won't see a Download button.</span>}
                 </div>
 
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {pdfUploadEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => setBrochureMode('upload')}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        brochureMode === 'upload' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      Upload PDFs
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setBrochureMode('link')}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                      brochureMode === 'link' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Paste Link (Google Drive, etc.)
-                  </button>
-                </div>
                 <p className="mb-2 text-[11px] text-slate-400">
-                  💡 Use whichever suits you — a link or uploaded PDFs. A Google Drive link is free; an uploaded PDF stays in storage and counts toward your plan's limit.
+                  💡 Use a link <b>or</b> an upload — whichever you like. Employees always see just one <b>Download</b> button (if you upload several PDFs, that one button downloads them all).
+                  A Google Drive link is free; an uploaded PDF stays in storage and counts toward your plan's limit.
                   {!pdfUploadEnabled && ' PDF upload is currently turned off for your company (Admin → Company → Storage).'}
                 </p>
 
-                {brochureMode === 'upload' && pdfUploadEnabled ? (
-                  <div className="flex gap-2">
+                {pdfUploadEnabled && (
+                  <div className="mb-3">
                     <input ref={brochureInputRef} type="file" accept="application/pdf" multiple onChange={handleBrochureFileChange} className="hidden" />
                     <button
+                      type="button"
                       onClick={() => brochureInputRef.current?.click()}
                       disabled={uploadingBrochure}
-                      className="flex-shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
-                      {uploadingBrochure ? <IconSpinner className="h-3.5 w-3.5" /> : 'Choose PDFs (one or many)'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      value={brochureLinkDraft}
-                      onChange={(e) => setBrochureLinkDraft(e.target.value)}
-                      placeholder="Paste Google Drive (or any) link here..."
-                      className={INPUT_CLS}
-                    />
-                    <button
-                      onClick={handleAddBrochureLink}
-                      disabled={uploadingBrochure}
-                      className="flex-shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      {uploadingBrochure ? <IconSpinner className="h-3.5 w-3.5" /> : 'Add Link'}
+                      {uploadingBrochure ? <IconSpinner className="h-3.5 w-3.5" /> : '⬆ Upload PDF (pick one or many)'}
                     </button>
                   </div>
                 )}
+
+                <div className="flex gap-2">
+                  <input
+                    value={brochureLinkDraft}
+                    onChange={(e) => setBrochureLinkDraft(e.target.value)}
+                    placeholder="…or paste a Google Drive (or any) link here"
+                    className={INPUT_CLS}
+                  />
+                  <button
+                    onClick={handleAddBrochureLink}
+                    disabled={uploadingBrochure}
+                    className="flex-shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {uploadingBrochure ? <IconSpinner className="h-3.5 w-3.5" /> : 'Add Link'}
+                  </button>
+                </div>
 
                 <p className="mt-1 text-xs text-slate-400">
                   For a Google Drive link, make sure sharing is set to "Anyone with the link" so employees can open it.

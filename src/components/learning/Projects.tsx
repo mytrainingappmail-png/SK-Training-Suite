@@ -57,6 +57,43 @@ const GRADIENTS = [
   'from-fuchsia-500 to-pink-500',
 ];
 
+// One "Download" button for a project's brochure(s). One file: it downloads (or, for a Google Drive link, opens Drive in
+// a new tab). Several uploaded files: the same single button downloads them one after another.
+function BrochureDownload({ brochures, small = false }: { brochures: { fileUrl: string; title: string }[]; small?: boolean }) {
+  if (brochures.length === 0) return null;
+  const links = brochures.map((b) => brochureLink(b.fileUrl, b.title));
+  const cls = small
+    ? 'inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95'
+    : 'inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95';
+  const inner = (
+    <>
+      <IconPdf className={small ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+      Download
+      <IconDownload className={small ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+    </>
+  );
+  if (links.length === 1) {
+    const l = links[0];
+    return (
+      <a href={l.href} {...(l.direct ? { download: l.fileName } : { target: '_blank', rel: 'noopener noreferrer' })} className={cls}>
+        {inner}
+      </a>
+    );
+  }
+  async function downloadAll() {
+    for (const l of links) {
+      const a = document.createElement('a');
+      a.href = l.href;
+      if (l.direct) a.download = l.fileName; else { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      await new Promise((r) => setTimeout(r, 700));
+    }
+  }
+  return <button type="button" onClick={downloadAll} className={cls}>{inner}</button>;
+}
+
 function Skeleton() {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -147,21 +184,7 @@ export function ProjectDetailCard({
 
         {project.brochures.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {project.brochures.map((b) => {
-              const link = brochureLink(b.fileUrl, b.title);
-              return (
-                <a
-                  key={b.resourceId}
-                  href={link.href}
-                  {...(link.direct ? { download: link.fileName } : { target: '_blank', rel: 'noopener noreferrer' })}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
-                >
-                  <IconPdf className="h-4 w-4" />
-                  Download
-                  <IconDownload className="h-3.5 w-3.5" />
-                </a>
-              );
-            })}
+            <BrochureDownload brochures={project.brochures.map((b) => ({ fileUrl: b.fileUrl, title: b.title }))} />
           </div>
         )}
 
@@ -317,21 +340,7 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
 
         {project.brochures.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-1">
-            {project.brochures.map((b) => {
-              const link = brochureLink(b.fileUrl, b.title);
-              return (
-                <a
-                  key={b.resourceId}
-                  href={link.href}
-                  {...(link.direct ? { download: link.fileName } : { target: '_blank', rel: 'noopener noreferrer' })}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
-                >
-                  <IconPdf className="h-3.5 w-3.5" />
-                  Download
-                  <IconDownload className="h-3 w-3" />
-                </a>
-              );
-            })}
+            <BrochureDownload brochures={project.brochures.map((b) => ({ fileUrl: b.fileUrl, title: b.title }))} small />
           </div>
         )}
       </div>
