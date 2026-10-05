@@ -445,7 +445,15 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     setSavingProject(true);
     try {
       if (editingProjectId === 'new') {
-        await saveProject({ ...draft, company_id: user.companyId, active: true, display_order: projects.length, branch_id: null, source_id: null, induction_section_id: scope?.inductionSectionId ?? null });
+        const created = await saveProject({ ...draft, company_id: user.companyId, active: true, display_order: projects.length, branch_id: null, source_id: null, induction_section_id: scope?.inductionSectionId ?? null });
+        if (scope && created) {
+          // Inside an induction card: stay on this project so its Brochures (PDF or Google Drive link) and pages are right there.
+          setEditingProjectId(created.id);
+          setSections([]);
+          fetchAll();
+          showToast('Saved — now add the brochure (PDF or Google Drive link) and pages below.');
+          return;
+        }
       } else if (editingProjectId) {
         await editProject(editingProjectId, draft);
       }
@@ -754,6 +762,12 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                 </button>
               </div>
             </div>
+
+            {editingProjectId === 'new' && (
+              <p className="rounded-xl bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                📎 Brochures (upload a PDF or paste a Google Drive link) and extra pages are added right after you press <b>Save Project</b>.
+              </p>
+            )}
 
             {editingProjectId !== 'new' && (
               <div>

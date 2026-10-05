@@ -22,6 +22,7 @@ import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { brochureLink } from '../../utils/brochureLink';
 import type { Project } from '../../services/projects/projectsService';
 
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
@@ -146,20 +147,22 @@ export function ProjectDetailCard({
 
         {project.brochures.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {project.brochures.map((b) => (
-              <a
-                key={b.resourceId}
-                href={b.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
-              >
-                <IconPdf className="h-4 w-4" />
-                Download Brochure
-                <IconDownload className="h-3.5 w-3.5" />
-              </a>
-            ))}
+            {project.brochures.map((b) => {
+              const link = brochureLink(b.fileUrl, b.title);
+              return (
+                <a
+                  key={b.resourceId}
+                  href={link.href}
+                  {...(link.direct ? { download: link.fileName } : { target: '_blank', rel: 'noopener noreferrer' })}
+                  title={b.title}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
+                >
+                  <IconPdf className="h-4 w-4" />
+                  {project.brochures.length > 1 && b.title ? `Download: ${b.title}` : 'Download Brochure'}
+                  <IconDownload className="h-3.5 w-3.5" />
+                </a>
+              );
+            })}
           </div>
         )}
 
@@ -315,20 +318,22 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
 
         {project.brochures.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-1">
-            {project.brochures.map((b) => (
-              <a
-                key={b.resourceId}
-                href={b.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
-              >
-                <IconPdf className="h-3.5 w-3.5" />
-                Download Brochure
-                <IconDownload className="h-3 w-3" />
-              </a>
-            ))}
+            {project.brochures.map((b) => {
+              const link = brochureLink(b.fileUrl, b.title);
+              return (
+                <a
+                  key={b.resourceId}
+                  href={link.href}
+                  {...(link.direct ? { download: link.fileName } : { target: '_blank', rel: 'noopener noreferrer' })}
+                  title={b.title}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:shadow-md active:scale-95"
+                >
+                  <IconPdf className="h-3.5 w-3.5" />
+                  {project.brochures.length > 1 && b.title ? `Download: ${b.title}` : 'Download Brochure'}
+                  <IconDownload className="h-3 w-3" />
+                </a>
+              );
+            })}
           </div>
         )}
       </div>
