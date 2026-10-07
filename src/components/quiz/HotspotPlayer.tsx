@@ -40,6 +40,14 @@ const ZOOM_STEP = 1;
 // an intentional pan.
 const DRAG_THRESHOLD_PX = 12;
 
+// Buttons that sit on top of the map (zoom, Confirm). Their pointer events must NOT reach the map's own tap handler,
+// otherwise pressing Confirm also registers a tap on the map underneath the button.
+const stopMapPointer = {
+  onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+  onPointerMove: (e: React.PointerEvent) => e.stopPropagation(),
+  onPointerUp: (e: React.PointerEvent) => e.stopPropagation(),
+};
+
 const FEEDBACK_TEXT_SIZE: Record<"small" | "medium" | "large", string> = {
   small: "text-[10px]",
   medium: "text-xs",
@@ -247,32 +255,43 @@ export default function HotspotPlayer({
             ))}
             {requireConfirm && taps.map((t, i) => {
               const known = t.correct !== undefined;
-              const dotClass = !known ? "bg-slate-300 border-white" : t.correct ? "bg-emerald-500 border-white" : "bg-red-500 border-white";
+              const dotClass = !known ? "bg-slate-300 text-slate-700" : t.correct ? "bg-emerald-500 text-white" : "bg-red-600 text-white";
               return (
                 <div
                   key={i}
-                  className={`absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 ${dotClass}`}
-                  style={{ left: `${t.x}%`, top: `${t.y}%`, width: 14, height: 14 }}
-                />
+                  className="absolute pointer-events-none"
+                  style={{ left: `${t.x}%`, top: `${t.y}%`, width: 0, height: 0 }}
+                >
+                  <div
+                    className={`flex items-center justify-center rounded-full border-2 border-white text-[13px] font-extrabold leading-none shadow-lg ${dotClass}`}
+                    style={{ width: 24, height: 24, transform: `translate(-50%, -50%) scale(${1 / zoom})` }}
+                  >
+                    {!known ? "•" : t.correct ? "✓" : "✗"}
+                  </div>
+                </div>
               );
             })}
             {requireConfirm && flashIndex !== null && taps[flashIndex] && (
               <div
-                className="absolute -translate-x-1/2 pointer-events-none whitespace-nowrap"
-                style={{ left: `${taps[flashIndex].x}%`, top: `${taps[flashIndex].y}%`, marginTop: -26 }}
+                className="absolute pointer-events-none whitespace-nowrap"
+                style={{ left: `${taps[flashIndex].x}%`, top: `${taps[flashIndex].y}%`, width: 0, height: 0 }}
               >
+               <div style={{ transform: `translate(-50%, -34px) scale(${1 / zoom})`, transformOrigin: "50% 100%", width: "max-content" }}>
                 <div className={`rounded-full px-2 py-0.5 font-semibold shadow-lg ${sizeClass} ${
                   taps[flashIndex].correct ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
                 }`}>
-                  {taps[flashIndex].correct ? (taps[flashIndex].label || "✓ Correct") : "✗ Not a match"}
+                  {taps[flashIndex].correct ? (taps[flashIndex].label || "✓ Correct") : "✗ Wrong spot"}
                 </div>
+               </div>
               </div>
             )}
             {requireConfirm && pending && (
-              <div
-                className="absolute rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-amber-400 bg-amber-400/30 animate-pulse"
-                style={{ left: `${pending.x}%`, top: `${pending.y}%`, width: 22, height: 22 }}
-              />
+              <div className="absolute pointer-events-none" style={{ left: `${pending.x}%`, top: `${pending.y}%`, width: 0, height: 0 }}>
+                <div
+                  className="rounded-full border-2 border-amber-400 bg-amber-400/30 animate-pulse"
+                  style={{ width: 26, height: 26, transform: `translate(-50%, -50%) scale(${1 / zoom})` }}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -285,7 +304,7 @@ export default function HotspotPlayer({
           </div>
         )}
 
-        <div className="absolute bottom-3 right-3 flex flex-col gap-2">
+        <div className="absolute bottom-3 right-3 flex flex-col gap-2" {...stopMapPointer}>
           <button
             onClick={zoomIn}
             disabled={zoom >= MAX_ZOOM}
@@ -315,7 +334,7 @@ export default function HotspotPlayer({
 
         {requireConfirm && pending && (
           <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none px-3">
-            <div className="pointer-events-auto flex items-center gap-2 bg-slate-950/95 border border-amber-500/50 rounded-full pl-4 pr-2 py-2 shadow-lg">
+            <div {...stopMapPointer} className="pointer-events-auto flex items-center gap-2 bg-slate-950/95 border border-amber-500/50 rounded-full pl-4 pr-2 py-2 shadow-lg">
               <span className="text-xs font-semibold text-amber-200">📍 Tap elsewhere to move, or</span>
               <button
                 onClick={() => void confirmPending()}

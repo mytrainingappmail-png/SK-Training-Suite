@@ -245,6 +245,30 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
     });
   }
 
+  /** One map question that has several marked spots -> one question per spot (same map, ONE spot each).
+   * Marks are shared out equally, each new question reads "Tap: <spot name>", and a tap inside that spot
+   * counts as correct. Nothing is saved until Save/Publish. */
+  function splitHotspotQuestion(localId: string) {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.localId === localId);
+      if (index === -1) return prev;
+      const src = prev[index];
+      const zones = effectiveZones(src);
+      if (src.type !== "hotspot" || zones.length < 2) return prev;
+      const each = Math.max(1, Math.round((src.marks || zones.length) / zones.length));
+      const copies: EditableQuestion[] = zones.map((z, i) => ({
+        ...src,
+        localId: nextLocalId(),
+        question_text: `Tap: ${z.label?.trim() || `Spot ${i + 1}`}`,
+        marks: each,
+        options: src.options.map((o) => ({ ...o })),
+        hotspot_zones: [z],
+        ...legacyFromZones([z]),
+      }));
+      return [...prev.slice(0, index), ...copies, ...prev.slice(index + 1)];
+    });
+  }
+
   /** Pulls the CURRENT content of a merged question's original into this local copy — same edit-then-Save flow as any other change, so nothing is written until Save/Publish is clicked afterward. */
   async function handleResync(localId: string, sourceQuestionId: string) {
     setResyncingId(localId);
@@ -774,12 +798,29 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                 ✍️ Employees type their answer and/or attach photos of a handwritten one. You mark it by hand after the exam. Put the model answer in the box below — only you see it.
               </div>
             ) : q.type === "hotspot" ? (
+              <>
+              {effectiveZones(q).length > 1 && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100 flex flex-wrap items-center gap-2">
+                  <span className="flex-1 min-w-[200px]">
+                    This map has {effectiveZones(q).length} spots in ONE question. Split it into {effectiveZones(q).length} questions — same map, one spot each — so every spot is asked, tapped and marked on its own.
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Split into ${effectiveZones(q).length} separate questions (one spot each)? You can still edit them afterwards; nothing is saved until you press Save/Publish.`)) splitHotspotQuestion(q.localId);
+                    }}
+                    className="rounded-lg bg-amber-400 px-3 py-1.5 font-semibold text-slate-900 hover:bg-amber-300"
+                  >
+                    ✂ Split into {effectiveZones(q).length} questions
+                  </button>
+                </div>
+              )}
               <HotspotZoneEditor
                 companyId={admin?.company_id ?? ""}
                 imageUrl={q.image_url}
                 zones={effectiveZones(q)}
                 onChange={(patch) => updateQuestion(q.localId, patch)}
               />
+              </>
             ) : (
             <div className="space-y-2">
               {q.options.map((opt, oi) => (
