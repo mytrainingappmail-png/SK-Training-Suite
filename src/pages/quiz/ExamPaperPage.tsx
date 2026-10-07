@@ -733,21 +733,6 @@ export default function ExamPaperPage() {
                         void flush();
                       }}
                     />
-                    {d.hotspot_taps.length > 0 && (
-                      <div className="flex justify-center mt-2">
-                        <button
-                          onClick={() => {
-                            const base = (pendingRef.current[q.question_id] ?? d).hotspot_taps;
-                            setDraft(q.question_id, { hotspot_taps: base.slice(0, -1) });
-                            if (flushTimer.current) clearTimeout(flushTimer.current);
-                            void flush();
-                          }}
-                          className="text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-full px-3 py-1.5"
-                        >
-                          ↩ Undo last tap
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })()}
