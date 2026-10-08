@@ -19,6 +19,8 @@ import {
 } from "../services/platformMarketing/platformMarketingService";
 import { ROUTES } from "../constants/routes";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import FounderSection from "../components/marketing/FounderSection";
+import { normalizeFounder } from "../types/platformMarketing";
 import type {
   PlatformMarketingSettings,
   PlatformMarketingFeature,
@@ -299,6 +301,8 @@ export default function MarketingHomePage() {
   const aboutTo = settings?.about_bg_to || "#1E1B4B";
   const heroAlign = settings?.hero_align === "left" ? "left" : "center";
   const aboutLight = settings?.about_text_light !== false;
+  const founder = normalizeFounder(settings?.founder);
+  const showFounder = founder.enabled && founder.name.trim() !== "";
   const logoHeight = 36 * ((settings?.logo_scale || 100) / 100);
   const whatsappHref = settings?.whatsapp_number
     ? `https://wa.me/${settings.whatsapp_number.replace(/\D/g, "")}?text=${encodeURIComponent(settings.whatsapp_default_message || "Hi, I would like to know more.")}`
@@ -325,6 +329,7 @@ export default function MarketingHomePage() {
 
           <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
             {settings?.about_content_html && <a href="#about" className="transition hover:text-slate-900">About Us</a>}
+            {showFounder && <a href="#founder" className="transition hover:text-slate-900">Founder</a>}
             {features.length > 0 && <a href="#why-us" className="transition hover:text-slate-900">Why Us</a>}
             {testimonials.length > 0 && <a href="#testimonials" className="transition hover:text-slate-900">Testimonials</a>}
             {plans.length > 0 && <a href="#pricing" className="transition hover:text-slate-900">Pricing</a>}
@@ -435,6 +440,9 @@ export default function MarketingHomePage() {
           </div>
         </section>
       )}
+
+      {/* Founder — the personal brand, why the product exists, and a demo call-to-action. */}
+      <FounderSection founder={founder} whatsappHref={whatsappHref} />
 
       {/* Testimonials */}
       {testimonials.length > 0 && (

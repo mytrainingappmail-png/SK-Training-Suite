@@ -37,6 +37,8 @@ export interface PlatformMarketingSettings {
   /** Optional portrait shown above the About Us title — e.g. the founder's own photo. */
   about_photo_url: string | null;
   about_photo_frame: "circle" | "square" | "rounded_square" | "hexagon" | "oval" | "polaroid";
+  /** The Founder section — see FounderContent below. Raw jsonb; read it through normalizeFounder(). */
+  founder: unknown;
   updated_at: string;
 }
 
@@ -168,4 +170,69 @@ export interface PlatformMarketingInquiryForm {
   phone?: string;
   email?: string;
   message?: string;
+}
+
+// ── Founder section (public homepage) ────────────────────────────────────
+// Stored as ONE jsonb document on the settings row, so every word, number, colour and the photo are
+// editable from Admin → Marketing Website → Founder; nothing about the founder is hardcoded in the page.
+
+export interface FounderContent {
+  enabled: boolean;
+  eyebrow: string;
+  name: string;
+  /** The personal-brand line under the name, e.g. "Real Estate Business & Learning Expert". */
+  headline: string;
+  /** Current role / organisation line. */
+  role_line: string;
+  tagline: string;
+  photo_url: string | null;
+  /** Plain text; a blank line starts a new paragraph. */
+  bio: string;
+  stats: { value: string; label: string }[];
+  expertise: string[];
+  industries: string[];
+  books: { title: string; blurb: string }[];
+  journey: { period: string; role: string; org: string; note: string }[];
+  why_eyebrow: string;
+  why_title: string;
+  why_intro: string;
+  gaps: { icon: string; title: string; text: string }[];
+  compare_left_label: string;
+  compare_left_value: string;
+  compare_left_note: string;
+  compare_right_label: string;
+  compare_right_value: string;
+  compare_right_note: string;
+  mission_quote: string;
+  cta_title: string;
+  cta_text: string;
+  cta_label: string;
+  bg_from: string;
+  bg_to: string;
+  accent: string;
+}
+
+/** Structure only (no copy): what an unconfigured / partially configured row falls back to. */
+export const EMPTY_FOUNDER: FounderContent = {
+  enabled: false, eyebrow: "", name: "", headline: "", role_line: "", tagline: "", photo_url: null, bio: "",
+  stats: [], expertise: [], industries: [], books: [], journey: [],
+  why_eyebrow: "", why_title: "", why_intro: "", gaps: [],
+  compare_left_label: "", compare_left_value: "", compare_left_note: "",
+  compare_right_label: "", compare_right_value: "", compare_right_note: "",
+  mission_quote: "", cta_title: "", cta_text: "", cta_label: "",
+  bg_from: "#0B1B3A", bg_to: "#12274D", accent: "#D4A93A",
+};
+
+export function normalizeFounder(raw: unknown): FounderContent {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...EMPTY_FOUNDER };
+  for (const k of Object.keys(EMPTY_FOUNDER) as (keyof FounderContent)[]) {
+    const def = EMPTY_FOUNDER[k];
+    const v = r[k];
+    if (Array.isArray(def)) out[k] = Array.isArray(v) ? v : def;
+    else if (typeof def === "boolean") out[k] = typeof v === "boolean" ? v : def;
+    else if (k === "photo_url") out[k] = typeof v === "string" && v ? v : null;
+    else out[k] = typeof v === "string" ? v : def;
+  }
+  return out as unknown as FounderContent;
 }

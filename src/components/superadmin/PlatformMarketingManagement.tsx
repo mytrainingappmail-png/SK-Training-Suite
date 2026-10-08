@@ -35,6 +35,8 @@ import type {
   PlatformMarketingIndustryNews,
 } from "../../types/platformMarketing";
 
+import FounderEditor from "./FounderEditor";
+
 const CLS_INPUT =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:bg-slate-50";
 
@@ -555,6 +557,7 @@ export default function PlatformMarketingManagement() {
         about_bg_from: settings.about_bg_from,
         about_bg_to: settings.about_bg_to,
         about_text_light: settings.about_text_light,
+        founder: settings.founder,
         accent_from: settings.accent_from,
         accent_to: settings.accent_to,
         footer_company_name: settings.footer_company_name,
@@ -896,6 +899,12 @@ export default function PlatformMarketingManagement() {
           </div>
         </FL>
       </section>
+
+      <FounderEditor
+        value={settings.founder}
+        onChange={(next) => field("founder", next)}
+        onUploadPhoto={(file) => uploadToCourseContent(file, "images/platform-marketing", "founder-photo")}
+      />
 
       <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <div>
