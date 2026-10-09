@@ -23,6 +23,7 @@ import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useState } from 'react';
 import ImageEditModal from './ImageEditModal';
 import ImageAnnotator, { type Annotation } from './ImageAnnotator';
+import ImageCropper from './ImageCropper';
 import ContentWatermark, { noCopyProps, type WatermarkConfig } from './ContentWatermark';
 
 interface RichTextEditorProps {
@@ -378,6 +379,7 @@ function ToolbarButton({ onClick, title, active, disabled, children }: {
 
 function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra, storageKey, watermark, onWatermarkChange, noCopy, onNoCopyChange, annotatable = false }: RichTextEditorProps) {
   const [annotating, setAnnotating] = useState<{ src: string; initial: Annotation[] } | null>(null);
+  const [cropping, setCropping] = useState<{ src: string } | null>(null);
   const [showProtectMenu, setShowProtectMenu] = useState(false);
   const showProtectControl = !!watermark && !!onWatermarkChange;
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -547,6 +549,23 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     let initial: Annotation[];
     try { initial = a.annot ? (JSON.parse(a.annot) as Annotation[]) : []; } catch { initial = []; }
     setAnnotating({ src: base, initial });
+  }
+
+  /** Opens the cropper on the selected picture. A picture with drawings is cropped from its ORIGINAL (the drawings are removed, and can be drawn again). */
+  function openCropper() {
+    if (!editor || !editor.isActive('image')) return;
+    const a = editor.getAttributes('image') as { src?: string; orig?: string | null; annot?: string | null };
+    const hasDrawings = !!a.annot && a.annot !== '[]';
+    if (hasDrawings && !confirm('This picture has drawings on it. Cropping starts from the original picture and removes the drawings (you can draw again after). Continue?')) return;
+    const base = a.orig || a.src;
+    if (base) setCropping({ src: base });
+  }
+
+  async function handleCroppedSave(file: File) {
+    if (!editor) return;
+    const url = await onImageUpload(file); // a failure throws back into the cropper, which stays open
+    editor.chain().focus().updateAttributes('image', { src: url, orig: null, annot: null }).run();
+    setCropping(null);
   }
 
   async function handleAnnotatedSave({ file, annotations }: { file: File; annotations: Annotation[] }) {
@@ -994,12 +1013,17 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           away, exactly as reported ("only shows at the top"). Nesting it one level in fixes
           that: the inner div is as tall as the actual content, so `inset-0` covers all of it
           and it scrolls along with the text underneath it. */}
-      {annotatable && editor.isActive('image') && (
+      {editor.isActive('image') && (
         <div className="flex flex-wrap items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
           <span>🖼 Picture selected.</span>
-          <button type="button" onClick={openAnnotator} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
-            ✏️ Draw arrows, circles, brackets &amp; text on it
+          <button type="button" onClick={openCropper} className="rounded-md border border-indigo-300 bg-white px-3 py-1.5 font-semibold text-indigo-700 hover:bg-indigo-100">
+            ✂ Crop
           </button>
+          {annotatable && (
+            <button type="button" onClick={openAnnotator} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
+              ✏️ Draw arrows, circles, brackets &amp; text on it
+            </button>
+          )}
         </div>
       )}
 
@@ -1016,6 +1040,10 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         </span>
         {draftSavedAt && <span>Saved locally {new Date(draftSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
       </div>
+
+      {cropping && (
+        <ImageCropper src={cropping.src} onCancel={() => setCropping(null)} onSave={handleCroppedSave} />
+      )}
 
       {annotating && (
         <ImageAnnotator src={annotating.src} initial={annotating.initial} onCancel={() => setAnnotating(null)} onSave={handleAnnotatedSave} />
