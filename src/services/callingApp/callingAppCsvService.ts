@@ -49,6 +49,10 @@ export function parseContactsCsv(text: string, fieldDefs: CallingAppCustomFieldD
       errors.push(`Row ${rowNum}: needs both Name and Mobile — skipped.`);
       return;
     }
+    if (!isPlausibleMobile(mobile)) {
+      errors.push(`Row ${rowNum}: "${(r[idx.mobile] ?? "").trim()}" is not a valid mobile number — skipped.`);
+      return;
+    }
     if (seenMobiles.has(mobile)) {
       errors.push(`Row ${rowNum}: ${mobile} appears earlier in this same file — skipped.`);
       return;
@@ -76,12 +80,19 @@ export function parseContactsCsv(text: string, fieldDefs: CallingAppCustomFieldD
   return { rows: parsed, errors };
 }
 
-/** "98765 43210", "+91-98765-43210" and "9876543210" are the same person - store them the same way
- * so duplicate detection actually catches them. Only strips separators and an Indian +91/91 prefix. */
+/** "98765 43210", "+91-98765-43210", "09876543210" and "9876543210" are the same person - store them the same way
+ * so duplicate detection actually catches them. Strips separators, an Indian +91/91 prefix and a leading 0. */
 export function normalizeMobile(raw: string): string {
   let m = raw.replace(/[\s\-().]/g, "");
   if (/^\+?91\d{10}$/.test(m)) m = m.replace(/^\+?91/, "");
+  else if (/^0\d{10}$/.test(m)) m = m.slice(1);
   return m;
+}
+
+/** Digits only (an optional leading +), 7–15 long — catches "12345", "abc" or a half-pasted number without
+ * rejecting genuine foreign numbers. */
+export function isPlausibleMobile(m: string): boolean {
+  return /^\+?\d{7,15}$/.test(m);
 }
 
 export function exportContactsCsv(

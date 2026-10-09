@@ -22,6 +22,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useState } from 'react';
 import ImageEditModal from './ImageEditModal';
+import ImageAnnotator, { type Annotation } from './ImageAnnotator';
 import ContentWatermark, { noCopyProps, type WatermarkConfig } from './ContentWatermark';
 
 interface RichTextEditorProps {
@@ -50,7 +51,29 @@ interface RichTextEditorProps {
   onWatermarkChange?: (config: WatermarkConfig) => void;
   noCopy?: boolean;
   onNoCopyChange?: (value: boolean) => void;
+  /** Lets a picture in the content be drawn on afterwards (arrows, circles, brackets, text…) and re-edited later.
+   * Off by default — switched on only where it is wanted (Projects). */
+  annotatable?: boolean;
 }
+
+// The picture node remembers its ORIGINAL picture and the drawn objects, so a drawn-on picture can be reopened and edited.
+const AnnotatableImage = ImageExtension.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      annot: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-annot'),
+        renderHTML: (attrs: Record<string, unknown>) => (attrs.annot ? { 'data-annot': attrs.annot as string } : {}),
+      },
+      orig: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-orig'),
+        renderHTML: (attrs: Record<string, unknown>) => (attrs.orig ? { 'data-orig': attrs.orig as string } : {}),
+      },
+    };
+  },
+});
 
 // ── Draft recovery ───────────────────────────────────────────────────────────
 // Nothing here ever reaches the server — it's purely a same-browser safety net against a
@@ -334,7 +357,8 @@ function ToolbarButton({ onClick, title, active, disabled, children }: {
   );
 }
 
-function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra, storageKey, watermark, onWatermarkChange, noCopy, onNoCopyChange }: RichTextEditorProps) {
+function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, resetKey, toolbarExtra, storageKey, watermark, onWatermarkChange, noCopy, onNoCopyChange, annotatable = false }: RichTextEditorProps) {
+  const [annotating, setAnnotating] = useState<{ src: string; initial: Annotation[] } | null>(null);
   const [showProtectMenu, setShowProtectMenu] = useState(false);
   const showProtectControl = !!watermark && !!onWatermarkChange;
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -365,7 +389,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Start writing…' }),
-      ImageExtension.configure({ inline: false }),
+      AnnotatableImage.configure({ inline: false }),
       TableWithStyle.configure({ resizable: true }),
       TableRow,
       TableHeader,
@@ -453,6 +477,29 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     } finally {
       setUploadingImage(false);
     }
+  }
+
+  /** Opens the drawing tool on the selected picture — on its ORIGINAL if it was drawn on before. */
+  function openAnnotator() {
+    if (!editor || !editor.isActive('image')) return;
+    const a = editor.getAttributes('image') as { src?: string; orig?: string | null; annot?: string | null };
+    const base = a.orig || a.src;
+    if (!base) return;
+    let initial: Annotation[];
+    try { initial = a.annot ? (JSON.parse(a.annot) as Annotation[]) : []; } catch { initial = []; }
+    setAnnotating({ src: base, initial });
+  }
+
+  async function handleAnnotatedSave({ file, annotations }: { file: File; annotations: Annotation[] }) {
+    if (!editor || !annotating) return;
+    if (annotations.length === 0) {
+      // Everything was removed: go back to the plain original picture.
+      editor.chain().focus().updateAttributes('image', { src: annotating.src, orig: null, annot: null }).run();
+    } else {
+      const url = await onImageUpload(file); // a failure throws back into the annotator, which stays open
+      editor.chain().focus().updateAttributes('image', { src: url, orig: annotating.src, annot: JSON.stringify(annotations) }).run();
+    }
+    setAnnotating(null);
   }
 
   function insertShape(shape: { viewBox?: string; body: (c: string) => string }, label: string) {
@@ -661,6 +708,17 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         <ToolbarButton onClick={() => imageInputRef.current?.click()} title="Insert image">
           {uploadingImage ? <IconSpinner /> : <IconImage />}
         </ToolbarButton>
+        {annotatable && (
+          <button
+            type="button"
+            onClick={openAnnotator}
+            disabled={!editor.isActive('image')}
+            title={editor.isActive('image') ? 'Draw arrows, circles, brackets and text on this picture' : 'Click a picture in the text first, then use this to draw on it'}
+            className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-40"
+          >
+            ✏️ Draw on picture
+          </button>
+        )}
 
         <div>
           <ToolbarButton onClick={() => setShowShapesMenu((v) => !v)} title="Insert shape"><IconShapes /></ToolbarButton>
@@ -777,6 +835,15 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           away, exactly as reported ("only shows at the top"). Nesting it one level in fixes
           that: the inner div is as tall as the actual content, so `inset-0` covers all of it
           and it scrolls along with the text underneath it. */}
+      {annotatable && editor.isActive('image') && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+          <span>🖼 Picture selected.</span>
+          <button type="button" onClick={openAnnotator} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
+            ✏️ Draw arrows, circles, brackets &amp; text on it
+          </button>
+        </div>
+      )}
+
       <div className="max-h-[70vh] overflow-y-auto">
         <div className="relative">
           <EditorContent editor={editor} {...(showProtectControl ? noCopyProps(!!noCopy) : {})} />
@@ -790,6 +857,10 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         </span>
         {draftSavedAt && <span>Saved locally {new Date(draftSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
       </div>
+
+      {annotating && (
+        <ImageAnnotator src={annotating.src} initial={annotating.initial} onCancel={() => setAnnotating(null)} onSave={handleAnnotatedSave} />
+      )}
 
       {pendingImageFile && (
         <ImageEditModal

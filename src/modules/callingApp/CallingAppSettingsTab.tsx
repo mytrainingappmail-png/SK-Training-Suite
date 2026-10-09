@@ -12,6 +12,16 @@ const OUTCOME_OPTIONS: { value: DispositionOutcome; label: string }[] = [
   { value: "negative", label: "Negative" },
 ];
 
+/** A ready-made set for a company that has none yet, so agents can log calls straight away (all editable afterwards). */
+const STARTER_DISPOSITIONS: { label: string; color: string; outcome_type: DispositionOutcome }[] = [
+  { label: "Interested", color: "#16a34a", outcome_type: "positive" },
+  { label: "Site Visit Booked", color: "#0d9488", outcome_type: "positive" },
+  { label: "Call Back Later", color: "#f59e0b", outcome_type: "neutral" },
+  { label: "Busy / No Answer", color: "#64748b", outcome_type: "neutral" },
+  { label: "Not Interested", color: "#dc2626", outcome_type: "negative" },
+  { label: "Wrong Number", color: "#9333ea", outcome_type: "negative" },
+];
+
 function DispositionsPanel({ identity, dispositions, onChanged }: { identity: CallingAppIdentity; dispositions: CallingAppDisposition[]; onChanged: () => void }) {
   const [label, setLabel] = useState("");
   const [color, setColor] = useState("#6366f1");
@@ -30,9 +40,27 @@ function DispositionsPanel({ identity, dispositions, onChanged }: { identity: Ca
     }
   }
 
-  async function handleDelete(id: string) {
-    await dataRepo.deleteDisposition(identity.client, id);
+  async function handleDelete(d: CallingAppDisposition) {
+    if (!confirm(`Delete "${d.label}"? Calls already logged with it will lose their outcome in the reports. (To just change whether it counts as Positive / Neutral / Negative, use the dropdown instead.)`)) return;
+    await dataRepo.deleteDisposition(identity.client, d.id);
     onChanged();
+  }
+
+  async function handleOutcomeChange(d: CallingAppDisposition, value: DispositionOutcome) {
+    await dataRepo.updateDisposition(identity.client, d.id, { outcome_type: value });
+    onChanged();
+  }
+
+  async function handleAddStarterSet() {
+    setSaving(true);
+    try {
+      for (let i = 0; i < STARTER_DISPOSITIONS.length; i++) {
+        await dataRepo.createDisposition(identity.client, identity.admin.company_id, { ...STARTER_DISPOSITIONS[i], sort_order: dispositions.length + i });
+      }
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -40,15 +68,33 @@ function DispositionsPanel({ identity, dispositions, onChanged }: { identity: Ca
       <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600">Dispositions</h3>
       <p className="text-xs text-slate-600">Call outcomes your team picks from. Tag each Positive/Neutral/Negative — this drives the Reports quality score.</p>
 
+      {dispositions.length === 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50 px-4 py-3">
+          <p className="text-xs text-indigo-800">No outcomes yet — your team can't log calls until there are some. Add the usual six in one click (you can change or delete any of them afterwards).</p>
+          <button onClick={handleAddStarterSet} disabled={saving} className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+            {saving ? "Adding…" : "Add the standard set"}
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2">
         {dispositions.map((d) => (
-          <div key={d.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5">
+          <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5">
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
               <span className="text-sm font-medium text-slate-800">{d.label}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600">{d.outcome_type}</span>
             </div>
-            <button onClick={() => handleDelete(d.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+            <div className="flex items-center gap-3">
+              <select
+                value={d.outcome_type}
+                onChange={(e) => void handleOutcomeChange(d, e.target.value as DispositionOutcome)}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                aria-label={`Outcome type for ${d.label}`}
+              >
+                {OUTCOME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <button onClick={() => void handleDelete(d)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+            </div>
           </div>
         ))}
       </div>

@@ -186,7 +186,7 @@ export function CallingAppDashboardTab({
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Calls Today" value={myLogsToday.length} accent="#6366f1" />
         <StatCard label="Positive Outcomes" value={myPositiveToday} accent="#10b981" />
-        <StatCard label={isTeamView ? "Team Contacts" : "My Contacts"} value={myContacts.length} accent="#a855f7" />
+        <StatCard label={isTeamView ? "Team Contacts" : admin.is_admin ? "All Contacts" : "My Contacts"} value={myContacts.length} accent="#a855f7" />
         <StatCard label="Pending Follow-ups" value={myContacts.filter((c) => c.next_call_at && new Date(c.next_call_at) <= new Date()).length} accent="#f59e0b" />
       </div>
 

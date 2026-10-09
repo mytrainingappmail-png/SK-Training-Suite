@@ -747,6 +747,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                 value={draft.full_description}
                 onChange={(v) => setDraft((d) => ({ ...d, full_description: v }))}
                 onImageUpload={uploadInlineImage}
+                annotatable
                 minHeight={320}
                 resetKey={editingProjectId ?? 'new'}
               />
@@ -911,6 +912,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                         value={sectionDraft.page_content}
                         onChange={(v) => setSectionDraft((d) => d && { ...d, page_content: v })}
                         onImageUpload={uploadInlineImage}
+                        annotatable
                         minHeight={220}
                         resetKey={editingSectionId ?? 'new-section'}
                         {...(isOperator ? {
