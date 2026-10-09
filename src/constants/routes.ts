@@ -119,6 +119,7 @@ export const ROUTES = {
   QUIZ_ADMIN_SURVEYS: "/quiz-admin/surveys",
   QUIZ_ADMIN_SURVEY_BUILDER_NEW: "/quiz-admin/surveys/new",
   QUIZ_ADMIN_SURVEY_SETTINGS: "/quiz-admin/surveys/settings",
+  QUIZ_ADMIN_SURVEY_RESULTS_ALL: "/quiz-admin/surveys/results",
   QUIZ_ADMIN_SURVEY_BUILDER_EDIT: "/quiz-admin/surveys/:surveyId",
   QUIZ_ADMIN_SURVEY_RESULTS: "/quiz-admin/surveys/:surveyId/results",
   QUIZ_ADMIN_SURVEY_LIVE_HOST: "/quiz-admin/surveys/:surveyId/live/:sessionId",

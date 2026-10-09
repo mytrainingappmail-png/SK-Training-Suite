@@ -4,7 +4,8 @@ import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/qui
 import { listSessionsForCompany, deleteSession, deleteSessions, deleteAllSessions } from "../../repositories/quiz/quizSessionRepository";
 import { getCompanySessionResults, getAnswerDistribution } from "../../repositories/quiz/quizAnalyticsRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
-import { listFoldersForCompany, createFolder, moveSessionToFolder } from "../../repositories/quiz/quizResultFolderRepository";
+import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
+import { saveSessionToFinalResult, listSavedSessionFolders } from "../../repositories/quiz/quizFinalResultRepository";
 import { buildDetailedReportCsv, buildTraineeSummaryCsv, computeChampions } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
@@ -91,6 +92,9 @@ export default function QuizResultsPage() {
   const [movingSessionId, setMovingSessionId] = useState<string | null>(null);
   const [moveNewFolderName, setMoveNewFolderName] = useState("");
   const [folderBusy, setFolderBusy] = useState(false);
+  // session id -> Final Result folder id, for sessions that already have a saved copy
+  const [savedFolders, setSavedFolders] = useState<Map<string, string>>(new Map());
+  const [savedNotice, setSavedNotice] = useState("");
 
   // Bulk-select in the everyday Session list (not the Final Result folders)
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
@@ -104,8 +108,10 @@ export default function QuizResultsPage() {
       getCompanySessionResults(admin.company_id),
       getSettings(admin.company_id),
       listFoldersForCompany(admin.company_id),
+      listSavedSessionFolders(admin.company_id).catch(() => new Map<string, string>()),
     ])
-      .then(([s, r, settings, f]) => {
+      .then(([s, r, settings, f, saved]) => {
+        setSavedFolders(saved);
         setSessions(s.filter((x) => x.phase === "ended"));
         setAllResults(r);
         setCertEligibility(settings.cert_eligibility);
@@ -163,7 +169,7 @@ export default function QuizResultsPage() {
   }
 
   async function handleDeleteSession(sessionId: string) {
-    if (!confirm("Delete this session and all its results? This cannot be undone.")) return;
+    if (!confirm("Delete this session and all its results? Copies already saved in Final Result are not affected. This cannot be undone.")) return;
     try {
       await deleteSession(sessionId);
       refresh();
@@ -174,7 +180,7 @@ export default function QuizResultsPage() {
 
   async function handleDeleteAll() {
     if (!admin) return;
-    if (!confirm("Delete ALL quiz sessions and results for your company? This cannot be undone.")) return;
+    if (!confirm("Delete ALL quiz sessions and results for your company? Copies already saved in Final Result are not affected. This cannot be undone.")) return;
     try {
       await deleteAllSessions(admin.company_id);
       refresh();
@@ -198,7 +204,7 @@ export default function QuizResultsPage() {
 
   async function handleBulkDeleteSessions() {
     if (selectedSessionIds.size === 0) return;
-    if (!confirm(`Delete ${selectedSessionIds.size} session(s) and all their results? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${selectedSessionIds.size} session(s) and all their results? Copies already saved in Final Result are not affected. This cannot be undone.`)) return;
     setBulkDeletingSessions(true);
     setError("");
     try {
@@ -212,15 +218,29 @@ export default function QuizResultsPage() {
     }
   }
 
+  /** Saves a separate, frozen copy of this session into a Final Result folder. The session itself stays here and
+   * can be deleted any time without touching the saved copy (and vice versa). */
+  async function saveCopy(sessionId: string, folderId: string, folderName: string) {
+    if (!admin) return;
+    const session = sessions.find((x) => x.id === sessionId);
+    if (!session) throw new Error("Session not found.");
+    const rows = allResults.filter((r) => r.session_id === sessionId);
+    const distribution = distributions[sessionId] ?? (await getAnswerDistribution(sessionId, session.quiz_id));
+    await saveSessionToFinalResult(admin.company_id, admin.id, session, rows, distribution, folderId);
+    setSavedNotice(`Saved to Final Result → ${folderName}. This is a separate copy — deleting the session here won't remove it.`);
+    setTimeout(() => setSavedNotice(""), 6000);
+  }
+
   async function handleMoveToFolder(sessionId: string, folderId: string | null) {
+    if (!folderId) return;
     setFolderBusy(true);
     try {
-      await moveSessionToFolder(sessionId, folderId);
+      await saveCopy(sessionId, folderId, folders.find((f) => f.id === folderId)?.name ?? "folder");
       setMovingSessionId(null);
       setMoveNewFolderName("");
       refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to move session.");
+      setError(e instanceof Error ? e.message : "Failed to save to Final Result.");
     } finally {
       setFolderBusy(false);
     }
@@ -231,7 +251,7 @@ export default function QuizResultsPage() {
     setFolderBusy(true);
     try {
       const folder = await createFolder(admin.company_id, moveNewFolderName.trim(), admin.id);
-      await moveSessionToFolder(sessionId, folder.id);
+      await saveCopy(sessionId, folder.id, folder.name);
       setMovingSessionId(null);
       setMoveNewFolderName("");
       refresh();
@@ -318,6 +338,9 @@ export default function QuizResultsPage() {
 
       {error && (
         <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
+      )}
+      {savedNotice && (
+        <div className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">✅ {savedNotice}</div>
       )}
 
       {/* Export Reports */}
@@ -598,7 +621,7 @@ export default function QuizResultsPage() {
                         }}
                         className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5"
                       >
-                        📁 Move
+                        {savedFolders.has(s.id) ? "✓ In Final Result" : "📁 Save to Final Result"}
                       </button>
                       <button
                         onClick={() => handleDeleteSession(s.id)}
@@ -609,7 +632,7 @@ export default function QuizResultsPage() {
 
                       {isMoveOpen && (
                         <div className="absolute right-0 top-full z-20 mt-1 w-60 rounded-xl border border-slate-700 bg-slate-800 py-1.5 shadow-xl">
-                          <div className="px-3 py-1 text-xs font-semibold text-slate-400">Move to folder</div>
+                          <div className="px-3 py-1 text-xs font-semibold text-slate-400">Save a copy to Final Result folder</div>
                           {folders.length === 0 ? (
                             <div className="px-3 py-1.5 text-xs text-slate-500">No folders yet.</div>
                           ) : (
@@ -620,7 +643,7 @@ export default function QuizResultsPage() {
                                 disabled={folderBusy}
                                 className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-40"
                               >
-                                📁 {f.name}
+                                📁 {f.name}{savedFolders.get(s.id) === f.id ? " ✓" : ""}
                               </button>
                             ))
                           )}

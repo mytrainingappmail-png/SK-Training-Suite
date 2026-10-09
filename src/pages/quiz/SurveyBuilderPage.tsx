@@ -12,6 +12,7 @@ import {
 } from "../../repositories/survey/surveyRepository";
 import type { SurveyForm, SurveyQuestionForm } from "../../repositories/survey/surveyRepository";
 import type { SurveyQuestionType, SurveySentiment } from "../../types/survey";
+import { buildSurveySampleCsv, buildSurveyQuestionsCsv, parseCsv, csvRowsToSurveyQuestions, downloadCsvFile } from "../../services/survey/surveyCsvService";
 
 let localIdCounter = 0;
 function nextLocalId() {
@@ -64,6 +65,8 @@ export default function SurveyBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [csvImportedCount, setCsvImportedCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (isNew && !canEdit) navigate(ROUTES.QUIZ_ADMIN_SURVEYS, { replace: true });
@@ -144,6 +147,37 @@ export default function SurveyBuilderPage() {
 
   function removeQuestion(localId: string) {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
+  }
+
+  function isBlankQuestion(q: EditableSurveyQuestion): boolean {
+    return !q.question_text.trim() && q.options.every((o) => !o.option_text.trim());
+  }
+
+  function handleDownloadSampleCsv() {
+    downloadCsvFile("survey-sample.csv", buildSurveySampleCsv());
+  }
+
+  /** Downloads this survey's questions in the same format the importer reads — edit in Excel and import back. */
+  function handleExportQuestionsCsv() {
+    const real = questions.filter((q) => !isBlankQuestion(q)).map(({ localId: _localId, ...rest }) => rest);
+    const name = (form.title.trim() || "survey").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    downloadCsvFile(`${name}-questions.csv`, buildSurveyQuestionsCsv(real));
+  }
+
+  function handleCsvFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again later
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { questions: imported, errors } = csvRowsToSurveyQuestions(parseCsv(String(reader.result ?? "")));
+      setCsvErrors(errors);
+      setCsvImportedCount(imported.length);
+      if (imported.length === 0) return;
+      const added: EditableSurveyQuestion[] = imported.map((q) => ({ ...q, localId: nextLocalId() }));
+      setQuestions((prev) => [...prev.filter((q) => !isBlankQuestion(q)), ...added]);
+    };
+    reader.readAsText(file);
   }
 
   function validate(): string | null {
@@ -258,6 +292,54 @@ export default function SurveyBuilderPage() {
           <p className="text-[11px] text-slate-500 mt-1">After this, the link stops accepting responses. Leave blank to keep it open indefinitely.</p>
         </div>
       </fieldset>
+
+      {/* Bulk import / export */}
+      {canEdit && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-300">📄 Questions in bulk (CSV)</h2>
+          <p className="text-xs text-slate-500">
+            Download the sample to see the format, fill it in (Excel / Google Sheets), then upload it — the questions are added below.
+            You can also download this survey's questions, edit them, and upload again.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleDownloadSampleCsv} className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5">
+              ⬇ Download Sample CSV
+            </button>
+            <button
+              onClick={handleExportQuestionsCsv}
+              disabled={questions.every(isBlankQuestion)}
+              className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5 disabled:opacity-40"
+            >
+              ⬇ Download This Survey's Questions
+            </button>
+            <label className="text-xs font-semibold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg px-3 py-1.5 cursor-pointer">
+              ⬆ Import from CSV
+              <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvFileSelected} />
+            </label>
+          </div>
+          <details className="text-[11px] text-slate-500">
+            <summary className="cursor-pointer text-slate-400">What goes in each column?</summary>
+            <ul className="mt-2 space-y-1 list-disc pl-5">
+              <li><b>Question</b> — the question text (required).</li>
+              <li><b>Type</b> — single_choice, multi_choice, scale or open_text. Left empty: it becomes a choice question if options are filled, otherwise open text.</li>
+              <li><b>Required</b> — yes or no (default yes).</li>
+              <li><b>Option1 … Option8</b> — answers for choice questions (at least 2).</li>
+              <li><b>Sentiments</b> — optional, one per option separated by ; for example <code>positive;neutral;negative</code>. Left empty: first option positive, last negative, the rest neutral.</li>
+              <li><b>ScaleMin / ScaleMax</b> — for scale questions (default 1 to 5).</li>
+              <li><b>TimeLimit</b> — optional seconds (5–3600).</li>
+            </ul>
+          </details>
+          {csvImportedCount !== null && (
+            <div className="text-sm text-emerald-300">✅ Imported {csvImportedCount} question{csvImportedCount === 1 ? "" : "s"}.</div>
+          )}
+          {csvErrors.length > 0 && (
+            <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 space-y-1">
+              <div className="font-semibold">{csvErrors.length} row(s) skipped:</div>
+              {csvErrors.map((e, i) => <div key={i}>• {e}</div>)}
+            </div>
+          )}
+        </div>
+      )}
 
       <fieldset disabled={!canEdit} className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-300">Questions</h2>

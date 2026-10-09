@@ -88,11 +88,11 @@ export async function renameFolder(folderId: string, name: string): Promise<void
   }
 }
 
-/** Refuses to delete a folder that still holds sessions — move them out (or to another
- * folder) first, so a record can never be silently orphaned by a stray click. */
+/** Refuses to delete a folder that still holds saved Final Results or exam sessions — move or remove them
+ * first, so a record can never be silently orphaned by a stray click. */
 export async function deleteFolder(folderId: string): Promise<void> {
   const { count, error: countError } = await supabaseQuiz
-    .from("quiz_sessions")
+    .from("quiz_final_results")
     .select("id", { count: "exact", head: true })
     .eq("folder_id", folderId);
 

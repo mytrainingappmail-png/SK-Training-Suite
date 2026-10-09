@@ -597,3 +597,22 @@ export interface AnswerReviewQuestion {
     hotspot_zones: HotspotZone[] | null;
   } | null;
 }
+
+/** A Final Result record: a frozen copy of one ended session's results, stored on its own so deleting the original
+ * session (or the quiz) never touches it. */
+export interface QuizFinalResult {
+  id: string;
+  company_id: string;
+  folder_id: string;
+  /** The session this was copied from — may no longer exist. */
+  source_session_id: string | null;
+  quiz_id: string | null;
+  quiz_title: string;
+  started_at: string | null;
+  ended_at: string | null;
+  passing_score_pct: number | null;
+  improve_threshold_pct: number | null;
+  rows: QuizSessionResultRow[];
+  distribution: AnswerDistributionQuestion[];
+  saved_at: string;
+}

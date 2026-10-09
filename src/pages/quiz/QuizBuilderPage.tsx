@@ -8,6 +8,7 @@ import { buildSampleCsv, parseCsv, csvRowsToQuestions, downloadCsvFile } from ".
 import HotspotZoneEditor from "../../components/quiz/HotspotZoneEditor";
 import HotspotBulkMarker from "../../components/quiz/HotspotBulkMarker";
 import { effectiveZones, legacyFromZones } from "../../components/quiz/hotspotZones";
+import { describePlayMode } from "../../utils/quizPlayMode";
 import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
 import type { QuizDifficulty } from "../../types/quiz";
@@ -330,6 +331,16 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
   // the preview total excludes them too — otherwise it wouldn't match what
   // the Host screen / final score actually add up to.
   const totalMarks = questions.reduce((sum, q) => sum + (q.is_hidden ? 0 : q.marks || 1), 0);
+  // A hidden question doesn't exist as far as play and results go, so the count and the Q-numbers skip it
+  // until it is unhidden.
+  const activeQuestionCount = questions.filter((q) => !q.is_hidden).length;
+  const hiddenQuestionCount = questions.length - activeQuestionCount;
+  const questionNumber = (() => {
+    const m = new Map<string, number>();
+    let n = 0;
+    for (const q of questions) if (!q.is_hidden) m.set(q.localId, ++n);
+    return m;
+  })();
 
   // Distinct source projects present among the current questions — only
   // non-empty for a merged quiz (see mergeQuizzes). Counts included so
@@ -556,7 +567,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
             checked={form.shuffle_options}
             onChange={(e) => setForm({ ...form, shuffle_options: e.target.checked })}
           />
-          {isExam ? "Shuffle the options of each question differently for every employee" : "Shuffle answer order for each player"}
+          {isExam ? "Shuffle the options of each question differently for every employee" : "Shuffle answer order for each player (A/B/C/D will differ on every phone)"}
         </label>
         {!isExam && (
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -584,6 +595,25 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
             </span>
           </span>
         </label>
+        {!isExam && (() => {
+          const mode = describePlayMode(form);
+          return (
+            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1 ${mode.sameOnEveryScreen ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-200" : "border-amber-500/30 bg-amber-500/5 text-amber-200"}`}>
+              <div className="font-semibold uppercase tracking-wide text-[10px] opacity-80">What players will see</div>
+              <div>{mode.questions.icon} {mode.questions.text}</div>
+              <div>{mode.answers.icon} {mode.answers.text}</div>
+              {!mode.sameOnEveryScreen && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, shuffle_options: false, shuffle_questions_per_participant: false })}
+                  className="mt-1 rounded-md bg-amber-400 px-2.5 py-1 font-semibold text-amber-950 hover:bg-amber-300"
+                >
+                  🎯 Make it the same on every screen
+                </button>
+              )}
+            </div>
+          );
+        })()}
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
@@ -637,7 +667,12 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
       <fieldset disabled={!canEdit} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-300">
-            {questions.length} question(s) <span className="text-slate-500 font-normal">· {totalMarks} marks total</span>
+            {activeQuestionCount} question(s) <span className="text-slate-500 font-normal">· {totalMarks} marks total</span>
+            {hiddenQuestionCount > 0 && (
+              <span className="ml-2 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5 align-middle">
+                🙈 {hiddenQuestionCount} hidden — not counted
+              </span>
+            )}
           </h2>
           {canEdit && (
           <button
@@ -693,7 +728,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           <div key={q.localId} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
+                <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">{q.is_hidden ? "Hidden" : `Q${questionNumber.get(q.localId) ?? qi + 1}`}</span>
                 {q.type === "hotspot" && effectiveZones(q).length === 0 && (
                   <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
                     ⚠ {q.image_url ? "Area not marked" : "Image needed"}

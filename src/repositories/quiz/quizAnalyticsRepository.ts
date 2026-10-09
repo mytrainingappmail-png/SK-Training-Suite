@@ -18,6 +18,7 @@ export async function getAnswerDistribution(sessionId: string, quizId: string): 
   const answers = answersRes.data ?? [];
 
   return quiz.questions
+    .filter((q) => !q.is_hidden)
     .slice()
     .sort((a, b) => a.display_order - b.display_order)
     .map((q) => {

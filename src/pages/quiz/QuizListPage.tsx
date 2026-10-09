@@ -3,9 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
-import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes } from "../../services/quiz/quizService";
+import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes, updateQuizMeta } from "../../services/quiz/quizService";
 import { launchSession } from "../../services/quiz/quizSessionService";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
+import { describePlayMode, hasPerPlayerShuffle } from "../../utils/quizPlayMode";
 import type { Quiz } from "../../types/quiz";
 
 export default function QuizListPage() {
@@ -61,6 +62,25 @@ export default function QuizListPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  const [launchCheck, setLaunchCheck] = useState<Quiz | null>(null);
+
+  /** Launches straight away, except when a shuffle is on — then a quick heads-up shows what phones will look like. */
+  function handleLaunchClick(q: Quiz) {
+    if (hasPerPlayerShuffle(q)) setLaunchCheck(q);
+    else void handleLaunch(q);
+  }
+
+  async function handleMakeSameAndLaunch(q: Quiz) {
+    try {
+      await updateQuizMeta(q.id, { shuffle_options: false, shuffle_questions_per_participant: false });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update the quiz.");
+      return;
+    }
+    setLaunchCheck(null);
+    await handleLaunch({ ...q, shuffle_options: false, shuffle_questions_per_participant: false });
   }
 
   async function handleLaunch(q: Quiz) {
@@ -250,7 +270,7 @@ export default function QuizListPage() {
                 {q.status === "published" && canEdit && (
                   <button
                     disabled={busyId === q.id}
-                    onClick={() => handleLaunch(q)}
+                    onClick={() => handleLaunchClick(q)}
                     className="text-xs font-semibold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
                   >
                     ▶ Launch
@@ -388,6 +408,39 @@ export default function QuizListPage() {
           )}
         </div>
       )}
+
+      {launchCheck && (() => {
+        const mode = describePlayMode(launchCheck);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-white">Before you launch: {launchCheck.title}</h3>
+                <p className="text-xs text-slate-400 mt-1">Players' phones will not all look the same. Is that what you want?</p>
+              </div>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-200 space-y-1">
+                <div>{mode.questions.icon} {mode.questions.text}</div>
+                <div>{mode.answers.icon} {mode.answers.text}</div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => handleMakeSameAndLaunch(launchCheck)}
+                  className="text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 py-2.5"
+                >
+                  🎯 Make it the same on every screen &amp; launch
+                </button>
+                <button
+                  onClick={() => { const q = launchCheck; setLaunchCheck(null); void handleLaunch(q); }}
+                  className="text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-amber-950 rounded-lg px-4 py-2.5"
+                >
+                  ▶ Launch as it is
+                </button>
+                <button onClick={() => setLaunchCheck(null)} className="text-xs text-slate-400 hover:text-white px-3 py-2">Cancel</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

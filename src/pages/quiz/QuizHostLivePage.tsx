@@ -365,6 +365,11 @@ export default function QuizHostLivePage() {
 
           {session.phase === "question" && currentQuestion && (
             <div className="space-y-6">
+              {quiz.shuffle_options && !quiz.shuffle_questions_per_participant && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  🔀 Answer order is shuffled on every player's phone — their A/B/C/D will not match the order shown here. (Turn off “Shuffle answer order for each player” in the quiz settings to keep it the same.)
+                </div>
+              )}
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold">

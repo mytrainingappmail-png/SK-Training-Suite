@@ -24,8 +24,9 @@ export default function SessionResultCard({
   certEligibility,
   companyId,
   actions,
+  certParticipantIds,
 }: {
-  session: QuizSession;
+  session: Pick<QuizSession, "ended_at">;
   rows: QuizSessionResultRow[];
   isOpen: boolean;
   onToggle: () => void;
@@ -33,6 +34,8 @@ export default function SessionResultCard({
   certEligibility: CertEligibility;
   companyId: string | null;
   actions?: ReactNode;
+  /** When given, the certificate button only shows for these participants (a Final Result copy outlives its session, so a participant may no longer exist). */
+  certParticipantIds?: Set<string>;
 }) {
   const nPass = rows.filter((r) => r.grade === "PASS").length;
   const nImp = rows.filter((r) => r.grade === "NEED_IMPROVEMENT").length;
@@ -76,7 +79,7 @@ export default function SessionResultCard({
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
                     {r.grade.replace("_", " ")}
                   </span>
-                  {isCertEligible(r.rank, r.grade, certEligibility) && companyId && (
+                  {isCertEligible(r.rank, r.grade, certEligibility) && companyId && (!certParticipantIds || certParticipantIds.has(r.participant_id)) && (
                     <QuizAdminCertificateButton participantId={r.participant_id} companyId={companyId} />
                   )}
                 </div>

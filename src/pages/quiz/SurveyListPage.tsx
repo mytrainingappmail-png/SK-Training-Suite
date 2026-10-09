@@ -123,6 +123,12 @@ export default function SurveyListPage() {
         </div>
         <div className="flex gap-2">
           <Link
+            to={ROUTES.QUIZ_ADMIN_SURVEY_RESULTS_ALL}
+            className="text-sm font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-4 py-2"
+          >
+            📊 Results
+          </Link>
+          <Link
             to={ROUTES.QUIZ_ADMIN_SURVEY_SETTINGS}
             className="text-sm font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-4 py-2"
           >

@@ -166,6 +166,33 @@ export async function replaceSurveyQuestions(surveyId: string, questions: Survey
   }
 }
 
+export interface SurveyResponseStat {
+  surveyId: string;
+  responses: number;
+  lastSubmittedAt: string | null;
+}
+
+/** One light request per survey (a head count plus the newest submission time) — never pulls the answers themselves. */
+export async function listSurveyResponseStats(surveyIds: string[]): Promise<Map<string, SurveyResponseStat>> {
+  const out = new Map<string, SurveyResponseStat>();
+  await Promise.all(
+    surveyIds.map(async (surveyId) => {
+      const { data, count, error } = await supabaseQuiz
+        .from("survey_responses")
+        .select("submitted_at", { count: "exact" })
+        .eq("survey_id", surveyId)
+        .order("submitted_at", { ascending: false })
+        .limit(1);
+      if (error) {
+        console.error("[surveyRepository] listSurveyResponseStats:", error);
+        throw new Error(error.message);
+      }
+      out.set(surveyId, { surveyId, responses: count ?? 0, lastSubmittedAt: data?.[0]?.submitted_at ?? null });
+    })
+  );
+  return out;
+}
+
 // ── Results (anonymous by construction — see the migration's header note) ──
 
 interface RawSurveyAnswer {
