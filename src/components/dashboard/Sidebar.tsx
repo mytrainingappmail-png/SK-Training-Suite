@@ -11,6 +11,7 @@ import BrandLogo from "../shared/BrandLogo";
 import { loadCompany } from "../../services/company/companyService";
 import { loadCompanyModuleFlags } from "../../services/company/appModuleService";
 import { getMyEmployeeLinkedGrant } from "../../repositories/callingApp/callingAppAdminRepository";
+import { getPracticeSettings } from "../../repositories/practice/practiceRepository";
 import { loadMyAssignment } from "../../services/induction/inductionService";
 import { getSettingText } from "../../services/setting/settingService";
 import type { PermissionCode } from "../../types/authorization";
@@ -118,6 +119,8 @@ function Sidebar() {
   // separate from moduleFlags.calling_app (company-level purchase), since
   // Calling App access is also gated per-person (Admin → Calling App).
   const [hasCallingAppGrant, setHasCallingAppGrant] = useState(false);
+  // AI Practice is a company-level switch an admin turns on (Admin → AI Practice).
+  const [practiceEnabled, setPracticeEnabled] = useState(false);
   // Whether the current employee has an active Induction assignment —
   // while true, every item except INDUCTION_EXEMPT_IDS stays visible but
   // becomes unclickable (a toast explains why instead of navigating).
@@ -172,6 +175,12 @@ function Sidebar() {
   }, []);
 
   useEffect(() => {
+    if (!user?.companyId) return;
+    getPracticeSettings(user.companyId).then((s) => setPracticeEnabled(s.enabled)).catch(() => setPracticeEnabled(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.companyId]);
+
+  useEffect(() => {
     getMyEmployeeLinkedGrant()
       .then((grant) => setHasCallingAppGrant(!!grant && grant.status === "active"))
       .catch(() => setHasCallingAppGrant(false));
@@ -224,6 +233,7 @@ function Sidebar() {
     // access (Admin → Calling App) — unlike every other item here, that's
     // a per-person check, not a role/permission one.
     if (item.id === "calling-app" && !hasCallingAppGrant) return false;
+    if (item.id === "ai-practice" && !practiceEnabled) return false;
     const requiredModule = MENU_MODULE_MAP[item.id];
     if (requiredModule && moduleFlags[requiredModule] === false) return false;
 

@@ -56,6 +56,7 @@ const ContentDistributionManagement = lazyWithRetry(() => import("../components/
 const CourseVisibilityMatrix = lazyWithRetry(() => import("../modules/courseVisibility/CourseVisibilityMatrix"));
 const RealEstateProjectManagement = lazyWithRetry(() => import("../modules/realEstateProject/RealEstateProjectManagement"));
 const InductionManagement = lazyWithRetry(() => import("../modules/induction/InductionManagement"));
+const PracticeManagement = lazyWithRetry(() => import("../components/admin/practice/PracticeManagement"));
 const BrainstormingManagement = lazyWithRetry(() => import("../components/admin/brainstorming/BrainstormingManagement"));
 const EmployeeOfTheMonthManagement = lazyWithRetry(() => import("../components/admin/employeeOfTheMonth/EmployeeOfTheMonthManagement"));
 const LegalDocumentManagement = lazyWithRetry(() => import("../components/admin/legal/LegalDocumentManagement"));
@@ -509,6 +510,7 @@ function Admin() {
              (moduleFlags.calling_app && matches("Calling App")) ||
              (isPlatformOperator && matches("Brainstorming")) ||
              matches("Projects") ||
+             matches("AI Practice") ||
              matches("Induction") ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Premium Add-ons</p>
@@ -530,6 +532,9 @@ function Admin() {
                   )}
                   {matches("Induction") && (
                     <button onClick={() => setActiveTab("induction")} className={getTabClass()} style={getTabStyle("induction")}>Induction</button>
+                  )}
+                  {matches("AI Practice") && (
+                    <button onClick={() => setActiveTab("ai-practice")} className={getTabClass()} style={getTabStyle("ai-practice")}>AI Practice</button>
                   )}
                 </div>
               </div>
@@ -704,6 +709,7 @@ function Admin() {
 
             {activeTab === "real-estate-projects" && moduleAllowed("real-estate-projects") && <RealEstateProjectManagement />}
             {activeTab === "induction" && moduleAllowed("induction") && <InductionManagement />}
+            {activeTab === "ai-practice" && <PracticeManagement />}
 
             {activeTab === "brainstorming" && isPlatformOperator && moduleAllowed("brainstorming") && <BrainstormingManagement />}
 

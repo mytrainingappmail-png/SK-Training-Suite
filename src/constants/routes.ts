@@ -168,4 +168,7 @@ export const ROUTES = {
 
   SCRIPTS: "/scripts",
 
+  // AI Practice — employees practise customer situations and get AI feedback (admin side lives under Admin → AI Practice).
+  PRACTICE: "/practice",
+
 } as const;

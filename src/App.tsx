@@ -33,6 +33,7 @@ const ProjectsPage = lazyWithRetry(() => import("./pages/Projects"));
 const InductionPage = lazyWithRetry(() => import("./pages/InductionPage"));
 const PerformanceTrackerPage = lazyWithRetry(() => import("./pages/PerformanceTrackerPage"));
 const ScriptsPage = lazyWithRetry(() => import("./pages/ScriptsPage"));
+const PracticePage = lazyWithRetry(() => import("./pages/PracticePage"));
 const PerformanceTrackerTvPage = lazyWithRetry(() => import("./pages/PerformanceTrackerTvPage"));
 const BrainstormingPage = lazyWithRetry(() => import("./pages/Brainstorming"));
 const LegalDocumentPage = lazyWithRetry(() => import("./pages/LegalDocumentPage"));
@@ -331,6 +332,7 @@ function App() {
         <Route path={ROUTES.INDUCTION} element={<InductionPage />} />
         <Route path={ROUTES.PERFORMANCE_TRACKER} element={<PerformanceTrackerPage />} />
         <Route path={ROUTES.SCRIPTS} element={<ScriptsPage />} />
+        <Route path={ROUTES.PRACTICE} element={<PracticePage />} />
         <Route path={ROUTES.BRAINSTORMING} element={<BrainstormingPage />} />
         <Route path={ROUTES.CERTIFICATE_VIEW} element={<CertificateViewPage />} />
         <Route path={ROUTES.MY_ATTENDANCE} element={<AttendancePage />} />

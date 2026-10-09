@@ -57,6 +57,15 @@ export const MENU: MenuItem[] = [
     visible: true,
     group: "Overview",
   },
+  // Shown only once an admin has switched AI Practice on for the company (see Sidebar.tsx: practiceEnabled).
+  {
+    id: "ai-practice",
+    title: "AI Practice",
+    route: ROUTES.PRACTICE,
+    icon: "mic",
+    visible: true,
+    group: "Overview",
+  },
   {
     id: "dashboard",
     title: "Dashboard",
