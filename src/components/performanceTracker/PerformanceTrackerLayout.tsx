@@ -19,7 +19,7 @@ import type { Department } from '../../types/department';
 import type { PtTeam, PtSettings, PtCustomField } from '../../types/performanceTracker';
 import {
   IconTrendingUp, IconSun, IconMoon, IconChartLine, IconTrophy, IconBarChart,
-  IconUsers, IconBell, IconDocument, IconGear, IconLock, IconSpinner,
+  IconUsers, IconBell, IconDocument, IconGear, IconLock, IconSpinner, IconAward,
 } from './ptIcons';
 import { DashboardTab } from './DashboardTab';
 import { MorningCommitTab } from './MorningCommitTab';
@@ -27,12 +27,13 @@ import { EveningReportTab } from './EveningReportTab';
 import { TrendsTab } from './TrendsTab';
 import { LeaderboardTab } from './LeaderboardTab';
 import { AnalyticsTab } from './AnalyticsTab';
+import { TrainingImpactTab } from './TrainingImpactTab';
 import { TeamViewTab } from './TeamViewTab';
 import { AlertsTab } from './AlertsTab';
 import { ReportsTab } from './ReportsTab';
 import { SettingsTab } from './SettingsTab';
 
-type TabKey = 'dashboard' | 'morning' | 'evening' | 'trends' | 'leaderboard' | 'analytics' | 'team' | 'alerts' | 'reports' | 'settings';
+type TabKey = 'dashboard' | 'morning' | 'evening' | 'trends' | 'leaderboard' | 'analytics' | 'impact' | 'team' | 'alerts' | 'reports' | 'settings';
 
 function GateScreen({ state }: { state: 'checking' | 'locked' }) {
   return (
@@ -122,6 +123,7 @@ function PerformanceTrackerLayout() {
     { key: 'trends', label: 'Trends', icon: IconChartLine, show: true },
     { key: 'leaderboard', label: 'Leaderboard', icon: IconTrophy, show: true },
     { key: 'analytics', label: 'Analytics', icon: IconBarChart, show: isManagerUp },
+    { key: 'impact', label: 'Training Impact', icon: IconAward, show: isAdmin },
     { key: 'team', label: 'Team View', icon: IconUsers, show: isManagerUp },
     { key: 'alerts', label: 'Alerts', icon: IconBell, show: isManagerUp },
     { key: 'reports', label: 'Reports', icon: IconDocument, show: isManagerUp },
@@ -173,6 +175,7 @@ function PerformanceTrackerLayout() {
         {tab === 'trends' && <TrendsTab employees={employees} teams={teams} teamMap={teamMap} isManagerUp={isManagerUp} />}
         {tab === 'leaderboard' && <LeaderboardTab employees={employees} teams={teams} teamMap={teamMap} settings={settings} isManagerUp={isManagerUp} />}
         {tab === 'analytics' && isManagerUp && <AnalyticsTab employees={employees} departments={departments} />}
+        {tab === 'impact' && isAdmin && <TrainingImpactTab />}
         {tab === 'team' && isManagerUp && <TeamViewTab employees={employees} teams={teams} teamMap={teamMap} />}
         {tab === 'alerts' && isManagerUp && <AlertsTab employees={employees} settings={settings} />}
         {tab === 'reports' && isManagerUp && <ReportsTab employees={employees} teams={teams} teamMap={teamMap} departments={departments} />}

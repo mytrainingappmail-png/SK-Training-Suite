@@ -15,7 +15,7 @@ import ThumbnailCard from '../shared/ThumbnailCard';
 import CardPagination from '../shared/CardPagination';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import TranslatableHtml from '../shared/TranslatableHtml';
 import type {
   CoursePlayerData,
   CoursePlayerModule,
@@ -247,9 +247,9 @@ function LessonContent({
           {lesson.lessonType === 'text' && (
             <ContentWatermark config={{ enabled: !!watermarkEnabled, text: watermarkText ?? '', orientation: watermarkOrientation ?? 'diagonal', opacity: watermarkOpacity ?? 8 }} />
           )}
-          <div
+          <TranslatableHtml
             className="prose prose-slate relative max-w-none p-6 text-sm leading-relaxed text-slate-700"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content) }}
+            html={lesson.content}
             {...(lesson.lessonType === 'text' ? noCopyProps(!!noCopy) : {})}
           />
         </div>

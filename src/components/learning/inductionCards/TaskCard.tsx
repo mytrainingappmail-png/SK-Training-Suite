@@ -2,9 +2,9 @@
 // whichever the admin switched on. A reviewer can approve it or ask for another try.
 
 import { useRef, useState } from 'react';
-import { sanitizeHtml } from '../../../utils/sanitizeHtml';
 import { uploadToCourseContent } from '../../../lib/mediaUpload';
 import type { CardProps } from './AcknowledgeCard';
+import TranslatableHtml from '../../shared/TranslatableHtml';
 
 const MAX_MB = 25;
 
@@ -54,7 +54,7 @@ export default function TaskCard({ section, response, onSubmit, showToast, previ
   return (
     <div className="space-y-5">
       {section.page_content && (
-        <div className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-5 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }} />
+        <TranslatableHtml className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-5 text-sm leading-relaxed" html={section.page_content} />
       )}
 
       {response && (

@@ -14,8 +14,8 @@ import TaskCard from './inductionCards/TaskCard';
 import ContactCard from './inductionCards/ContactCard';
 import { cardDone, cardRequirement } from '../../utils/inductionCards';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import type { InductionCardResponse, InductionDay, InductionDaySection } from '../../types/induction';
+import TranslatableHtml from '../shared/TranslatableHtml';
 
 function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>);
@@ -115,9 +115,9 @@ export default function InductionDayView({
           <div className="p-3 sm:p-8">
             {openSection.section_type === 'page' && (
               <div className="relative">
-                <div
+                <TranslatableHtml
                   className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-5 text-sm leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(openSection.page_content) }}
+                  html={openSection.page_content}
                   {...noCopyProps(openSection.no_copy)}
                 />
                 <ContentWatermark config={{ enabled: openSection.watermark_enabled, text: openSection.watermark_text, orientation: openSection.watermark_orientation, opacity: openSection.watermark_opacity }} />

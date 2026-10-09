@@ -101,6 +101,7 @@ export const ROUTES = {
   QUIZ_ADMIN_FINAL_RESULT: "/quiz-admin/final-result",
   QUIZ_ADMIN_USERS: "/quiz-admin/users",
   QUIZ_ADMIN_SETTINGS: "/quiz-admin/settings",
+  QUIZ_ADMIN_BIN: "/quiz-admin/bin",
 
   QUIZ_JOIN: "/quiz/join",
   QUIZ_PLAY: "/quiz/play/:sessionId",

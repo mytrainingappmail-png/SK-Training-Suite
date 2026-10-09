@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { loadLesson, loadModuleLessons } from '../../services/lessonPlayer/lessonPlayerService';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
+import TranslatableHtml from '../shared/TranslatableHtml';
 import type {
   LessonPlayerLesson,
   LessonPlayerResource,
@@ -336,9 +336,9 @@ function LessonPlayer({ lessonId, moduleId, onBack, onComplete }: LessonPlayerPr
           <ContentWatermark
             config={{ enabled: lesson.watermarkEnabled, text: lesson.watermarkText, orientation: lesson.watermarkOrientation, opacity: lesson.watermarkOpacity }}
           />
-          <div
+          <TranslatableHtml
             className="prose prose-slate relative max-w-none p-6 text-sm leading-relaxed text-slate-700"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content) }}
+            html={lesson.content}
             {...noCopyProps(lesson.noCopy)}
           />
         </div>

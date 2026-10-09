@@ -21,9 +21,9 @@ import SectionHeroBanner from './SectionHeroBanner';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ThumbnailCard from '../shared/ThumbnailCard';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import { brochureLink } from '../../utils/brochureLink';
 import type { Project } from '../../services/projects/projectsService';
+import TranslatableHtml from '../shared/TranslatableHtml';
 
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h9a1.5 1.5 0 0 1 1.5 1.5V21M4.5 3v18M4.5 3H3m10.5 0H15m-1.5 18V15a1.5 1.5 0 0 1 1.5-1.5h1.5A1.5 1.5 0 0 1 18 15v6M15 3l4.5 3v15M18.75 3H15M7.5 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6h1.5m-1.5 3h1.5m-1.5 3h1.5" /></svg>);
@@ -174,9 +174,9 @@ export function ProjectDetailCard({
               {showFullDetails ? 'Hide Full Details ▲' : 'View Full Details ▼'}
             </button>
             {showFullDetails && (
-              <div
+              <TranslatableHtml
                 className="prose prose-sm mt-3 max-w-none overflow-x-auto rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_table]:min-w-[420px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:p-2"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.fullDescription) }}
+                html={project.fullDescription}
               />
             )}
           </div>
@@ -203,9 +203,9 @@ export function ProjectDetailCard({
                     </button>
                     {openKeys.has(key) && (
                       <div className="relative">
-                        <div
+                        <TranslatableHtml
                           className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.page_content) }}
+                          html={section.page_content}
                           {...noCopyProps(section.no_copy)}
                         />
                         <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
@@ -332,9 +332,9 @@ function ProjectCompareCard({ project, gradient, indexBadge, onRemove }: Project
           <p className="text-sm font-medium text-slate-700">{project.shortDescription}</p>
         )}
         {project.fullDescription && (
-          <div
+          <TranslatableHtml
             className="prose prose-sm max-w-none overflow-x-auto text-sm leading-relaxed text-slate-600 [&_table]:w-full [&_table]:min-w-[320px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-1.5 [&_td]:text-xs [&_th]:border [&_th]:border-slate-200 [&_th]:p-1.5 [&_th]:text-xs print:overflow-visible print:[&_table]:min-w-0"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.fullDescription) }}
+            html={project.fullDescription}
           />
         )}
 

@@ -72,6 +72,7 @@ const QuizJoinPage = lazyWithRetry(() => import("./pages/quiz/QuizJoinPage"));
 const QuizPlayPage = lazyWithRetry(() => import("./pages/quiz/QuizPlayPage"));
 const QuizUsersPage = lazyWithRetry(() => import("./pages/quiz/QuizUsersPage"));
 const QuizSettingsPage = lazyWithRetry(() => import("./pages/quiz/QuizSettingsPage"));
+const QuizRecycleBinPage = lazyWithRetry(() => import("./pages/quiz/QuizRecycleBinPage"));
 const ExamListPage = lazyWithRetry(() => import("./pages/quiz/ExamListPage"));
 const ExamHostPage = lazyWithRetry(() => import("./pages/quiz/ExamHostPage"));
 const ExamJoinPage = lazyWithRetry(() => import("./pages/quiz/ExamJoinPage"));
@@ -181,6 +182,7 @@ function App() {
         <Route path={ROUTES.QUIZ_ADMIN_FINAL_RESULT} element={<QuizFinalResultPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_USERS} element={<QuizUsersPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_SETTINGS} element={<QuizSettingsPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_BIN} element={<QuizRecycleBinPage />} />
       </Route>
       {/* Host Live renders its own full-bleed screen without QuizAdminLayout's nav chrome */}
       <Route element={<QuizAdminGuard><Outlet /></QuizAdminGuard>}>
