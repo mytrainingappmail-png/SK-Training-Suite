@@ -45,6 +45,7 @@ import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
+import { htmlToText } from '../../utils/htmlToText';
 import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import RichTextEditor from '../../components/shared/RichTextEditor';
@@ -984,6 +985,10 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                             optionsByQuestion={testQuestionOptions}
                             onSaved={() => reloadTestQuestions(sectionDraft.assessment_id!)}
                             showToast={showToast}
+                            aiSourceText={[
+                              htmlToText(draft.full_description),
+                              ...sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`),
+                            ].filter(Boolean).join('\n\n')}
                           />
                           </div>
                         ) : (

@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { createQuestionsBulk, saveQuestion, removeQuestion, editQuestionText, setMarksForQuestions } from '../../services/question/questionService';
 import { defaultQuestionForm } from '../../types/question';
 import type { Question, QuestionWithOptionsForm } from '../../types/question';
+import AiQuizMakerModal from './AiQuizMakerModal';
+import type { AiQuestion } from '../../services/aiQuiz/aiQuizService';
 
 type Opt = { option_text: string; is_correct: boolean };
 
@@ -25,6 +27,7 @@ interface Row {
   savedText: string;
   savedMarks: number;
   savedOpts: string;            // the options part of the snapshot alone
+  explanation?: string;         // only for questions drafted by the AI Quiz Maker — saved with the new question
 }
 
 const OPTION_TYPES = ['mcq', 'multiple_select', 'true_false'];
@@ -65,8 +68,10 @@ function rowsFrom(questions: Question[], optionsByQuestion: Record<string, Opt[]
 
 const isLocked = (r: Row) => r.id !== null && !OPTION_TYPES.includes(r.type);
 
-export default function TestQuestionsEditor({ assessmentId, questions, optionsByQuestion, onSaved, showToast }: {
+export default function TestQuestionsEditor({ assessmentId, questions, optionsByQuestion, onSaved, showToast, aiSourceText = '' }: {
   assessmentId: string;
+  /** Text of the page / project this test belongs to — the AI Quiz Maker starts from it (the trainer can change it). */
+  aiSourceText?: string;
   questions: Question[];
   optionsByQuestion: Record<string, Opt[]>;
   onSaved: () => Promise<void> | void;
@@ -75,6 +80,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
   const [rows, setRows] = useState<Row[]>([]);
   const [saving, setSaving] = useState(false);
   const [bulkMarks, setBulkMarks] = useState('1');
+  const [showAi, setShowAi] = useState(false);
 
   // Start again from what is stored whenever it is (re)loaded. A text signature, not the array identity,
   // decides that — the parent may hand over a fresh array on every render without anything having changed.
@@ -102,6 +108,21 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
     setBulkMarks(String(m));
     setRows((rs) => rs.map((r) => (r.removed || isLocked(r) ? r : { ...r, marks: m })));
     showToast(`Marks set to ${m} for all ${editable.length} questions — press Save all changes to keep it.`);
+  }
+
+  /** Questions drafted by the AI go in as NEW, unsaved rows — read, edit, then "Save all changes". */
+  function addAiQuestions(list: AiQuestion[]) {
+    setRows((rs) => [
+      ...rs,
+      ...list.map((q) => ({
+        ...blankRow(0),
+        text: q.text,
+        options: q.options.map((t, i) => ({ option_text: t, is_correct: i === q.correct_index })),
+        explanation: q.explanation,
+      })),
+    ]);
+    setShowAi(false);
+    showToast(`Added ${list.length} AI question${list.length === 1 ? '' : 's'} at the bottom — read them, fix anything, then press Save all changes.`);
   }
 
   function duplicate(key: string) {
@@ -172,7 +193,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
             mandatory: r.q.mandatory, randomize_options: r.q.randomize_options, attachment_url: r.q.attachment_url, image_url: r.q.image_url, active: r.q.active,
             display_order: r.q.display_order, question_text: '', marks: 1, options: [],
           }
-          : { ...defaultQuestionForm, assessment_id: assessmentId, question_code: r.code, display_order: nextOrder++ };
+          : { ...defaultQuestionForm, assessment_id: assessmentId, question_code: r.code, display_order: nextOrder++, explanation: r.explanation ?? '' };
         const form = { ...base, question_text: r.text.trim(), marks: Math.max(1, Number(r.marks) || 1), options };
         if (r.id) await saveQuestion(r.id, form); else toCreate.push(form);
       }
@@ -206,7 +227,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
         </div>
       )}
       <div className="space-y-4">
-        {visible.length === 0 && <p className="text-xs text-slate-400">No questions yet — add one below, or bulk upload a CSV.</p>}
+        {visible.length === 0 && <p className="text-xs text-slate-400">No questions yet — add one below, make them with AI, or bulk upload a CSV.</p>}
         {visible.map((r) => {
           const num = r.removed ? null : ++n;
           const dirty = isChanged(r);
@@ -267,6 +288,13 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
                   </div>
                 ))}
               </div>
+              {r.id === null && r.explanation !== undefined && (
+                <input
+                  value={r.explanation} placeholder="Explanation shown after the test (optional)"
+                  onChange={(e) => change(r.key, (x) => ({ ...x, explanation: e.target.value }))}
+                  className={`${INPUT} mt-3 text-xs italic`}
+                />
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                   Marks
@@ -287,9 +315,14 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
       </div>
 
       <div className="sticky bottom-0 z-10 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
-        <button type="button" onClick={() => setRows((rs) => [...rs, blankRow(0)])} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-          + Add Question
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setRows((rs) => [...rs, blankRow(0)])} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            + Add Question
+          </button>
+          <button type="button" onClick={() => setShowAi(true)} className="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
+            ✨ Make questions with AI
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs font-semibold ${changedCount ? 'text-amber-600' : 'text-slate-400'}`}>
             {changedCount ? `${changedCount} unsaved change${changedCount === 1 ? '' : 's'}` : 'Everything saved'}
@@ -307,6 +340,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
           >{saving ? 'Saving…' : 'Save all changes'}</button>
         </div>
       </div>
+      {showAi && <AiQuizMakerModal sourceText={aiSourceText} onAdd={addAiQuestions} onClose={() => setShowAi(false)} />}
     </div>
   );
 }

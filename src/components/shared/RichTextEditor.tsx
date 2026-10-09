@@ -209,6 +209,25 @@ function shapeDataUri(body: string, viewBox: string): string {
 // color — this extends it with one real attribute that reads/writes
 // straight to the cell's own inline style, so it persists correctly
 // in the saved HTML (and survives reload).
+// Rows get an optional fixed height (set from the Table menu: Taller / Shorter / Auto); it is saved on the row itself
+// so it shows the same wherever the content is displayed.
+const TableRowWithHeight = TableRow.extend({
+  addAttributes() {
+    const parentAttrs = (this as { parent?: () => Record<string, unknown> }).parent?.() ?? {};
+    return {
+      ...parentAttrs,
+      rowHeight: {
+        default: null,
+        parseHTML: (element: HTMLElement) => {
+          const h = parseInt(element.style.height, 10);
+          return Number.isFinite(h) && h > 0 ? h : null;
+        },
+        renderHTML: (attributes: Record<string, unknown>) => (attributes.rowHeight ? { style: `height: ${attributes.rowHeight}px` } : {}),
+      },
+    };
+  },
+});
+
 const TableCellWithColor = TableCell.extend({
   addAttributes() {
     const parentAttrs = (this as { parent?: () => Record<string, unknown> }).parent?.() ?? {};
@@ -391,7 +410,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       Placeholder.configure({ placeholder: 'Start writing…' }),
       AnnotatableImage.configure({ inline: false }),
       TableWithStyle.configure({ resizable: true }),
-      TableRow,
+      TableRowWithHeight,
       TableHeader,
       TableCellWithColor,
       CharacterCount,
@@ -418,6 +437,46 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       },
     },
   });
+
+  // After a column border has been dragged, only the dragged column has a stored width — the others just "share the rest".
+  // Saving every column's on-screen width keeps the whole layout exactly as the author sees it, on any screen it is shown.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const onUp = () => window.setTimeout(() => {
+      const tr = editor.state.tr;
+      let changed = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name !== 'table') return true;
+        const first = node.firstChild;
+        if (!first) return false;
+        const cells: { attrs: Record<string, unknown> }[] = [];
+        first.forEach((c) => cells.push(c));
+        const withWidth = cells.filter((c) => c.attrs.colwidth).length;
+        if (withWidth === 0 || withWidth === cells.length || cells.some((c) => ((c.attrs.colspan as number) || 1) > 1)) return false;
+        const tableDom = editor.view.nodeDOM(pos) as HTMLElement | null;
+        const firstRowCells = tableDom?.querySelector('tr')?.children;
+        if (!firstRowCells || firstRowCells.length !== cells.length) return false;
+        const px = Array.from(firstRowCells).map((c) => Math.max(40, Math.round(c.getBoundingClientRect().width)));
+        node.forEach((row, rowOffset) => {
+          let col = 0;
+          let cellPos = pos + 1 + rowOffset + 1;
+          row.forEach((cell) => {
+            if (col < px.length && !cell.attrs.colwidth) {
+              tr.setNodeMarkup(cellPos, undefined, { ...cell.attrs, colwidth: [px[col]] });
+              changed = true;
+            }
+            col += (cell.attrs.colspan as number) || 1;
+            cellPos += cell.nodeSize;
+          });
+        });
+        return false;
+      });
+      if (changed) editor.view.dispatch(tr);
+    }, 80);
+    dom.addEventListener('mouseup', onUp);
+    return () => dom.removeEventListener('mouseup', onUp);
+  }, [editor]);
 
   // A fresh editing session (a new resetKey) — check whether a leftover draft from an
   // earlier crashed/closed session exists for THIS key and differs from what the server
@@ -502,6 +561,93 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     setAnnotating(null);
   }
 
+  /** The table the cursor is in: its position, node and DOM element — or null. */
+  function currentTable() {
+    if (!editor) return null;
+    const { $from } = editor.state.selection;
+    for (let d = $from.depth; d > 0; d--) {
+      const node = $from.node(d);
+      if (node.type.name === 'table') {
+        const pos = $from.before(d);
+        const dom = editor.view.nodeDOM(pos) as HTMLElement | null;
+        return { node, pos, dom };
+      }
+    }
+    return null;
+  }
+
+  /** Every column gets the width its text needs (long text wide, short text narrow), together filling the page width. */
+  function autoFitColumns() {
+    const t = currentTable();
+    if (!editor || !t) return;
+    const rows: { node: typeof t.node; offset: number }[] = [];
+    t.node.forEach((row, offset) => rows.push({ node: row, offset }));
+    const colCount = Math.max(0, ...rows.map((r) => { let n = 0; r.node.forEach((c) => { n += (c.attrs.colspan as number) || 1; }); return n; }));
+    if (colCount === 0) return;
+    const weight = new Array(colCount).fill(6);
+    for (const r of rows) {
+      let col = 0;
+      r.node.forEach((cell) => {
+        const span = (cell.attrs.colspan as number) || 1;
+        if (span === 1) {
+          const longestWord = Math.max(0, ...cell.textContent.split(/\s+/).map((w) => w.length));
+          const w = Math.min(46, Math.max(longestWord + 2, Math.min(34, cell.textContent.trim().length * 0.7)));
+          weight[col] = Math.max(weight[col], w);
+        }
+        col += span;
+      });
+    }
+    const total = weight.reduce((a, b) => a + b, 0);
+    const available = Math.max(300, Math.round(t.dom?.getBoundingClientRect().width || 640));
+    const px = weight.map((w) => Math.max(40, Math.round((w / total) * available)));
+    const tr = editor.state.tr;
+    rows.forEach((r) => {
+      let col = 0;
+      let offset = t.pos + 1 + r.offset + 1;
+      r.node.forEach((cell) => {
+        const span = (cell.attrs.colspan as number) || 1;
+        tr.setNodeMarkup(tr.mapping.map(offset), undefined, { ...cell.attrs, colwidth: px.slice(col, col + span) });
+        col += span;
+        offset += cell.nodeSize;
+      });
+    });
+    editor.view.dispatch(tr);
+    setShowTableMenu(false);
+  }
+
+  /** Forget every dragged width: all columns share the page width equally again. */
+  function equalColumns() {
+    const t = currentTable();
+    if (!editor || !t) return;
+    const tr = editor.state.tr;
+    t.node.descendants((n, p) => {
+      if ((n.type.name === 'tableCell' || n.type.name === 'tableHeader') && n.attrs.colwidth) {
+        tr.setNodeMarkup(t.pos + 1 + p, undefined, { ...n.attrs, colwidth: null });
+      }
+      return n.type.name === 'tableRow' || n.type.name === 'table' ? true : false;
+    });
+    editor.view.dispatch(tr);
+    // the table's column strip does not drop widths it was given earlier by itself — clear them so the columns really even out
+    t.dom?.querySelectorAll('col').forEach((c) => (c as HTMLElement).style.removeProperty('width'));
+    setShowTableMenu(false);
+  }
+
+  /** Taller / shorter / automatic height for the row(s) the cursor or cell selection touches. */
+  function changeRowHeight(mode: 'taller' | 'shorter' | 'auto') {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const tr = editor.state.tr;
+    editor.state.doc.nodesBetween(from, to, (node, pos) => {
+      if (node.type.name !== 'tableRow') return true;
+      const dom = editor.view.nodeDOM(pos) as HTMLElement | null;
+      const current = (node.attrs.rowHeight as number | null) ?? Math.round(dom?.getBoundingClientRect().height ?? 40);
+      const next = mode === 'auto' ? null : Math.max(28, current + (mode === 'taller' ? 14 : -14));
+      tr.setNodeMarkup(pos, undefined, { ...node.attrs, rowHeight: next });
+      return false;
+    });
+    editor.view.dispatch(tr);
+  }
+
   function insertShape(shape: { viewBox?: string; body: (c: string) => string }, label: string) {
     const src = shapeDataUri(shape.body(shapeColor), shape.viewBox ?? '0 0 100 100');
     editor?.chain().focus().setImage({ src, alt: label }).run();
@@ -518,7 +664,8 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         .rte-content ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
         .rte-content li { margin: 0.15rem 0; }
         .rte-content table { margin: 0.75rem 0; width: 100% !important; min-width: 0 !important; max-width: 100%; table-layout: fixed; }
-        .rte-content col { width: auto !important; min-width: 0 !important; }
+        .rte-content .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: -2px; width: 4px; background: #6366F1; pointer-events: none; z-index: 5; }
+        .rte-content.resize-cursor, .rte-content .resize-cursor { cursor: col-resize; }
         .rte-content td, .rte-content th { position: relative; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
         .rte-content .selectedCell { background: #E0E7FF; }
         .rte-content img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; }
@@ -672,6 +819,18 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
                 className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Merge Selected Cells</button>
               <button onClick={() => editor.chain().focus().splitCell().run()} disabled={!editor.can().splitCell()}
                 className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Split Cell</button>
+              <div className="my-1 border-t border-slate-100" />
+              <div className="px-3 py-1 text-xs font-semibold text-slate-400">Size — or drag a column border</div>
+              <button onClick={autoFitColumns} disabled={!editor.can().deleteTable()}
+                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">↔ Auto-fit columns to the text</button>
+              <button onClick={equalColumns} disabled={!editor.can().deleteTable()}
+                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">▥ Equal columns (fit the page)</button>
+              <div className="flex items-center gap-1.5 px-3 py-2">
+                <span className="mr-1 text-sm text-slate-700">Row height</span>
+                <button onClick={() => changeRowHeight('shorter')} disabled={!editor.can().deleteTable()} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">− Shorter</button>
+                <button onClick={() => changeRowHeight('taller')} disabled={!editor.can().deleteTable()} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">+ Taller</button>
+                <button onClick={() => changeRowHeight('auto')} disabled={!editor.can().deleteTable()} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">Auto</button>
+              </div>
               <div className="my-1 border-t border-slate-100" />
               <div className="px-3 py-1 text-xs font-semibold text-slate-400">Table Style</div>
               <div className="grid grid-cols-2 gap-1.5 px-3 py-2">

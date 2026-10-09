@@ -3,7 +3,7 @@
 // they open follows it. The button only appears when translation has been switched on for the platform and the text has
 // real words in it. The translated HTML is sanitised exactly like the original before it is shown.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sanitizeHtml } from "../../utils/sanitizeHtml";
 import { isTranslationAvailable, translateToHinglish, setContentLang, useContentLang } from "../../services/translate/hinglishService";
 
@@ -11,7 +11,26 @@ type Props = { html: string | null | undefined; className?: string } & Omit<Reac
 
 const hasWords = (html: string) => /[A-Za-z]{3,}/.test(html.replace(/<[^>]*>/g, " "));
 
+/** A table whose columns were dragged / auto-fitted keeps those widths, but as percentages of the table — so on a phone the
+ * same proportions simply get narrower instead of forcing sideways scrolling. */
+function fitTableColumns(root: HTMLElement) {
+  root.querySelectorAll("table").forEach((table) => {
+    const cols = Array.from(table.querySelectorAll<HTMLTableColElement>("colgroup > col"));
+    const given = cols.map((c) => parseFloat(c.style.width));
+    const known = given.filter((w) => Number.isFinite(w) && w > 0);
+    if (cols.length === 0 || known.length === 0) return;
+    // columns the author never dragged count as an average-width column
+    const average = Math.max(40, known.reduce((a, b) => a + b, 0) / known.length);
+    const px = given.map((w) => (Number.isFinite(w) && w > 0 ? w : average));
+    const total = px.reduce((a, b) => a + b, 0);
+    cols.forEach((c, i) => { c.style.width = `${((px[i] / total) * 100).toFixed(2)}%`; c.style.minWidth = "0"; });
+    table.style.width = "100%";
+    table.style.minWidth = "0";
+  });
+}
+
 export default function TranslatableHtml({ html, className, ...rest }: Props) {
+  const contentRef = useRef<HTMLDivElement>(null);
   const source = html ?? "";
   const lang = useContentLang();
   const [available, setAvailable] = useState(false);
@@ -42,6 +61,9 @@ export default function TranslatableHtml({ html, className, ...rest }: Props) {
   const showing = wantHinglish && translated && translated.for === source && !error ? translated.html : source;
   const canOffer = available && hasWords(source);
 
+  // after every render of the content (original or translated), turn dragged pixel widths into proportions
+  useEffect(() => { if (contentRef.current) fitTableColumns(contentRef.current); }, [showing]);
+
   return (
     <div>
       {canOffer && (
@@ -60,7 +82,7 @@ export default function TranslatableHtml({ html, className, ...rest }: Props) {
           )}
         </div>
       )}
-      <div className={className} dangerouslySetInnerHTML={{ __html: sanitizeHtml(showing) }} {...rest} />
+      <div ref={contentRef} className={className} dangerouslySetInnerHTML={{ __html: sanitizeHtml(showing) }} {...rest} />
     </div>
   );
 }

@@ -52,6 +52,7 @@ import { RequirementSelect, AcknowledgeSettings, FeedbackBuilder, TaskSettings, 
 import InductionResponsesModal from './cards/InductionResponsesModal';
 import { COMPLETABLE_TYPES, isFormCard, newQuestionId, standardFeedbackQuestions } from '../../utils/inductionCards';
 import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
+import { htmlToText } from '../../utils/htmlToText';
 import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { locationLabel } from '../../constants/locations';
 import { dayLabels, isStandaloneDay, nextInOrder, refName, withLabel } from '../../utils/inductionDayLabel';
@@ -1148,6 +1149,7 @@ function InductionManagement() {
                             optionsByQuestion={testQuestionOptions}
                             onSaved={() => reloadTestQuestions(sectionDraft.assessment_id!)}
                             showToast={showToast}
+                            aiSourceText={sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`).join('\n\n')}
                           />
                         </div>
                       ) : (
