@@ -6,7 +6,7 @@ import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
   getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult,
-  uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap, getExamSessionSettings,
+  uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap, getExamSessionSettings, getExamMyControl,
 } from "../../repositories/exam/examPlayRepository";
 import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
 import FallingWords, { DEFAULT_MOTIVATIONAL_WORDS } from "../../components/quiz/FallingWords";
@@ -51,6 +51,8 @@ export default function ExamPaperPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [error, setError] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
+  // set while the invigilator has paused THIS candidate — the paper is covered until they resume
+  const [paused, setPaused] = useState<{ reason: string | null } | null>(null);
   const [lobbySeconds, setLobbySeconds] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
@@ -355,6 +357,26 @@ export default function ExamPaperPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, sessionId]);
 
+  // Ask every few seconds (own jittered schedule, only while the tab is visible) whether the invigilator has paused this
+  // candidate. The database refuses saves and Submit while paused too, so this is only the explanation, not the lock.
+  useEffect(() => {
+    if (phase !== "paper") { setPaused(null); return; }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function run() {
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const c = await getExamMyControl(sessionId);
+          if (!cancelled) setPaused(c.stopped ? { reason: c.reason } : null);
+        } catch { /* transient — the next check retries */ }
+      }
+      if (!cancelled) timer = setTimeout(() => { void run(); }, 4000 * (0.75 + Math.random() * 0.5));
+    }
+    void run();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [phase, sessionId]);
+
   useEffect(() => {
     if (phase === "result" && !result) getMyExamResult(sessionId).then(setResult).catch(() => {});
   }, [phase, result, sessionId]);
@@ -583,6 +605,17 @@ export default function ExamPaperPage() {
 
   return (
     <div className={`${shell} pb-28`}>
+      {paused && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/97 px-5 text-center">
+          <div className="max-w-sm space-y-3">
+            <div className="text-6xl">⏸</div>
+            <h2 className="text-xl font-bold text-white">Your exam is paused</h2>
+            <p className="text-sm text-slate-300">The invigilator has paused your paper. Please stay on this screen and wait — it will continue as soon as they resume it. The exam clock is still running.</p>
+            {paused.reason && <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">“{paused.reason}”</p>}
+            <p className="text-[11px] text-slate-500">Your earlier answers are safe.</p>
+          </div>
+        </div>
+      )}
       <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-2.5 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold truncate">{state.quiz_title}</p>

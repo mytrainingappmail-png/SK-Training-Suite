@@ -9,7 +9,7 @@ import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat } from
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import { effectiveZones } from "../../components/quiz/hotspotZones";
-import { listParticipants } from "../../repositories/quiz/quizParticipantRepository";
+import { listParticipants, getQuizMyControl } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
@@ -44,6 +44,8 @@ export default function QuizPlayPage() {
   const [question, setQuestion] = useState<PublicQuizQuestion | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [answered, setAnswered] = useState(false);
+  // set while the host has paused this player
+  const [hostPause, setHostPause] = useState<{ reason: string | null } | null>(null);
   const [feedback, setFeedback] = useState<SubmitAnswerResult | null>(null);
   const [hotspotFeedback, setHotspotFeedback] = useState<SubmitHotspotAnswerResult | null>(null);
   const [myTap, setMyTap] = useState<{ x: number; y: number } | null>(null);
@@ -145,6 +147,27 @@ export default function QuizPlayPage() {
     schedule();
     return () => { cancelled = true; clearTimeout(timer); };
   }, [sessionId, session?.phase]);
+
+  // Has the host paused THIS player? Asked every few seconds (jittered, only while visible). The database refuses a paused
+  // player's answers anyway — this is just the explanation on their screen.
+  useEffect(() => {
+    if (!sessionId || !session || (session.phase !== "question" && session.phase !== "lobby" && session.phase !== "paused")) return;
+    const sid = sessionId;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function run() {
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const c = await getQuizMyControl(sid);
+          if (!cancelled) setHostPause(c.stopped ? { reason: c.reason } : null);
+        } catch { /* transient — the next check retries */ }
+      }
+      if (!cancelled) timer = setTimeout(() => { void run(); }, 3500 * (0.75 + Math.random() * 0.5));
+    }
+    void run();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [sessionId, session?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!sessionId || !session || session.phase !== "question") {
@@ -353,6 +376,19 @@ export default function QuizPlayPage() {
         <div className="text-lg font-semibold text-white">Waiting for trainer to start…</div>
         <div className="text-sm text-slate-400">{locationState.quizTitle}</div>
         {!connected && <div className="text-xs font-bold text-red-400 animate-pulse">⚠ Reconnecting…</div>}
+      </div>
+    );
+  }
+
+  if (hostPause && session.phase !== "ended") {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6">
+        <div className="max-w-sm space-y-3">
+          <div className="text-6xl">⏸</div>
+          <div className="text-xl font-bold text-white">You are paused</div>
+          <p className="text-sm text-slate-300">The host has paused you. Please stay on this screen — you can play again when they resume you. The quiz keeps going for everyone else.</p>
+          {hostPause.reason && <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">“{hostPause.reason}”</p>}
+        </div>
       </div>
     );
   }

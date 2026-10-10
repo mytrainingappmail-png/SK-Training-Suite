@@ -4,7 +4,7 @@ import { ROUTES } from "../../constants/routes";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { getCompanySessionResults } from "../../repositories/quiz/quizAnalyticsRepository";
-import { listFinalResults, deleteFinalResult } from "../../repositories/quiz/quizFinalResultRepository";
+import { listFinalResults, deleteFinalResult, listFinalUploads } from "../../repositories/quiz/quizFinalResultRepository";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import {
   listFoldersForCompany,
@@ -18,7 +18,8 @@ import {
 import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import SessionResultCard from "../../components/quiz/SessionResultCard";
-import type { QuizFinalResult, QuizSessionResultRow, QuizResultFolder, CertEligibility } from "../../types/quiz";
+import FinalFolderReport from "../../components/quiz/FinalFolderReport";
+import type { QuizFinalResult, QuizFinalUpload, QuizSessionResultRow, QuizResultFolder, CertEligibility } from "../../types/quiz";
 
 /** A permanent, organized home for final-test results — stored on its own, separate from the Results tab.
  * "Save to Final Result" in Results makes a frozen copy of a session in a folder here; deleting that session
@@ -32,6 +33,7 @@ export default function QuizFinalResultPage() {
   const [livePids, setLivePids] = useState<Set<string>>(new Set());
   const [folders, setFolders] = useState<QuizResultFolder[]>([]);
   const [examSessions, setExamSessions] = useState<FolderExamSession[]>([]);
+  const [uploads, setUploads] = useState<QuizFinalUpload[]>([]);
   const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,9 +56,11 @@ export default function QuizFinalResultPage() {
       getSettings(admin.company_id),
       listFoldersForCompany(admin.company_id),
       listFolderExamSessions(admin.company_id).catch(() => [] as FolderExamSession[]),
+      listFinalUploads(admin.company_id).catch(() => [] as QuizFinalUpload[]),
     ])
-      .then(([fr, r, settings, f, ex]) => {
+      .then(([fr, r, settings, f, ex, up]) => {
         setExamSessions(ex);
+        setUploads(up);
         setFinals(fr);
         setLivePids(new Set(r.map((x) => x.participant_id)));
         setCertEligibility(settings.cert_eligibility);
@@ -133,7 +137,7 @@ export default function QuizFinalResultPage() {
       <div>
         <h1 className="text-xl font-bold text-white">📁 Final Result</h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          In Results, use “Save to Final Result” on a session to keep a permanent, organized copy here. It is stored separately — deleting the session (or clearing Results) never deletes it.
+          In Results, use “Save to Final Result” on a session to keep a permanent, organized copy here. It is stored separately — deleting the session (or clearing Results) never deletes it. Open a folder to upload an Excel round, see everyone's rounds side by side with feedback, and download one final report.
         </p>
       </div>
 
@@ -194,6 +198,7 @@ export default function QuizFinalResultPage() {
             {folders.map((f) => {
               const folderFinals = finals.filter((x) => x.folder_id === f.id);
               const folderExams = examSessions.filter((x) => x.folder_id === f.id);
+              const folderUploads = uploads.filter((x) => x.folder_id === f.id);
               const folderRows = folderFinals.flatMap((x) => x.rows);
               const isFolderOpen = expandedFolder === f.id;
               const isRenaming = renamingFolderId === f.id;
@@ -231,7 +236,7 @@ export default function QuizFinalResultPage() {
                         <span className="text-lg">📁</span>
                         <span className="font-semibold text-sm text-white">{f.name}</span>
                         <span className="text-xs text-slate-500">
-                          {folderFinals.length + folderExams.length} record{folderFinals.length + folderExams.length === 1 ? "" : "s"}
+                          {folderFinals.length + folderExams.length + folderUploads.length} record{folderFinals.length + folderExams.length + folderUploads.length === 1 ? "" : "s"}
                         </span>
                         <span className="text-slate-500 ml-auto">{isFolderOpen ? "▲" : "▼"}</span>
                       </button>
@@ -287,7 +292,19 @@ export default function QuizFinalResultPage() {
                           )}
                         </div>
                       ))}
-                      {folderFinals.length === 0 && folderExams.length === 0 ? (
+                      {admin && (
+                        <FinalFolderReport
+                          folder={{ id: f.id, name: f.name }}
+                          finals={folderFinals}
+                          exams={folderExams}
+                          uploads={folderUploads}
+                          companyId={admin.company_id}
+                          adminId={admin.id}
+                          canEdit={canEdit}
+                          onChanged={refresh}
+                        />
+                      )}
+                      {folderFinals.length === 0 && folderExams.length === 0 && folderUploads.length === 0 ? (
                         <div className="text-xs text-slate-500 text-center py-4">Empty — in Results, open a session and choose “Save to Final Result” (Live Quiz), or file an exam from its results page (Exams).</div>
                       ) : (
                         folderFinals.map((x) => (

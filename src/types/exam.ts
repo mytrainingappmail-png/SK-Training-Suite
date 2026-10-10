@@ -53,6 +53,28 @@ export interface ExamParticipantAdmin {
   answered_count: number;
 }
 
+/** get_exam_live_admin - one candidate's running numbers, for the host's own screen. */
+export interface ExamLiveRow {
+  participant_id: string;
+  answered_count: number;
+  correct_count: number;
+  wrong_count: number;
+  written_count: number;
+  auto_marks: number;
+  possible_marks: number;
+  stopped_at: string | null;
+  stop_reason: string | null;
+}
+
+export interface ExamLiveQuestion {
+  question_id: string;
+  question_order: number;
+  question_text: string;
+  qtype: string;
+  attempted: number;
+  correct: number;
+}
+
 export interface ExamResultRow {
   participant_id: string;
   display_name: string;

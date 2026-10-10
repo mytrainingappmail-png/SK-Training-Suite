@@ -20,7 +20,8 @@ import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResult
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
 import { HorizontalBars, type ChartPoint } from "../../components/quiz/QuizDashboardCharts";
-import type { QuizWithQuestions, QuizGrade, QuizSettings } from "../../types/quiz";
+import { getQuizLiveAdmin, stopQuizParticipant, resumeQuizParticipant } from "../../repositories/quiz/quizParticipantRepository";
+import type { QuizWithQuestions, QuizGrade, QuizSettings, QuizLiveRow } from "../../types/quiz";
 
 const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 const ANSWER_COLORS = ["#e11d48", "#2563eb", "#f59e0b", "#16a34a", "#8b5cf6", "#0891b2"];
@@ -49,6 +50,10 @@ export default function QuizHostLivePage() {
   const [advancing, setAdvancing] = useState(false);
   const [uiScale, setUiScale] = useState(100);
   const [answeredCount, setAnsweredCount] = useState(0);
+  // each player's running answered / right / wrong, refreshed every few seconds while the quiz is on
+  const [liveStats, setLiveStats] = useState<Record<string, QuizLiveRow>>({});
+  const [controlBusy, setControlBusy] = useState<string | null>(null);
+  const [controlError, setControlError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,6 +109,47 @@ export default function QuizHostLivePage() {
   const totalQuestions = orderedQuestions.length;
   const totalMarks = orderedQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
   const currentQuestion = session ? orderedQuestions[session.current_question_index] ?? null : null;
+
+  const liveActive = !!session && (session.phase === "question" || session.phase === "paused");
+  useEffect(() => {
+    if (!sessionId || !liveActive) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function run() {
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const rows = await getQuizLiveAdmin(sessionId as string);
+          if (!cancelled) setLiveStats(Object.fromEntries(rows.map((r) => [r.participant_id, r])));
+        } catch { /* the board just keeps its last numbers */ }
+      }
+      if (!cancelled) timer = setTimeout(() => { void run(); }, 3000);
+    }
+    void run();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [sessionId, liveActive]);
+
+  async function refreshLive() {
+    if (!sessionId) return;
+    try {
+      const rows = await getQuizLiveAdmin(sessionId);
+      setLiveStats(Object.fromEntries(rows.map((r) => [r.participant_id, r])));
+    } catch { /* next poll catches up */ }
+  }
+
+  async function handleStopPlayer(id: string, name: string) {
+    const reason = prompt(`Pause ${name}? They cannot answer until you resume them — the quiz keeps going for everyone else.\n\nReason (optional, they will see it):`, "");
+    if (reason === null) return;
+    setControlBusy(id);
+    setControlError("");
+    try { await stopQuizParticipant(id, reason); await refreshLive(); } catch (e) { setControlError(e instanceof Error ? e.message : "Could not pause the player."); } finally { setControlBusy(null); }
+  }
+
+  async function handleResumePlayer(id: string) {
+    setControlBusy(id);
+    setControlError("");
+    try { await resumeQuizParticipant(id); await refreshLive(); } catch (e) { setControlError(e instanceof Error ? e.message : "Could not resume the player."); } finally { setControlBusy(null); }
+  }
 
   const REVEAL_PAUSE_MS = 2500;
 
@@ -590,32 +636,55 @@ export default function QuizHostLivePage() {
         <div className="border-l border-slate-800 p-5 bg-slate-950/40">
           <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">🏆 Leaderboard</div>
           <div className="space-y-1.5">
+            {controlError && <div className="mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{controlError}</div>}
             {participants
               .slice()
               .sort((a, b) => b.score - a.score)
-              .map((p, i) => (
+              .map((p, i) => {
+                const lr = liveStats[p.id];
+                const isPaused = !!p.stopped_at || !!lr?.stopped_at;
+                const answered = lr?.answered_count ?? 0;
+                return (
                 <div
                   key={p.id}
                   style={{ borderLeft: i < 3 ? `3px solid ${["#FBBF24", "#CBD5E1", "#D97706"][i]}` : undefined }}
-                  className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2"
+                  className={`bg-slate-900 rounded-lg px-3 py-2 ${isPaused ? "opacity-70 ring-1 ring-red-500/40" : ""}`}
                   title={p.last_seen_at ? `Last seen ${Math.max(0, Math.round((now - new Date(p.last_seen_at).getTime()) / 1000))}s ago` : undefined}
                 >
-                  <span className="font-mono text-xs text-slate-500 w-5">{i + 1}</span>
-                  {p.last_seen_at && (
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isActive(p.last_seen_at) ? "bg-emerald-400" : "bg-slate-600"}`} />
-                  )}
-                  <span className="flex-1 truncate" style={{ fontSize: `${0.875 * scale}rem` }}>{p.display_name}</span>
-                  {p.tab_switch_count > 0 && (
-                    <span
-                      title={`Switched away from the quiz tab ${p.tab_switch_count} time${p.tab_switch_count === 1 ? "" : "s"}`}
-                      className="text-[10px] font-bold text-red-300 bg-red-500/15 border border-red-500/30 rounded px-1.5 py-0.5"
-                    >
-                      ⚠ {p.tab_switch_count}
-                    </span>
-                  )}
-                  <span className="font-mono text-xs text-amber-400 font-bold" style={{ fontSize: `${0.75 * scale}rem` }}>{p.score}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-slate-500 w-5">{i + 1}</span>
+                    {p.last_seen_at && (
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isActive(p.last_seen_at) ? "bg-emerald-400" : "bg-slate-600"}`} />
+                    )}
+                    <span className="flex-1 truncate" style={{ fontSize: `${0.875 * scale}rem` }}>{p.display_name}</span>
+                    {p.tab_switch_count > 0 && (
+                      <span
+                        title={`Switched away from the quiz tab ${p.tab_switch_count} time${p.tab_switch_count === 1 ? "" : "s"}`}
+                        className="text-[10px] font-bold text-red-300 bg-red-500/15 border border-red-500/30 rounded px-1.5 py-0.5"
+                      >
+                        ⚠ {p.tab_switch_count}
+                      </span>
+                    )}
+                    <span className="font-mono text-xs text-amber-400 font-bold" style={{ fontSize: `${0.75 * scale}rem` }}>{p.score}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2 pl-7 text-[11px] font-mono">
+                    <span className="text-slate-400" title="Questions answered so far">{answered}/{totalQuestions}</span>
+                    <span className="font-bold text-emerald-300" title="Right">✅ {lr?.correct_count ?? p.correct_count}</span>
+                    <span className="font-bold text-red-300" title="Wrong">❌ {lr?.wrong_count ?? 0}</span>
+                    {isPaused && <span className="rounded bg-red-500/20 px-1.5 py-0.5 font-sans text-[10px] font-bold text-red-300">⏸ PAUSED</span>}
+                    {canEdit && session?.phase !== "ended" && (
+                      <button
+                        onClick={() => void (isPaused ? handleResumePlayer(p.id) : handleStopPlayer(p.id, p.display_name))}
+                        disabled={controlBusy === p.id}
+                        className={`ml-auto rounded-md px-2 py-0.5 font-sans text-[10px] font-bold disabled:opacity-50 ${isPaused ? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-red-500/40 text-red-300 hover:bg-red-500/10"}`}
+                      >
+                        {isPaused ? "▶ Start" : "⏹ Stop"}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
+                );
+              })}
           </div>
         </div>
       </div>

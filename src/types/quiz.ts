@@ -146,6 +146,19 @@ export interface QuizParticipant {
   joined_at: string;
   /** Updated by that participant's own periodic heartbeat — lets the host see who's actually still connected. */
   last_seen_at: string | null;
+  /** Set while the host has paused this player (their answers are refused until resumed). */
+  stopped_at?: string | null;
+  stop_reason?: string | null;
+}
+
+/** get_quiz_live_admin — one player's running numbers for the host. */
+export interface QuizLiveRow {
+  participant_id: string;
+  answered_count: number;
+  correct_count: number;
+  wrong_count: number;
+  stopped_at: string | null;
+  stop_reason: string | null;
 }
 
 export interface QuizAnswer {
@@ -615,4 +628,39 @@ export interface QuizFinalResult {
   rows: QuizSessionResultRow[];
   distribution: AnswerDistributionQuestion[];
   saved_at: string;
+}
+
+/** One candidate's line in a round brought in from an Excel file (as mapped by the trainer at upload time). */
+export interface FinalUploadRow {
+  name: string;
+  score: number | null;
+  total: number | null;
+  percent: number | null;
+  correct: number | null;
+  wrong: number | null;
+  remarks: string;
+}
+
+/** A round uploaded from Excel into a Final Result folder (see migration 20261014100000). */
+export interface QuizFinalUpload {
+  id: string;
+  company_id: string;
+  folder_id: string;
+  round_label: string;
+  file_name: string;
+  pass_pct: number | null;
+  round_date: string | null;
+  rows: FinalUploadRow[];
+  created_at: string;
+}
+
+/** The trainer's feedback for one candidate of a Final Result folder. */
+export interface QuizFinalFeedback {
+  id: string;
+  company_id: string;
+  folder_id: string;
+  candidate_key: string;
+  display_name: string;
+  feedback: string;
+  updated_at: string;
 }

@@ -119,6 +119,14 @@ export async function checkHotspotTap(sessionId: string, questionId: string, x: 
   return { correct: row?.is_correct ?? false, label: row?.zone_label ?? null };
 }
 
+/** Has the invigilator paused this candidate? (Asked every few seconds while the paper is open.) */
+export async function getExamMyControl(sessionId: string): Promise<{ stopped: boolean; reason: string | null }> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_exam_my_control", { p_session_id: sessionId });
+  if (error) fail("getExamMyControl", error);
+  const row = (data as { stopped: boolean; stop_reason: string | null }[] | null)?.[0];
+  return { stopped: !!row?.stopped, reason: row?.stop_reason ?? null };
+}
+
 export async function submitExam(sessionId: string, reason: "manual" | "timeout"): Promise<void> {
   const { error } = await supabaseQuizPlayer.rpc("submit_exam", { p_session_id: sessionId, p_reason: reason });
   if (error) fail("submitExam", error);

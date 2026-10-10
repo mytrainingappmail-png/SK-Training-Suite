@@ -1,6 +1,6 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { QuizParticipant } from "../../types/quiz";
+import type { QuizParticipant, QuizLiveRow } from "../../types/quiz";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Used by the host (supabaseQuiz) and, via useQuizSessionRealtime, the player too (supabaseQuizPlayer) — client is passed in so each reads with its own identity. */
@@ -17,6 +17,41 @@ export async function listParticipants(sessionId: string, client: SupabaseClient
   }
 
   return data ?? [];
+}
+
+/** Host: answered / right / wrong per player so far. */
+export async function getQuizLiveAdmin(sessionId: string): Promise<QuizLiveRow[]> {
+  const { data, error } = await supabaseQuiz.rpc("get_quiz_live_admin", { p_session_id: sessionId });
+  if (error) {
+    console.error("[quizParticipantRepository] getQuizLiveAdmin:", error);
+    throw new Error(error.message);
+  }
+  return (data as QuizLiveRow[] | null) ?? [];
+}
+
+/** Host: pause one player — the database refuses their answers until they are resumed. */
+export async function stopQuizParticipant(participantId: string, reason: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("stop_quiz_participant", { p_participant_id: participantId, p_reason: reason });
+  if (error) {
+    console.error("[quizParticipantRepository] stopQuizParticipant:", error);
+    throw new Error(error.message);
+  }
+}
+
+export async function resumeQuizParticipant(participantId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("resume_quiz_participant", { p_participant_id: participantId });
+  if (error) {
+    console.error("[quizParticipantRepository] resumeQuizParticipant:", error);
+    throw new Error(error.message);
+  }
+}
+
+/** Player: has the host paused me? */
+export async function getQuizMyControl(sessionId: string): Promise<{ stopped: boolean; reason: string | null }> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_quiz_my_control", { p_session_id: sessionId });
+  if (error) throw new Error(error.message);
+  const row = (data as { stopped: boolean; stop_reason: string | null }[] | null)?.[0];
+  return { stopped: !!row?.stopped, reason: row?.stop_reason ?? null };
 }
 
 interface FindSessionByPinRow {

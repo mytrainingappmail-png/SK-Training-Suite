@@ -3,7 +3,7 @@
 
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import type {
-  ExamSession, ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat,
+  ExamSession, ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat, ExamLiveRow, ExamLiveQuestion,
 } from "../../types/exam";
 
 function fail(label: string, error: { message: string }): never {
@@ -63,6 +63,30 @@ export async function resetExamParticipant(participantId: string): Promise<void>
 export async function reopenExamParticipant(participantId: string): Promise<void> {
   const { error } = await supabaseQuiz.rpc("reopen_exam_participant", { p_participant_id: participantId });
   if (error) fail("reopenExamParticipant", error);
+}
+
+/** Running right / wrong / marks for every candidate while the exam is on. */
+export async function getExamLiveAdmin(sessionId: string): Promise<ExamLiveRow[]> {
+  const { data, error } = await supabaseQuiz.rpc("get_exam_live_admin", { p_session_id: sessionId });
+  if (error) fail("getExamLiveAdmin", error);
+  return ((data as ExamLiveRow[] | null) ?? []).map((r) => ({ ...r, auto_marks: Number(r.auto_marks), possible_marks: Number(r.possible_marks) }));
+}
+
+export async function getExamLiveQuestions(sessionId: string): Promise<ExamLiveQuestion[]> {
+  const { data, error } = await supabaseQuiz.rpc("get_exam_live_questions", { p_session_id: sessionId });
+  if (error) fail("getExamLiveQuestions", error);
+  return (data as ExamLiveQuestion[] | null) ?? [];
+}
+
+/** Pauses ONE candidate (the clock keeps running for everyone). */
+export async function stopExamParticipant(participantId: string, reason: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("stop_exam_participant", { p_participant_id: participantId, p_reason: reason });
+  if (error) fail("stopExamParticipant", error);
+}
+
+export async function resumeExamParticipant(participantId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("resume_exam_participant", { p_participant_id: participantId });
+  if (error) fail("resumeExamParticipant", error);
 }
 
 export async function endExamSession(sessionId: string): Promise<void> {

@@ -11,8 +11,9 @@ import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
   getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant, renameExamParticipant, resetExamParticipant,
+  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant,
 } from "../../repositories/exam/examAdminRepository";
-import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat } from "../../types/exam";
+import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat, ExamLiveRow, ExamLiveQuestion } from "../../types/exam";
 
 const POLL_MS = 4000;
 
@@ -45,6 +46,13 @@ export default function ExamHostPage() {
   const [extendText, setExtendText] = useState("10");
   const [copied, setCopied] = useState("");
   const [now, setNow] = useState(0);
+  // running numbers per candidate (right / wrong / marks) and the questions being missed most — host's own screen only
+  const [liveRows, setLiveRows] = useState<Record<string, ExamLiveRow>>({});
+  const [liveQs, setLiveQs] = useState<ExamLiveQuestion[]>([]);
+  // Off when this screen is projected for the room: names and progress stay, marks are hidden.
+  const [showScores, setShowScores] = useState(() => {
+    try { return localStorage.getItem("exam_host_show_scores") !== "0"; } catch { return true; }
+  });
 
   const [openParticipant, setOpenParticipant] = useState<ExamResultRow | null>(null);
   const [detail, setDetail] = useState<ExamDetailRow[]>([]);
@@ -93,6 +101,11 @@ export default function ExamHostPage() {
       clockOffsetMs.current = new Date(s.server_now).getTime() - (before + Date.now()) / 2;
       setSession(s);
       setParticipants(await getExamParticipantsAdmin(sessionId));
+      if (s.status !== "finished" && s.status !== "lobby") {
+        // live numbers are a bonus — the page works without them if this call fails
+        getExamLiveAdmin(sessionId).then((rows) => setLiveRows(Object.fromEntries(rows.map((r) => [r.participant_id, r])))).catch(() => undefined);
+        getExamLiveQuestions(sessionId).then(setLiveQs).catch(() => undefined);
+      }
       if (s.status === "finished") {
         setResults(await getExamResults(sessionId));
         setStats(await getExamQuestionStats(sessionId).catch(() => []));
@@ -206,6 +219,38 @@ export default function ExamHostPage() {
     }
   }
 
+  function toggleScores() {
+    const next = !showScores;
+    setShowScores(next);
+    try { localStorage.setItem("exam_host_show_scores", next ? "1" : "0"); } catch { /* not remembered */ }
+  }
+
+  /** Candidates in the order the host cares about while the exam runs: highest marks first (or joining order when scores are hidden). */
+  const liveOrdered = useMemo(() => {
+    const list = participants.slice();
+    if (!showScores) return list;
+    return list.sort((a, b) => (liveRows[b.participant_id]?.auto_marks ?? 0) - (liveRows[a.participant_id]?.auto_marks ?? 0)
+      || (liveRows[b.participant_id]?.correct_count ?? 0) - (liveRows[a.participant_id]?.correct_count ?? 0));
+  }, [participants, liveRows, showScores]);
+
+  const liveSummary = useMemo(() => {
+    const rows = Object.values(liveRows);
+    const writing = participants.filter((p) => !p.submitted_at && !liveRows[p.participant_id]?.stopped_at).length;
+    const stopped = participants.filter((p) => !p.submitted_at && liveRows[p.participant_id]?.stopped_at).length;
+    const withAnswers = rows.filter((r) => r.answered_count > 0);
+    const avgPct = withAnswers.length && withAnswers[0].possible_marks > 0
+      ? Math.round((withAnswers.reduce((sum, r) => sum + r.auto_marks, 0) / withAnswers.length / withAnswers[0].possible_marks) * 1000) / 10
+      : null;
+    return { writing, stopped, avgPct };
+  }, [participants, liveRows]);
+
+  const hardest = useMemo(() => liveQs
+    .filter((q) => q.qtype !== "written" && q.attempted >= 2)
+    .map((q) => ({ ...q, missed: q.attempted - q.correct, missPct: Math.round(((q.attempted - q.correct) / q.attempted) * 100) }))
+    .filter((q) => q.missed > 0)
+    .sort((a, b) => b.missPct - a.missPct || b.attempted - a.attempted)
+    .slice(0, 3), [liveQs]);
+
   const ranked = useMemo(() => (results ?? []).slice().sort((a, b) => totalOf(b) - totalOf(a) || a.display_name.localeCompare(b.display_name)), [results]);
   const pendingTotal = ranked.reduce((s, r) => s + r.pending_written, 0);
 
@@ -312,8 +357,25 @@ export default function ExamHostPage() {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-sm font-bold">Employees ({session.joined})</h2>
-          <span className="text-xs text-slate-400">{session.submitted} submitted</span>
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            <span>{session.submitted} submitted</span>
+            {live && session.status !== "lobby" && (
+              <button onClick={toggleScores} className="font-semibold text-slate-200 border border-slate-700 hover:bg-slate-800 rounded-lg px-2.5 py-1">
+                {showScores ? "🙈 Hide marks (projector)" : "👁 Show marks"}
+              </button>
+            )}
+          </div>
         </div>
+
+        {live && session.status !== "lobby" && participants.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            <div className="rounded-xl bg-slate-800/60 px-3 py-2"><p className="text-[10px] uppercase tracking-wide text-slate-400">Writing</p><p className="text-xl font-bold text-amber-300">{liveSummary.writing}</p></div>
+            <div className="rounded-xl bg-slate-800/60 px-3 py-2"><p className="text-[10px] uppercase tracking-wide text-slate-400">Submitted</p><p className="text-xl font-bold text-emerald-300">{session.submitted}</p></div>
+            <div className="rounded-xl bg-slate-800/60 px-3 py-2"><p className="text-[10px] uppercase tracking-wide text-slate-400">Stopped</p><p className={`text-xl font-bold ${liveSummary.stopped ? "text-red-300" : "text-slate-500"}`}>{liveSummary.stopped}</p></div>
+            <div className="rounded-xl bg-slate-800/60 px-3 py-2"><p className="text-[10px] uppercase tracking-wide text-slate-400">Average so far</p><p className="text-xl font-bold text-violet-300">{showScores && liveSummary.avgPct !== null ? `${liveSummary.avgPct}%` : "—"}</p></div>
+          </div>
+        )}
+
         {participants.length === 0 ? (
           <p className="text-xs text-slate-500">Nobody has joined yet — share the PIN above.</p>
         ) : (
@@ -324,13 +386,25 @@ export default function ExamHostPage() {
                   <th className="py-2 pr-3 font-semibold">Name</th>
                   <th className="py-2 pr-3 font-semibold">Status</th>
                   <th className="py-2 pr-3 font-semibold">Answered</th>
-                  <th className="py-2 font-semibold">Left the tab</th>
+                  {live && session.status !== "lobby" && showScores && (
+                    <>
+                      <th className="py-2 pr-3 font-semibold text-emerald-400">Right</th>
+                      <th className="py-2 pr-3 font-semibold text-red-400">Wrong</th>
+                      <th className="py-2 pr-3 font-semibold">Marks so far</th>
+                    </>
+                  )}
+                  <th className="py-2 pr-3 font-semibold">Left the tab</th>
+                  {live && session.status === "running" && <th className="py-2 font-semibold">Control</th>}
                 </tr>
               </thead>
               <tbody>
-                {participants.map((p) => (
-                  <tr key={p.participant_id} className="border-b border-slate-800/60 last:border-0">
+                {liveOrdered.map((p, idx) => {
+                  const lr = liveRows[p.participant_id];
+                  const stopped = !!lr?.stopped_at && !p.submitted_at;
+                  return (
+                  <tr key={p.participant_id} className={`border-b border-slate-800/60 last:border-0 ${stopped ? "bg-red-500/5" : ""}`}>
                     <td className="py-2 pr-3 font-medium">
+                      {showScores && live && session.status !== "lobby" && lr && lr.answered_count > 0 && <span className="mr-2 text-xs text-slate-500">{idx < 3 ? ["🥇", "🥈", "🥉"][idx] : `#${idx + 1}`}</span>}
                       {p.display_name}
                       <button
                         onClick={() => { const n = prompt("Correct name for this participant:", p.display_name); if (n && n.trim() && n.trim() !== p.display_name) void act(() => renameExamParticipant(p.participant_id, n.trim())); }}
@@ -362,17 +436,72 @@ export default function ExamHostPage() {
                               </button>
                             )}
                           </span>
-                        : session.status === "lobby" ? <span className="text-slate-400 text-xs">Waiting</span> : <span className="text-amber-300 text-xs">✍️ Writing…</span>}
+                        : stopped
+                          ? <span className="text-red-300 text-xs font-semibold">⏸ Stopped{lr?.stop_reason ? ` — ${lr.stop_reason}` : ""}</span>
+                          : session.status === "lobby" ? <span className="text-slate-400 text-xs">Waiting</span> : <span className="text-amber-300 text-xs">✍️ Writing…</span>}
                     </td>
-                    <td className="py-2 pr-3 font-mono text-xs text-slate-300">{p.answered_count}/{session.total_questions}</td>
-                    <td className={`py-2 font-mono text-xs ${p.tab_switches > 0 ? "text-amber-300" : "text-slate-500"}`}>{p.tab_switches}×</td>
+                    <td className="py-2 pr-3 font-mono text-xs text-slate-300">
+                      {p.answered_count}/{session.total_questions}
+                      {live && session.status !== "lobby" && session.total_questions > 0 && (
+                        <span className="ml-2 inline-block h-1.5 w-12 rounded-full bg-slate-800 align-middle"><span className="block h-1.5 rounded-full bg-violet-500" style={{ width: `${Math.min(100, (p.answered_count / session.total_questions) * 100)}%` }} /></span>
+                      )}
+                    </td>
+                    {live && session.status !== "lobby" && showScores && (
+                      <>
+                        <td className="py-2 pr-3 font-mono text-xs font-bold text-emerald-300">{lr ? lr.correct_count : "–"}</td>
+                        <td className="py-2 pr-3 font-mono text-xs font-bold text-red-300">{lr ? lr.wrong_count : "–"}</td>
+                        <td className="py-2 pr-3 font-mono text-xs text-slate-200">
+                          {lr ? `${Math.round(lr.auto_marks * 10) / 10} / ${lr.possible_marks}` : "–"}
+                          {lr && lr.written_count > 0 && <span className="ml-1 text-[10px] text-slate-500">+{lr.written_count} written</span>}
+                        </td>
+                      </>
+                    )}
+                    <td className={`py-2 pr-3 font-mono text-xs ${p.tab_switches > 0 ? "text-amber-300" : "text-slate-500"}`}>{p.tab_switches}×</td>
+                    {live && session.status === "running" && (
+                      <td className="py-2">
+                        {p.submitted_at ? <span className="text-slate-600 text-xs">—</span> : stopped ? (
+                          <button
+                            onClick={() => void act(() => resumeExamParticipant(p.participant_id))}
+                            disabled={busy}
+                            className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg px-3 py-1"
+                          >▶ Resume</button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              const reason = prompt(`Stop ${p.display_name}? They cannot answer or submit until you resume them (the clock keeps running).\n\nReason (optional, they will see it):`, "");
+                              if (reason === null) return;
+                              void act(() => stopExamParticipant(p.participant_id, reason));
+                            }}
+                            disabled={busy}
+                            className="text-xs font-semibold text-red-200 border border-red-500/50 hover:bg-red-500/10 disabled:opacity-50 rounded-lg px-3 py-1"
+                          >⏹ Stop</button>
+                        )}
+                      </td>
+                    )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-        {live && <p className="text-[11px] text-slate-500 mt-3">🔒 Marks stay hidden until the exam has finished, so nobody's score is seen while others are still writing.</p>}
+
+        {live && session.status !== "lobby" && showScores && hardest.length > 0 && (
+          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">🔥 Missed most so far</p>
+            <ul className="space-y-1.5">
+              {hardest.map((q) => (
+                <li key={q.question_id} className="flex items-center gap-3 text-xs">
+                  <span className="shrink-0 w-8 font-mono text-slate-500">Q{q.question_order}</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-300">{q.question_text}</span>
+                  <span className="shrink-0 font-mono font-bold text-red-300">{q.missPct}% wrong</span>
+                  <span className="shrink-0 text-slate-500">({q.missed}/{q.attempted})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {live && <p className="text-[11px] text-slate-500 mt-3">{showScores ? "👁 Marks and right/wrong are showing on this screen — use “Hide marks” before projecting it to the room." : "🙈 Marks are hidden on this screen (progress only)."} Written answers are marked by you after the exam.</p>}
       </div>
 
       {/* Results */}
