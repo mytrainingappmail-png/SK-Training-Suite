@@ -7,6 +7,7 @@
 // to add a new project without ever touching code.
 
 import ProjectPreview from './ProjectPreview';
+import { matchesProjectSearch } from '../../utils/projectSearch';
 import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
@@ -110,6 +111,17 @@ function SortableProjectRow({
 
 // No category grouping here (unlike Course reorder) — Projects is
 // deliberately a flat list (see the file-top comment in projectsService.ts).
+/** The full project order after moving one project a step up or down the VISIBLE list (so it works with the branch filter). */
+function moveOneStep(projects: RealEstateProject[], id: string, direction: 'up' | 'down', visibleIds: string[]): RealEstateProject[] {
+  const pos = visibleIds.indexOf(id);
+  const neighbourId = visibleIds[direction === 'up' ? pos - 1 : pos + 1];
+  const ordered = [...projects].sort((a, b) => a.display_order - b.display_order);
+  const from = ordered.findIndex((x) => x.id === id);
+  const to = ordered.findIndex((x) => x.id === neighbourId);
+  if (pos < 0 || !neighbourId || from < 0 || to < 0) return ordered;
+  return arrayMove(ordered, from, to);
+}
+
 function ReorderProjectsModal({
   projects,
   saving,
@@ -258,6 +270,10 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   const lastNotified = useRef((scope?.initialIds ?? []).join(','));
   const [pickOpen, setPickOpen] = useState(false);
   const [mainProjects, setMainProjects] = useState<RealEstateProject[] | null>(null);
+  /** Search box above the project list (name, area or sector) and how many rows are drawn so far. */
+  const [projectSearch, setProjectSearch] = useState('');
+  const [listLimit, setListLimit] = useState(50);
+  const [pickSearch, setPickSearch] = useState('');
   const [copyingId, setCopyingId] = useState<string | null>(null);
   // 'Preview' of a project exactly as an employee sees it (nothing saved).
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
@@ -504,8 +520,20 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   async function handleDuplicateProject(id: string) {
     setCopyingId(id);
     try {
-      await duplicateProject(id);
-      showToast('Duplicated — the new project is called “… (Copy)”. Open it with Edit to rename and change it; the original is not affected.');
+      const newId = await duplicateProject(id);
+      // place the copy directly under its original (the database puts it at the end)
+      try {
+        const list = await loadProjects(scope ? { inductionSectionId: scope.inductionSectionId } : undefined);
+        const from = list.findIndex((x) => x.id === newId);
+        const to = list.findIndex((x) => x.id === id);
+        if (from >= 0 && to >= 0 && from !== to + 1) {
+          const arranged = [...list];
+          const [moved] = arranged.splice(from, 1);
+          arranged.splice(to + 1, 0, moved);
+          await reorderProjects(arranged);
+        }
+      } catch { /* the copy exists either way — it just stays at the end */ }
+      showToast('Duplicated — the new project is called “… (Copy)”, right below the original. Open it with Edit to rename and change it; the original is not affected.');
       fetchAll();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not duplicate the project.');
@@ -1072,6 +1100,11 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     );
   }
 
+  const projectMatches = (p: RealEstateProject) =>
+    (branchFilter === 'all' || (branchFilter === 'generic' ? !p.branch_id : p.branch_id === branchFilter)) &&
+    matchesProjectSearch(projectSearch, [p.project_name], [p.short_description]);
+  const matchedCount = projects.filter(projectMatches).length;
+
   return (
     <div className="space-y-6">
       {previewProjectId && <ProjectPreview projectId={previewProjectId} onClose={() => setPreviewProjectId(null)} />}
@@ -1112,15 +1145,58 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
             </button>
           </div>
         </div>
+        {projects.length > 0 && (
+          <div className="mb-3">
+            <div className="relative">
+              <input
+                value={projectSearch}
+                onChange={(e) => { setProjectSearch(e.target.value); setListLimit(50); }}
+                placeholder="Search projects — by name, area or sector (e.g. Dwarka Expressway, Sector 53)"
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-3 pr-10 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
+              />
+              {projectSearch && (
+                <button
+                  type="button"
+                  onClick={() => { setProjectSearch(''); setListLimit(50); }}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >✕</button>
+              )}
+            </div>
+            {(projectSearch.trim() !== '' || projects.length > 20) && (
+              <p className="mt-1 text-xs text-slate-400">
+                {projectSearch.trim() !== '' ? `${matchedCount} of ${projects.length} projects match` : `${projects.length} projects`}
+              </p>
+            )}
+          </div>
+        )}
         <div className="space-y-2">
           {projects.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">{scope ? 'No projects in this card yet — add a new one, or copy one from your Projects section.' : 'No projects yet — add one above.'}</p>
           ) : (
             projects
-              .filter((p) => branchFilter === 'all' || (branchFilter === 'generic' ? !p.branch_id : p.branch_id === branchFilter))
-              .map((p) => (
+              .filter(projectMatches)
+              .map((p, vi, visible) => vi >= listLimit ? null : (
               <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
                 <div className="flex items-center gap-3">
+                  <div className="flex flex-shrink-0 flex-col gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleReorderProjects(moveOneStep(projects, p.id, 'up', visible.map((x) => x.id)))}
+                      disabled={vi === 0 || reordering}
+                      title="Move up"
+                      aria-label={`Move ${p.project_name} up`}
+                      className="flex h-6 w-7 items-center justify-center rounded-md border border-slate-200 text-[10px] text-slate-500 hover:bg-slate-50 disabled:opacity-30"
+                    >▲</button>
+                    <button
+                      type="button"
+                      onClick={() => handleReorderProjects(moveOneStep(projects, p.id, 'down', visible.map((x) => x.id)))}
+                      disabled={vi === visible.length - 1 || reordering}
+                      title="Move down"
+                      aria-label={`Move ${p.project_name} down`}
+                      className="flex h-6 w-7 items-center justify-center rounded-md border border-slate-200 text-[10px] text-slate-500 hover:bg-slate-50 disabled:opacity-30"
+                    >▼</button>
+                  </div>
                   {p.thumbnail_url ? (
                     <img src={p.thumbnail_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
                   ) : (
@@ -1171,6 +1247,18 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
               </div>
             ))
           )}
+          {projects.length > 0 && matchedCount === 0 && (
+            <p className="py-8 text-center text-sm text-slate-400">No project matches “{projectSearch}”. Try fewer words — for example only the area, or only “Sector 53”.</p>
+          )}
+          {matchedCount > listLimit && (
+            <button
+              type="button"
+              onClick={() => setListLimit((n) => n + 50)}
+              className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Show {Math.min(50, matchedCount - listLimit)} more ({matchedCount - listLimit} not shown)
+            </button>
+          )}
         </div>
       </div>
 
@@ -1180,10 +1268,19 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
           <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white p-5 shadow-2xl">
             <h3 className="text-lg font-bold text-slate-900">Copy from your Projects section</h3>
             <p className="mb-3 text-xs text-slate-500">Each one is copied in full (pages, tests, brochures) as a separate project in this card.</p>
+            <input
+              value={pickSearch}
+              onChange={(e) => setPickSearch(e.target.value)}
+              placeholder="Search by name, area or sector…"
+              className="mb-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+            />
             <div className="flex-1 space-y-2 overflow-y-auto">
               {!mainProjects && <p className="text-sm text-slate-400">Loading…</p>}
               {mainProjects && mainProjects.length === 0 && <p className="text-sm text-slate-400">Your Projects section has no projects yet.</p>}
-              {(mainProjects ?? []).map((m) => (
+              {mainProjects && mainProjects.length > 0 && !mainProjects.some((m) => matchesProjectSearch(pickSearch, [m.project_name], [m.short_description])) && (
+                <p className="text-sm text-slate-400">No project matches “{pickSearch}”.</p>
+              )}
+              {(mainProjects ?? []).filter((m) => matchesProjectSearch(pickSearch, [m.project_name], [m.short_description])).slice(0, 100).map((m) => (
                 <div key={m.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-2.5">
                   <div className="flex min-w-0 items-center gap-3">
                     {m.thumbnail_url ? <img src={m.thumbnail_url} alt="" className="h-10 w-12 flex-shrink-0 rounded-lg object-cover" /> : <div className="h-10 w-12 flex-shrink-0 rounded-lg bg-slate-100" />}

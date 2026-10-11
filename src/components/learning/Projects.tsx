@@ -14,6 +14,7 @@
 // means "read these side by side, one after another."
 
 import { useEffect, useState } from 'react';
+import { matchesProjectSearch } from '../../utils/projectSearch';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
 import { loadCompletedProjectIds, markProjectComplete } from '../../services/realEstateProject/realEstateProjectService';
 import { getCurrentUser } from '../../services/auth/session';
@@ -365,6 +366,8 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  /** How many project cards are drawn — more load on request, so a long list stays quick on a phone. */
+  const [shownCount, setShownCount] = useState(24);
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [completedProjectIds, setCompletedProjectIds] = useState<Set<string>>(new Set());
@@ -424,10 +427,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
     }
   }
 
-  const searchTerm = search.trim().toLowerCase();
-  const filtered = projects.filter(
-    (p) => !searchTerm || p.projectName.toLowerCase().includes(searchTerm)
-  );
+  const filtered = projects.filter((p) => matchesProjectSearch(search, [p.projectName], [p.shortDescription]));
 
   const openProject = projects.find((p) => p.projectId === openProjectId) ?? null;
   const openProjectIndex = projects.findIndex((p) => p.projectId === openProjectId);
@@ -525,9 +525,9 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <input
           className="min-w-[200px] flex-1 rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-          placeholder="Search by project name..."
+          placeholder="Search by project name, area or sector…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setShownCount(24); }}
         />
         <button
           onClick={toggleCompareMode}
@@ -562,7 +562,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
 
       {!loading && !error && filtered.length > 0 && (
         <div className={`grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 ${compareMode ? 'pb-20' : ''}`}>
-          {filtered.map((project) => {
+          {filtered.slice(0, shownCount).map((project) => {
             const selected = compareIds.includes(project.projectId);
             const selectionOrder = compareIds.indexOf(project.projectId);
             return (
@@ -581,6 +581,19 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!loading && !error && filtered.length > shownCount && (
+        <div className="mt-5 text-center">
+          <p className="mb-2 text-xs text-slate-400">Showing {shownCount} of {filtered.length} projects</p>
+          <button
+            type="button"
+            onClick={() => setShownCount((n) => n + 24)}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+          >
+            Show more
+          </button>
         </div>
       )}
 
