@@ -222,7 +222,7 @@ export default function PracticePage() {
                 disabled={checking || answer.trim().length < 8 || listening}
                 className="w-full rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
               >
-                {checking ? "AI aapka jawab check kar raha hai…" : "Get feedback ✨"}
+                {checking ? "AI is checking your answer…" : "Get feedback ✨"}
               </button>
               <p className="text-center text-[11px] text-slate-400">The AI scores you on {open.criteria.length} points. Your answer and score are visible to your trainer.</p>
             </div>

@@ -32,10 +32,10 @@ interface Question { text: string; options: string[]; correct_index: number; exp
 
 const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
 
-// The app is English only: questions are ALWAYS written in clear, simple English — even when the training content itself is
-// in Hindi or Hinglish (its meaning is used, the words are not copied).
-function buildPrompt(content: string, count: number, difficulty: string, extra: string): string {
-  const lang = "Write every question, option and explanation in clear, simple English only. If the content is in Hindi or Hinglish (Devanagari or Hindi written in English letters), understand it and write the questions in English — never use Hindi words or Devanagari script. Keep project names, numbers and terms like RERA, BHK, sqft, GST, EMI, ROI as they are.";
+function buildPrompt(content: string, count: number, difficulty: string, language: string, extra: string): string {
+  const lang = language === "hinglish"
+    ? "Write the questions, options and explanations in natural, simple Hinglish (Hindi in English letters, how Indian sales teams talk). Keep numbers, project names and terms like RERA, BHK, sqft, GST, EMI, ROI in English."
+    : "Write in clear, simple English.";
   return `You are an experienced corporate trainer for real estate sales teams in India. Create ${count} multiple-choice questions that test whether a learner has understood the TRAINING CONTENT below.
 
 Rules:
@@ -97,6 +97,7 @@ serve(async (req) => {
     if (content.length > MAX_CONTENT) throw new HttpError(400, "That is a lot of text at once. Use about 2,500 words or less (one topic at a time gives better questions).");
     const count = Math.min(20, Math.max(1, Math.round(Number(body?.count) || 10)));
     const difficulty = ["easy", "medium", "hard", "mixed"].includes(body?.difficulty) ? body.difficulty : "mixed";
+    const language = body?.language === "hinglish" ? "hinglish" : "english";
     const extra = clean(body?.extra, 300);
 
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -108,7 +109,7 @@ serve(async (req) => {
     let parsed: { questions?: unknown };
     if (useMock) parsed = mock(count);
     else {
-      const text = await callGemini(buildPrompt(content, count, difficulty, extra), apiKey!, { json: true, temperature: 0.5 });
+      const text = await callGemini(buildPrompt(content, count, difficulty, language, extra), apiKey!, { json: true, temperature: 0.5 });
       try { parsed = JSON.parse(text); } catch { throw new HttpError(502, "The AI's reply could not be read. Please try once more."); }
     }
 

@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { generateQuizQuestions } from "../../services/aiQuiz/aiQuizService";
-import type { AiQuestion, AiDifficulty } from "../../services/aiQuiz/aiQuizService";
+import type { AiQuestion, AiDifficulty, AiLanguage } from "../../services/aiQuiz/aiQuizService";
 
 const COUNTS = [5, 10, 15, 20];
 const DIFFS: { v: AiDifficulty; l: string }[] = [
@@ -20,6 +20,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
   const [content, setContent] = useState(sourceText.slice(0, 14000));
   const [count, setCount] = useState(10);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("mixed");
+  const [language, setLanguage] = useState<AiLanguage>("english");
   const [extra, setExtra] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +35,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
     setBusy(true);
     setError("");
     try {
-      const r = await generateQuizQuestions({ content, count, difficulty, extra: extra.trim() || undefined });
+      const r = await generateQuizQuestions({ content, count, difficulty, language, extra: extra.trim() || undefined });
       setResult(r.questions);
       setPicked(new Set(r.questions.map((_, i) => i)));
       setRunsLeft(r.runsLeft);
@@ -83,6 +84,11 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
                 <label className="text-xs font-semibold text-slate-600">How hard
                   <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as AiDifficulty)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm">{DIFFS.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}</select>
                 </label>
+                <label className="col-span-2 text-xs font-semibold text-slate-600">Language
+                  <select value={language} onChange={(e) => setLanguage(e.target.value as AiLanguage)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm">
+                    <option value="english">English</option><option value="hinglish">Hinglish (Hindi in English letters)</option>
+                  </select>
+                </label>
               </div>
 
               <label className="block text-xs font-semibold text-slate-600">Anything special? (optional)
@@ -122,7 +128,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
             <>
               <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Cancel</button>
               <button onClick={generate} disabled={busy || words < 30 || tooLong} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
-                {busy ? "AI sawal bana raha hai…" : `✨ Make ${count} questions`}
+                {busy ? "AI is making your questions…" : `✨ Make ${count} questions`}
               </button>
             </>
           ) : (

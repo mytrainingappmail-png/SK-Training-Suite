@@ -8,17 +8,17 @@
 import type { BrainstormingVoiceStyle } from '../types/brainstormingSettings';
 
 const CORRECT_PHRASES = [
-  'Sahi jawab! Zabardast!',
+  'Right answer! Fantastic!',
   "Correct! You're on fire!",
-  'Waah! Bilkul sahi jawab!',
+  'Wow! Absolutely right!',
   'Excellent! That is absolutely correct!',
-  'Shandaar! Right answer!',
+  'Brilliant! Right answer!',
 ];
 
 const WRONG_PHRASES = [
-  'Ohh... galat jawab.',
+  'Ohh... wrong answer.',
   'Not quite — that is incorrect.',
-  'Arre yaar, galat ho gaya.',
+  'Oh no, that one went wrong.',
   'Oops! Wrong answer.',
   'Ohh, so close, but no.',
 ];

@@ -6,7 +6,9 @@ import { supabase } from "../../lib/supabase";
 export interface AiQuestion { text: string; options: string[]; correct_index: number; explanation: string }
 export type AiDifficulty = "easy" | "medium" | "hard" | "mixed";
 
-export interface AiQuizRequest { content: string; count: number; difficulty: AiDifficulty; extra?: string }
+export type AiLanguage = "english" | "hinglish";
+
+export interface AiQuizRequest { content: string; count: number; difficulty: AiDifficulty; language: AiLanguage; extra?: string }
 
 export async function generateQuizQuestions(req: AiQuizRequest): Promise<{ questions: AiQuestion[]; runsLeft: number }> {
   const { data, error } = await supabase.functions.invoke("generate-quiz-questions", { body: req });

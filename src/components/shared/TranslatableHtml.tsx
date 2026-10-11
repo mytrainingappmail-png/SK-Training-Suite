@@ -73,12 +73,12 @@ export default function TranslatableHtml({ html, className, ...rest }: Props) {
             onClick={() => setContentLang(lang === "hinglish" ? "en" : "hinglish")}
             className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 active:scale-95"
           >
-            🌐 {lang === "hinglish" ? "English mein padhein" : "Hinglish mein padhein"}
+            🌐 {lang === "hinglish" ? "Read in English" : "Read in Hinglish"}
           </button>
-          {busy && <span className="text-xs text-slate-500">Hinglish mein badal raha hai…</span>}
+          {busy && <span className="text-xs text-slate-500">Translating to Hinglish…</span>}
           {error && <span className="text-xs text-amber-700">{error}</span>}
           {wantHinglish && !busy && !error && translated?.for === source && (
-            <span className="text-[11px] text-slate-400">Auto-translated — kuch line thodi alag ho sakti hai</span>
+            <span className="text-[11px] text-slate-400">Auto-translated — a few lines may read slightly differently</span>
           )}
         </div>
       )}
