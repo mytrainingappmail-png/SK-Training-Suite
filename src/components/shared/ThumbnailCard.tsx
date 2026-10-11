@@ -46,9 +46,12 @@ interface ThumbnailCardProps {
   children?: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  /** Show the WHOLE picture (nothing cropped) in a taller frame, with a soft blurred copy of it behind — for posters and
+   * brochures where the edges carry the text. Off by default, so every other grid keeps its look. */
+  fullImage?: boolean;
 }
 
-function ThumbnailCard({ title, subtitle, thumbnailUrl, badge, cornerTag, children, onClick, disabled }: ThumbnailCardProps) {
+function ThumbnailCard({ title, subtitle, thumbnailUrl, badge, cornerTag, children, onClick, disabled, fullImage = false }: ThumbnailCardProps) {
   const [from, to] = paletteFor(title || 'course');
 
   return (
@@ -58,8 +61,13 @@ function ThumbnailCard({ title, subtitle, thumbnailUrl, badge, cornerTag, childr
       disabled={disabled}
       className="group flex flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
     >
-      <div className="relative aspect-video w-full flex-shrink-0 bg-slate-100">
-        {thumbnailUrl ? (
+      <div className={`relative w-full flex-shrink-0 bg-slate-100 ${fullImage ? 'aspect-[4/3] overflow-hidden' : 'aspect-video'}`}>
+        {thumbnailUrl && fullImage ? (
+          <>
+            <img src={thumbnailUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-xl" />
+            <img src={thumbnailUrl} alt="" className="relative h-full w-full object-contain transition group-hover:scale-[1.02]" />
+          </>
+        ) : thumbnailUrl ? (
           <img src={thumbnailUrl} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" />
         ) : (
           <div

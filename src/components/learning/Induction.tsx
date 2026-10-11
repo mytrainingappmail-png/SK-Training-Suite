@@ -283,6 +283,7 @@ function Induction() {
           const status = dayStatus(i);
           return (
             <ThumbnailCard
+              fullImage
               key={day.id}
               title={withLabel(labels[i], day.title)}
               subtitle={day.description || undefined}

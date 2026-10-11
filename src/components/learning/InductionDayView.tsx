@@ -203,6 +203,7 @@ export default function InductionDayView({
               const resp = responses[s.id];
               return (
                 <ThumbnailCard
+                  fullImage
                   key={s.id}
                   title={s.title}
                   subtitle={TYPE_LABEL[s.section_type] ?? undefined}

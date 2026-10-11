@@ -568,6 +568,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
             return (
               <div key={project.projectId} className={`w-full [&>button]:w-full ${selected ? 'rounded-2xl ring-2 ring-indigo-500' : ''}`}>
                 <ThumbnailCard
+                  fullImage
                   title={project.projectName}
                   subtitle={project.shortDescription}
                   thumbnailUrl={project.thumbnail}
