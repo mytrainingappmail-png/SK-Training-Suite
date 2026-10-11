@@ -21,6 +21,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { TextSelection } from '@tiptap/pm/state';
 import ImageEditModal from './ImageEditModal';
 import ImageAnnotator, { type Annotation } from './ImageAnnotator';
 import ImageCropper from './ImageCropper';
@@ -229,20 +231,51 @@ const TableRowWithHeight = TableRow.extend({
   },
 });
 
+// Content pasted from other apps sometimes carries colspan="undefined" / rowspan="NaN" or a broken colwidth. Left as it is,
+// that makes the table's grid invalid and Add / Delete row, column and table silently do nothing — so every cell reads
+// those attributes defensively and falls back to 1 / no width.
+const spanAttribute = (name: 'colspan' | 'rowspan') => ({
+  default: 1,
+  parseHTML: (element: HTMLElement) => {
+    const n = parseInt(element.getAttribute(name) ?? '', 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  },
+});
+
+function cellAttributes(parentAttrs: Record<string, unknown>) {
+  return {
+    ...parentAttrs,
+    colspan: spanAttribute('colspan'),
+    rowspan: spanAttribute('rowspan'),
+    colwidth: {
+      default: null,
+      parseHTML: (element: HTMLElement) => {
+        const raw = element.getAttribute('colwidth');
+        if (!raw) return null;
+        const widths = raw.split(',').map((w) => parseInt(w, 10));
+        return widths.every((w) => Number.isFinite(w) && w > 0) ? widths : null;
+      },
+    },
+    backgroundColor: {
+      default: null,
+      parseHTML: (element: HTMLElement) => element.style.backgroundColor || null,
+      renderHTML: (attributes: Record<string, unknown>) => {
+        if (!attributes.backgroundColor) return {};
+        return { style: `background-color: ${attributes.backgroundColor}` };
+      },
+    },
+  };
+}
+
 const TableCellWithColor = TableCell.extend({
   addAttributes() {
-    const parentAttrs = (this as { parent?: () => Record<string, unknown> }).parent?.() ?? {};
-    return {
-      ...parentAttrs,
-      backgroundColor: {
-        default: null,
-        parseHTML: (element: HTMLElement) => element.style.backgroundColor || null,
-        renderHTML: (attributes: Record<string, unknown>) => {
-          if (!attributes.backgroundColor) return {};
-          return { style: `background-color: ${attributes.backgroundColor}` };
-        },
-      },
-    };
+    return cellAttributes((this as { parent?: () => Record<string, unknown> }).parent?.() ?? {});
+  },
+});
+
+const TableHeaderWithColor = TableHeader.extend({
+  addAttributes() {
+    return cellAttributes((this as { parent?: () => Record<string, unknown> }).parent?.() ?? {});
   },
 });
 
@@ -388,6 +421,10 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
   const [showTextColors, setShowTextColors] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
+  /** Where the right-click table menu is shown (screen position), or null when it is closed. */
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  /** Size shown while hovering the "Insert table" grid. */
+  const [gridHover, setGridHover] = useState<{ r: number; c: number }>({ r: 3, c: 3 });
   const [showShapesMenu, setShowShapesMenu] = useState(false);
   const [shapeColor, setShapeColor] = useState(SHAPE_COLORS[0]);
 
@@ -413,7 +450,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       AnnotatableImage.configure({ inline: false }),
       TableWithStyle.configure({ resizable: true }),
       TableRowWithHeight,
-      TableHeader,
+      TableHeaderWithColor,
       TableCellWithColor,
       CharacterCount,
     ],
@@ -437,8 +474,41 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       attributes: {
         class: 'rte-content focus:outline-none',
       },
+      handleDOMEvents: {
+        // Right-click on a table cell: Word-style table menu instead of the browser's own.
+        contextmenu: (view, event) => {
+          const el = event.target as HTMLElement | null;
+          if (!el || !el.closest('td, th')) return false;
+          event.preventDefault();
+          const sel = view.state.selection;
+          const hit = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          const insideSelection = hit ? hit.pos >= sel.from && hit.pos <= sel.to : false;
+          // a right-click outside the current selection moves the cursor there first (a selected group of cells is kept)
+          if (hit && !insideSelection) {
+            try { view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(hit.pos)))); } catch { /* keep selection */ }
+          }
+          setCtxMenu({ x: event.clientX, y: event.clientY });
+          return true;
+        },
+      },
     },
   });
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu]);
 
   // After a column border has been dragged, only the dragged column has a stored width — the others just "share the rest".
   // Saving every column's on-screen width keeps the whole layout exactly as the author sees it, on any screen it is shown.
@@ -675,6 +745,56 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
 
   if (!editor) return null;
 
+  const closeTableMenus = () => { setShowTableMenu(false); setCtxMenu(null); };
+  const tableChain = () => editor.chain().focus();
+  const inTable = editor.can().deleteTable();
+  interface TableAction { label: string; icon: string; run: () => void; enabled: boolean; danger?: boolean }
+  const tableActionGroups: TableAction[][] = [
+    [
+      { label: 'Insert row above', icon: '⬆', run: () => tableChain().addRowBefore().run(), enabled: editor.can().addRowBefore() },
+      { label: 'Insert row below', icon: '⬇', run: () => tableChain().addRowAfter().run(), enabled: editor.can().addRowAfter() },
+      { label: 'Insert column left', icon: '⬅', run: () => tableChain().addColumnBefore().run(), enabled: editor.can().addColumnBefore() },
+      { label: 'Insert column right', icon: '➡', run: () => tableChain().addColumnAfter().run(), enabled: editor.can().addColumnAfter() },
+    ],
+    [
+      { label: 'Delete row', icon: '✕', run: () => tableChain().deleteRow().run(), enabled: editor.can().deleteRow(), danger: true },
+      { label: 'Delete column', icon: '✕', run: () => tableChain().deleteColumn().run(), enabled: editor.can().deleteColumn(), danger: true },
+      { label: 'Delete whole table', icon: '🗑', run: () => tableChain().deleteTable().run(), enabled: inTable, danger: true },
+    ],
+    [
+      { label: 'Merge selected cells', icon: '⧉', run: () => tableChain().mergeCells().run(), enabled: editor.can().mergeCells() },
+      { label: 'Split cell', icon: '⫼', run: () => tableChain().splitCell().run(), enabled: editor.can().splitCell() },
+      { label: 'Header row on / off', icon: '▤', run: () => tableChain().toggleHeaderRow().run(), enabled: inTable },
+      { label: 'Header column on / off', icon: '▥', run: () => tableChain().toggleHeaderColumn().run(), enabled: inTable },
+    ],
+    [
+      { label: 'Auto-fit columns to the text', icon: '↔', run: autoFitColumns, enabled: inTable },
+      { label: 'Equal columns (fit the page)', icon: '▥', run: equalColumns, enabled: inTable },
+    ],
+  ];
+
+  const renderTableActions = () =>
+    tableActionGroups.map((group, gi) => (
+      <div key={gi} className={gi > 0 ? 'mt-1 border-t border-slate-100 pt-1' : ''}>
+        {group.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            // keep the cursor in the table: a mousedown on a menu button must not take focus away from the editor
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { a.run(); closeTableMenus(); }}
+            disabled={!a.enabled}
+            className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-30 ${
+              a.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <span className="w-4 text-center text-xs opacity-70">{a.icon}</span>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    ));
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
       <style>{`
@@ -821,49 +941,52 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
         <div>
           <ToolbarButton onClick={() => setShowTableMenu((v) => !v)} title="Table options"><IconTable /></ToolbarButton>
           {showTableMenu && (
-            <div className="absolute left-0 top-full z-20 mt-1 max-h-[70vh] w-56 max-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl">
-              <button onClick={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); setShowTableMenu(false); }}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">Insert Table</button>
+            <div className="absolute left-0 top-full z-20 mt-1 max-h-[70vh] w-64 max-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl">
+              <div className="px-3 pb-1 pt-1.5 text-xs font-semibold text-slate-400">
+                Insert table — {gridHover.c} × {gridHover.r}
+              </div>
+              <div className="px-3 pb-2" onMouseLeave={() => setGridHover({ r: 3, c: 3 })}>
+                {Array.from({ length: 6 }, (_, r) => (
+                  <div key={r} className="flex gap-1 pb-1">
+                    {Array.from({ length: 6 }, (_, c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Insert a ${c + 1} by ${r + 1} table`}
+                        onMouseEnter={() => setGridHover({ r: r + 1, c: c + 1 })}
+                        onClick={() => { editor.chain().focus().insertTable({ rows: r + 1, cols: c + 1, withHeaderRow: true }).run(); closeTableMenus(); }}
+                        className={`h-5 w-5 rounded-sm border ${r < gridHover.r && c < gridHover.c ? 'border-indigo-400 bg-indigo-100' : 'border-slate-300 bg-white'}`}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
               <div className="my-1 border-t border-slate-100" />
-              <button onClick={() => editor.chain().focus().addRowAfter().run()} disabled={!editor.can().addRowAfter()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Add Row Below</button>
-              <button onClick={() => editor.chain().focus().addColumnAfter().run()} disabled={!editor.can().addColumnAfter()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Add Column Right</button>
-              <button onClick={() => editor.chain().focus().deleteRow().run()} disabled={!editor.can().deleteRow()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-30">Delete Row</button>
-              <button onClick={() => editor.chain().focus().deleteColumn().run()} disabled={!editor.can().deleteColumn()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-30">Delete Column</button>
+              <div className="px-3 pb-1 pt-1 text-xs font-semibold text-slate-400">
+                {inTable ? 'This table' : 'Click inside a table first'}
+              </div>
+              {renderTableActions()}
               <div className="my-1 border-t border-slate-100" />
-              <button onClick={() => editor.chain().focus().mergeCells().run()} disabled={!editor.can().mergeCells()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Merge Selected Cells</button>
-              <button onClick={() => editor.chain().focus().splitCell().run()} disabled={!editor.can().splitCell()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">Split Cell</button>
-              <div className="my-1 border-t border-slate-100" />
-              <div className="px-3 py-1 text-xs font-semibold text-slate-400">Size — or drag a column border</div>
-              <button onClick={autoFitColumns} disabled={!editor.can().deleteTable()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">↔ Auto-fit columns to the text</button>
-              <button onClick={equalColumns} disabled={!editor.can().deleteTable()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30">▥ Equal columns (fit the page)</button>
               <div className="flex items-center gap-1.5 px-3 py-2">
                 <span className="mr-1 text-sm text-slate-700">Row height</span>
-                <button onClick={() => changeRowHeight('shorter')} disabled={!editor.can().deleteTable()} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">− Shorter</button>
-                <button onClick={() => changeRowHeight('taller')} disabled={!editor.can().deleteTable()} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">+ Taller</button>
-                <button onClick={() => changeRowHeight('auto')} disabled={!editor.can().deleteTable()} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">Auto</button>
+                <button onClick={() => changeRowHeight('shorter')} disabled={!inTable} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">− Shorter</button>
+                <button onClick={() => changeRowHeight('taller')} disabled={!inTable} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">+ Taller</button>
+                <button onClick={() => changeRowHeight('auto')} disabled={!inTable} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30">Auto</button>
               </div>
               <div className="my-1 border-t border-slate-100" />
               <div className="px-3 py-1 text-xs font-semibold text-slate-400">Table Style</div>
               <div className="grid grid-cols-2 gap-1.5 px-3 py-2">
-                {TABLE_STYLES.map((s) => (
+                {TABLE_STYLES.map((st) => (
                   <button
-                    key={s.value}
-                    onClick={() => editor.chain().focus().updateAttributes('table', { tableStyle: s.value }).run()}
+                    key={st.value}
+                    onClick={() => editor.chain().focus().updateAttributes('table', { tableStyle: st.value }).run()}
                     className={`rounded-lg border px-2 py-1.5 text-left text-xs font-medium transition ${
-                      editor.getAttributes('table').tableStyle === s.value
+                      editor.getAttributes('table').tableStyle === st.value
                         ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    {s.label}
+                    {st.label}
                   </button>
                 ))}
               </div>
@@ -874,15 +997,43 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
                   <button key={c} onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', c).run()}
                     style={{ backgroundColor: c }} className="h-6 w-6 rounded border border-slate-300" />
                 ))}
+                <button onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', null).run()}
+                  title="No color" className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-xs text-slate-500">✕</button>
               </div>
-              <div className="my-1 border-t border-slate-100" />
-              <button onClick={() => { editor.chain().focus().deleteTable().run(); setShowTableMenu(false); }} disabled={!editor.can().deleteTable()}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-30">Delete Whole Table</button>
             </div>
           )}
         </div>
 
         <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+        {ctxMenu && createPortal(
+          <div
+            // a click inside the menu must not reach the window "close" listener before the button's own click
+            onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+            style={{
+              position: 'fixed',
+              left: Math.max(8, Math.min(ctxMenu.x, window.innerWidth - 248)),
+              top: Math.max(8, Math.min(ctxMenu.y, window.innerHeight - 420)),
+              zIndex: 60,
+            }}
+            className="max-h-[80vh] w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1.5 shadow-2xl"
+          >
+            {renderTableActions()}
+            <div className="mt-1 border-t border-slate-100 px-3 py-2">
+              <div className="mb-1.5 text-xs font-semibold text-slate-400">Cell color</div>
+              <div className="flex flex-wrap gap-1.5">
+                {CELL_COLORS.map((c) => (
+                  <button key={c} type="button" onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { editor.chain().focus().setCellAttribute('backgroundColor', c).run(); closeTableMenus(); }}
+                    style={{ backgroundColor: c }} className="h-5 w-5 rounded border border-slate-300" />
+                ))}
+                <button type="button" onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { editor.chain().focus().setCellAttribute('backgroundColor', null).run(); closeTableMenus(); }}
+                  title="No color" className="flex h-5 w-5 items-center justify-center rounded border border-slate-300 text-[10px] text-slate-500">✕</button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
         <ToolbarButton onClick={() => imageInputRef.current?.click()} title="Insert image">
           {uploadingImage ? <IconSpinner /> : <IconImage />}
         </ToolbarButton>

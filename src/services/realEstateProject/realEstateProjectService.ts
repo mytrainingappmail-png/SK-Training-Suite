@@ -72,6 +72,13 @@ export async function copyProjectIndependent(projectId: string, intoSectionId: s
   return data as string;
 }
 
+/** A separate copy of a project in the same place (main Projects, or the same Induction card) — named "… (Copy)". */
+export async function duplicateProject(projectId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('duplicate_project', { p_project: projectId });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
 function validateProjectForm(form: RealEstateProjectForm): void {
   if (!form.project_name.trim()) throw new Error('Project name is required.');
 }

@@ -517,6 +517,7 @@ function InductionManagement() {
   }
 
   async function handleDeleteDay(id: string) {
+    if (!window.confirm('Delete this day with all its cards? Projects that live inside its “Focused projects” cards are deleted with them (your main Projects section is not affected). This cannot be undone.')) return;
     try {
       await removeDay(id);
       showToast('Day deleted.');
@@ -748,8 +749,13 @@ function InductionManagement() {
 
   async function handleDeleteSection(id: string) {
     if (!editingDayId || editingDayId === 'new') return;
+    const target = sections.find((x) => x.id === id);
+    const message = target?.section_type === 'projects'
+      ? 'Delete this card? The projects inside it belong only to this card and are deleted with it. Your main Projects section is not affected. This cannot be undone.'
+      : 'Delete this card? This cannot be undone.';
+    if (!window.confirm(message)) return;
     try {
-      const s = sections.find((x) => x.id === id);
+      const s = target;
       await removeSection(id);
       if (s?.section_type === 'test' && s.assessment_id) {
         try { await removeAssessmentSvc(s.assessment_id); } catch { /* best-effort cleanup */ }

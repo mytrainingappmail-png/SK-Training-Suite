@@ -26,7 +26,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  loadProjects, saveProject, editProject, removeProject, reorderProjects, copyProjectIndependent,
+  loadProjects, saveProject, editProject, removeProject, reorderProjects, copyProjectIndependent, duplicateProject,
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
   loadSectionsForProject, saveSection, editSection, removeSection, reorderSections,
@@ -500,8 +500,25 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     }
   }
 
+  /** Same place, separate copy — so a new project can start from an existing one's layout. */
+  async function handleDuplicateProject(id: string) {
+    setCopyingId(id);
+    try {
+      await duplicateProject(id);
+      showToast('Duplicated — the new project is called “… (Copy)”. Open it with Edit to rename and change it; the original is not affected.');
+      fetchAll();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not duplicate the project.');
+    } finally {
+      setCopyingId(null);
+    }
+  }
+
   async function handleDeleteProject(id: string) {
-    if (scope && !window.confirm('Delete this project from the card? Your Projects section is not affected.')) return;
+    const ok = scope
+      ? window.confirm('Delete this project from the card? Your Projects section is not affected.')
+      : window.confirm('Delete this project with all its pages, tests and brochures? Copies of it inside Induction cards are separate and are not affected. This cannot be undone.');
+    if (!ok) return;
     try {
       await removeProject(id);
       fetchAll();
@@ -1116,7 +1133,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                         {branchName(p.branch_id)}
                       </span>
                     )}
-                    {scope && !p.active && <span className="text-[11px] font-semibold text-amber-600">Inactive</span>}
+                    {!p.active && <span className="text-[11px] font-semibold text-amber-600">Inactive</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1145,6 +1162,9 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                       {copyingId === p.id ? 'Copying…' : 'Copy to Projects section'}
                     </button>
                   )}
+                  <button onClick={() => handleDuplicateProject(p.id)} disabled={copyingId === p.id} title="Make a separate copy of this project here, to start a similar one" className="text-xs font-semibold text-sky-600 hover:underline disabled:opacity-40">
+                    {copyingId === p.id ? 'Duplicating…' : 'Duplicate'}
+                  </button>
                   <button onClick={() => startEditProject(p)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteProject(p.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                 </div>
