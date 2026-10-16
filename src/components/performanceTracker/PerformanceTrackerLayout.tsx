@@ -171,14 +171,14 @@ function PerformanceTrackerLayout() {
       <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
         {tab === 'dashboard' && <DashboardTab employees={employees} departments={departments} isManagerUp={isManagerUp} />}
         {tab === 'morning' && <MorningCommitTab employees={employees} customFields={customFields} isManagerUp={isManagerUp} settings={settings} />}
-        {tab === 'evening' && <EveningReportTab settings={settings} customFields={customFields} />}
+        {tab === 'evening' && <EveningReportTab settings={settings} customFields={customFields} employees={employees} />}
         {tab === 'trends' && <TrendsTab employees={employees} teams={teams} teamMap={teamMap} isManagerUp={isManagerUp} />}
         {tab === 'leaderboard' && <LeaderboardTab employees={employees} teams={teams} teamMap={teamMap} settings={settings} isManagerUp={isManagerUp} />}
         {tab === 'analytics' && isManagerUp && <AnalyticsTab employees={employees} departments={departments} />}
         {tab === 'impact' && isAdmin && <TrainingImpactTab />}
         {tab === 'team' && isManagerUp && <TeamViewTab employees={employees} teams={teams} teamMap={teamMap} />}
         {tab === 'alerts' && isManagerUp && <AlertsTab employees={employees} settings={settings} />}
-        {tab === 'reports' && isManagerUp && <ReportsTab employees={employees} teams={teams} teamMap={teamMap} departments={departments} />}
+        {tab === 'reports' && isManagerUp && <ReportsTab employees={employees} teams={teams} teamMap={teamMap} departments={departments} settings={settings} />}
         {tab === 'settings' && isAdmin && (
           <SettingsTab
             settings={settings} onSettingsChange={setSettings}

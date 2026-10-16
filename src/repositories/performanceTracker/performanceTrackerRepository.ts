@@ -232,6 +232,23 @@ export async function listMyReportsForRange(employeeId: string, startDate: strin
   return data ?? [];
 }
 
+// ── Project names (for the "which project" picker in activity details) ───
+
+// Names only — the full project rows carry long descriptions, which a picker never needs. Induction-card projects are
+// not part of the main Projects list, so they are left out; a project that is switched off is left out too.
+export async function getProjectNames(companyId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('real_estate_projects')
+    .select('project_name')
+    .eq('company_id', companyId)
+    .eq('active', true)
+    .is('induction_section_id', null)
+    .order('project_name')
+    .limit(5000);
+  if (error) throw new Error(error.message);
+  return [...new Set((data ?? []).map((r) => (r.project_name as string).trim()).filter(Boolean))];
+}
+
 // ── Champion categories ──────────────────────────────────────────────────
 
 const DEFAULT_CHAMPION_CATEGORIES: { metric_key: PtChampionCategory['metric_key']; label: string; sort_order: number }[] = [

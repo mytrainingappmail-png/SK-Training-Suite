@@ -1,0 +1,10 @@
+alter table pt_settings drop constraint if exists pt_settings_details_visibility_check;
+alter table pt_settings drop column if exists details_visibility;
+alter table pt_settings drop column if exists details_use_projects;
+alter table pt_settings drop column if exists details_ask_writeup;
+alter table pt_settings drop column if exists details_ask_mobile;
+alter table pt_settings drop column if exists details_ask_client;
+alter table pt_settings drop column if exists details_ask_time;
+alter table pt_settings drop column if exists details_enabled;
+alter table pt_reports drop column if exists activity_details;
+alter table pt_commitments drop column if exists plan_details;

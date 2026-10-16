@@ -15,6 +15,7 @@ import {
 } from '../../services/performanceTracker/performanceTrackerService';
 import type { Employee } from '../../types/employee';
 import type { PtSettings, PtTeam, PtCustomField, PtLeaderboardFormula, PtChampionCategory } from '../../types/performanceTracker';
+import { detailsConfig } from '../../utils/ptActivityDetails';
 import { Card, SelectField, NumField, ptInputCls, employeeName } from './ptUi';
 
 const FORMULA_OPTIONS: { value: PtLeaderboardFormula; label: string }[] = [
@@ -261,6 +262,45 @@ export function SettingsTab({
             </div>
           </div>
         )}
+      </SectionCard>
+
+      <SectionCard title="Activity Details" subtitle="Behind the daily numbers, employees can write which project, what time, which client — plus a write-up for each meeting, the client behind each booking, and the data-calling prospects. Everything is optional for them; nothing blocks a submit. After they submit it is locked: only managers and admins can correct it (Reports tab).">
+        {(() => {
+          const dc = detailsConfig(draft);
+          const row = (label: string, hint: string | null, checked: boolean, key: 'details_enabled' | 'details_ask_time' | 'details_ask_client' | 'details_ask_mobile' | 'details_ask_writeup' | 'details_use_projects') => (
+            <label key={key} className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" className="mt-0.5 h-3.5 w-3.5" checked={checked} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.checked }))} />
+              <span>{label}{hint && <span className="block text-[11px] text-slate-500">{hint}</span>}</span>
+            </label>
+          );
+          return (
+            <div className="space-y-3">
+              {row('Let employees add activity details', 'Switch off to hide every details box (the plain numbers keep working).', dc.enabled, 'details_enabled')}
+              {dc.enabled && (
+                <>
+                  <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2">
+                    {row('Project picker', 'Offer the company Projects list (searchable by name, area or sector). They can still type any name.', dc.useProjects, 'details_use_projects')}
+                    {row('Write-up box', 'A free text box for each meeting, booking and for data calling. Enter starts a new line.', dc.askWriteup, 'details_ask_writeup')}
+                    {row('Time', null, dc.askTime, 'details_ask_time')}
+                    {row('Client name', null, dc.askClient, 'details_ask_client')}
+                    {row('Client mobile number', 'Optional field for the employee. Off by default.', dc.askMobile, 'details_ask_mobile')}
+                  </div>
+                  <div className="sm:max-w-sm">
+                    <SelectField
+                      label="Who can read other people's details?"
+                      value={dc.visibility}
+                      onChange={(v) => setDraft((d) => ({ ...d, details_visibility: v }))}
+                      options={[
+                        { value: 'managers', label: 'Managers and admins only (employees see their own)' },
+                        { value: 'team', label: 'The whole team (shown as "Team activity today")' },
+                      ]}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
       </SectionCard>
 
       <div className="flex items-center gap-3">

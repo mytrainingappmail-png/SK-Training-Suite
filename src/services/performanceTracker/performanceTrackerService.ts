@@ -141,6 +141,10 @@ export async function leaveManagerComment(id: string, comment: string, byEmploye
 
 // ── Champion categories ──────────────────────────────────────────────────
 
+export async function loadProjectNames(companyId: string): Promise<string[]> {
+  return repo.getProjectNames(companyId);
+}
+
 export async function loadChampionCategories(companyId: string): Promise<PtChampionCategory[]> {
   return repo.getChampionCategories(companyId);
 }

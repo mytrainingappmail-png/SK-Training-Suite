@@ -15,8 +15,13 @@ import { fmtDate, weekRange, weekendRange, monthRange } from '../../utils/perfor
 import { csvEscape, downloadCsvFile } from '../../services/quiz/quizCsvService';
 import type { Employee } from '../../types/employee';
 import type { Department } from '../../types/department';
-import type { PtTeam, PtCommitment, PtReport } from '../../types/performanceTracker';
+import type { PtTeam, PtCommitment, PtReport, PtSettings, PtActivityDetails, PtMeetingKind, PtMeetingRow } from '../../types/performanceTracker';
+import {
+  MEETING_KINDS, cleanBookings, cleanPlan, cleanReportRows, detailsConfig, doneCount, flattenReport, hasDetails, kindNoun, mergeSlots, padSlots, resizeSlots, type DetailsConfig,
+} from '../../utils/ptActivityDetails';
 import { Card, SelectField, MultiSelectField, NumField, LoadingBlock, Modal, ptInputCls, employeeName } from './ptUi';
+import { BookingRowsEditor, MeetingRowsEditor } from './ActivityDetailsEditor';
+import { useProjectNames } from './usePtProjectNames';
 import { IconDocument, IconSpinner } from './ptIcons';
 
 // ── Metric config — every "activity type" in this module is a fixed pair of
@@ -60,11 +65,41 @@ interface MergedRow {
   report: PtReport | null;
 }
 
-function ReportDetailModal({ report, employeeLabel, onClose, onSaved }: {
-  report: PtReport; employeeLabel: string; onClose: () => void; onSaved: (r: PtReport) => void;
+/** The details as they are saved: planned meetings always, extras only when written, empty groups dropped. */
+function cleanDetails(d: PtActivityDetails): PtActivityDetails {
+  const out: PtActivityDetails = {};
+  for (const k of MEETING_KINDS) {
+    const rows = d[k.key];
+    if (rows && rows.length > 0) out[k.key] = cleanReportRows(rows);
+  }
+  if (d.bookings && d.bookings.length > 0) out.bookings = cleanBookings(d.bookings);
+  if (d.calling && ((d.calling.prospects ?? 0) > 0 || d.calling.note.trim())) out.calling = { prospects: d.calling.prospects, note: d.calling.note.trim() };
+  return out;
+}
+
+function ReportDetailModal({ report, employeeLabel, cfg, onClose, onSaved }: {
+  report: PtReport; employeeLabel: string; cfg: DetailsConfig; onClose: () => void; onSaved: (r: PtReport) => void;
 }) {
   const user = getCurrentUser();
   const [draft, setDraft] = useState(report);
+  // the employee's details, open for the manager to correct (the employee cannot edit after submitting)
+  const [details, setDetails] = useState<PtActivityDetails>(report.activity_details ?? {});
+  const projectNames = useProjectNames(cfg.enabled && cfg.useProjects);
+  const doneByDetails: Partial<Record<PtMeetingKind, number>> = {};
+  for (const k of MEETING_KINDS) {
+    const rows = details[k.key];
+    if (rows && rows.length > 0) doneByDetails[k.key] = doneCount(rows);
+  }
+  const draftDone: Record<PtMeetingKind, number> = { f2f: draft.f2f_done, sv: draft.sv_done, revisit: draft.revisit_done };
+  const mismatches = MEETING_KINDS.filter((k) => doneByDetails[k.key] !== undefined && doneByDetails[k.key] !== draftDone[k.key]);
+  const bookingMismatch = (details.bookings?.length ?? 0) > 0 && details.bookings!.length !== draft.bookings;
+  function matchNumbersToDetails() {
+    setDraft((d) => ({
+      ...d,
+      f2f_done: doneByDetails.f2f ?? d.f2f_done, sv_done: doneByDetails.sv ?? d.sv_done, revisit_done: doneByDetails.revisit ?? d.revisit_done,
+      bookings: (details.bookings?.length ?? 0) > 0 ? details.bookings!.length : d.bookings,
+    }));
+  }
   const [comment, setComment] = useState(report.manager_comment ?? '');
   const [savingValues, setSavingValues] = useState(false);
   const [savingComment, setSavingComment] = useState(false);
@@ -79,6 +114,7 @@ function ReportDetailModal({ report, employeeLabel, onClose, onSaved }: {
         calls_done: draft.calls_done, conn_done: draft.conn_done, talk_done: draft.talk_done,
         leads: draft.leads, meetings_fixed: draft.meetings_fixed, bookings: draft.bookings,
         remarks: draft.remarks,
+        ...(cfg.enabled ? { activity_details: cleanDetails(details) } : {}),
       });
       onSaved(saved);
     } catch (e) {
@@ -103,7 +139,7 @@ function ReportDetailModal({ report, employeeLabel, onClose, onSaved }: {
   }
 
   return (
-    <Modal open onClose={onClose} title={`${employeeLabel} — ${report.work_date}`}>
+    <Modal open onClose={onClose} title={`${employeeLabel} — ${report.work_date}`} wide>
       <div className="space-y-4">
         <div>
           <p className="mb-2 text-xs font-semibold text-slate-600">Correct a typo (recomputes Score/Achievement automatically)</p>
@@ -118,6 +154,38 @@ function ReportDetailModal({ report, employeeLabel, onClose, onSaved }: {
             <NumField label="Meetings Fixed" value={draft.meetings_fixed} onChange={(v) => setDraft((d) => ({ ...d, meetings_fixed: v }))} />
             <NumField label="Bookings" value={draft.bookings} onChange={(v) => setDraft((d) => ({ ...d, bookings: v }))} />
           </div>
+          {cfg.enabled && (
+            <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
+              <p className="text-xs font-semibold text-slate-600">Details written by {employeeLabel} (you can correct them)</p>
+              {MEETING_KINDS.map((k) => (
+                <MeetingRowsEditor
+                  key={k.key} kind={k.key} rows={details[k.key] ?? []} mode="report" cfg={cfg} names={projectNames}
+                  addLabel={`+ Add a ${kindNoun(k.key, 1)}`}
+                  onChange={(rows) => setDetails((d) => ({ ...d, [k.key]: rows }))}
+                />
+              ))}
+              <BookingRowsEditor rows={details.bookings ?? []} cfg={cfg} names={projectNames} onChange={(rows) => setDetails((d) => ({ ...d, bookings: rows }))} />
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+                <h4 className="mb-2 text-xs font-semibold text-slate-800">Data calling</h4>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <NumField label="Prospects created" value={details.calling?.prospects ?? 0} onChange={(v) => setDetails((d) => ({ ...d, calling: { prospects: v, note: d.calling?.note ?? '' } }))} />
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-slate-600">Write-up</label>
+                    <textarea value={details.calling?.note ?? ''} onChange={(e) => setDetails((d) => ({ ...d, calling: { prospects: d.calling?.prospects ?? 0, note: e.target.value } }))} rows={2} className={`mt-1 resize-y ${ptInputCls}`} />
+                  </div>
+                </div>
+              </div>
+              {(mismatches.length > 0 || bookingMismatch) && (
+                <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  The numbers above do not match the details
+                  {mismatches.map((k) => ` (${k.label}: details say ${doneByDetails[k.key]}, number says ${draftDone[k.key]})`).join('')}
+                  {bookingMismatch ? ` (Bookings: details say ${details.bookings!.length}, number says ${draft.bookings})` : ''}.
+                  <button type="button" onClick={matchNumbersToDetails} className="ml-2 font-semibold underline">Make the numbers match the details</button>
+                </div>
+              )}
+              <p className="text-[11px] text-slate-500">Editing the details never changes the numbers or the score by itself — use the button above if you want them to follow.</p>
+            </div>
+          )}
           <button onClick={handleSaveValues} disabled={savingValues} className="mt-3 flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
             {savingValues && <IconSpinner className="h-3 w-3" />}Save Correction
           </button>
@@ -144,10 +212,22 @@ function ReportDetailModal({ report, employeeLabel, onClose, onSaved }: {
 // Commitment — this UI didn't exist before (only Evening Reports could be
 // corrected by a manager) even though the repository/service functions for
 // it were already there and simply never called from anywhere.
-function CommitmentDetailModal({ commitment, employeeLabel, onClose, onSaved }: {
-  commitment: PtCommitment; employeeLabel: string; onClose: () => void; onSaved: (c: PtCommitment) => void;
+function CommitmentDetailModal({ commitment, employeeLabel, cfg, onClose, onSaved }: {
+  commitment: PtCommitment; employeeLabel: string; cfg: DetailsConfig; onClose: () => void; onSaved: (c: PtCommitment) => void;
 }) {
   const [draft, setDraft] = useState(commitment);
+  const projectNames = useProjectNames(cfg.enabled && cfg.useProjects);
+  // one card per planned meeting, filled with what the employee wrote in the morning
+  const [slots, setSlots] = useState<Record<PtMeetingKind, PtMeetingRow[]>>(() => ({
+    f2f: resizeSlots(commitment.plan_details?.f2f ?? [], commitment.f2f_planned),
+    sv: resizeSlots(commitment.plan_details?.sv ?? [], commitment.sv_planned),
+    revisit: resizeSlots(commitment.plan_details?.revisit ?? [], commitment.revisit_planned),
+  }));
+  const plannedNow: Record<PtMeetingKind, number> = { f2f: draft.f2f_planned, sv: draft.sv_planned, revisit: draft.revisit_planned };
+  function setPlanned(kind: PtMeetingKind, n: number) {
+    setDraft((d) => ({ ...d, [kind === 'f2f' ? 'f2f_planned' : kind === 'sv' ? 'sv_planned' : 'revisit_planned']: n }));
+    setSlots((prev) => ({ ...prev, [kind]: padSlots(prev[kind], n) }));
+  }
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
@@ -159,6 +239,7 @@ function CommitmentDetailModal({ commitment, employeeLabel, onClose, onSaved }: 
         f2f_planned: draft.f2f_planned, sv_planned: draft.sv_planned, planned_site: draft.planned_site,
         revisit_planned: draft.revisit_planned, calls_planned: draft.calls_planned,
         conn_target: draft.conn_target, talk_target: draft.talk_target, remarks: draft.remarks,
+        ...(cfg.enabled ? { plan_details: cleanPlan(slots, plannedNow) } : {}),
       });
       onSaved(saved);
     } catch (e) {
@@ -169,13 +250,13 @@ function CommitmentDetailModal({ commitment, employeeLabel, onClose, onSaved }: 
   }
 
   return (
-    <Modal open onClose={onClose} title={`${employeeLabel} — ${commitment.work_date} (Plan)`}>
+    <Modal open onClose={onClose} title={`${employeeLabel} — ${commitment.work_date} (Plan)`} wide>
       <div className="space-y-4">
         <p className="text-xs font-semibold text-slate-600">Correct a typo in the morning plan</p>
         <div className="grid grid-cols-3 gap-2">
-          <NumField label="F2F Planned" value={draft.f2f_planned} onChange={(v) => setDraft((d) => ({ ...d, f2f_planned: v }))} />
-          <NumField label="Site Visits" value={draft.sv_planned} onChange={(v) => setDraft((d) => ({ ...d, sv_planned: v }))} />
-          <NumField label="Revisits" value={draft.revisit_planned} onChange={(v) => setDraft((d) => ({ ...d, revisit_planned: v }))} />
+          <NumField label="F2F Planned" value={draft.f2f_planned} onChange={(v) => setPlanned('f2f', v)} />
+          <NumField label="Site Visits" value={draft.sv_planned} onChange={(v) => setPlanned('sv', v)} />
+          <NumField label="Revisits" value={draft.revisit_planned} onChange={(v) => setPlanned('revisit', v)} />
           <NumField label="Calls" value={draft.calls_planned} onChange={(v) => setDraft((d) => ({ ...d, calls_planned: v }))} />
           <NumField label="Connected Target" value={draft.conn_target} onChange={(v) => setDraft((d) => ({ ...d, conn_target: v }))} />
           <NumField label="Talk Target (mins)" value={draft.talk_target} onChange={(v) => setDraft((d) => ({ ...d, talk_target: v }))} />
@@ -184,6 +265,12 @@ function CommitmentDetailModal({ commitment, employeeLabel, onClose, onSaved }: 
           <label className="text-xs font-medium text-slate-600">Planned Site / Location</label>
           <input type="text" value={draft.planned_site ?? ''} onChange={(e) => setDraft((d) => ({ ...d, planned_site: e.target.value || null }))} className={`mt-1 ${ptInputCls}`} />
         </div>
+        {cfg.enabled && MEETING_KINDS.filter((k) => plannedNow[k.key] > 0).map((k) => (
+          <MeetingRowsEditor
+            key={k.key} kind={k.key} rows={slots[k.key].slice(0, plannedNow[k.key])} mode="plan" cfg={cfg} names={projectNames}
+            onChange={(rows) => setSlots((prev) => ({ ...prev, [k.key]: mergeSlots(rows, prev[k.key]) }))}
+          />
+        ))}
         <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
           {saving && <IconSpinner className="h-3 w-3" />}Save Correction
         </button>
@@ -193,10 +280,11 @@ function CommitmentDetailModal({ commitment, employeeLabel, onClose, onSaved }: 
   );
 }
 
-export function ReportsTab({ employees, teams, teamMap, departments }: {
-  employees: Employee[]; teams: PtTeam[]; teamMap: Record<string, string | null>; departments: Department[];
+export function ReportsTab({ employees, teams, teamMap, departments, settings }: {
+  employees: Employee[]; teams: PtTeam[]; teamMap: Record<string, string | null>; departments: Department[]; settings: PtSettings;
 }) {
   const user = getCurrentUser();
+  const detailsCfg = detailsConfig(settings);
   const [range, setRange] = useState(defaultRange());
   const [singleDay, setSingleDay] = useState(false);
   const [employeeFilter, setEmployeeFilter] = useState<string[]>([]);
@@ -287,6 +375,7 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
     managerComment?: string | null;
     reportId?: string | null;
     commitmentId?: string | null;
+    hasDetails?: boolean;
     clickable: boolean;
   }
 
@@ -322,6 +411,7 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
           managerComment: row.report?.manager_comment ?? null,
           reportId: row.report?.id ?? null,
           commitmentId: row.commitment?.id ?? null,
+          hasDetails: hasDetails(row.report?.activity_details) || hasDetails(row.commitment?.plan_details),
           clickable: showAchievement && row.report != null,
         };
       });
@@ -409,6 +499,19 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
     downloadCsvFile(`pt-report_${range.start}_to_${range.end}_${modeLabel}_${dataMode}.csv`, csv);
   }
 
+  // One line per meeting / booking / calling write-up of the rows currently selected (same filters as the table).
+  const activityLines = useMemo(
+    () => merged.flatMap((row) => (row.report ? flattenReport(row.report, employeeName(empById.get(row.employee_id))) : [])),
+    [merged, empById],
+  );
+
+  function exportActivityCsv() {
+    const header = ['Date', 'Employee', 'Type', 'Project', 'Time', 'Client', 'Mobile', 'Status', 'Detail', 'Write-up'];
+    const rows = activityLines.map((l) => [l.date, l.employee, l.type, l.project, l.time, l.client, l.mobile, l.status, l.detail, l.note]);
+    const csv = [header, ...rows].map((row) => row.map((cell) => csvEscape(String(cell))).join(',')).join('\r\n');
+    downloadCsvFile(`pt-activity-details_${range.start}_to_${range.end}.csv`, csv);
+  }
+
   const teamOptions = teams.map((t) => ({ value: t.id, label: t.name }));
   const deptOptions = departments.map((d) => ({ value: d.id, label: d.department_name }));
   const employeeOptions = employees.filter((e) => e.active).map((e) => ({ value: e.id, label: employeeName(e) }));
@@ -453,6 +556,11 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
           <button onClick={exportCsv} disabled={summaryRows.length === 0 || activeMetrics.length === 0} className="ml-auto flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
             <IconDocument className="h-3.5 w-3.5" />Export CSV
           </button>
+          {detailsCfg.enabled && (
+            <button onClick={exportActivityCsv} disabled={activityLines.length === 0} title="One line per meeting, booking and calling write-up — project, time, client, status, write-up" className="flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3.5 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+              <IconDocument className="h-3.5 w-3.5" />Export activity details
+            </button>
+          )}
         </div>
       </Card>
 
@@ -478,6 +586,7 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
                     {columns.map((c) => <td key={c.header} className="whitespace-nowrap px-4 py-2 font-mono text-slate-700 first:font-sans first:font-medium first:text-slate-900 [&:nth-child(2)]:font-sans">{c.get(r)}</td>)}
                     {groupMode === 'daily' && (
                       <td className="whitespace-nowrap px-4 py-2 font-sans">
+                        {r.hasDetails && <span title="Has activity details — open the row to read them" className="mr-2 text-xs">📝</span>}
                         {r.commitmentId && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setOpenCommitmentId(r.commitmentId ?? null); }}
@@ -500,6 +609,7 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
       {openReport && (
         <ReportDetailModal
           report={openReport}
+          cfg={detailsCfg}
           employeeLabel={employeeName(empById.get(openReport.employee_id))}
           onClose={() => setOpenReportId(null)}
           onSaved={(saved) => setReports((rs) => rs.map((r) => (r.id === saved.id ? saved : r)))}
@@ -509,6 +619,7 @@ export function ReportsTab({ employees, teams, teamMap, departments }: {
       {openCommitment && (
         <CommitmentDetailModal
           commitment={openCommitment}
+          cfg={detailsCfg}
           employeeLabel={employeeName(empById.get(openCommitment.employee_id))}
           onClose={() => setOpenCommitmentId(null)}
           onSaved={(saved) => setCommitments((cs) => cs.map((c) => (c.id === saved.id ? saved : c)))}

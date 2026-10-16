@@ -134,7 +134,7 @@ export function LoadingBlock() {
   return <div className="flex h-32 items-center justify-center text-slate-500"><IconSpinner className="mr-2 h-4 w-4 text-emerald-500" /> Loading...</div>;
 }
 
-export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+export function Modal({ open, onClose, title, children, wide = false }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -144,7 +144,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={ref} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <div ref={ref} className={`w-full rounded-2xl bg-white p-5 shadow-2xl ${wide ? 'max-h-[92vh] max-w-2xl overflow-y-auto' : 'max-w-md'}`}>
         <h3 className="mb-3 text-sm font-semibold text-slate-900">{title}</h3>
         {children}
       </div>

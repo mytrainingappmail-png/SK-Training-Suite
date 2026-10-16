@@ -51,8 +51,64 @@ export interface PtSettings {
   auto_reminder_enabled: boolean;
   auto_reminder_morning_cutoff: string;
   auto_reminder_evening_cutoff: string;
+  // Activity details (migration 20261017100000) — what employees may write behind their numbers, and who may read it.
+  details_enabled: boolean;
+  details_ask_time: boolean;
+  details_ask_client: boolean;
+  details_ask_mobile: boolean;
+  details_ask_writeup: boolean;
+  details_use_projects: boolean;
+  details_visibility: 'managers' | 'team';
   updated_at: string;
 }
+
+// ── Activity details ─────────────────────────────────────────────────────
+
+/** One meeting (face-to-face, site visit or revisit): planned in the morning or reported in the evening. */
+export interface PtMeetingRow {
+  id: string;
+  project: string;
+  /** "HH:MM" or "" */
+  time: string;
+  client: string;
+  mobile: string;
+  /** the write-up (several lines allowed) */
+  note: string;
+  /** evening only: did it happen? A planned meeting starts unanswered. */
+  status?: 'done' | 'missed';
+  /** evening only: this row came from the morning plan (false = an extra meeting that was not planned) */
+  planned?: boolean;
+  /** evening only: how the morning plan described it, kept even if the row is edited ("Tulip · 11:00 · Mr Sharma") */
+  planned_as?: string;
+}
+
+export interface PtBookingRow {
+  id: string;
+  client: string;
+  mobile: string;
+  project: string;
+  /** unit / size / tower — free text */
+  unit: string;
+  /** booking amount — free text so "5 lakh token" is fine */
+  amount: string;
+  note: string;
+}
+
+export interface PtPlanDetails {
+  f2f?: PtMeetingRow[];
+  sv?: PtMeetingRow[];
+  revisit?: PtMeetingRow[];
+}
+
+export interface PtActivityDetails {
+  f2f?: PtMeetingRow[];
+  sv?: PtMeetingRow[];
+  revisit?: PtMeetingRow[];
+  bookings?: PtBookingRow[];
+  calling?: { prospects: number; note: string };
+}
+
+export type PtMeetingKind = 'f2f' | 'sv' | 'revisit';
 
 export interface PtCustomField {
   id: string;
@@ -88,11 +144,12 @@ export interface PtCommitment {
   talk_target: number;
   remarks: string | null;
   custom_values: Record<string, number>;
+  plan_details: PtPlanDetails;
   submitted_at: string;
   created_at: string;
 }
 
-export type PtCommitmentForm = Omit<PtCommitment, 'id' | 'submitted_at' | 'created_at'>;
+export type PtCommitmentForm = Omit<PtCommitment, 'id' | 'submitted_at' | 'created_at' | 'plan_details'> & { plan_details?: PtPlanDetails };
 
 export interface PtReport {
   id: string;
@@ -110,6 +167,7 @@ export interface PtReport {
   bookings: number;
   remarks: string | null;
   custom_values: Record<string, number>;
+  activity_details: PtActivityDetails;
   // Computed server-side by the pt_reports_compute_score trigger.
   score: number | null;
   achievement_pct: number | null;
@@ -124,7 +182,7 @@ export interface PtReport {
   created_at: string;
 }
 
-export type PtReportForm = Omit<PtReport, 'id' | 'submitted_at' | 'created_at' | 'score' | 'achievement_pct' | 'min_criteria_met' | 'manager_comment' | 'manager_comment_by' | 'manager_comment_at'>;
+export type PtReportForm = Omit<PtReport, 'id' | 'submitted_at' | 'created_at' | 'score' | 'achievement_pct' | 'min_criteria_met' | 'manager_comment' | 'manager_comment_by' | 'manager_comment_at' | 'activity_details'> & { activity_details?: PtActivityDetails };
 
 export type PtChampionMetricKey = 'f2f' | 'sv' | 'bookings' | 'achievement' | 'calls' | 'talk';
 

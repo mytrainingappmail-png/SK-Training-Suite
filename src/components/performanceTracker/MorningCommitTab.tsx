@@ -6,8 +6,11 @@ import {
   loadMyCommitment, submitCommitment, loadCommitmentsForDate, todayStr, sendReminder,
 } from '../../services/performanceTracker/performanceTrackerService';
 import type { Employee } from '../../types/employee';
-import type { PtCommitment, PtCustomField, PtSettings } from '../../types/performanceTracker';
+import type { PtCommitment, PtCustomField, PtMeetingKind, PtMeetingRow, PtSettings } from '../../types/performanceTracker';
+import { MEETING_KINDS, cleanPlan, detailsConfig, hasDetails, kindNoun, mergeSlots, padSlots } from '../../utils/ptActivityDetails';
 import { Card, Badge, NumField, LoadingBlock, ptInputCls, employeeName } from './ptUi';
+import { ActivityDetailsView, DetailsToggle, MeetingRowsEditor } from './ActivityDetailsEditor';
+import { useProjectNames } from './usePtProjectNames';
 import { IconSend, IconAlert, IconBell, IconCheck, IconClock, IconSpinner } from './ptIcons';
 
 export function MorningCommitTab({ employees, customFields, isManagerUp, settings }: {
@@ -32,6 +35,25 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
   const [talk, setTalk] = useState(0);
   const [remarks, setRemarks] = useState('');
   const [customValues, setCustomValues] = useState<Record<string, number>>({});
+
+  // Optional details behind the planned numbers: one card per planned meeting, shown when the employee opens them.
+  const cfg = detailsConfig(settings);
+  const projectNames = useProjectNames(cfg.enabled && cfg.useProjects);
+  const [planRows, setPlanRows] = useState<Record<PtMeetingKind, PtMeetingRow[]>>({ f2f: [], sv: [], revisit: [] });
+  const [openKinds, setOpenKinds] = useState<Set<PtMeetingKind>>(new Set());
+  const counts: Record<PtMeetingKind, number> = { f2f, sv, revisit };
+  const kindEnabled: Record<PtMeetingKind, boolean> = { f2f: settings.f2f_enabled, sv: settings.sv_enabled, revisit: settings.revisit_enabled };
+
+  /** A planned number changed: the details get exactly that many cards, keeping what was already typed. */
+  function setCount(kind: PtMeetingKind, n: number) {
+    if (kind === 'f2f') setF2f(n);
+    else if (kind === 'sv') setSv(n);
+    else setRevisit(n);
+    setPlanRows((prev) => ({ ...prev, [kind]: padSlots(prev[kind], n) }));
+  }
+  function toggleKind(kind: PtMeetingKind) {
+    setOpenKinds((prev) => { const next = new Set(prev); if (next.has(kind)) next.delete(kind); else next.add(kind); return next; });
+  }
 
   async function load() {
     if (!user?.id || !user.companyId) return;
@@ -62,6 +84,7 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
         f2f_planned: f2f, sv_planned: sv, planned_site: sv > 0 ? (plannedSite.trim() || null) : null,
         revisit_planned: revisit, calls_planned: calls, conn_target: conn, talk_target: talk,
         remarks: remarks || null, custom_values: customValues,
+        plan_details: cfg.enabled ? cleanPlan(planRows, { f2f: settings.f2f_enabled ? f2f : 0, sv: settings.sv_enabled ? sv : 0, revisit: settings.revisit_enabled ? revisit : 0 }) : {},
       });
       await load();
     } catch (e) {
@@ -107,13 +130,19 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
               <div><p className="font-mono text-lg font-bold">{mine.calls_planned}</p><p className="text-[11px] text-slate-500">Calls</p></div>
             </div>
             {mine.planned_site && <p className="pt-1 text-center text-xs text-slate-600">📍 {mine.planned_site}</p>}
+            {hasDetails(mine.plan_details) && (
+              <div className="border-t border-slate-100 pt-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Plan details</p>
+                <ActivityDetailsView details={mine.plan_details} />
+              </div>
+            )}
           </div>
         ) : (
           <>
             <p className="my-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Cannot be edited after submission — double-check before submitting.</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {settings.f2f_enabled && <NumField label="F2F Meetings Planned" value={f2f} onChange={setF2f} />}
-              {settings.sv_enabled && <NumField label="Site Visits Planned" value={sv} onChange={setSv} />}
+              {settings.f2f_enabled && <NumField label="F2F Meetings Planned" value={f2f} onChange={(v) => setCount('f2f', v)} />}
+              {settings.sv_enabled && <NumField label="Site Visits Planned" value={sv} onChange={(v) => setCount('sv', v)} />}
               {settings.sv_enabled && sv > 0 && (
                 <div>
                   <label className="text-xs font-medium text-slate-600">Planned Site / Location</label>
@@ -123,11 +152,28 @@ export function MorningCommitTab({ employees, customFields, isManagerUp, setting
                   />
                 </div>
               )}
-              {settings.revisit_enabled && <NumField label="Revisits Planned" value={revisit} onChange={setRevisit} />}
+              {settings.revisit_enabled && <NumField label="Revisits Planned" value={revisit} onChange={(v) => setCount('revisit', v)} />}
               {settings.calls_enabled && <NumField label="Total Calls Planned" value={calls} onChange={setCalls} />}
               {settings.conn_enabled && <NumField label="Connected Calls Target" value={conn} onChange={setConn} />}
               {settings.talk_enabled && <NumField label="Talk Time Target (mins)" value={talk} onChange={setTalk} />}
             </div>
+            {cfg.enabled && MEETING_KINDS.filter((k) => kindEnabled[k.key] && counts[k.key] > 0).map((k) => (
+              <div key={k.key} className="mt-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+                <DetailsToggle
+                  label={`Add ${kindNoun(k.key, 2)} details — which project, when, which client (optional)`}
+                  openLabel={`Hide ${kindNoun(k.key, 2)} details`}
+                  open={openKinds.has(k.key)} onToggle={() => toggleKind(k.key)}
+                />
+                {openKinds.has(k.key) && (
+                  <div className="mt-3">
+                    <MeetingRowsEditor
+                      kind={k.key} rows={planRows[k.key].slice(0, counts[k.key])} mode="plan" cfg={cfg} names={projectNames}
+                      onChange={(rows) => setPlanRows((prev) => ({ ...prev, [k.key]: mergeSlots(rows, prev[k.key]) }))}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
             {morningFields.length > 0 && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {morningFields.map((f) => (
