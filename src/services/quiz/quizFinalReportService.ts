@@ -5,52 +5,12 @@
 
 import type { FinalUploadRow } from "../../types/quiz";
 
-// ── Reading an uploaded sheet ────────────────────────────────────────────────────────────────────────────────────
+// ── Column mapping helpers (used by "pick a table yourself") ────────────────────────────────────────────────────────────────────────────────────
 
 export type MappingField = "name" | "score" | "total" | "percent" | "correct" | "wrong" | "remarks";
 export type ColumnMapping = Record<MappingField, number | null>;
 
-export interface ParsedSheet {
-  headers: string[];
-  body: unknown[][];
-}
-
 const cellText = (v: unknown): string => (v === null || v === undefined ? "" : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).trim());
-
-/** The header row is the first row with at least two filled cells; everything under it is data. */
-export function parseSheet(raw: unknown[][]): ParsedSheet {
-  const at = raw.findIndex((r) => r.filter((c) => cellText(c) !== "").length >= 2);
-  if (at < 0) return { headers: [], body: [] };
-  const width = Math.max(...raw.slice(at).map((r) => r.length));
-  const headers = Array.from({ length: width }, (_, i) => cellText(raw[at][i]) || `Column ${i + 1}`);
-  const body = raw.slice(at + 1).filter((r) => r.some((c) => cellText(c) !== ""));
-  return { headers, body };
-}
-
-// Suggestions only — the trainer always confirms or changes each one in a dropdown that lists the file's own headers.
-const HINTS: Record<MappingField, RegExp> = {
-  name: /\b(name|candidate|trainee|employee|student|participant)\b/i,
-  score: /\b(marks?|score|obtained|points?)\b/i,
-  total: /\b(total|out of|max|maximum|full)\b/i,
-  percent: /(%|percent|percentage|\bpct\b)/i,
-  correct: /\b(correct|right)\b/i,
-  wrong: /\b(wrong|incorrect)\b/i,
-  remarks: /\b(remark|remarks|comment|comments|feedback|note|notes)\b/i,
-};
-
-export function guessMapping(headers: string[]): ColumnMapping {
-  const used = new Set<number>();
-  const out = {} as ColumnMapping;
-  // most specific first, so "Total Marks" is not taken as the score column
-  const order: MappingField[] = ["name", "percent", "total", "correct", "wrong", "remarks", "score"];
-  for (const f of order) {
-    let idx = headers.findIndex((h, i) => !used.has(i) && HINTS[f].test(h));
-    if (f === "score" && idx < 0) idx = -1;
-    out[f] = idx >= 0 ? idx : null;
-    if (idx >= 0) used.add(idx);
-  }
-  return out;
-}
 
 const toNumber = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -263,23 +223,4 @@ export async function downloadFinalReportXlsx(input: ReportExportInput, fileName
     ],
     {}
   ).toFile(fileName);
-}
-
-/** A tiny example file so the trainer sees which columns to bring. The example names are placeholders to overwrite. */
-export async function downloadSampleXlsx(fileName: string): Promise<void> {
-  const { default: writeXlsxFile } = await import("write-excel-file/browser");
-  const head = (v: string) => ({ value: v, fontWeight: "bold" as const, backgroundColor: NAVY, color: "#FFFFFF" });
-  const data = [
-    ["Name", "Marks", "Out of", "Percent", "Correct", "Wrong", "Remarks"].map(head),
-    [{ value: "Example Person One" }, { value: 18, type: Number }, { value: 20, type: Number }, { value: 90, type: Number }, { value: 18, type: Number }, { value: 2, type: Number }, { value: "Replace these example rows with your own" }],
-    [{ value: "Example Person Two" }, { value: 12, type: Number }, { value: 20, type: Number }, { value: 60, type: Number }, { value: 12, type: Number }, { value: 8, type: Number }, { value: "" }],
-  ];
-  await writeXlsxFile(data, { sheet: "Round", columns: [{ width: 26 }, { width: 9 }, { width: 9 }, { width: 10 }, { width: 9 }, { width: 9 }, { width: 40 }] }).toFile(fileName);
-}
-
-/** Reads the first sheet of an .xlsx the trainer picked. Loaded on demand so the app's main bundle stays small. */
-export async function readXlsxFile(file: File): Promise<ParsedSheet> {
-  const { readSheet } = await import("read-excel-file/browser");
-  const raw = (await readSheet(file)) as unknown[][];
-  return parseSheet(raw);
 }

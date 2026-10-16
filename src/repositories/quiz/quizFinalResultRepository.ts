@@ -140,6 +140,24 @@ export async function listFinalFeedback(folderId: string): Promise<QuizFinalFeed
   return (data ?? []) as QuizFinalFeedback[];
 }
 
+/** Many feedback lines at once (an Excel upload) — one request. */
+export async function saveFinalFeedbackMany(
+  companyId: string,
+  folderId: string,
+  items: { candidateKey: string; displayName: string; feedback: string }[]
+): Promise<void> {
+  if (items.length === 0) return;
+  const now = new Date().toISOString();
+  const { error } = await supabaseQuiz.from("quiz_final_feedback").upsert(
+    items.map((i) => ({ company_id: companyId, folder_id: folderId, candidate_key: i.candidateKey, display_name: i.displayName, feedback: i.feedback, updated_at: now })),
+    { onConflict: "folder_id,candidate_key" }
+  );
+  if (error) {
+    console.error("[quizFinalResultRepository] saveFinalFeedbackMany:", error);
+    throw new Error(error.message);
+  }
+}
+
 export async function saveFinalFeedback(companyId: string, folderId: string, candidateKey: string, displayName: string, feedback: string): Promise<void> {
   const { error } = await supabaseQuiz
     .from("quiz_final_feedback")

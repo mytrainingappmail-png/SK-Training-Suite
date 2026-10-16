@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { getExamResults } from "../../repositories/exam/examAdminRepository";
-import { listFinalFeedback, saveFinalFeedback, createFinalUpload, deleteFinalUpload } from "../../repositories/quiz/quizFinalResultRepository";
+import { listFinalFeedback, saveFinalFeedback, saveFinalFeedbackMany, createFinalUpload, deleteFinalUpload } from "../../repositories/quiz/quizFinalResultRepository";
 import type { FolderExamSession } from "../../repositories/quiz/quizResultFolderRepository";
 import {
   buildCandidates,
+  candidateKey,
   downloadFinalReportXlsx,
   resultOf,
   sortRounds,
@@ -304,9 +305,20 @@ export default function FinalFolderReport({ folder, finals, exams, uploads, comp
       {showUpload && (
         <FinalExcelUploadModal
           folderName={folder.name}
+          existingLabels={uploads.map((u) => u.round_label)}
           onClose={() => setShowUpload(false)}
-          onSave={async (input) => {
-            await createFinalUpload(companyId, adminId, { folder_id: folder.id, ...input });
+          onSave={async (p) => {
+            for (const r of p.rounds) await createFinalUpload(companyId, adminId, { folder_id: folder.id, ...r });
+            if (p.feedback.length > 0) {
+              const have = new Map((await listFinalFeedback(folder.id)).map((f) => [f.candidate_key, f.feedback.trim()]));
+              const items = p.feedback
+                .filter((f) => p.overwriteFeedback || !have.get(candidateKey(f.name)))
+                .map((f) => ({ candidateKey: candidateKey(f.name), displayName: f.name, feedback: f.text }));
+              await saveFinalFeedbackMany(companyId, folder.id, items);
+              const fresh = Object.fromEntries((await listFinalFeedback(folder.id)).map((f) => [f.candidate_key, f.feedback]));
+              setFeedback(fresh);
+              setSaved(fresh);
+            }
             setShowUpload(false);
             onChanged();
           }}
