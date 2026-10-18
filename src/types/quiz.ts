@@ -54,6 +54,8 @@ export interface Quiz {
   exam_duration_minutes: number | null;
   /** Does a trainee learn "right / wrong" the moment they answer? null = follow the company default (Quiz Settings / Exams). */
   reveal_answers?: boolean | null;
+  /** Live Quiz only: may a player press Next as soon as they have answered? null = follow the company default (off). */
+  allow_early_next?: boolean | null;
   status: QuizStatus;
   created_at: string;
   updated_at: string;
@@ -131,6 +133,8 @@ export interface QuizSession {
   ended_at: string | null;
   /** Frozen at launch from the quiz's own choice or the company default: does a player learn right / wrong the moment they answer? */
   reveal_answers?: boolean;
+  /** Frozen at launch: may a player press Next as soon as they have answered (their own question, own timer)? */
+  allow_early_next?: boolean;
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
   question_started_at: string | null;
   created_at: string;
@@ -153,6 +157,8 @@ export interface QuizParticipant {
   /** Set while the host has paused this player (their answers are refused until resumed). */
   stopped_at?: string | null;
   stop_reason?: string | null;
+  /** Set when this player pressed Next to get ahead of the host's question (the question number they are on). */
+  my_index?: number | null;
 }
 
 /** get_quiz_live_admin — one player's running numbers for the host. */
@@ -317,6 +323,8 @@ export interface QuizSettings {
   exam_reveal_answers: boolean;
   /** Company default for Live Quizzes: tell a player right / wrong the moment they answer. A quiz can override it in its own settings. */
   quiz_reveal_answers: boolean;
+  /** Company default for Live Quizzes: let players press Next as soon as they have answered. A quiz can override it. */
+  quiz_allow_early_next: boolean;
   /** How long a hotspot tap's name/"wrong spot" label stays on screen before fading. 0 = stays until the next tap. */
   exam_hotspot_feedback_seconds: number;
   exam_hotspot_feedback_size: HotspotFeedbackSize;

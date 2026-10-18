@@ -162,6 +162,7 @@ export default function QuizSettingsPage() {
         option_colors: settings.option_colors,
         sound_enabled: settings.sound_enabled,
         quiz_reveal_answers: settings.quiz_reveal_answers,
+        quiz_allow_early_next: settings.quiz_allow_early_next,
       });
       setAppearanceMessage("Appearance saved.");
     } finally {
@@ -436,6 +437,22 @@ export default function QuizSettingsPage() {
             <span className="block text-xs text-slate-500 mt-0.5">
               This is the default for every Live Quiz. Turn it off to keep answers hidden until the results. Any single quiz or exam can override it in its own settings
               (Exams also have their own default on the Exams page).
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={settings.quiz_allow_early_next ?? false}
+            onChange={(e) => setSettings({ ...settings, quiz_allow_early_next: e.target.checked })}
+          />
+          <span>
+            ⏩ Let players move ahead when they finish early (Live Quiz)
+            <span className="block text-xs text-slate-500 mt-0.5">
+              After answering, a player can press “Next question” instead of waiting for the host. Your host screen, timer, leaderboard and results work exactly as before.
+              This is the default for every Live Quiz; any single quiz can override it in its own settings. Off to begin with.
             </span>
           </span>
         </label>

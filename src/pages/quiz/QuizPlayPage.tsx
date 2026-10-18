@@ -5,7 +5,7 @@ import { ROUTES } from "../../constants/routes";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { useServerClock } from "../../hooks/quiz/useServerClock";
-import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat } from "../../services/quiz/quizPlayService";
+import { getCurrentQuestion, submitAnswer, submitHotspotAnswer, heartbeat, getMyQuizPosition, moveAhead, type QuizPosition } from "../../services/quiz/quizPlayService";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import { effectiveZones } from "../../components/quiz/hotspotZones";
@@ -61,6 +61,13 @@ export default function QuizPlayPage() {
   const [showCalc, setShowCalc] = useState(false);
   // Shown instead of an endless "Recording your answer…" when the answer could not be sent.
   const [submitProblem, setSubmitProblem] = useState<string | null>(null);
+  // "Move ahead": when the trainer allows it, a player who presses Next is on their own (later) question. pos is where this
+  // player is (asked from the database, never worked out here); with the option off everything below uses the host's question.
+  const [pos, setPos] = useState<QuizPosition | null>(null);
+  const [movingNext, setMovingNext] = useState(false);
+  const earlyNext = session?.allow_early_next === true;
+  const viewIndex = earlyNext && pos ? pos.index : session?.current_question_index ?? 0;
+  const viewStartedAt = earlyNext && pos ? pos.startedAt : session?.question_started_at ?? null;
 
   const questionStartedAt = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -148,6 +155,24 @@ export default function QuizPlayPage() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [sessionId, session?.phase]);
 
+  useEffect(() => {
+    if (!sessionId || !earlyNext || session?.phase !== "question") return;
+    const sid = sessionId;
+    let cancelled = false;
+    async function load() {
+      try {
+        const p = await getMyQuizPosition(sid);
+        if (!cancelled) {
+          setPos((prev) => (prev && prev.index === p.index && prev.startedAt === p.startedAt && prev.finished === p.finished && prev.total === p.total ? prev : p));
+        }
+      } catch { /* the next refresh asks again */ }
+    }
+    void load();
+    // A missed realtime message must never leave a player on a stale question.
+    const t = setInterval(() => { if (document.visibilityState === "visible") void load(); }, 6000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [sessionId, earlyNext, session?.phase, session?.current_question_index, session?.question_started_at]);
+
   // Has the host paused THIS player? Asked every few seconds (jittered, only while visible). The database refuses a paused
   // player's answers anyway — this is just the explanation on their screen.
   useEffect(() => {
@@ -174,10 +199,16 @@ export default function QuizPlayPage() {
       setQuestion(null);
       return;
     }
+    // with "move ahead" on, wait until we know which question THIS player is on; a player who has finished has none left
+    if (earlyNext && !pos) return;
+    if (earlyNext && pos?.finished) {
+      setQuestion(null);
+      return;
+    }
 
     let cancelled = false;
-    const isNewQuestion = shownIndexRef.current !== session.current_question_index;
-    shownIndexRef.current = session.current_question_index;
+    const isNewQuestion = shownIndexRef.current !== viewIndex;
+    shownIndexRef.current = viewIndex;
     if (isNewQuestion) {
       setAnswered(false);
       setFeedback(null);
@@ -205,8 +236,8 @@ export default function QuizPlayPage() {
             // Anchored off the server's question_started_at (database time) instead
             // of a fresh full timer — a device that reconnects mid-question sees the
             // actual time left.
-            const elapsedSec = session?.question_started_at
-              ? Math.floor((serverNow() - new Date(session.question_started_at).getTime()) / 1000)
+            const elapsedSec = viewStartedAt
+              ? Math.floor((serverNow() - new Date(viewStartedAt).getTime()) / 1000)
               : 0;
             setSecondsLeft(Math.max(0, q.timer_seconds - Math.max(0, elapsedSec)));
             if (isNewQuestion && playerSettings?.sound_enabled !== false) playTone("pop");
@@ -223,7 +254,7 @@ export default function QuizPlayPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, session?.phase, session?.current_question_index]);
+  }, [sessionId, session?.phase, viewIndex, earlyNext, pos !== null, pos?.finished]);
 
   // Re-syncs the countdown (without touching answered/feedback) whenever
   // question_started_at itself changes for the SAME question — e.g. a
@@ -241,12 +272,12 @@ export default function QuizPlayPage() {
   useEffect(() => {
     if (!sessionId || !session || session.phase !== "question" || !question || answered) return;
     questionStartedAt.current = Date.now();
-    const elapsedSec = session.question_started_at
-      ? Math.floor((serverNow() - new Date(session.question_started_at).getTime()) / 1000)
+    const elapsedSec = viewStartedAt
+      ? Math.floor((serverNow() - new Date(viewStartedAt).getTime()) / 1000)
       : 0;
     setSecondsLeft(Math.max(0, question.timer_seconds - Math.max(0, elapsedSec)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.question_started_at]);
+  }, [viewStartedAt]);
 
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
@@ -334,6 +365,20 @@ export default function QuizPlayPage() {
     return null;
   }
 
+  /** "Next question": moves only THIS player on. A refusal (answer first / paused / switched off) just re-asks where we are. */
+  async function handleMoveNext() {
+    if (!sessionId || !pos || movingNext) return;
+    setMovingNext(true);
+    try {
+      const r = await moveAhead(sessionId, pos.index);
+      setPos({ ...pos, index: r.index, startedAt: r.startedAt, finished: r.finished });
+    } catch {
+      try { setPos(await getMyQuizPosition(sessionId)); } catch { /* the periodic refresh will catch up */ }
+    } finally {
+      setMovingNext(false);
+    }
+  }
+
   async function handleSubmit(optionId: string | null) {
     if (!sessionId || !question || answered) return;
     setAnswered(true);
@@ -376,6 +421,18 @@ export default function QuizPlayPage() {
         <div className="text-lg font-semibold text-white">Waiting for trainer to start…</div>
         <div className="text-sm text-slate-400">{locationState.quizTitle}</div>
         {!connected && <div className="text-xs font-bold text-red-400 animate-pulse">⚠ Reconnecting…</div>}
+      </div>
+    );
+  }
+
+  if (earlyNext && session.phase === "question" && pos?.finished) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6">
+        <div className="max-w-sm space-y-3">
+          <div className="text-6xl">🎉</div>
+          <div className="text-xl font-bold text-white">You have answered every question</div>
+          <p className="text-sm text-slate-300">Waiting for the others to finish. Your result appears when the quiz ends — please stay on this screen.</p>
+        </div>
       </div>
     );
   }
@@ -656,7 +713,20 @@ export default function QuizPlayPage() {
             ) : (
               <div className="text-slate-400 text-sm">Recording your answer…</div>
             )}
-            <div className="text-xs text-slate-500 mt-2">Waiting for the next question…</div>
+            {earlyNext && pos && !pos.finished ? (
+              <div className="mt-4">
+                <button
+                  onClick={handleMoveNext}
+                  disabled={movingNext}
+                  className="rounded-2xl bg-amber-400 px-6 py-3 text-base font-bold text-slate-950 hover:bg-amber-300 disabled:opacity-60"
+                >
+                  {movingNext ? "…" : pos.index + 1 >= pos.total ? "Finish ✓" : "Next question →"}
+                </button>
+                <div className="text-xs text-slate-500 mt-2">…or just wait — the host moves everyone on.</div>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500 mt-2">Waiting for the next question…</div>
+            )}
           </div>
           );
         })()}

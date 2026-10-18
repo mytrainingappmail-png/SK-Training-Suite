@@ -202,6 +202,16 @@ export default function QuizHostLivePage() {
   useEffect(() => {
     if (!sessionId || session?.phase !== "question" || !currentQuestion) return;
     const questionId = currentQuestion.id;
+    let cancelled = false;
+    // With "move ahead" on, some players already answered this question before the host got here — count those too.
+    if (session?.allow_early_next) {
+      void supabaseQuiz
+        .from("quiz_answers")
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", sessionId)
+        .eq("question_id", questionId)
+        .then(({ count }) => { if (!cancelled && typeof count === "number") setAnsweredCount((c) => Math.max(c, count)); });
+    }
     const channel = supabaseQuiz
       .channel(`quiz-answers-${sessionId}-${questionId}`)
       .on(
@@ -218,6 +228,7 @@ export default function QuizHostLivePage() {
       .subscribe();
 
     return () => {
+      cancelled = true;
       supabaseQuiz.removeChannel(channel);
     };
   }, [sessionId, session?.phase, currentQuestion?.id]);
@@ -421,6 +432,15 @@ export default function QuizHostLivePage() {
                   <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold">
                     Q{session.current_question_index + 1} of {totalQuestions} <span className="text-slate-500">· {totalMarks} marks total</span>
                     <span className="ml-3 text-emerald-400">{answeredCount}/{participants.length} answered</span>
+                    {session.allow_early_next && (() => {
+                      const ahead = participants.filter((p) => p.my_index != null && p.my_index > session.current_question_index && p.my_index < totalQuestions).length;
+                      const done = participants.filter((p) => p.my_index != null && p.my_index >= totalQuestions).length;
+                      return ahead + done > 0 ? (
+                        <span className="ml-3 text-amber-300" title="Players who pressed Next to get ahead of this question">
+                          ⏩ {ahead} ahead{done > 0 ? ' · ' + done + ' finished' : ''}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   <div className="font-semibold mt-1" style={{ fontSize: `${1.125 * scale}rem` }}>
                     {quiz.shuffle_questions_per_participant ? "🕵️ Anti-cheat mode is on" : currentQuestion.question_text}

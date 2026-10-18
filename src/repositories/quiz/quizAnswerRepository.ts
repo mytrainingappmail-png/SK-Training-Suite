@@ -47,6 +47,33 @@ export async function getCurrentQuestion(sessionId: string): Promise<PublicQuizQ
   };
 }
 
+/** Where this player is in the quiz (the host's question, or their own if they moved ahead) — see migration 20261019100000. */
+export interface QuizPosition {
+  index: number;
+  startedAt: string | null;
+  ahead: boolean;
+  finished: boolean;
+  total: number;
+  allowEarlyNext: boolean;
+}
+
+export async function getMyQuizPosition(sessionId: string): Promise<QuizPosition> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_my_quiz_position", { p_session_id: sessionId });
+  if (error) throw new Error(error.message);
+  const r = (data as { question_index: number; started_at: string | null; ahead: boolean; finished: boolean; total_questions: number; allow_early_next: boolean }[] | null)?.[0];
+  if (!r) throw new Error("Could not find your place in the quiz.");
+  return { index: r.question_index, startedAt: r.started_at, ahead: r.ahead, finished: r.finished, total: r.total_questions, allowEarlyNext: r.allow_early_next };
+}
+
+/** "Next question": moves ONLY this player on. The database refuses unless the current question is answered (or its time is up). */
+export async function moveAhead(sessionId: string, fromIndex: number): Promise<{ index: number; startedAt: string | null; finished: boolean; moved: boolean }> {
+  const { data, error } = await supabaseQuizPlayer.rpc("quiz_move_ahead", { p_session_id: sessionId, p_from_index: fromIndex });
+  if (error) throw new Error(error.message);
+  const r = (data as { question_index: number; started_at: string | null; finished: boolean; moved: boolean }[] | null)?.[0];
+  if (!r) throw new Error("Could not move to the next question.");
+  return { index: r.question_index, startedAt: r.started_at, finished: r.finished, moved: r.moved };
+}
+
 /** Correctness is computed server-side — the client never decides whether its own answer was right. */
 export async function submitAnswer(
   sessionId: string,

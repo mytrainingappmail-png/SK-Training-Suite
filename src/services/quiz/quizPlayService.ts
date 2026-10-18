@@ -138,6 +138,9 @@ export async function submitHotspotAnswer(
   return answerRepo.submitHotspotAnswer(sessionId, questionId, clickX, clickY, responseTimeMs);
 }
 
+export { getMyQuizPosition, moveAhead } from "../../repositories/quiz/quizAnswerRepository";
+export type { QuizPosition } from "../../repositories/quiz/quizAnswerRepository";
+
 export async function heartbeat(sessionId: string): Promise<void> {
   return participantRepo.heartbeat(sessionId);
 }

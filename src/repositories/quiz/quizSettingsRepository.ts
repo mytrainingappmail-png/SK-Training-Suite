@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   exam_lobby_music_volume: 60,
   exam_reveal_answers: true,
   quiz_reveal_answers: true,
+  quiz_allow_early_next: false,
   exam_hotspot_feedback_seconds: 3,
   exam_hotspot_feedback_size: "small",
 };

@@ -58,6 +58,7 @@ interface BackupQuiz {
   exam_duration_minutes?: number | null;
   /** Absent in an older backup — restore follows the company default. */
   reveal_answers?: boolean | null;
+  allow_early_next?: boolean | null;
   status: QuizStatus;
   questions: BackupQuestion[];
 }
@@ -134,6 +135,7 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
         mode: q.mode,
         exam_duration_minutes: q.exam_duration_minutes,
         reveal_answers: q.reveal_answers ?? null,
+        allow_early_next: q.allow_early_next ?? null,
         status: q.status,
         questions: (full?.questions ?? []).map((question) => ({
           question_text: question.question_text,
@@ -268,6 +270,7 @@ export async function importBackup(
       mode: quiz.mode ?? "live",
       exam_duration_minutes: quiz.exam_duration_minutes ?? null,
       reveal_answers: quiz.reveal_answers ?? null,
+      allow_early_next: quiz.allow_early_next ?? null,
     });
 
     if (quiz.questions.length > 0) {

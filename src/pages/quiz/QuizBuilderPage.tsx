@@ -63,6 +63,7 @@ const DEFAULT_FORM: QuizForm = {
   mode: "live",
   exam_duration_minutes: null,
   reveal_answers: null,
+  allow_early_next: null,
 };
 
 // An exam starts with the anti-cheat shuffles ON (each person's question and
@@ -128,6 +129,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           mode: quiz.mode,
           exam_duration_minutes: quiz.exam_duration_minutes,
           reveal_answers: quiz.reveal_answers ?? null,
+          allow_early_next: quiz.allow_early_next ?? null,
         });
         setQuestions(
           quiz.questions.length > 0
@@ -635,6 +637,25 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
               : "Decided when the quiz is launched and frozen for that session. Hidden means players only see that their answer was recorded — nothing about right or wrong, points or the correct option, and it is never sent to the phone. Your default is in Quiz Settings."}
           </p>
         </div>
+        {!isExam && (
+          <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">Let players move ahead when they finish early</label>
+            <select
+              className="w-full sm:max-w-md rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              value={form.allow_early_next === null || form.allow_early_next === undefined ? "default" : form.allow_early_next ? "allow" : "deny"}
+              onChange={(e) => setForm({ ...form, allow_early_next: e.target.value === "default" ? null : e.target.value === "allow" })}
+            >
+              <option value="default">Follow my default setting</option>
+              <option value="allow">Allow — players can press Next after answering</option>
+              <option value="deny">Do not allow — everyone moves together</option>
+            </select>
+            <p className="text-xs text-slate-500">
+              Decided when the quiz is launched. Allowed: after answering, a player sees a “Next question” button; it moves only that player and the next question gets its own full timer.
+              Your host screen, timer, leaderboard and results stay exactly the same, and nobody gets stuck (a player who does not press Next is moved on with the host).
+              Players who move ahead see upcoming questions before the room, so it suits practice quizzes better than strict tests.
+            </p>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"

@@ -13,13 +13,14 @@ export async function createSession(
   hostAdminId: string,
   joinMode: QuizJoinMode,
   questionOrder: string[] | null = null,
-  revealAnswers = true
+  revealAnswers = true,
+  allowEarlyNext = false
 ): Promise<QuizSession> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const pin = randomPin();
     const { data, error } = await supabaseQuiz
       .from("quiz_sessions")
-      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers })
+      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext })
       .select()
       .single();
 

@@ -89,7 +89,7 @@ export default function QuizListPage() {
     setError("");
     try {
       const settings = await getSettings(admin.company_id);
-      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode, settings.quiz_reveal_answers ?? true);
+      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode, settings.quiz_reveal_answers ?? true, settings.quiz_allow_early_next ?? false);
       navigate(ROUTES.QUIZ_ADMIN_HOST.replace(":sessionId", session.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to launch.");
