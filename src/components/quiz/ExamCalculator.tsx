@@ -1,38 +1,37 @@
-// A basic 4-function calculator, floating over the exam/quiz screen. Docks
-// above the bottom action bar by default; drag the header to move it out of
-// the way of whatever it's covering (a question, the Submit bar) — the
-// trainee reported it blocking content with nowhere to move it. Stays
-// mounted (just translated off-screen) while closed, so an in-progress
-// calculation — and wherever it was dragged to — survives toggling it.
+// The calculator trainees can open during an exam / live quiz. A full calculator, not just + − × ÷:
+// brackets and the proper order of work (2+3×4 = 14), shop-style % (200+10% = 220), √ x² 1/x xʸ,
+// memory (MC MR M+ M−), history, and keyboard typing.
+// All the maths lives in utils/calcEngine.ts (tested on its own); this file is only the screen.
+//
+// Floats over the exam screen and docks above the bottom action bar by default; drag the header to move it out of
+// the way of whatever it's covering (a question, the Submit bar). Stays mounted (just translated off-screen) while
+// closed, so an in-progress calculation — and wherever it was dragged to — survives toggling it.
 
 import { useEffect, useRef, useState } from "react";
+import { applyKey, CALC_EMPTY, currentValue, formatNumber, liveValue, type CalcHistoryEntry, type CalcState } from "../../utils/calcEngine";
 
-type Op = "+" | "-" | "×" | "÷";
-
-const BTN = "h-12 rounded-xl text-base font-semibold active:scale-95 transition-transform";
+const BTN = "h-10 sm:h-11 rounded-xl text-base font-semibold active:scale-95 transition-transform select-none";
 const NUM_BTN = `${BTN} bg-slate-800 text-white hover:bg-slate-700`;
 const OP_BTN = `${BTN} bg-violet-600 text-white hover:bg-violet-500`;
 const FN_BTN = `${BTN} bg-slate-700 text-slate-200 hover:bg-slate-600`;
+const MEM_BTN = "h-8 rounded-lg text-xs font-bold bg-slate-800/70 text-amber-300 hover:bg-slate-700 active:scale-95 transition-transform select-none";
 
-function compute(a: number, b: number, op: Op): number {
-  if (op === "+") return a + b;
-  if (op === "-") return a - b;
-  if (op === "×") return a * b;
-  return b === 0 ? NaN : a / b;
-}
+const KEYBOARD: Record<string, string> = {
+  "*": "×", "/": "÷", ",": ".", Enter: "=", "=": "=", Backspace: "⌫", Delete: "C", Escape: "C",
+  "+": "+", "-": "-", ".": ".", "^": "^", "%": "%", "(": "(", ")": ")",
+};
 
-function formatResult(n: number): string {
-  if (!Number.isFinite(n)) return "Error";
-  // Round away long floating-point tails (0.1 + 0.2 artifacts) without
-  // truncating a genuinely large/precise result.
-  return String(Math.round(n * 1e9) / 1e9);
-}
+const HISTORY_MAX = 12;
 
 export default function ExamCalculator({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [display, setDisplay] = useState("0");
-  const [stored, setStored] = useState<number | null>(null);
-  const [pendingOp, setPendingOp] = useState<Op | null>(null);
-  const [justEvaluated, setJustEvaluated] = useState(false);
+  const [state, setState] = useState<CalcState>(CALC_EMPTY);
+  // the latest state, updated the instant a key is pressed, so two quick presses never work from an out-of-date screen
+  const stateRef = useRef<CalcState>(CALC_EMPTY);
+  const [lastExpr, setLastExpr] = useState("");
+  const [memory, setMemory] = useState<number | null>(null);
+  const [history, setHistory] = useState<CalcHistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Drag offset from the default docked position (0,0 = docked bottom-center).
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -64,61 +63,53 @@ export default function ExamCalculator({ open, onClose }: { open: boolean; onClo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  function inputDigit(d: string) {
-    if (justEvaluated) {
-      setDisplay(d === "." ? "0." : d);
-      setJustEvaluated(false);
-      return;
+  function press(key: string) {
+    const step = applyKey(stateRef.current, key);
+    stateRef.current = step.state;
+    setState(step.state);
+    setLastExpr(step.entry ? step.entry.expr : "");
+    if (step.entry) {
+      const entry = step.entry;
+      setHistory((h) => [entry, ...h].slice(0, HISTORY_MAX));
     }
-    if (d === "." && display.includes(".")) return;
-    setDisplay((prev) => (prev === "0" && d !== "." ? d : prev + d));
   }
 
-  function clearAll() {
-    setDisplay("0");
-    setStored(null);
-    setPendingOp(null);
-    setJustEvaluated(false);
+  function memoryAdd(sign: 1 | -1) {
+    const v = currentValue(stateRef.current);
+    if (v === null) return;
+    setMemory((m) => (m ?? 0) + sign * v);
+  }
+  function memoryRecall() {
+    if (memory !== null) press("#" + formatNumber(memory));
   }
 
-  function backspace() {
-    setDisplay((prev) => (prev.length > 1 ? prev.slice(0, -1) : "0"));
-  }
-
-  function toggleSign() {
-    setDisplay((prev) => (prev.startsWith("-") ? prev.slice(1) : prev === "0" ? prev : "-" + prev));
-  }
-
-  function percent() {
-    setDisplay((prev) => formatResult(parseFloat(prev) / 100));
-  }
-
-  function applyOp(op: Op) {
-    const current = parseFloat(display);
-    if (stored !== null && pendingOp && !justEvaluated) {
-      const result = compute(stored, current, pendingOp);
-      setStored(result);
-      setDisplay(formatResult(result));
-    } else {
-      setStored(current);
+  // Keyboard typing while the calculator is open — but never while the trainee is typing an answer somewhere else.
+  const pressRef = useRef(press);
+  useEffect(() => { pressRef.current = press; });
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      const inCalc = !!t && !!rootRef.current?.contains(t);
+      const free = !t || t === document.body || t === document.documentElement;
+      if (!inCalc && !free) return; // typing in an answer box, a button elsewhere, etc.
+      const key = /^[0-9]$/.test(e.key) ? e.key : KEYBOARD[e.key];
+      if (!key) return;
+      e.preventDefault();
+      pressRef.current(key);
     }
-    setPendingOp(op);
-    // The digit typed next starts a fresh second operand instead of being
-    // appended onto the first one — without this, "1" then "+" then "3"
-    // read as display "1" + "3" = "13", not two separate numbers.
-    setJustEvaluated(true);
-  }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
-  function equals() {
-    if (stored === null || !pendingOp) return;
-    setDisplay(formatResult(compute(stored, parseFloat(display), pendingOp)));
-    setStored(null);
-    setPendingOp(null);
-    setJustEvaluated(true);
-  }
+  const composite = !/^-?[0-9.]*$/.test(state.expr);
+  const smallLine = state.error ? "" : state.done ? (lastExpr ? `${lastExpr} =` : "") : composite ? state.expr : "";
+  const bigLine = state.error ? "Error" : liveValue(state) || state.expr;
 
   return (
     <div
+      ref={rootRef}
       className="fixed inset-x-0 z-40 px-2"
       style={{
         bottom: "72px",
@@ -127,46 +118,95 @@ export default function ExamCalculator({ open, onClose }: { open: boolean; onClo
       }}
       aria-hidden={!open}
     >
-      <div className="max-w-2xl mx-auto bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="max-w-md mx-auto bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
         <div
           onPointerDown={handleHeaderDown}
           onPointerMove={handleHeaderMove}
           onPointerUp={handleHeaderUp}
           onPointerCancel={handleHeaderUp}
-          className="flex items-center justify-between px-4 py-2 border-b border-slate-800 cursor-grab active:cursor-grabbing touch-none select-none"
+          className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-800 cursor-grab active:cursor-grabbing touch-none select-none"
         >
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">⠿ 🧮 Calculator — drag to move</span>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-sm px-2 py-1" aria-label="Close calculator">✕ Close</button>
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide truncate">⠿ 🧮 Calculator</span>
+          <div className="flex items-center gap-1 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              className={`text-xs px-2 py-1 rounded-md ${showHistory ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"}`}
+              aria-pressed={showHistory}
+              title="Earlier calculations"
+            >
+              🕘
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-white text-sm px-2 py-1" aria-label="Close calculator">✕ Close</button>
+          </div>
         </div>
-        <div className="px-4 pt-2 pb-1 text-right min-h-[2rem]">
-          {pendingOp && <div className="text-[11px] text-slate-500 truncate">{formatResult(stored ?? 0)} {pendingOp}</div>}
-          <div className="text-2xl font-mono font-bold text-white truncate">{display}</div>
+
+        <div className="relative px-4 pt-2 pb-1 text-right min-h-[3.75rem]">
+          {memory !== null && <span className="absolute left-4 top-2 text-[10px] font-bold text-amber-300 bg-amber-300/10 rounded px-1.5 py-0.5" title="A number is stored in memory">M</span>}
+          <div className="text-[11px] text-slate-400 truncate min-h-[1rem] font-mono" dir="ltr">{smallLine}</div>
+          <div className={`text-2xl font-mono font-bold truncate ${state.error ? "text-red-400" : state.done || !composite ? "text-white" : "text-slate-200"}`}>{bigLine}</div>
         </div>
-        <div className="grid grid-cols-4 gap-1.5 px-3 pb-3 pt-1">
-          <button onClick={clearAll} className={FN_BTN}>C</button>
-          <button onClick={toggleSign} className={FN_BTN}>±</button>
-          <button onClick={percent} className={FN_BTN}>%</button>
-          <button onClick={() => applyOp("÷")} className={OP_BTN}>÷</button>
 
-          <button onClick={() => inputDigit("7")} className={NUM_BTN}>7</button>
-          <button onClick={() => inputDigit("8")} className={NUM_BTN}>8</button>
-          <button onClick={() => inputDigit("9")} className={NUM_BTN}>9</button>
-          <button onClick={() => applyOp("×")} className={OP_BTN}>×</button>
+        {showHistory && (
+          <div className="mx-3 mb-2 rounded-xl border border-slate-700 bg-slate-950/60 max-h-36 overflow-y-auto">
+            {history.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-slate-500">Your calculations will appear here. Tap one to use its answer.</p>
+            ) : (
+              <>
+                {history.map((h, i) => (
+                  <button
+                    key={`${h.expr}-${i}`}
+                    onClick={() => { press("#" + h.result); setShowHistory(false); }}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-xs font-mono hover:bg-slate-800"
+                  >
+                    <span className="truncate text-slate-400">{h.expr} =</span>
+                    <span className="shrink-0 font-bold text-white">{h.result}</span>
+                  </button>
+                ))}
+                <button onClick={() => setHistory([])} className="w-full px-3 py-1.5 text-right text-[11px] text-slate-500 hover:text-slate-300">Clear history</button>
+              </>
+            )}
+          </div>
+        )}
 
-          <button onClick={() => inputDigit("4")} className={NUM_BTN}>4</button>
-          <button onClick={() => inputDigit("5")} className={NUM_BTN}>5</button>
-          <button onClick={() => inputDigit("6")} className={NUM_BTN}>6</button>
-          <button onClick={() => applyOp("-")} className={OP_BTN}>−</button>
+        {/* mousedown is blocked so a tapped key never grabs keyboard focus (Enter would then press it a second time) */}
+        <div className="px-3 pb-3 pt-1 space-y-1.5" onMouseDown={(e) => e.preventDefault()}>
+          <div className="grid grid-cols-5 gap-1.5">
+            <button onClick={() => setMemory(null)} className={MEM_BTN} title="Memory clear">MC</button>
+            <button onClick={memoryRecall} className={MEM_BTN} title="Memory recall">MR</button>
+            <button onClick={() => memoryAdd(1)} className={MEM_BTN} title="Add the shown number to memory">M+</button>
+            <button onClick={() => memoryAdd(-1)} className={MEM_BTN} title="Subtract the shown number from memory">M−</button>
+            <button onClick={() => press("⌫")} className={MEM_BTN} aria-label="Backspace">⌫</button>
 
-          <button onClick={() => inputDigit("1")} className={NUM_BTN}>1</button>
-          <button onClick={() => inputDigit("2")} className={NUM_BTN}>2</button>
-          <button onClick={() => inputDigit("3")} className={NUM_BTN}>3</button>
-          <button onClick={() => applyOp("+")} className={OP_BTN}>+</button>
+            <button onClick={() => press("C")} className={FN_BTN}>C</button>
+            <button onClick={() => press("(")} className={FN_BTN}>(</button>
+            <button onClick={() => press(")")} className={FN_BTN}>)</button>
+            <button onClick={() => press("%")} className={FN_BTN} title="Percent: 200 + 10 % = 220">%</button>
+            <button onClick={() => press("÷")} className={OP_BTN} aria-label="Divide">÷</button>
 
-          <button onClick={backspace} className={FN_BTN}>⌫</button>
-          <button onClick={() => inputDigit("0")} className={NUM_BTN}>0</button>
-          <button onClick={() => inputDigit(".")} className={NUM_BTN}>.</button>
-          <button onClick={equals} className="h-12 rounded-xl text-base font-semibold bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 transition-transform">=</button>
+            <button onClick={() => press("√")} className={FN_BTN} title="Square root">√</button>
+            <button onClick={() => press("7")} className={NUM_BTN}>7</button>
+            <button onClick={() => press("8")} className={NUM_BTN}>8</button>
+            <button onClick={() => press("9")} className={NUM_BTN}>9</button>
+            <button onClick={() => press("×")} className={OP_BTN} aria-label="Multiply">×</button>
+
+            <button onClick={() => press("x²")} className={FN_BTN} title="Square">x²</button>
+            <button onClick={() => press("4")} className={NUM_BTN}>4</button>
+            <button onClick={() => press("5")} className={NUM_BTN}>5</button>
+            <button onClick={() => press("6")} className={NUM_BTN}>6</button>
+            <button onClick={() => press("-")} className={OP_BTN} aria-label="Subtract">−</button>
+
+            <button onClick={() => press("1/x")} className={FN_BTN} title="One divided by the number">1/x</button>
+            <button onClick={() => press("1")} className={NUM_BTN}>1</button>
+            <button onClick={() => press("2")} className={NUM_BTN}>2</button>
+            <button onClick={() => press("3")} className={NUM_BTN}>3</button>
+            <button onClick={() => press("+")} className={OP_BTN} aria-label="Add">+</button>
+
+            <button onClick={() => press("^")} className={FN_BTN} title="Power: 2 xʸ 3 = 8">xʸ</button>
+            <button onClick={() => press("±")} className={FN_BTN} title="Change sign">±</button>
+            <button onClick={() => press("0")} className={NUM_BTN}>0</button>
+            <button onClick={() => press(".")} className={NUM_BTN}>.</button>
+            <button onClick={() => press("=")} className="h-10 sm:h-11 rounded-xl text-base font-semibold bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 transition-transform select-none">=</button>
+          </div>
         </div>
       </div>
     </div>
