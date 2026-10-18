@@ -8,6 +8,7 @@ import App from "./App";
 import { AuthorizationProvider } from "./context/AuthorizationContext";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import UpdatePrompt from "./components/shared/UpdatePrompt";
+import InfoTipLayer from "./components/infoTips/InfoTipLayer";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -16,6 +17,7 @@ createRoot(document.getElementById("root")!).render(
         <AuthorizationProvider>
           <App />
           <UpdatePrompt />
+          <InfoTipLayer />
         </AuthorizationProvider>
       </BrowserRouter>
     </ErrorBoundary>

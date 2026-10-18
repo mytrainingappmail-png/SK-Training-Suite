@@ -19,6 +19,7 @@ const RoleManagement = lazyWithRetry(() => import("../components/superadmin/Role
 const ThemeManagement = lazyWithRetry(() => import("../components/superadmin/ThemeManagement"));
 const PlatformMarketingManagement = lazyWithRetry(() => import("../components/superadmin/PlatformMarketingManagement"));
 const MenuManagement = lazyWithRetry(() => import("../components/superadmin/MenuManagement"));
+const InfoTipManagement = lazyWithRetry(() => import("../components/infoTips/InfoTipManagement"));
 const SettingsManagement = lazyWithRetry(() => import("../components/settings/SettingsManagement"));
 const PermissionManagement = lazyWithRetry(() => import("../modules/permissions/PermissionManagement"));
 const PermissionMatrix = lazyWithRetry(() => import("../modules/permissions/PermissionMatrix"));
@@ -455,6 +456,7 @@ function Admin() {
              (isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings")) ||
              (isPlatformOperator && matches("Legal Documents")) ||
              (isPlatformOperator && matches("Marketing Website")) ||
+             (isPlatformOperator && matches("Info Tips")) ||
              (isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu")) ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
                 <p className={GROUP_LABEL_CLS} style={GROUP_LABEL_STYLE}>Platform Configuration</p>
@@ -470,6 +472,9 @@ function Admin() {
                   )}
                   {isPlatformOperator && matches("Marketing Website") && (
                     <button onClick={() => setActiveTab("marketing-website")} className={getTabClass()} style={getTabStyle("marketing-website")}>Marketing Website</button>
+                  )}
+                  {isPlatformOperator && matches("Info Tips") && (
+                    <button onClick={() => setActiveTab("info-tips")} className={getTabClass()} style={getTabStyle("info-tips")}>Info Tips</button>
                   )}
                   {isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu") && (
                     <button onClick={() => setActiveTab("menu")} className={getTabClass()} style={getTabStyle("menu")}>Menu</button>
@@ -685,6 +690,8 @@ function Admin() {
             {activeTab === "legal-documents" && isPlatformOperator && <LegalDocumentManagement />}
 
             {activeTab === "marketing-website" && isPlatformOperator && <PlatformMarketingManagement />}
+
+            {activeTab === "info-tips" && isPlatformOperator && <InfoTipManagement />}
 
             {activeTab === "menu" && isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && <MenuManagement />}
 
