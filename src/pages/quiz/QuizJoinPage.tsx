@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { joinByPin, getSavedPlayerName } from "../../services/quiz/quizPlayService";
+import { joinByPin, getSavedPlayerName, ensureParticipantSession } from "../../services/quiz/quizPlayService";
+import { joinExam } from "../../repositories/exam/examPlayRepository";
 import { getPublicQuizBranding } from "../../repositories/quiz/quizSettingsRepository";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import type { QuizPublicBranding } from "../../types/quiz";
@@ -28,10 +29,28 @@ export default function QuizJoinPage() {
     setLoading(true);
 
     try {
-      const result = await joinByPin(pin, name);
-      navigate(ROUTES.QUIZ_PLAY.replace(":sessionId", result.sessionId), {
-        state: { participantId: result.participantId, quizTitle: result.quizTitle },
-      });
+      try {
+        const result = await joinByPin(pin, name);
+        navigate(ROUTES.QUIZ_PLAY.replace(":sessionId", result.sessionId), {
+          state: { participantId: result.participantId, quizTitle: result.quizTitle },
+        });
+        return;
+      } catch (e1) {
+        // Not a live quiz PIN — it may be an exam's PIN (trainees are often given one link for both).
+        if (!(e1 instanceof Error) || !/^Invalid PIN/i.test(e1.message)) throw e1;
+        try {
+          await ensureParticipantSession();
+          const { sessionId } = await joinExam(pin.trim(), name.trim());
+          try { localStorage.setItem("QUIZ_PLAYER_NAME", name.trim()); } catch { /* non-fatal */ }
+          navigate(ROUTES.EXAM_PAPER.replace(":sessionId", sessionId), { replace: true });
+          return;
+        } catch (e2) {
+          if (e2 instanceof Error && /not active/i.test(e2.message)) {
+            throw new Error("That PIN is not active. Check the PIN, or ask your trainer for the current one.");
+          }
+          throw e2;
+        }
+      }
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Could not join.");
     } finally {
