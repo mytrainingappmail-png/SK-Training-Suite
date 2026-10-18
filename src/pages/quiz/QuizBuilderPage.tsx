@@ -62,6 +62,7 @@ const DEFAULT_FORM: QuizForm = {
   issue_certificate: true,
   mode: "live",
   exam_duration_minutes: null,
+  reveal_answers: null,
 };
 
 // An exam starts with the anti-cheat shuffles ON (each person's question and
@@ -126,6 +127,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           issue_certificate: quiz.issue_certificate,
           mode: quiz.mode,
           exam_duration_minutes: quiz.exam_duration_minutes,
+          reveal_answers: quiz.reveal_answers ?? null,
         });
         setQuestions(
           quiz.questions.length > 0
@@ -614,6 +616,25 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
             </div>
           );
         })()}
+        <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
+            {isExam ? "Tell candidates right / wrong while they answer" : "Tell players right / wrong while they answer"}
+          </label>
+          <select
+            className="w-full sm:max-w-md rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+            value={form.reveal_answers === null || form.reveal_answers === undefined ? "default" : form.reveal_answers ? "show" : "hide"}
+            onChange={(e) => setForm({ ...form, reveal_answers: e.target.value === "default" ? null : e.target.value === "show" })}
+          >
+            <option value="default">Follow my default setting</option>
+            <option value="show">Show right / wrong immediately</option>
+            <option value="hide">Hide it — they see results only at the end</option>
+          </select>
+          <p className="text-xs text-slate-500">
+            {isExam
+              ? "Decided when the exam is started and frozen for that exam. Hidden means the screen shows nothing about right or wrong, and the answer is never sent to the phone."
+              : "Decided when the quiz is launched and frozen for that session. Hidden means players only see that their answer was recorded — nothing about right or wrong, points or the correct option, and it is never sent to the phone. Your default is in Quiz Settings."}
+          </p>
+        </div>
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"

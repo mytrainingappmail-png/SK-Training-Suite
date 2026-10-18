@@ -161,6 +161,7 @@ export default function QuizSettingsPage() {
         option_font_size: settings.option_font_size,
         option_colors: settings.option_colors,
         sound_enabled: settings.sound_enabled,
+        quiz_reveal_answers: settings.quiz_reveal_answers,
       });
       setAppearanceMessage("Appearance saved.");
     } finally {
@@ -421,6 +422,22 @@ export default function QuizSettingsPage() {
             onChange={(e) => setSettings({ ...settings, sound_enabled: e.target.checked })}
           />
           🔊 Sound effects (question pops, timer ticks, correct/wrong tones)
+        </label>
+
+        <label className="flex items-start gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={settings.quiz_reveal_answers ?? true}
+            onChange={(e) => setSettings({ ...settings, quiz_reveal_answers: e.target.checked })}
+          />
+          <span>
+            🎯 Tell players right / wrong the moment they answer (Live Quiz)
+            <span className="block text-xs text-slate-500 mt-0.5">
+              This is the default for every Live Quiz. Turn it off to keep answers hidden until the results. Any single quiz or exam can override it in its own settings
+              (Exams also have their own default on the Exams page).
+            </span>
+          </span>
         </label>
 
         {appearanceMessage && <div className="text-sm text-emerald-300">{appearanceMessage}</div>}

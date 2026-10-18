@@ -142,6 +142,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     issue_certificate: source.issue_certificate,
     mode: source.mode,
     exam_duration_minutes: source.exam_duration_minutes,
+    reveal_answers: source.reveal_answers ?? null,
   });
 
   if (source.questions.length > 0) {

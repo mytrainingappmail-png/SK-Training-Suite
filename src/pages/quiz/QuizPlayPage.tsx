@@ -344,7 +344,7 @@ export default function QuizPlayPage() {
     const result = await sendWithRetry(() => submitAnswer(sessionId, question.question_id, optionId, responseTimeMs));
     if (result) {
       setFeedback(result);
-      if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
+      if (playerSettings?.sound_enabled !== false && session?.reveal_answers !== false) playTone(result.is_correct ? "correct" : "wrong");
     }
   }
 
@@ -358,7 +358,7 @@ export default function QuizPlayPage() {
     const result = await sendWithRetry(() => submitHotspotAnswer(sessionId, question.question_id, x, y, responseTimeMs));
     if (result) {
       setHotspotFeedback(result);
-      if (playerSettings?.sound_enabled !== false) playTone(result.is_correct ? "correct" : "wrong");
+      if (playerSettings?.sound_enabled !== false && session?.reveal_answers !== false) playTone(result.is_correct ? "correct" : "wrong");
     }
   }
 
@@ -601,8 +601,8 @@ export default function QuizPlayPage() {
               imageUrl={question.image_url}
               disabled={answered}
               onTap={(x, y) => handleHotspotSubmit(x, y)}
-              zones={hotspotFeedback ? effectiveZones(hotspotFeedback) : undefined}
-              markers={hotspotFeedback && !hotspotFeedback.is_correct && myTap ? [{ x: myTap.x, y: myTap.y, correct: false }] : undefined}
+              zones={hotspotFeedback && session.reveal_answers !== false ? effectiveZones(hotspotFeedback) : undefined}
+              markers={hotspotFeedback && session.reveal_answers !== false && !hotspotFeedback.is_correct && myTap ? [{ x: myTap.x, y: myTap.y, correct: false }] : undefined}
             />
           )
         ) : (
@@ -610,7 +610,7 @@ export default function QuizPlayPage() {
           {question.options.map((opt, i) => {
             const c = colors[i % colors.length];
             const isSelected = selectedOptionId === opt.option_id;
-            const isCorrectReveal = answered && feedback && opt.option_id === feedback.correct_option_id;
+            const isCorrectReveal = answered && session.reveal_answers !== false && feedback && opt.option_id === feedback.correct_option_id;
             return (
               <button
                 key={opt.option_id}
@@ -633,7 +633,13 @@ export default function QuizPlayPage() {
           const hasAnswerAttempt = question.type === "hotspot" ? myTap !== null : selectedOptionId !== null;
           return (
           <div className="text-center mt-6 px-6">
-            {activeFeedback ? (
+            {activeFeedback && session.reveal_answers === false ? (
+              <>
+                {/* the trainer keeps right / wrong hidden until the results: only confirm that the answer was recorded */}
+                <div className="text-3xl mb-1">{hasAnswerAttempt ? "🔒" : "⏰"}</div>
+                <div className="font-bold text-white">{hasAnswerAttempt ? "Answer locked in" : "Time's up!"}</div>
+              </>
+            ) : activeFeedback ? (
               <>
                 <div className="text-3xl mb-1">{activeFeedback.is_correct ? "✅" : hasAnswerAttempt ? "❌" : "⏰"}</div>
                 <div className="font-bold text-white">

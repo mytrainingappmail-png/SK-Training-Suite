@@ -15,7 +15,9 @@ export async function launchSession(
   quizId: string,
   companyId: string,
   hostAdminId: string,
-  joinMode: QuizJoinMode
+  joinMode: QuizJoinMode,
+  /** The company default for "tell players right / wrong straight away" — the quiz's own choice, if it has one, wins. */
+  revealDefault = true
 ): Promise<QuizSession> {
   const quiz = await getQuiz(quizId);
   if (!quiz) throw new Error("Quiz not found.");
@@ -31,7 +33,7 @@ export async function launchSession(
   // this is what keeps a hidden question from ever being served live.
   const questionOrder = quiz.shuffle_questions ? shuffleArray(visibleIds) : visibleIds;
 
-  return sessionRepo.createSession(quizId, companyId, hostAdminId, joinMode, questionOrder);
+  return sessionRepo.createSession(quizId, companyId, hostAdminId, joinMode, questionOrder, quiz.reveal_answers ?? revealDefault);
 }
 
 export async function startQuiz(sessionId: string): Promise<void> {

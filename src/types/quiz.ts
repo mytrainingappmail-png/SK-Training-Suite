@@ -52,6 +52,8 @@ export interface Quiz {
   mode: "live" | "exam";
   /** Exams only — the default length of the whole paper, pre-filled when the exam is started. */
   exam_duration_minutes: number | null;
+  /** Does a trainee learn "right / wrong" the moment they answer? null = follow the company default (Quiz Settings / Exams). */
+  reveal_answers?: boolean | null;
   status: QuizStatus;
   created_at: string;
   updated_at: string;
@@ -127,6 +129,8 @@ export interface QuizSession {
   question_order: string[] | null;
   started_at: string | null;
   ended_at: string | null;
+  /** Frozen at launch from the quiz's own choice or the company default: does a player learn right / wrong the moment they answer? */
+  reveal_answers?: boolean;
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
   question_started_at: string | null;
   created_at: string;
@@ -234,7 +238,8 @@ export interface PublicQuizQuestion {
 }
 
 export interface SubmitAnswerResult {
-  is_correct: boolean;
+  /** null when the trainer has chosen not to reveal right / wrong while answering. */
+  is_correct: boolean | null;
   correct_option_id: string | null;
   points_awarded: number;
   explanation: string | null;
@@ -242,7 +247,7 @@ export interface SubmitAnswerResult {
 
 /** Returned by submit_quiz_hotspot_answer — reveals the correct spot only after the tap has already been scored. */
 export interface SubmitHotspotAnswerResult {
-  is_correct: boolean;
+  is_correct: boolean | null;
   target_x: number | null;
   target_y: number | null;
   target_radius: number | null;
@@ -310,6 +315,8 @@ export interface QuizSettings {
   exam_lobby_music_volume: number;
   /** Instant right/wrong feedback during an exam (never the running score/marks) — mcq/truefalse color the chosen option, hotspot colors each confirmed tap. */
   exam_reveal_answers: boolean;
+  /** Company default for Live Quizzes: tell a player right / wrong the moment they answer. A quiz can override it in its own settings. */
+  quiz_reveal_answers: boolean;
   /** How long a hotspot tap's name/"wrong spot" label stays on screen before fading. 0 = stays until the next tap. */
   exam_hotspot_feedback_seconds: number;
   exam_hotspot_feedback_size: HotspotFeedbackSize;

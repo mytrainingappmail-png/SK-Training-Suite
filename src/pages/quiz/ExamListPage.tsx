@@ -231,7 +231,7 @@ export default function ExamListPage() {
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">🎯 Instant Answer Feedback</div>
-        <p className="text-xs text-slate-500">Colors a trainee's answer green/red the moment they lock it in (mcq, true/false, and each hotspot tap) — never the running score or marks. Turn off any time to go back to fully hidden until you release results.</p>
+        <p className="text-xs text-slate-500">Colors a trainee's answer green/red the moment they lock it in (mcq, true/false, and each hotspot tap) — never the running score or marks. This is the default for every exam you start; any single exam can override it in its own settings (Edit exam → “Tell candidates right / wrong while they answer”). Hidden answers are never sent to the phone.</p>
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <label className="flex items-center gap-2 text-sm text-slate-200">
             <input

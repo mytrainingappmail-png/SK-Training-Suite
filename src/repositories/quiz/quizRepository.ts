@@ -15,6 +15,8 @@ export interface QuizForm {
   issue_certificate: boolean;
   mode: Quiz["mode"];
   exam_duration_minutes: number | null;
+  /** null / absent = follow the company default */
+  reveal_answers?: boolean | null;
 }
 
 export interface QuestionOptionForm {
