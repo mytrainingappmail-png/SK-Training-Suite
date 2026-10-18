@@ -11,8 +11,9 @@ import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
   getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant, renameExamParticipant, resetExamParticipant,
-  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant,
+  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant, isExamSessionPractice,
 } from "../../repositories/exam/examAdminRepository";
+import { practiceLeave } from "../../repositories/quiz/quizSessionRepository";
 import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat, ExamLiveRow, ExamLiveQuestion } from "../../types/exam";
 
 const POLL_MS = 4000;
@@ -74,6 +75,22 @@ export default function ExamHostPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // A practice run: plays like the real exam, but nothing is kept (see migration 20261021100000)
+  const [isPractice, setIsPractice] = useState(false);
+  useEffect(() => {
+    if (!sessionId) return;
+    void isExamSessionPractice(sessionId).then(setIsPractice).catch(() => {});
+  }, [sessionId]);
+
+  async function leaveExam() {
+    if (isPractice && sessionId) {
+      const running = session?.status !== "finished";
+      if (!confirm(running ? "Leave this practice? It ends for everyone and its results are deleted." : "Leave this practice? Its results will be deleted.")) return;
+      try { await practiceLeave("exam", sessionId); } catch { /* it is also cleaned up automatically after 24 hours */ }
+    }
+    navigate(ROUTES.QUIZ_ADMIN_EXAMS);
+  }
 
   async function changeFolder(value: string) {
     try {
@@ -289,6 +306,7 @@ export default function ExamHostPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h1 className="text-xl font-bold break-words">{session.quiz_title} — Exam</h1>
+          {isPractice && <p className="text-[11px] font-bold uppercase tracking-wide text-sky-300 mt-0.5">🧪 Practice — nothing is saved</p>}
           <p className="text-sm text-slate-400 mt-0.5">
             {session.status === "lobby" && "⏳ Waiting to start"}
             {session.status === "running" && "🔴 Running"}
@@ -297,7 +315,7 @@ export default function ExamHostPage() {
             {" · "}{session.total_questions} questions · {session.total_marks} marks · pass {session.passing_score_pct}%
           </p>
         </div>
-        <button onClick={() => navigate(ROUTES.QUIZ_ADMIN_EXAMS)} className="text-sm font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-4 py-2">← Back to Exams</button>
+        <button onClick={() => void leaveExam()} className="text-sm font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-4 py-2">← Back to Exams</button>
       </div>
 
       {error && <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>}
@@ -518,7 +536,7 @@ export default function ExamHostPage() {
             <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <h2 className="text-sm font-bold">Results</h2>
               <div className="flex gap-2 flex-wrap">
-                {canEditQuizContent() && (
+                {canEditQuizContent() && !isPractice && (
                   <select
                     value={folderId ?? ""}
                     onChange={(e) => void changeFolder(e.target.value)}
@@ -530,7 +548,7 @@ export default function ExamHostPage() {
                     <option value="__new__">＋ New folder…</option>
                   </select>
                 )}
-                <button onClick={exportCsv} className="text-xs font-semibold text-slate-200 border border-slate-700 hover:bg-slate-800 rounded-lg px-3 py-1.5">⬇ Download CSV</button>
+                {!isPractice && <button onClick={exportCsv} className="text-xs font-semibold text-slate-200 border border-slate-700 hover:bg-slate-800 rounded-lg px-3 py-1.5">⬇ Download CSV</button>}
                 <button
                   onClick={() => { if (!session.results_released && pendingTotal > 0 && !confirm(`${pendingTotal} written answer(s) are still unmarked and will show as 0. Share results anyway?`)) return; void act(() => releaseExamResults(sessionId, !session.results_released)); }}
                   disabled={busy}
@@ -564,7 +582,7 @@ export default function ExamHostPage() {
                         <td className="py-2 pr-3 font-mono text-xs">{pctOf(r)}%</td>
                         <td className="py-2 pr-3"><span className={`text-xs font-bold rounded-full px-2 py-0.5 ${pass ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{pass ? "Pass" : "Fail"}</span></td>
                         <td className="py-2 pr-3 text-xs">{r.pending_written > 0 ? <span className="text-amber-300">{r.pending_written} to mark</span> : <span className="text-slate-500">—</span>}</td>
-                        <td className="py-2 text-right whitespace-nowrap">{pass && admin && r.pending_written === 0 && <span className="mr-2 inline-block align-middle"><QuizAdminCertificateButton kind="exam" participantId={r.participant_id} companyId={admin.company_id} /></span>}<button onClick={() => void openDetail(r)} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View / mark</button></td>
+                        <td className="py-2 text-right whitespace-nowrap">{pass && admin && !isPractice && r.pending_written === 0 && <span className="mr-2 inline-block align-middle"><QuizAdminCertificateButton kind="exam" participantId={r.participant_id} companyId={admin.company_id} /></span>}<button onClick={() => void openDetail(r)} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View / mark</button></td>
                       </tr>
                     );
                   })}

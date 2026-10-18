@@ -14,13 +14,14 @@ export async function createSession(
   joinMode: QuizJoinMode,
   questionOrder: string[] | null = null,
   revealAnswers = true,
-  allowEarlyNext = false
+  allowEarlyNext = false,
+  isPractice = false
 ): Promise<QuizSession> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const pin = randomPin();
     const { data, error } = await supabaseQuiz
       .from("quiz_sessions")
-      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext })
+      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext, is_practice: isPractice })
       .select()
       .single();
 
@@ -106,6 +107,7 @@ export async function listSessionsForQuiz(quizId: string): Promise<QuizSession[]
     .from("quiz_sessions")
     .select("*")
     .eq("quiz_id", quizId)
+    .eq("is_practice", false) // practice runs are never listed
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -121,6 +123,7 @@ export async function listSessionsForCompany(companyId: string): Promise<QuizSes
     .from("quiz_sessions")
     .select("*")
     .eq("company_id", companyId)
+    .eq("is_practice", false) // practice runs are never listed
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -129,6 +132,24 @@ export async function listSessionsForCompany(companyId: string): Promise<QuizSes
   }
 
   return data ?? [];
+}
+
+/** The trainer left a practice run: it is ended if still going and deleted a few minutes later. */
+export async function practiceLeave(kind: "quiz" | "exam", sessionId: string): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("practice_leave", { p_kind: kind, p_session_id: sessionId });
+  if (error) {
+    console.error("[quizSessionRepository] practiceLeave:", error);
+    throw new Error(error.message);
+  }
+}
+
+/** Deletes practice runs that are due (left a while ago, or older than a day). Never throws: it is housekeeping. */
+export async function purgePracticeSessions(): Promise<void> {
+  try {
+    await supabaseQuiz.rpc("purge_practice_sessions");
+  } catch {
+    /* housekeeping only */
+  }
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

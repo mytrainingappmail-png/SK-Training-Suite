@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes, updateQuizMeta } from "../../services/quiz/quizService";
-import { launchSession } from "../../services/quiz/quizSessionService";
+import { launchSession, purgePracticeSessions } from "../../services/quiz/quizSessionService";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { describePlayMode, hasPerPlayerShuffle } from "../../utils/quizPlayMode";
 import type { Quiz } from "../../types/quiz";
@@ -66,6 +66,9 @@ export default function QuizListPage() {
 
   const [launchCheck, setLaunchCheck] = useState<Quiz | null>(null);
 
+  // practice runs the trainer has left are cleaned up here (they are also hidden from every list)
+  useEffect(() => { void purgePracticeSessions(); }, []);
+
   /** Launches straight away, except when a shuffle is on — then a quick heads-up shows what phones will look like. */
   function handleLaunchClick(q: Quiz) {
     if (hasPerPlayerShuffle(q)) setLaunchCheck(q);
@@ -83,13 +86,13 @@ export default function QuizListPage() {
     await handleLaunch({ ...q, shuffle_options: false, shuffle_questions_per_participant: false });
   }
 
-  async function handleLaunch(q: Quiz) {
+  async function handleLaunch(q: Quiz, practice = false) {
     if (!admin) return;
     setBusyId(q.id);
     setError("");
     try {
       const settings = await getSettings(admin.company_id);
-      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode, settings.quiz_reveal_answers ?? true, settings.quiz_allow_early_next ?? false);
+      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode, settings.quiz_reveal_answers ?? true, settings.quiz_allow_early_next ?? false, practice);
       navigate(ROUTES.QUIZ_ADMIN_HOST.replace(":sessionId", session.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to launch.");
@@ -274,6 +277,16 @@ export default function QuizListPage() {
                     className="text-xs font-semibold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
                   >
                     ▶ Launch
+                  </button>
+                )}
+                {q.status === "published" && canEdit && (
+                  <button
+                    disabled={busyId === q.id}
+                    onClick={() => void handleLaunch(q, true)}
+                    className="text-xs font-semibold text-sky-300 hover:text-sky-200 border border-sky-500/50 rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+                    title="Try it out first: no shuffle, right/wrong shown, no certificate, and nothing is saved"
+                  >
+                    🧪 Practice
                   </button>
                 )}
                 {canEdit && (

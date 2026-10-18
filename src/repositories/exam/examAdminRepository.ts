@@ -15,6 +15,8 @@ export interface ExamStartOptions {
   durationSeconds: number;
   startInSeconds?: number | null;
   startAt?: Date | null;
+  /** A practice run: right / wrong shown, no shuffle, no certificate, nothing kept. */
+  practice?: boolean;
 }
 
 export async function createExamSession(quizId: string, options: ExamStartOptions): Promise<ExamSession> {
@@ -23,6 +25,7 @@ export async function createExamSession(quizId: string, options: ExamStartOption
     p_duration_seconds: options.durationSeconds,
     p_start_in_seconds: options.startInSeconds ?? null,
     p_start_at: options.startAt ? options.startAt.toISOString() : null,
+    p_practice: options.practice === true,
   });
   if (error) fail("createExamSession", error);
   const row = (data as ExamSession[] | null)?.[0];
@@ -158,11 +161,18 @@ export async function moveExamSessionToFolder(sessionId: string, folderId: strin
   if (error) fail("moveExamSessionToFolder", error);
 }
 
+/** Is this exam session a practice run? (read straight from the table: the admin view function does not carry it) */
+export async function isExamSessionPractice(sessionId: string): Promise<boolean> {
+  const { data } = await supabaseQuiz.from("exam_sessions").select("is_practice").eq("id", sessionId).maybeSingle();
+  return data?.is_practice === true;
+}
+
 export async function listExamSessions(quizId: string): Promise<ExamSession[]> {
   const { data, error } = await supabaseQuiz
     .from("exam_sessions")
     .select("*")
     .eq("quiz_id", quizId)
+    .eq("is_practice", false) // practice runs are never listed
     .order("created_at", { ascending: false })
     .limit(10);
   if (error) fail("listExamSessions", error);

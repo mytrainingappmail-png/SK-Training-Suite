@@ -19,7 +19,9 @@ export async function launchSession(
   /** The company default for "tell players right / wrong straight away" — the quiz's own choice, if it has one, wins. */
   revealDefault = true,
   /** The company default for "players may press Next early" — the quiz's own choice, if it has one, wins. */
-  earlyNextDefault = false
+  earlyNextDefault = false,
+  /** A practice run: no shuffle, right / wrong shown, nothing kept (see migration 20261021100000). The quiz itself is not changed. */
+  practice = false
 ): Promise<QuizSession> {
   const quiz = await getQuiz(quizId);
   if (!quiz) throw new Error("Quiz not found.");
@@ -33,9 +35,14 @@ export async function launchSession(
   // single value broadcast to everyone, so every player must see the same order.
   // Always pre-filtered to visible questions, whether or not shuffle is on —
   // this is what keeps a hidden question from ever being served live.
-  const questionOrder = quiz.shuffle_questions ? shuffleArray(visibleIds) : visibleIds;
+  const questionOrder = quiz.shuffle_questions && !practice ? shuffleArray(visibleIds) : visibleIds;
 
-  return sessionRepo.createSession(quizId, companyId, hostAdminId, joinMode, questionOrder, quiz.reveal_answers ?? revealDefault, quiz.allow_early_next ?? earlyNextDefault);
+  return sessionRepo.createSession(
+    quizId, companyId, hostAdminId, joinMode, questionOrder,
+    practice ? true : quiz.reveal_answers ?? revealDefault,
+    quiz.allow_early_next ?? earlyNextDefault,
+    practice
+  );
 }
 
 export async function startQuiz(sessionId: string): Promise<void> {
@@ -59,5 +66,5 @@ export async function endSession(sessionId: string): Promise<void> {
   await sessionRepo.endQuizSessionNow(sessionId);
 }
 
-export { getSession, getSessionResults, listSessionsForQuiz, listSessionsForCompany } from "../../repositories/quiz/quizSessionRepository";
+export { getSession, getSessionResults, listSessionsForQuiz, listSessionsForCompany, practiceLeave, purgePracticeSessions } from "../../repositories/quiz/quizSessionRepository";
 export { listParticipants } from "../../repositories/quiz/quizParticipantRepository";

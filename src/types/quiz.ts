@@ -135,6 +135,8 @@ export interface QuizSession {
   reveal_answers?: boolean;
   /** Frozen at launch: may a player press Next as soon as they have answered (their own question, own timer)? */
   allow_early_next?: boolean;
+  /** A practice run: plays like the real thing but nothing is kept, no certificate, never listed in results. */
+  is_practice?: boolean;
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
   question_started_at: string | null;
   created_at: string;

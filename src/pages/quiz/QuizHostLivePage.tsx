@@ -7,7 +7,7 @@ import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime"
 import { useServerClock } from "../../hooks/quiz/useServerClock";
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { getQuiz } from "../../services/quiz/quizService";
-import { startQuiz, advanceQuestion, endSession } from "../../services/quiz/quizSessionService";
+import { startQuiz, advanceQuestion, endSession, practiceLeave } from "../../services/quiz/quizSessionService";
 import { canEditQuizContent, getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
 import { getSessionResults } from "../../repositories/quiz/quizSessionRepository";
 import { getAnswerDistribution } from "../../repositories/quiz/quizAnalyticsRepository";
@@ -285,6 +285,18 @@ export default function QuizHostLivePage() {
     }
   }
 
+  const isPractice = session?.is_practice === true;
+
+  /** Leaving a practice run closes it and schedules it for deletion; a real quiz just navigates. */
+  async function handleLeave(to: string) {
+    if (isPractice && sessionId) {
+      const running = session?.phase !== "ended";
+      if (!confirm(running ? "Leave this practice? It ends for everyone and its results are deleted." : "Leave this practice? Its results will be deleted.")) return;
+      try { await practiceLeave("quiz", sessionId); } catch { /* it is also cleaned up automatically after 24 hours */ }
+    }
+    navigate(to);
+  }
+
   async function handleEnd() {
     if (!sessionId) return;
     if (!confirm("End this quiz now?")) return;
@@ -342,6 +354,7 @@ export default function QuizHostLivePage() {
           <div className="min-w-0">
             <div className="font-bold text-sm truncate">{quiz.title}</div>
             {brandName && <div className="text-[11px] text-slate-500 truncate">{brandName}</div>}
+            {isPractice && <div className="text-[10px] font-bold uppercase tracking-wide text-sky-300">🧪 Practice — nothing is saved</div>}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -378,7 +391,7 @@ export default function QuizHostLivePage() {
             ⛶
           </button>
           <button
-            onClick={() => navigate(ROUTES.QUIZ_ADMIN_QUIZZES)}
+            onClick={() => void handleLeave(ROUTES.QUIZ_ADMIN_QUIZZES)}
             className="text-xs font-semibold text-slate-300 border border-slate-700 rounded-lg px-3 py-1.5"
           >
             ← Back
@@ -519,21 +532,26 @@ export default function QuizHostLivePage() {
                       ...gradeCounts(participants, totalQuestions, quiz),
                     }}
                   />
-                  <button
+                  {isPractice && (
+                    <p className="w-full text-xs text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2">
+                      🧪 This was a practice: the results are not saved. Press <b>Back</b> when you are done and they are deleted.
+                    </p>
+                  )}
+                  {!isPractice && (<button
                     onClick={handleDownloadCsv}
                     disabled={csvDownloading}
                     className="text-sm font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-amber-950 rounded-lg px-4 py-2"
                   >
                     ⬇ {csvDownloading ? "Preparing…" : "Export CSV"}
-                  </button>
-                  <button
+                  </button>)}
+                  {!isPractice && (<button
                     onClick={() => navigate(ROUTES.QUIZ_ADMIN_RESULTS)}
                     className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2"
                   >
                     📋 View Results
-                  </button>
+                  </button>)}
                   <button
-                    onClick={() => navigate(ROUTES.QUIZ_ADMIN_DASHBOARD)}
+                    onClick={() => void handleLeave(ROUTES.QUIZ_ADMIN_DASHBOARD)}
                     className="text-sm font-semibold text-slate-300 border border-slate-700 rounded-lg px-4 py-2"
                   >
                     ← Dashboard

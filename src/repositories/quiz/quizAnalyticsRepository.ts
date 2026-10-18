@@ -50,7 +50,7 @@ export async function getCompanySessionResults(
   fromIso?: string,
   toIso?: string
 ): Promise<QuizSessionResultRow[]> {
-  let query = supabaseQuiz.from("quiz_session_results").select("*").eq("company_id", companyId).not("ended_at", "is", null);
+  let query = supabaseQuiz.from("quiz_session_results").select("*").eq("company_id", companyId).eq("is_practice", false).not("ended_at", "is", null);
 
   if (fromIso) query = query.gte("ended_at", fromIso);
   if (toIso) query = query.lte("ended_at", toIso);

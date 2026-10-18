@@ -50,7 +50,8 @@ export async function listParticipantJoinTimes(companyId: string): Promise<Parti
   const { data, error } = await supabaseQuiz
     .from("quiz_participants")
     .select("id, session_id, joined_at, quiz_sessions!inner(company_id)")
-    .eq("quiz_sessions.company_id", companyId);
+    .eq("quiz_sessions.company_id", companyId)
+    .eq("quiz_sessions.is_practice", false);
 
   if (error) {
     console.error("[quizDashboardRepository] listParticipantJoinTimes:", error);
@@ -65,7 +66,8 @@ export async function listResponseTimes(companyId: string, fromIso?: string, toI
   let query = supabaseQuiz
     .from("quiz_answers")
     .select("response_time_ms, quiz_sessions!inner(company_id)")
-    .eq("quiz_sessions.company_id", companyId);
+    .eq("quiz_sessions.company_id", companyId)
+    .eq("quiz_sessions.is_practice", false);
 
   if (fromIso) query = query.gte("answered_at", fromIso);
   if (toIso) query = query.lte("answered_at", toIso);

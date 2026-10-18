@@ -5,6 +5,7 @@ import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listQuizzes, deleteQuiz, publishQuiz, unpublishQuiz, duplicateQuiz } from "../../services/quiz/quizService";
 import { createExamSession, listExamSessions } from "../../repositories/exam/examAdminRepository";
+import { purgePracticeSessions } from "../../repositories/quiz/quizSessionRepository";
 import { listFoldersForCompany } from "../../repositories/quiz/quizResultFolderRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
 import type { Quiz, ChampMusic, HotspotFeedbackSize } from "../../types/quiz";
@@ -35,6 +36,10 @@ export default function ExamListPage() {
   const [folderNames, setFolderNames] = useState<Record<string, string>>({});
 
   const [startTarget, setStartTarget] = useState<Quiz | null>(null);
+  const [practiceStart, setPracticeStart] = useState(false);
+
+  // practice runs the trainer has left are cleaned up here (they are also hidden from every list)
+  useEffect(() => { void purgePracticeSessions(); }, []);
   const [durationText, setDurationText] = useState("60");
   const [startMode, setStartMode] = useState<StartMode>("now");
   const [startInMinutes, setStartInMinutes] = useState("5");
@@ -135,7 +140,8 @@ export default function ExamListPage() {
     }
   }
 
-  function openStartDialog(q: Quiz) {
+  function openStartDialog(q: Quiz, practice = false) {
+    setPracticeStart(practice);
     setStartTarget(q);
     setDurationText(String(q.exam_duration_minutes ?? 60));
     setStartMode("now");
@@ -160,7 +166,7 @@ export default function ExamListPage() {
         startAt = new Date(startAtLocal);
         if (Number.isNaN(startAt.getTime())) throw new Error("That start date/time isn't valid.");
       }
-      const session = await createExamSession(startTarget.id, { durationSeconds: Math.round(minutes * 60), startInSeconds, startAt });
+      const session = await createExamSession(startTarget.id, { durationSeconds: Math.round(minutes * 60), startInSeconds, startAt, practice: practiceStart });
       setStartTarget(null);
       navigate(ROUTES.QUIZ_ADMIN_EXAM_HOST.replace(":sessionId", session.id));
     } catch (e) {
@@ -316,6 +322,15 @@ export default function ExamListPage() {
                       ▶ Start Exam
                     </button>
                   )}
+                  {q.status === "published" && canEdit && (
+                    <button
+                      onClick={() => openStartDialog(q, true)}
+                      className="text-xs font-semibold text-sky-300 hover:text-sky-200 border border-sky-500/50 rounded-lg px-3 py-1.5"
+                      title="Try it out first: no shuffle, right/wrong shown, no certificate, and nothing is saved"
+                    >
+                      🧪 Practice
+                    </button>
+                  )}
                   <button onClick={() => toggleSessions(q.id)} className="text-xs font-semibold text-slate-300 border border-slate-700 hover:text-white rounded-lg px-3 py-1.5">
                     Sessions {openSessionsFor === q.id ? "▴" : "▾"}
                   </button>
@@ -379,8 +394,13 @@ export default function ExamListPage() {
       {startTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h3 className="text-sm font-bold text-white mb-1">Start: {startTarget.title}</h3>
+            <h3 className="text-sm font-bold text-white mb-1">{practiceStart ? "🧪 Practice" : "Start"}: {startTarget.title}</h3>
             <p className="text-xs text-slate-400 mb-4">Employees join with a PIN, see the whole paper, and share one timer.</p>
+            {practiceStart && (
+              <p className="text-xs text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2 mb-4">
+                Nothing is saved: right / wrong is shown, questions are not shuffled, no certificate, and it never appears in your results. It is deleted a few minutes after you press Back.
+              </p>
+            )}
 
             <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Paper time (minutes)</label>
             <input
@@ -417,7 +437,7 @@ export default function ExamListPage() {
             <div className="flex gap-2">
               <button onClick={() => setStartTarget(null)} className="flex-1 text-sm font-semibold text-slate-300 border border-slate-700 rounded-lg px-4 py-2.5">Cancel</button>
               <button onClick={handleStart} disabled={starting} className="flex-1 text-sm font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg px-4 py-2.5">
-                {starting ? "Starting…" : "▶ Start Exam"}
+                {starting ? "Starting…" : practiceStart ? "🧪 Start Practice" : "▶ Start Exam"}
               </button>
             </div>
           </div>
