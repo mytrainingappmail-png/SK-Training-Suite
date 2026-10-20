@@ -562,6 +562,18 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
               value={form.default_timer_seconds}
               onChange={(e) => setForm({ ...form, default_timer_seconds: Number(e.target.value) })}
             />
+            {questions.some((q) => q.timer_seconds !== null) && (
+              <p className="mt-1.5 text-[11px] leading-snug text-amber-300">
+                {questions.filter((q) => q.timer_seconds !== null).length} of {questions.length} questions have their own timer, so they do not follow this one.{" "}
+                <button
+                  type="button"
+                  onClick={() => setQuestions((prev) => prev.map((q) => ({ ...q, timer_seconds: null })))}
+                  className="font-semibold underline hover:text-amber-200"
+                >
+                  Use {form.default_timer_seconds}s for all questions
+                </button>
+              </p>
+            )}
           </div>
           )}
           <div>
