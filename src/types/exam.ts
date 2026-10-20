@@ -20,6 +20,8 @@ export interface ExamSession {
   results_released_at: string | null;
   /** A practice run: plays like the real exam but nothing is kept, no certificate, never listed in results. */
   is_practice?: boolean;
+  /** The location its exam had when it was started. */
+  location_id?: string | null;
   folder_id?: string | null;
   created_at: string;
 }

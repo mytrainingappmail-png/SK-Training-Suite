@@ -7,6 +7,7 @@ import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, dup
 import { launchSession, purgePracticeSessions } from "../../services/quiz/quizSessionService";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { describePlayMode, hasPerPlayerShuffle } from "../../utils/quizPlayMode";
+import { useQuizLocation, matchesQuizLocation, locationName } from "../../services/quiz/quizLocationStore";
 import type { Quiz } from "../../types/quiz";
 
 export default function QuizListPage() {
@@ -35,7 +36,8 @@ export default function QuizListPage() {
 
   useEffect(refresh, [admin]);
 
-  const filtered = quizzes.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()));
+  const { locations, selectedId: locationFilter } = useQuizLocation();
+  const filtered = quizzes.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()) && matchesQuizLocation(q.location_id, locationFilter));
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this quiz? This cannot be undone.")) return;
@@ -224,7 +226,7 @@ export default function QuizListPage() {
         <div className="text-slate-500 text-sm">Loading…</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-          No quizzes found.
+          {locationFilter ? "No quizzes in this location yet. Switch to “All locations” at the top, or build one here." : "No quizzes found."}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -248,6 +250,9 @@ export default function QuizListPage() {
                 </span>
               </div>
               <div className="font-semibold text-white text-sm mb-1">{q.title}</div>
+              {locationName(locations, q.location_id) && (
+                <div className="text-[11px] font-semibold text-amber-300 mb-1">📍 {locationName(locations, q.location_id)}</div>
+              )}
               <div className="text-xs text-slate-500 mb-4 line-clamp-2">{q.description || "No description"}</div>
 
               <div className="mt-auto flex flex-wrap gap-2 pt-3 border-t border-slate-800">

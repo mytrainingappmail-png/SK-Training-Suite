@@ -14,6 +14,7 @@ import { updateQuizMeta } from "../../services/quiz/quizService";
 import { renderCertificateToCanvas, CERT_TEMPLATE_LABELS } from "../../services/quiz/quizCertificateRenderer";
 import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from "../../services/quiz/quizBackupService";
 import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
+import QuizLocationsCard from "../../components/quiz/QuizLocationsCard";
 import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, CertPhotoFrame, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -361,6 +362,8 @@ export default function QuizSettingsPage() {
           <p className="text-xs text-amber-400 mt-1">👁 View only — you don't have permission to change these settings.</p>
         )}
       </div>
+
+      <QuizLocationsCard />
 
       {/* Appearance */}
       <fieldset disabled={!canEdit} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">

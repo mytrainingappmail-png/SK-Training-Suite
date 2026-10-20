@@ -10,6 +10,7 @@ import { listFoldersForCompany } from "../../repositories/quiz/quizResultFolderR
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
 import type { Quiz, ChampMusic, HotspotFeedbackSize } from "../../types/quiz";
 import type { ExamSession } from "../../types/exam";
+import { useQuizLocation, matchesQuizLocation, locationName } from "../../services/quiz/quizLocationStore";
 
 type StartMode = "now" | "in" | "at";
 
@@ -110,7 +111,8 @@ export default function ExamListPage() {
     }
   }
 
-  const filtered = exams.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()));
+  const { locations, selectedId: locationFilter } = useQuizLocation();
+  const filtered = exams.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()) && matchesQuizLocation(q.location_id, locationFilter));
 
   async function run(id: string, fn: () => Promise<unknown>, fallback: string) {
     setBusyId(id);
@@ -302,7 +304,9 @@ export default function ExamListPage() {
         <div className="text-slate-500 text-sm">Loading…</div>
       ) : filtered.length === 0 ? (
         <div className="text-center text-sm text-slate-500 border border-dashed border-slate-800 rounded-2xl py-12">
-          No exams yet. Click <span className="text-slate-300 font-semibold">+ New Exam</span> to build one.
+          {locationFilter
+            ? "No exams in this location yet. Switch to “All locations” at the top, or build one here."
+            : <>No exams yet. Click <span className="text-slate-300 font-semibold">+ New Exam</span> to build one.</>}
         </div>
       ) : (
         <div className="space-y-3">
@@ -311,6 +315,9 @@ export default function ExamListPage() {
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <p className="font-semibold text-white break-words">{q.title}</p>
+                  {locationName(locations, q.location_id) && (
+                    <p className="text-[11px] font-semibold text-amber-300 mt-0.5">📍 {locationName(locations, q.location_id)}</p>
+                  )}
                   <p className="text-xs text-slate-500 mt-0.5">
                     {q.exam_duration_minutes ?? 60} min · pass {q.passing_score_pct}% ·{" "}
                     <span className={q.status === "published" ? "text-emerald-400" : "text-amber-400"}>{q.status === "published" ? "Published" : "Draft"}</span>

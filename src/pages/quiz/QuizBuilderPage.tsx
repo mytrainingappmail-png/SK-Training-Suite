@@ -9,6 +9,7 @@ import HotspotZoneEditor from "../../components/quiz/HotspotZoneEditor";
 import HotspotBulkMarker from "../../components/quiz/HotspotBulkMarker";
 import { effectiveZones, legacyFromZones } from "../../components/quiz/hotspotZones";
 import { describePlayMode } from "../../utils/quizPlayMode";
+import { useQuizLocation } from "../../services/quiz/quizLocationStore";
 import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
 import type { QuizDifficulty } from "../../types/quiz";
@@ -64,6 +65,7 @@ const DEFAULT_FORM: QuizForm = {
   exam_duration_minutes: null,
   reveal_answers: null,
   allow_early_next: null,
+  location_id: undefined, // new quiz: follows the location switch at the top until chosen here
 };
 
 // An exam starts with the anti-cheat shuffles ON (each person's question and
@@ -89,6 +91,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
   const canEdit = canEditQuizContent();
 
   const [form, setForm] = useState<QuizForm>(isExam ? DEFAULT_EXAM_FORM : DEFAULT_FORM);
+  const { locations: allLocations, selectedId: selectedLocationId } = useQuizLocation();
   const [questions, setQuestions] = useState<EditableQuestion[]>([blankQuestion()]);
   const [savedQuizId, setSavedQuizId] = useState<string | null>(quizId ?? null);
   const [loading, setLoading] = useState(!isNew);
@@ -130,6 +133,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           exam_duration_minutes: quiz.exam_duration_minutes,
           reveal_answers: quiz.reveal_answers ?? null,
           allow_early_next: quiz.allow_early_next ?? null,
+          location_id: quiz.location_id ?? null,
         });
         setQuestions(
           quiz.questions.length > 0
@@ -408,11 +412,11 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
     try {
       let id = savedQuizId;
       if (!id) {
-        const created = await createQuiz(admin.company_id, admin.id, form);
+        const created = await createQuiz(admin.company_id, admin.id, { ...form, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
         id = created.id;
         setSavedQuizId(id);
       } else {
-        await updateQuizMeta(id, form);
+        await updateQuizMeta(id, { ...form, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
       }
 
       const result = await saveQuestions(
@@ -503,6 +507,24 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
         </div>
+        {(allLocations.length > 0 || form.location_id) && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">📍 Location</label>
+            <select
+              className="w-full sm:max-w-xs rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              value={(form.location_id === undefined ? selectedLocationId : form.location_id) ?? ""}
+              onChange={(e) => setForm({ ...form, location_id: e.target.value || null })}
+            >
+              <option value="">No location (shows under “All locations” only)</option>
+              {allLocations
+                .filter((l) => l.active || l.id === form.location_id)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}{l.active ? "" : " (hidden)"}</option>
+                ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">When you pick a location at the top, only that location's {isExam ? "exams" : "quizzes"} are shown. Add more locations in Settings → Locations.</p>
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Difficulty</label>

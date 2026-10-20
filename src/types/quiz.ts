@@ -28,6 +28,15 @@ export interface QuizCategory {
   display_order: number;
 }
 
+/** One of the trainer's own locations (Settings → Locations). Quizzes, exams and the sessions run from them can carry one. */
+export interface QuizLocation {
+  id: string;
+  company_id: string;
+  name: string;
+  active: boolean;
+  display_order: number;
+}
+
 export type QuizDifficulty = "Easy" | "Medium" | "Hard";
 export type QuizStatus = "draft" | "published";
 
@@ -56,6 +65,8 @@ export interface Quiz {
   reveal_answers?: boolean | null;
   /** Live Quiz only: may a player press Next as soon as they have answered? null = follow the company default (off). */
   allow_early_next?: boolean | null;
+  /** Where this quiz / exam is for (null = no location). New sessions take it at launch. */
+  location_id?: string | null;
   status: QuizStatus;
   created_at: string;
   updated_at: string;
@@ -137,6 +148,8 @@ export interface QuizSession {
   allow_early_next?: boolean;
   /** A practice run: plays like the real thing but nothing is kept, no certificate, never listed in results. */
   is_practice?: boolean;
+  /** The location its quiz had when it was launched. */
+  location_id?: string | null;
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
   question_started_at: string | null;
   created_at: string;
@@ -209,6 +222,8 @@ export interface QuizSessionResultRow {
   grade: QuizGrade;
   /** Set once this session has been moved into a Batch Records folder — see QuizResultFolder. */
   folder_id: string | null;
+  /** The location of the session (see QuizSession.location_id). */
+  location_id?: string | null;
 }
 
 /** A named, permanent archive for ended sessions (typically final tests) —
@@ -487,6 +502,8 @@ export interface DashboardFilters {
   quizId?: string | null;
   trainerId?: string | null;
   employeeName?: string | null;
+  /** The location switch at the top: only that location's sessions and quizzes. null = all locations. */
+  locationId?: string | null;
 }
 
 export interface DashboardTrendPoint {

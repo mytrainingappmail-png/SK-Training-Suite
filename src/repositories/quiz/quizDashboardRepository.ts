@@ -46,12 +46,14 @@ export interface ParticipantJoinRow {
 }
 
 /** Every participant's actual join timestamp, company-wide — quiz_session_results has no joined_at, so "today's participants" and the participation trend need this separately. */
-export async function listParticipantJoinTimes(companyId: string): Promise<ParticipantJoinRow[]> {
-  const { data, error } = await supabaseQuiz
+export async function listParticipantJoinTimes(companyId: string, locationId?: string | null): Promise<ParticipantJoinRow[]> {
+  let query = supabaseQuiz
     .from("quiz_participants")
     .select("id, session_id, joined_at, quiz_sessions!inner(company_id)")
     .eq("quiz_sessions.company_id", companyId)
     .eq("quiz_sessions.is_practice", false);
+  if (locationId) query = query.eq("quiz_sessions.location_id", locationId);
+  const { data, error } = await query;
 
   if (error) {
     console.error("[quizDashboardRepository] listParticipantJoinTimes:", error);
@@ -62,12 +64,13 @@ export async function listParticipantJoinTimes(companyId: string): Promise<Parti
 }
 
 /** Raw response times (ms) for every answer in the company, optionally date-bounded — used for the "Average Response Time" KPI and any response-time analysis. */
-export async function listResponseTimes(companyId: string, fromIso?: string, toIso?: string): Promise<number[]> {
+export async function listResponseTimes(companyId: string, fromIso?: string, toIso?: string, locationId?: string | null): Promise<number[]> {
   let query = supabaseQuiz
     .from("quiz_answers")
     .select("response_time_ms, quiz_sessions!inner(company_id)")
     .eq("quiz_sessions.company_id", companyId)
     .eq("quiz_sessions.is_practice", false);
+  if (locationId) query = query.eq("quiz_sessions.location_id", locationId);
 
   if (fromIso) query = query.gte("answered_at", fromIso);
   if (toIso) query = query.lte("answered_at", toIso);

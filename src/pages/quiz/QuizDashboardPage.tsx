@@ -7,6 +7,7 @@ import { getDashboardFilterOptions, getDashboardSnapshot } from "../../services/
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { ChartCard, AreaChart, VerticalBars, HorizontalBars, DonutChart } from "../../components/quiz/QuizDashboardCharts";
 import type { DashboardFilterOptions, DashboardFilters, DashboardSnapshot } from "../../types/quiz";
+import { useQuizLocation } from "../../services/quiz/quizLocationStore";
 
 type DatePreset = "all" | "today" | "yesterday" | "7d" | "30d" | "thisMonth" | "lastMonth" | "thisQuarter" | "custom";
 
@@ -90,6 +91,7 @@ export default function QuizDashboardPage() {
   const [quizId, setQuizId] = useState("");
   const [trainerId, setTrainerId] = useState("");
   const [employeeName, setEmployeeName] = useState("");
+  const { selectedId: locationFilter } = useQuizLocation();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [liveTick, setLiveTick] = useState(0);
@@ -102,8 +104,8 @@ export default function QuizDashboardPage() {
 
   useEffect(() => {
     if (!admin) return;
-    getDashboardFilterOptions(admin.company_id).then(setFilterOptions);
-  }, [admin]);
+    getDashboardFilterOptions(admin.company_id, locationFilter).then(setFilterOptions);
+  }, [admin, locationFilter]);
 
   const range = useMemo(() => presetToRange(datePreset, customFrom, customTo), [datePreset, customFrom, customTo]);
 
@@ -131,9 +133,10 @@ export default function QuizDashboardPage() {
       quizId: quizId || null,
       trainerId: trainerId || null,
       employeeName: employeeName || null,
+      locationId: locationFilter,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, categoryId, quizId, trainerId, employeeName]);
+  }, [range, categoryId, quizId, trainerId, employeeName, locationFilter]);
 
   useEffect(() => {
     if (!admin) return;

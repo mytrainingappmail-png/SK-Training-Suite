@@ -7,6 +7,7 @@ import { getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import QuizAccountModal from "../../components/quiz/QuizAccountModal";
+import { loadQuizLocations, setQuizLocation, useQuizLocation } from "../../services/quiz/quizLocationStore";
 
 const navItems = [
   { to: ROUTES.QUIZ_ADMIN_DASHBOARD, label: "Dashboard" },
@@ -27,6 +28,13 @@ export default function QuizAdminLayout() {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [footerText, setFooterText] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { locations, selectedId } = useQuizLocation();
+  const companyId = admin?.company_id;
+
+  // the trainer's own locations (Settings → Locations) drive the 📍 switch below
+  useEffect(() => {
+    if (companyId) void loadQuizLocations(companyId);
+  }, [companyId]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -74,6 +82,26 @@ export default function QuizAdminLayout() {
             </NavLink>
           ))}
         </div>
+
+        {locations.some((l) => l.active) && (
+          <label
+            className={`flex shrink-0 items-center gap-1 rounded-xl border px-2 py-1 text-sm ${selectedId ? "border-amber-400/70 bg-amber-400/10 text-amber-200" : "border-slate-700 text-slate-300"}`}
+            title="Show only one location's quizzes, exams, results and dashboard"
+          >
+            <span aria-hidden>📍</span>
+            <select
+              value={selectedId ?? ""}
+              onChange={(e) => setQuizLocation(e.target.value || null)}
+              aria-label="Location"
+              className="max-w-[9rem] bg-transparent text-sm font-semibold outline-none"
+            >
+              <option value="" className="text-slate-900">All locations</option>
+              {locations.filter((l) => l.active).map((l) => (
+                <option key={l.id} value={l.id} className="text-slate-900">{l.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="relative" ref={menuRef}>
           <button

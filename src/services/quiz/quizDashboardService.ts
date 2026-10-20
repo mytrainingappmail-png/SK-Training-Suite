@@ -57,7 +57,7 @@ function average(nums: number[]): number {
   return nums.length === 0 ? 0 : Math.round(nums.reduce((s, n) => s + n, 0) / nums.length);
 }
 
-export async function getDashboardFilterOptions(companyId: string): Promise<DashboardFilterOptions> {
+export async function getDashboardFilterOptions(companyId: string, locationId: string | null = null): Promise<DashboardFilterOptions> {
   const [quizzes, categories, admins, allResults] = await Promise.all([
     listQuizzes(companyId),
     listCategories(companyId),
@@ -67,11 +67,11 @@ export async function getDashboardFilterOptions(companyId: string): Promise<Dash
 
   return {
     categories: categories.map((c) => ({ id: c.id, name: c.name })),
-    quizzes: quizzes.map((q) => ({ id: q.id, title: q.title })),
+    quizzes: quizzes.filter((q) => !locationId || q.location_id === locationId).map((q) => ({ id: q.id, title: q.title })),
     // Disabled trainers are excluded here (and from every aggregate below) rather than deleted —
     // re-enabling them from the Users page brings their data straight back into view.
     trainers: admins.filter((a) => a.status === "active").map((a) => ({ id: a.id, name: a.display_name })),
-    employees: [...new Set(allResults.map((r) => r.display_name.trim()))].sort(),
+    employees: [...new Set(allResults.filter((r) => !locationId || r.location_id === locationId).map((r) => r.display_name.trim()))].sort(),
   };
 }
 
@@ -85,8 +85,8 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
       getCompanySessionResults(companyId),
       listCertificatesForCompany(companyId),
       countQuestionBankSize(companyId),
-      listResponseTimes(companyId, filters.fromIso, filters.toIso),
-      listParticipantJoinTimes(companyId),
+      listResponseTimes(companyId, filters.fromIso, filters.toIso, filters.locationId ?? null),
+      listParticipantJoinTimes(companyId, filters.locationId ?? null),
     ]);
 
   const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
@@ -108,6 +108,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
   // ── Apply the global filter set to the session-results rows (the primary dataset behind most KPIs/charts) ──
   const filteredResults: QuizSessionResultRow[] = allResults.filter((r) => {
     if (hostIsDisabled(r.session_id)) return false;
+    if (filters.locationId && (r.location_id ?? null) !== filters.locationId) return false;
     if (filters.quizId && r.quiz_id !== filters.quizId) return false;
     if (filters.categoryId) {
       const quiz = quizById.get(r.quiz_id);
@@ -124,6 +125,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
 
   const filteredSessions = sessions.filter((s) => {
     if (s.host_admin_id && disabledTrainerIds.has(s.host_admin_id)) return false;
+    if (filters.locationId && (s.location_id ?? null) !== filters.locationId) return false;
     if (filters.quizId && s.quiz_id !== filters.quizId) return false;
     if (filters.categoryId) {
       const quiz = quizById.get(s.quiz_id);
@@ -135,6 +137,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
   });
 
   const filteredQuizzes = quizzes.filter((q) => {
+    if (filters.locationId && (q.location_id ?? null) !== filters.locationId) return false;
     if (filters.quizId && q.id !== filters.quizId) return false;
     if (filters.categoryId && q.category_id !== filters.categoryId) return false;
     return true;
@@ -142,6 +145,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
 
   const filteredCertificates = certificates.filter((c) => {
     if (hostIsDisabled(c.session_id)) return false;
+    if (filters.locationId && (sessionById.get(c.session_id)?.location_id ?? null) !== filters.locationId) return false;
     if (filters.quizId) {
       const quiz = quizById.get(filters.quizId);
       if (quiz && c.quiz_title !== quiz.title) return false;
@@ -158,6 +162,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
   function joinTimeMatchesNonDateFilters(j: { session_id: string; participant_id: string }): boolean {
     if (hostIsDisabled(j.session_id)) return false;
     const session = sessionById.get(j.session_id);
+    if (filters.locationId && (session?.location_id ?? null) !== filters.locationId) return false;
     if (filters.quizId && session?.quiz_id !== filters.quizId) return false;
     if (filters.categoryId) {
       const quiz = session ? quizById.get(session.quiz_id) : undefined;
@@ -195,7 +200,7 @@ export async function getDashboardSnapshot(companyId: string, filters: Dashboard
       completedSessions,
       todaysParticipants,
       totalParticipants,
-      questionBankSize: filters.quizId || filters.categoryId ? filteredQuizzes.length : questionBankSize,
+      questionBankSize: filters.quizId || filters.categoryId || filters.locationId ? filteredQuizzes.length : questionBankSize,
       averageScorePct: average(filteredResults.map((r) => r.percent_correct)),
       passPct: Math.round((passCount / gradedTotal) * 100),
       failPct: Math.round((failCount / gradedTotal) * 100),

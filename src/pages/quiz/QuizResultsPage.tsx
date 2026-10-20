@@ -10,6 +10,7 @@ import { buildDetailedReportCsv, buildTraineeSummaryCsv, computeChampions } from
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
 import SessionResultCard, { GRADE_STYLE } from "../../components/quiz/SessionResultCard";
+import { useQuizLocation, matchesQuizLocation } from "../../services/quiz/quizLocationStore";
 import type {
   QuizSession,
   QuizSessionResultRow,
@@ -129,8 +130,10 @@ export default function QuizResultsPage() {
   // only ever see sessions that haven't been moved into a Batch Records
   // folder — that's the whole point of moving one in: it stops showing up
   // in the day-to-day clutter and lives only inside its folder from then on.
-  const unfiledSessions = useMemo(() => sessions.filter((s) => !s.folder_id), [sessions]);
-  const unfiledResults = useMemo(() => allResults.filter((r) => !r.folder_id), [allResults]);
+  // The 📍 switch at the top also narrows these everyday views to one location's sessions.
+  const { selectedId: locationFilter } = useQuizLocation();
+  const unfiledSessions = useMemo(() => sessions.filter((s) => !s.folder_id && matchesQuizLocation(s.location_id, locationFilter)), [sessions, locationFilter]);
+  const unfiledResults = useMemo(() => allResults.filter((r) => !r.folder_id && matchesQuizLocation(r.location_id, locationFilter)), [allResults, locationFilter]);
 
   const traineeNames = useMemo(
     () => [...new Set(unfiledResults.map((r) => r.display_name.trim()))].sort(),

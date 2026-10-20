@@ -144,6 +144,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     exam_duration_minutes: source.exam_duration_minutes,
     reveal_answers: source.reveal_answers ?? null,
     allow_early_next: source.allow_early_next ?? null,
+    location_id: source.location_id ?? null,
   });
 
   if (source.questions.length > 0) {

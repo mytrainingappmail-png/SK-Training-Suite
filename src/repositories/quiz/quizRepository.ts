@@ -18,6 +18,8 @@ export interface QuizForm {
   /** null / absent = follow the company default */
   reveal_answers?: boolean | null;
   allow_early_next?: boolean | null;
+  /** Where this quiz / exam is for (null = no location). */
+  location_id?: string | null;
 }
 
 export interface QuestionOptionForm {
