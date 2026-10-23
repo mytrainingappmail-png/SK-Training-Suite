@@ -8,6 +8,8 @@ import { launchSession, purgePracticeSessions } from "../../services/quiz/quizSe
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { describePlayMode, hasPerPlayerShuffle } from "../../utils/quizPlayMode";
 import { useQuizLocation, matchesQuizLocation, locationName } from "../../services/quiz/quizLocationStore";
+import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
+import { loadExportQuiz } from "../../services/quiz/quizExportService";
 import type { Quiz } from "../../types/quiz";
 
 export default function QuizListPage() {
@@ -312,6 +314,7 @@ export default function QuizListPage() {
                     📄 Duplicate
                   </button>
                 )}
+                <QuizDownloadMenu compact load={() => loadExportQuiz(q.id)} />
                 {canEdit && (
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 border border-dashed border-slate-700 rounded-lg px-2.5 py-1.5 cursor-pointer">
                     <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelected(q.id)} />

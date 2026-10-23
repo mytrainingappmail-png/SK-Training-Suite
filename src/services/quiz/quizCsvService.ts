@@ -6,6 +6,7 @@
 import type { QuestionForm } from "../../repositories/quiz/quizRepository";
 
 export const CSV_HEADERS = ["Question", "Type", "Option1", "Option2", "Option3", "Option4", "CorrectAnswer", "Timer", "Marks", "Explanation"];
+// A downloaded test (quizExportService) may also carry Option5 / Option6 and an ImageURL column; extra columns are simply ignored on import.
 
 export const SAMPLE_ROWS: string[][] = [
   ["What does RERA stand for?", "mcq", "Real Estate Regulatory Authority", "Real Estate Registration Act", "Residential Estate Reform Agency", "Real Estate Reform Act", "Real Estate Regulatory Authority", "20", "1", "RERA was established in 2016."],
@@ -93,6 +94,8 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
     opt2: col("option2"),
     opt3: col("option3"),
     opt4: col("option4"),
+    opt5: col("option5"),
+    opt6: col("option6"),
     correct: col("correctanswer"),
     timer: col("timer"),
     marks: col("marks"),
@@ -119,7 +122,7 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
     const optionTexts =
       type === "truefalse"
         ? ["True", "False"]
-        : [idx.opt1, idx.opt2, idx.opt3, idx.opt4]
+        : [idx.opt1, idx.opt2, idx.opt3, idx.opt4, idx.opt5, idx.opt6]
             .map((oi) => (oi >= 0 ? (r[oi] ?? "").trim() : ""))
             .filter((t) => t !== "");
 

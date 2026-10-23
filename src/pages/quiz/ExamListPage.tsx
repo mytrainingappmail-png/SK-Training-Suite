@@ -11,6 +11,8 @@ import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsR
 import type { Quiz, ChampMusic, HotspotFeedbackSize } from "../../types/quiz";
 import type { ExamSession } from "../../types/exam";
 import { useQuizLocation, matchesQuizLocation, locationName } from "../../services/quiz/quizLocationStore";
+import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
+import { loadExportQuiz } from "../../services/quiz/quizExportService";
 
 type StartMode = "now" | "in" | "at";
 
@@ -341,6 +343,7 @@ export default function ExamListPage() {
                   <button onClick={() => toggleSessions(q.id)} className="text-xs font-semibold text-slate-300 border border-slate-700 hover:text-white rounded-lg px-3 py-1.5">
                     Sessions {openSessionsFor === q.id ? "▴" : "▾"}
                   </button>
+                  <QuizDownloadMenu compact load={() => loadExportQuiz(q.id)} />
                   {canEdit && (
                     <>
                       <Link to={ROUTES.QUIZ_ADMIN_EXAM_EDIT.replace(":quizId", q.id)} className="text-xs font-semibold text-slate-300 border border-slate-700 hover:text-white rounded-lg px-3 py-1.5">

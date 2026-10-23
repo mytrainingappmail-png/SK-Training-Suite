@@ -10,6 +10,8 @@ import HotspotBulkMarker from "../../components/quiz/HotspotBulkMarker";
 import { effectiveZones, legacyFromZones } from "../../components/quiz/hotspotZones";
 import { describePlayMode } from "../../utils/quizPlayMode";
 import { useQuizLocation } from "../../services/quiz/quizLocationStore";
+import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
+import type { ExportQuiz } from "../../services/quiz/quizExportService";
 import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
 import type { QuizDifficulty } from "../../types/quiz";
@@ -375,6 +377,35 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
     updateQuestion(localId, { hotspot_zones: zones.length > 0 ? zones : null, ...legacyFromZones(zones) });
   }
 
+  /** The test as it is on the screen right now (saved or not), in the shape the PDF / CSV download needs. */
+  function buildExportQuiz(): ExportQuiz {
+    return {
+      title: form.title.trim() || (isExam ? "Exam" : "Quiz"),
+      description: form.description,
+      mode: form.mode,
+      difficulty: form.difficulty,
+      default_timer_seconds: form.default_timer_seconds,
+      passing_score_pct: form.passing_score_pct,
+      exam_duration_minutes: form.exam_duration_minutes,
+      questions: questions
+        .filter((q) => q.question_text.trim() !== "")
+        .map((q) => ({
+          question_text: q.question_text,
+          type: q.type,
+          timer_seconds: q.timer_seconds,
+          marks: q.marks,
+          explanation: q.explanation,
+          is_hidden: q.is_hidden,
+          options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+          image_url: q.image_url,
+          hotspot_zones: q.hotspot_zones,
+          target_x: q.target_x,
+          target_y: q.target_y,
+          target_radius: q.target_radius,
+        })),
+    };
+  }
+
   function handleDownloadSampleCsv() {
     downloadCsvFile("live-quiz-sample.csv", buildSampleCsv());
   }
@@ -702,6 +733,17 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           <p className="text-xs text-slate-500 -mt-2">No certificate will be offered for this quiz, regardless of score — useful for practice/ungraded quizzes.</p>
         )}
       </fieldset>
+
+      {/* Download the whole test (what is on screen right now) */}
+      {questions.some((q) => q.question_text.trim() !== "") && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <QuizDownloadMenu load={async () => buildExportQuiz()} />
+          <p className="min-w-[14rem] flex-1 text-xs text-slate-500">
+            Download this whole {isExam ? "exam" : "quiz"} — every question with its options, the correct answer and the explanation — as a PDF or a CSV (Excel) file.
+            It is made from what you see on this screen now, even before you save.
+          </p>
+        </div>
+      )}
 
       {/* Bulk import */}
       {canEdit && (
