@@ -540,7 +540,9 @@ export default function QuizResultsPage() {
                     <td className="px-3 py-2 text-white font-medium">{r.display_name}</td>
                     <td className="px-3 py-2 font-mono text-slate-300">{r.score}</td>
                     <td className="px-3 py-2 text-slate-300">
-                      {r.correct_count}/{r.total_questions}
+                      <span title={`${r.correct_count} of ${r.total_questions} questions correct`}>
+                        {r.marks_obtained != null ? `${r.marks_obtained}/${r.total_marks} marks` : `${r.correct_count}/${r.total_questions}`}
+                      </span>
                     </td>
                     <td className="px-3 py-2 font-mono text-slate-300">{r.percent_correct}%</td>
                     <td className="px-3 py-2">

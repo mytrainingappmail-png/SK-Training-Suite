@@ -74,7 +74,9 @@ export default function SessionResultCard({
                   <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[r.rank - 1] ?? `#${r.rank}`}</span>
                   <span className="flex-1 truncate">{r.display_name}</span>
                   <span className="text-xs text-slate-400">
-                    {r.correct_count}/{r.total_questions} · {r.percent_correct}%
+                    <span title={`${r.correct_count} of ${r.total_questions} questions correct`}>
+                      {r.marks_obtained != null ? `${r.marks_obtained}/${r.total_marks} marks` : `${r.correct_count}/${r.total_questions}`} · {r.percent_correct}%
+                    </span>
                   </span>
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
                     {r.grade.replace("_", " ")}

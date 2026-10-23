@@ -12,7 +12,7 @@ function formatDate(iso: string | null): string {
 
 /** One row per participant per session — the "Detailed Report" / Performance table shape. */
 export function buildDetailedReportCsv(rows: QuizSessionResultRow[]): string {
-  const header = ["Date", "Test Name", "Trainee", "Score", "Correct", "Total", "Percent", "Result"];
+  const header = ["Date", "Test Name", "Trainee", "Score", "Correct", "Total", "Marks", "Total Marks", "Percent", "Result"];
   const lines = [header, ...rows.map((r) => [
     formatDate(r.ended_at),
     r.quiz_title,
@@ -20,6 +20,8 @@ export function buildDetailedReportCsv(rows: QuizSessionResultRow[]): string {
     String(r.score),
     String(r.correct_count),
     String(r.total_questions),
+    r.marks_obtained != null ? String(r.marks_obtained) : "",
+    r.marks_obtained != null && r.total_marks != null ? String(r.total_marks) : "",
     `${r.percent_correct}%`,
     r.grade.replace("_", " "),
   ])];

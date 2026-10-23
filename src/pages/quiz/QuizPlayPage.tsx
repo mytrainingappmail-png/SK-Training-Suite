@@ -540,6 +540,7 @@ export default function QuizPlayPage() {
           <div className="text-4xl font-mono font-bold text-amber-400">{myResult?.percent_correct ?? 0}%</div>
           <div className="text-xs text-slate-500 mt-1">
             {myResult?.correct_count ?? 0}/{myResult?.total_questions ?? 0} correct
+            {myResult?.marks_obtained != null && myResult.total_marks !== myResult.total_questions && ` · ${myResult.marks_obtained}/${myResult.total_marks} marks`}
             {rank > 0 && ` · Rank #${rank} of ${ranked.length}`}
           </div>
         </div>

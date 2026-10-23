@@ -164,6 +164,8 @@ export interface QuizParticipant {
   display_name: string;
   score: number;
   correct_count: number;
+  /** Marks of the questions answered correctly (null = unknown: an older result whose answers were not kept). */
+  marks_earned?: number | null;
   total_response_time_ms: number;
   tab_switch_count: number;
   joined_at: string;
@@ -224,6 +226,10 @@ export interface QuizSessionResultRow {
   folder_id: string | null;
   /** The location of the session (see QuizSession.location_id). */
   location_id?: string | null;
+  /** Marks earned (null = unknown: an older result whose answers were not kept — then percent_correct is by question count as before). */
+  marks_obtained?: number | null;
+  /** Total marks of the quiz. */
+  total_marks?: number;
 }
 
 /** A named, permanent archive for ended sessions (typically final tests) —
@@ -420,6 +426,8 @@ export interface MyQuizResult {
   total_questions: number;
   percent_correct: number;
   grade: QuizGrade;
+  marks_obtained?: number | null;
+  total_marks?: number;
 }
 
 /** Pre-auth branding for the quiz admin login page, via get_quiz_public_branding RPC. */

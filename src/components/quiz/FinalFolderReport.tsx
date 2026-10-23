@@ -93,9 +93,9 @@ export default function FinalFolderReport({ folder, finals, exams, uploads, comp
       passPct: f.passing_score_pct,
       rows: f.rows.map((r) => ({
         name: r.display_name,
-        // marks in a live quiz = correct answers (the quiz's own "score" is speed-weighted points)
-        score: r.correct_count,
-        total: r.total_questions,
+        // marks of the questions answered right (older saved results without marks fall back to the right-answer count; the quiz's own "score" is speed-weighted points)
+        score: r.marks_obtained ?? r.correct_count,
+        total: r.marks_obtained != null && r.total_marks ? r.total_marks : r.total_questions,
         percent: r.percent_correct,
         correct: r.correct_count,
         wrong: r.total_questions - r.correct_count,

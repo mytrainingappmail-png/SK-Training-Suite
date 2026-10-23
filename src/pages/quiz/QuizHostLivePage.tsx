@@ -15,7 +15,7 @@ import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import { playTone } from "../../services/quiz/quizSoundService";
-import { rankByMarks, isCertEligible, MEDALS } from "../../services/quiz/quizRankingService";
+import { rankByMarks, isCertEligible, marksOf, percentOfMarks, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResultCardButton";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
@@ -527,9 +527,9 @@ export default function QuizHostLivePage() {
                       pin: session.pin,
                       participants: rankByMarks(participants).map((p) => ({
                         display_name: p.display_name,
-                        percent: totalQuestions === 0 ? 0 : Math.round((p.correct_count / totalQuestions) * 100),
+                        percent: percentOfMarks(p, totalQuestions, totalMarks),
                       })),
-                      ...gradeCounts(participants, totalQuestions, quiz),
+                      ...gradeCounts(participants, totalQuestions, totalMarks, quiz),
                     }}
                   />
                   {isPractice && (
@@ -568,7 +568,7 @@ export default function QuizHostLivePage() {
                     </div>
                     <HorizontalBars
                       data={(() => {
-                        const counts = gradeCounts(participants, totalQuestions, quiz);
+                        const counts = gradeCounts(participants, totalQuestions, totalMarks, quiz);
                         const total = Math.max(1, participants.length);
                         return [
                           { label: `Pass (${quiz.passing_score_pct}%+)`, value: Math.round((counts.passCount / total) * 100) },
@@ -588,14 +588,14 @@ export default function QuizHostLivePage() {
                     <div className="text-sm font-bold text-white mb-3">👥 All Participants — ranked by marks <span className="text-slate-500 font-normal">(out of {totalMarks} total)</span></div>
                     <div className="space-y-1.5">
                       {rankByMarks(participants).map((p, i) => {
-                          const grade = participantGrade(p.correct_count, totalQuestions, quiz);
-                          const pct = totalQuestions === 0 ? 0 : Math.round((p.correct_count / totalQuestions) * 100);
+                          const grade = participantGrade(percentOfMarks(p, totalQuestions, totalMarks), quiz);
+                          const pct = percentOfMarks(p, totalQuestions, totalMarks);
                           return (
                             <div key={p.id} className="flex items-center gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
                               <span className="font-mono text-xs text-slate-500 w-6 shrink-0">{MEDALS[i] ?? `#${i + 1}`}</span>
                               <span className="flex-1 truncate">{p.display_name}</span>
                               <span className="text-xs text-slate-400">
-                                {p.correct_count}/{totalMarks} marks · {pct}%
+                                {marksOf(p)}/{p.marks_earned == null ? totalQuestions : totalMarks} marks · {pct}%
                               </span>
                               {p.tab_switch_count > 0 && (
                                 <span
@@ -644,7 +644,7 @@ export default function QuizHostLivePage() {
                   {/* Certificates — competition-gated by cert_eligibility, not just a passing score */}
                   {(() => {
                     const ranked = rankByMarks(participants);
-                    const eligible = ranked.filter((p, i) => isCertEligible(i + 1, participantGrade(p.correct_count, totalQuestions, quiz), certEligibility));
+                    const eligible = ranked.filter((p, i) => isCertEligible(i + 1, participantGrade(percentOfMarks(p, totalQuestions, totalMarks), quiz), certEligibility));
                     if (eligible.length === 0) return null;
                     const eligibilityLabel =
                       certEligibility === "top1" ? "Rank #1 only" : certEligibility === "top3" ? "Top 3 ranks" : "Everyone who passed";
@@ -656,7 +656,7 @@ export default function QuizHostLivePage() {
                           {eligible.map((p) => (
                             <div key={p.id} className="flex items-center justify-between gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
                               <span className="flex-1 truncate">
-                                {p.display_name} <span className="text-slate-500">({totalQuestions === 0 ? 0 : Math.round((p.correct_count / totalQuestions) * 100)}%)</span>
+                                {p.display_name} <span className="text-slate-500">({percentOfMarks(p, totalQuestions, totalMarks)}%)</span>
                               </span>
                               {admin && <QuizAdminCertificateButton participantId={p.id} companyId={admin.company_id} />}
                             </div>
@@ -740,16 +740,16 @@ const GRADE_STYLE: Record<QuizGrade, string> = {
   FAIL: "text-red-300 bg-red-500/15 border-red-500/30",
 };
 
-function participantGrade(correctCount: number, totalQuestions: number, quiz: QuizWithQuestions): QuizGrade {
-  const pct = totalQuestions === 0 ? 0 : Math.round((correctCount / totalQuestions) * 100);
+function participantGrade(pct: number, quiz: QuizWithQuestions): QuizGrade {
   if (pct >= quiz.passing_score_pct) return "PASS";
   if (pct >= quiz.improve_threshold_pct) return "NEED_IMPROVEMENT";
   return "FAIL";
 }
 
 function gradeCounts(
-  participants: { correct_count: number }[],
+  participants: { correct_count: number; marks_earned?: number | null }[],
   totalQuestions: number,
+  totalMarks: number,
   quiz: QuizWithQuestions
 ): { passCount: number; improveCount: number; failCount: number } {
   let passCount = 0;
@@ -757,7 +757,7 @@ function gradeCounts(
   let failCount = 0;
 
   for (const p of participants) {
-    const pct = totalQuestions === 0 ? 0 : Math.round((p.correct_count / totalQuestions) * 100);
+    const pct = percentOfMarks(p, totalQuestions, totalMarks);
     if (pct >= quiz.passing_score_pct) passCount += 1;
     else if (pct >= quiz.improve_threshold_pct) improveCount += 1;
     else failCount += 1;
@@ -769,7 +769,7 @@ function gradeCounts(
 function Podium({
   participants,
 }: {
-  participants: { id: string; display_name: string; correct_count: number; total_response_time_ms: number }[];
+  participants: { id: string; display_name: string; correct_count: number; marks_earned?: number | null; total_response_time_ms: number }[];
 }) {
   const sorted = rankByMarks(participants).slice(0, 3);
   return (
@@ -778,7 +778,7 @@ function Podium({
         <div key={p.id} className="text-center">
           <div className="text-2xl">{MEDALS[i]}</div>
           <div className="text-sm font-semibold mt-1">{p.display_name}</div>
-          <div className="text-xs font-mono text-amber-400">{p.correct_count} correct</div>
+          <div className="text-xs font-mono text-amber-400">{marksOf(p)} {p.marks_earned == null ? "correct" : "marks"}</div>
         </div>
       ))}
       {sorted.length === 0 && <div className="text-slate-500 text-sm">No participants.</div>}
