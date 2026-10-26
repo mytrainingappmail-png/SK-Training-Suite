@@ -173,6 +173,7 @@ export async function listExamSessions(quizId: string): Promise<ExamSession[]> {
     .select("*")
     .eq("quiz_id", quizId)
     .eq("is_practice", false) // practice runs are never listed
+    .is("open_link_id", null) // one-trainee attempts of an open link are shown on that link's page
     .order("created_at", { ascending: false })
     .limit(10);
   if (error) fail("listExamSessions", error);

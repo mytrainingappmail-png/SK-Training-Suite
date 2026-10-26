@@ -316,6 +316,15 @@ export default function QuizListPage() {
                 )}
                 <QuizDownloadMenu compact load={() => loadExportQuiz(q.id)} />
                 {canEdit && (
+                  <Link
+                    to={ROUTES.QUIZ_ADMIN_OPEN_LINK.replace(":quizId", q.id)}
+                    className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-2.5 py-1.5"
+                    title="Let trainees start this quiz themselves with a link — no PIN, own timer"
+                  >
+                    🔗 Open link
+                  </Link>
+                )}
+                {canEdit && (
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 border border-dashed border-slate-700 rounded-lg px-2.5 py-1.5 cursor-pointer">
                     <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelected(q.id)} />
                     Select

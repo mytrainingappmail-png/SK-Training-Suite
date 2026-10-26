@@ -37,6 +37,59 @@ export interface QuizLocation {
   display_order: number;
 }
 
+/** "Open test link": trainees start the quiz / exam themselves with a link (no PIN), each with their own timer. One per quiz / exam. */
+export interface QuizOpenLink {
+  id: string;
+  company_id: string;
+  quiz_id: string;
+  token: string;
+  enabled: boolean;
+  opens_at: string | null;
+  closes_at: string | null;
+  /** How many attempts one name may make (null = unlimited). */
+  max_attempts: number | null;
+  /** Exams only: show the trainee the result right after they submit, or only once the trainer releases it. */
+  release_results: "immediate" | "manual";
+  created_at: string;
+}
+
+/** What the link page shows the trainee (get_open_test_info). */
+export interface OpenTestInfo {
+  title: string | null;
+  mode: "live" | "exam" | null;
+  description: string | null;
+  question_count: number;
+  duration_minutes: number | null;
+  pass_pct: number;
+  status: "open" | "not_yet" | "closed" | "unavailable";
+  company_name: string | null;
+  max_attempts: number | null;
+}
+
+export interface OpenTestStart {
+  kind: "exam" | "quiz";
+  session_id: string;
+  participant_id: string;
+  quiz_title: string;
+}
+
+/** One trainee's attempt on an open link (get_open_test_attempts). */
+export interface OpenTestAttempt {
+  kind: "exam" | "quiz";
+  session_id: string;
+  participant_id: string;
+  display_name: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "in_progress" | "finished" | "time_up" | "not_submitted";
+  marks_obtained: number | null;
+  total_marks: number | null;
+  percent: number | null;
+  result: "PASS" | "FAIL" | "NEED_IMPROVEMENT" | null;
+  pending_written: number;
+  tab_switches: number;
+}
+
 export type QuizDifficulty = "Easy" | "Medium" | "Hard";
 export type QuizStatus = "draft" | "published";
 

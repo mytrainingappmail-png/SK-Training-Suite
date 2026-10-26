@@ -108,6 +108,7 @@ export async function listSessionsForQuiz(quizId: string): Promise<QuizSession[]
     .select("*")
     .eq("quiz_id", quizId)
     .eq("is_practice", false) // practice runs are never listed
+    .is("open_link_id", null) // one-trainee attempts of an open link are shown on that link's page
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -124,6 +125,7 @@ export async function listSessionsForCompany(companyId: string): Promise<QuizSes
     .select("*")
     .eq("company_id", companyId)
     .eq("is_practice", false) // practice runs are never listed
+    .is("open_link_id", null) // one-trainee attempts of an open link are shown on that link's page
     .order("created_at", { ascending: false });
 
   if (error) {

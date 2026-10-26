@@ -112,6 +112,8 @@ export const ROUTES = {
   QUIZ_ADMIN_EXAM_NEW: "/quiz-admin/exams/new",
   QUIZ_ADMIN_EXAM_EDIT: "/quiz-admin/exams/:quizId",
   QUIZ_ADMIN_EXAM_HOST: "/quiz-admin/exams/session/:sessionId",
+  QUIZ_ADMIN_OPEN_LINK: "/quiz-admin/open/:quizId",
+  OPEN_TEST: "/open/:token",
   EXAM_JOIN: "/exam",
   EXAM_PAPER: "/exam/:sessionId",
 

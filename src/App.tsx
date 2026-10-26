@@ -78,6 +78,8 @@ const ExamListPage = lazyWithRetry(() => import("./pages/quiz/ExamListPage"));
 const ExamHostPage = lazyWithRetry(() => import("./pages/quiz/ExamHostPage"));
 const ExamJoinPage = lazyWithRetry(() => import("./pages/quiz/ExamJoinPage"));
 const ExamPaperPage = lazyWithRetry(() => import("./pages/quiz/ExamPaperPage"));
+const OpenTestStartPage = lazyWithRetry(() => import("./pages/quiz/OpenTestStartPage"));
+const QuizOpenLinkPage = lazyWithRetry(() => import("./pages/quiz/QuizOpenLinkPage"));
 const SurveyListPage = lazyWithRetry(() => import("./pages/quiz/SurveyListPage"));
 const SurveyBuilderPage = lazyWithRetry(() => import("./pages/quiz/SurveyBuilderPage"));
 const SurveyResultsPage = lazyWithRetry(() => import("./pages/quiz/SurveyResultsPage"));
@@ -170,6 +172,7 @@ function App() {
         <Route path={ROUTES.QUIZ_ADMIN_BUILDER_NEW} element={<QuizBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_BUILDER_EDIT} element={<QuizBuilderPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_EXAMS} element={<ExamListPage />} />
+        <Route path={ROUTES.QUIZ_ADMIN_OPEN_LINK} element={<QuizOpenLinkPage />} />
         <Route path={ROUTES.QUIZ_ADMIN_EXAM_NEW} element={<QuizBuilderPage mode="exam" />} />
         <Route path={ROUTES.QUIZ_ADMIN_EXAM_EDIT} element={<QuizBuilderPage mode="exam" />} />
         <Route path={ROUTES.QUIZ_ADMIN_SURVEYS} element={<SurveyListPage />} />
@@ -193,6 +196,7 @@ function App() {
       <Route path={ROUTES.QUIZ_JOIN} element={<QuizJoinPage />} />
       <Route path={ROUTES.QUIZ_PLAY} element={<QuizPlayPage />} />
       <Route path={ROUTES.EXAM_JOIN} element={<ExamJoinPage />} />
+      <Route path={ROUTES.OPEN_TEST} element={<OpenTestStartPage />} />
       <Route path={ROUTES.EXAM_PAPER} element={<ExamPaperPage />} />
       <Route path={ROUTES.SURVEY_TAKE} element={<SurveyTakePage />} />
       <Route path={ROUTES.SURVEY_LIVE_JOIN} element={<SurveyLiveJoinPage />} />

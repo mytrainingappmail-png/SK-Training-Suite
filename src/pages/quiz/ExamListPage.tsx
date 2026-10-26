@@ -345,6 +345,15 @@ export default function ExamListPage() {
                   </button>
                   <QuizDownloadMenu compact load={() => loadExportQuiz(q.id)} />
                   {canEdit && (
+                    <Link
+                      to={ROUTES.QUIZ_ADMIN_OPEN_LINK.replace(":quizId", q.id)}
+                      className="text-xs font-semibold text-slate-300 border border-slate-700 hover:text-white rounded-lg px-3 py-1.5"
+                      title="Let trainees start this exam themselves with a link — no PIN, own timer"
+                    >
+                      🔗 Open link
+                    </Link>
+                  )}
+                  {canEdit && (
                     <>
                       <Link to={ROUTES.QUIZ_ADMIN_EXAM_EDIT.replace(":quizId", q.id)} className="text-xs font-semibold text-slate-300 border border-slate-700 hover:text-white rounded-lg px-3 py-1.5">
                         ✏️ Edit
