@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RANK_BADGE_CLASS, type RankTitle } from "../../utils/rankTitles";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
-  getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult,
+  getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult, getMyExamRankTitle,
   uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap, getExamSessionSettings, getExamMyControl,
 } from "../../repositories/exam/examPlayRepository";
 import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
@@ -59,6 +60,8 @@ export default function ExamPaperPage() {
   const [showCalc, setShowCalc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<MyExamResultRow[] | null>(null);
+  // the trainer's top-rank wording when this trainee is one of the three best passing results
+  const [rankInfo, setRankInfo] = useState<{ rank: number; title: RankTitle | null } | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [photoError, setPhotoError] = useState<Record<string, string>>({});
@@ -381,6 +384,10 @@ export default function ExamPaperPage() {
     if (phase === "result" && !result) getMyExamResult(sessionId).then(setResult).catch(() => {});
   }, [phase, result, sessionId]);
 
+  useEffect(() => {
+    if (phase === "result") void getMyExamRankTitle(sessionId).then(setRankInfo);
+  }, [phase, sessionId]);
+
   // Flush the moment the connection or the tab comes back.
   useEffect(() => {
     function onBack() { if (document.visibilityState === "visible" && Object.keys(pendingRef.current).length > 0) void flush(); }
@@ -579,9 +586,17 @@ export default function ExamPaperPage() {
             <p className="text-xs uppercase tracking-widest text-slate-500 mb-1">{state.quiz_title}</p>
             <p className="text-5xl font-black text-amber-400">{pct}%</p>
             <p className="text-sm text-slate-300 mt-1">{total} / {possible} marks</p>
-            <p className={`inline-block mt-3 text-sm font-bold rounded-full px-4 py-1 ${passed ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
-              {passed ? "✓ Passed" : "Not passed"} (pass mark {state.passing_score_pct}%)
-            </p>
+            {passed && rankInfo?.title ? (
+              <div className="mt-3">
+                <p className={`inline-block text-sm font-extrabold rounded-full border px-4 py-1 ${RANK_BADGE_CLASS[rankInfo.rank] ?? ""}`}>{rankInfo.title.title}</p>
+                {rankInfo.title.message && <p className="text-sm text-slate-300 mt-2">{rankInfo.title.message}</p>}
+                <p className="text-xs text-slate-500 mt-1">Pass mark {state.passing_score_pct}%</p>
+              </div>
+            ) : (
+              <p className={`inline-block mt-3 text-sm font-bold rounded-full px-4 py-1 ${passed ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
+                {passed ? "✓ Passed" : "Not passed"} (pass mark {state.passing_score_pct}%)
+              </p>
+            )}
           </div>
           {rows.map((r) => (
             <div key={r.question_order} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-left">

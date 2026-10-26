@@ -3,13 +3,10 @@ import type { ReactNode } from "react";
 import { isCertEligible, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizAnswerDistributionBars from "./QuizAnswerDistributionBars";
 import QuizAdminCertificateButton from "./QuizAdminCertificateButton";
+import GradeBadge from "./GradeBadge";
 import type { QuizSession, QuizSessionResultRow, AnswerDistributionQuestion, CertEligibility } from "../../types/quiz";
 
-export const GRADE_STYLE: Record<string, string> = {
-  PASS: "text-emerald-300 bg-emerald-500/15 border-emerald-500/30",
-  NEED_IMPROVEMENT: "text-amber-300 bg-amber-500/15 border-amber-500/30",
-  FAIL: "text-red-300 bg-red-500/15 border-red-500/30",
-};
+export { GRADE_STYLE } from "./gradeStyles";
 
 /** One ended session's card — rank list + answer breakdown on expand.
  * Shared by the everyday Results session list and the Final Result
@@ -78,9 +75,7 @@ export default function SessionResultCard({
                       {r.marks_obtained != null ? `${r.marks_obtained}/${r.total_marks} marks` : `${r.correct_count}/${r.total_questions}`} · {r.percent_correct}%
                     </span>
                   </span>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
-                    {r.grade.replace("_", " ")}
-                  </span>
+                  <GradeBadge grade={r.grade} rank={r.rank} isOpenLink={!!r.open_link_id} />
                   {isCertEligible(r.rank, r.grade, certEligibility) && companyId && (!certParticipantIds || certParticipantIds.has(r.participant_id)) && (
                     <QuizAdminCertificateButton participantId={r.participant_id} companyId={companyId} />
                   )}

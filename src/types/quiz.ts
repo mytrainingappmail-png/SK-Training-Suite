@@ -1,3 +1,4 @@
+import type { RankTitle } from "../utils/rankTitles";
 // Live Quiz module — Phase 1 types.
 // Deliberately separate from src/types/app.ts (User/Employee) — quiz admins
 // and quiz participants are not LMS employees.
@@ -201,6 +202,8 @@ export interface QuizSession {
   allow_early_next?: boolean;
   /** A practice run: plays like the real thing but nothing is kept, no certificate, never listed in results. */
   is_practice?: boolean;
+  /** Set when this session is a one-trainee attempt of an open link (no ranking there). */
+  open_link_id?: string | null;
   /** The location its quiz had when it was launched. */
   location_id?: string | null;
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
@@ -283,6 +286,8 @@ export interface QuizSessionResultRow {
   marks_obtained?: number | null;
   /** Total marks of the quiz. */
   total_marks?: number;
+  /** Set when the session is a one-trainee attempt of an open link (no ranking there). */
+  open_link_id?: string | null;
 }
 
 /** A named, permanent archive for ended sessions (typically final tests) —
@@ -381,6 +386,9 @@ export interface QuizSettings {
   result_fail_title: string | null;
   result_fail_message: string | null;
   cert_eligibility: CertEligibility;
+  /** The three best passing results get their own title (see utils/rankTitles). Missing = the suggested wording, switched on. */
+  rank_titles_enabled?: boolean;
+  rank_titles?: RankTitle[] | null;
   /** One word/quote per line — the falling text on the trainee login/join landing screen. Falls back to a built-in default list when blank. */
   login_motivational_words: string | null;
   /** Turns the falling-words effect on the landing screen on/off entirely — independent of the word list itself. */
@@ -471,6 +479,8 @@ export interface QuizPlayerSettings {
   result_fail_message: string | null;
   cert_eligibility: CertEligibility;
   result_close_minutes: number;
+  rank_titles_enabled?: boolean;
+  rank_titles?: RankTitle[] | null;
 }
 
 /** The calling participant's own outcome, via get_my_result RPC. */

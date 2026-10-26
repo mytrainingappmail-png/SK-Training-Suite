@@ -15,6 +15,7 @@ import { renderCertificateToCanvas, CERT_TEMPLATE_LABELS } from "../../services/
 import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from "../../services/quiz/quizBackupService";
 import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
 import QuizLocationsCard from "../../components/quiz/QuizLocationsCard";
+import QuizRankTitlesCard from "../../components/quiz/QuizRankTitlesCard";
 import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, CertPhotoFrame, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -1397,6 +1398,8 @@ export default function QuizSettingsPage() {
           💾 {messagesSaving ? "Saving…" : "Save Result Messages"}
         </button>
       </fieldset>
+
+      <QuizRankTitlesCard />
 
       {/* Backup & Restore */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">

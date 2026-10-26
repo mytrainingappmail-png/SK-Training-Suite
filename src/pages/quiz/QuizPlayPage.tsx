@@ -18,6 +18,7 @@ import { getMyAnswerReview, getMyResult, flagTabSwitch } from "../../repositorie
 import { rankByMarks, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizCertificateButton from "../../components/quiz/QuizCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
+import { rankTitleFor, parseRankTitles } from "../../utils/rankTitles";
 import type { PublicQuizQuestion, SubmitAnswerResult, SubmitHotspotAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
 const DEFAULT_REVIEW_VISIBLE_SECONDS = 5 * 60;
@@ -490,6 +491,14 @@ export default function QuizPlayPage() {
             ? playerSettings?.result_fail_message
             : null;
 
+    // one of the three best passing results: the trainer's own top-rank heading and message
+    const rankTitle = rankTitleFor(
+      rank,
+      myResult?.grade,
+      { enabled: playerSettings?.rank_titles_enabled !== false, titles: parseRankTitles(playerSettings?.rank_titles) },
+      !!session.open_link_id
+    );
+
     const commonStyles = (
       <style>{`
         @keyframes quiz-pop-in {
@@ -512,11 +521,11 @@ export default function QuizPlayPage() {
           <div className="flex flex-col items-center gap-1 animate-[quiz-pop-in_0.5s_ease-out]">
             <div className="text-6xl">{MEDALS[rank - 1] ?? "🎖️"}</div>
             <div className="text-2xl mt-1">🏆</div>
-            <div className="text-2xl font-extrabold text-white mt-2">{resultTitle}</div>
+            <div className="text-2xl font-extrabold text-white mt-2">{rankTitle?.title || resultTitle}</div>
             <div className="text-6xl font-black text-amber-400 mt-2 animate-[quiz-glow_2s_ease-in-out_infinite]">
               {myResult ? `${myResult.percent_correct}%` : "…"}
             </div>
-            {resultMessage && <div className="text-sm text-slate-300 max-w-xs mt-2">{resultMessage}</div>}
+            {(rankTitle?.message || resultMessage) && <div className="text-sm text-slate-300 max-w-xs mt-2">{rankTitle?.message || resultMessage}</div>}
           </div>
           <button
             onClick={() => setEndStep("details")}

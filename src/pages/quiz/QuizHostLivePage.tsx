@@ -16,6 +16,7 @@ import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import { playTone } from "../../services/quiz/quizSoundService";
 import { rankByMarks, isCertEligible, marksOf, percentOfMarks, MEDALS } from "../../services/quiz/quizRankingService";
+import GradeBadge from "../../components/quiz/GradeBadge";
 import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResultCardButton";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
@@ -605,9 +606,7 @@ export default function QuizHostLivePage() {
                                   ⚠ {p.tab_switch_count}
                                 </span>
                               )}
-                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[grade]}`}>
-                                {grade.replace("_", " ")}
-                              </span>
+                              <GradeBadge grade={grade} rank={i + 1} />
                             </div>
                           );
                         })}
@@ -733,12 +732,6 @@ export default function QuizHostLivePage() {
     </div>
   );
 }
-
-const GRADE_STYLE: Record<QuizGrade, string> = {
-  PASS: "text-emerald-300 bg-emerald-500/15 border-emerald-500/30",
-  NEED_IMPROVEMENT: "text-amber-300 bg-amber-500/15 border-amber-500/30",
-  FAIL: "text-red-300 bg-red-500/15 border-red-500/30",
-};
 
 function participantGrade(pct: number, quiz: QuizWithQuestions): QuizGrade {
   if (pct >= quiz.passing_score_pct) return "PASS";

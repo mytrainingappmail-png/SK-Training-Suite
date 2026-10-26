@@ -3,6 +3,7 @@
 // ensureParticipantSession.
 
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
+import { parseRankTitles, type RankTitle } from "../../utils/rankTitles";
 import type { QuizPublicBranding } from "../../types/quiz";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow, HotspotTap } from "../../types/exam";
 
@@ -134,6 +135,15 @@ export async function submitExam(sessionId: string, reason: "manual" | "timeout"
 
 export async function flagExamTabSwitch(sessionId: string): Promise<void> {
   await supabaseQuizPlayer.rpc("flag_exam_tab_switch", { p_session_id: sessionId });
+}
+
+/** The trainee's own rank and, if it is one of the top three passing results, the trainer's wording for it (only once results are released). */
+export async function getMyExamRankTitle(sessionId: string): Promise<{ rank: number; title: RankTitle | null } | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_my_exam_rank_title", { p_session_id: sessionId });
+  if (error) return null;
+  const row = ((data ?? []) as { my_rank: number; title: unknown }[])[0];
+  if (!row) return null;
+  return { rank: row.my_rank, title: row.title ? parseRankTitles([row.title])[0] ?? null : null };
 }
 
 export async function getMyExamResult(sessionId: string): Promise<MyExamResultRow[]> {

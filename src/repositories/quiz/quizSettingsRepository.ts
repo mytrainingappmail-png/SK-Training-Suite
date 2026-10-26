@@ -1,6 +1,7 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
 import type { QuizSettings, QuizPlayerSettings, QuizPublicBranding } from "../../types/quiz";
+import { parseRankTitles, type RankTitle } from "../../utils/rankTitles";
 
 const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   brand_name: null,
@@ -53,7 +54,17 @@ export async function getSettings(companyId: string): Promise<QuizSettings> {
     throw new Error(error.message);
   }
 
-  return data ?? { company_id: companyId, updated_at: new Date().toISOString(), ...DEFAULT_SETTINGS };
+  if (data) return data;
+  // never saved anything yet: the top-rank wording starts from the suggested one kept in the database
+  const titles = await getDefaultRankTitles().catch(() => [] as RankTitle[]);
+  return { company_id: companyId, updated_at: new Date().toISOString(), ...DEFAULT_SETTINGS, rank_titles_enabled: titles.length > 0, rank_titles: titles };
+}
+
+/** The suggested wording for the top-rank titles (it lives in the database, not in the app). */
+export async function getDefaultRankTitles(): Promise<RankTitle[]> {
+  const { data, error } = await supabaseQuiz.rpc("default_rank_titles");
+  if (error) throw new Error(error.message);
+  return parseRankTitles(data);
 }
 
 export async function saveSettings(companyId: string, patch: Partial<QuizSettings>): Promise<QuizSettings> {
@@ -81,7 +92,7 @@ export async function getPlayerSettings(sessionId: string): Promise<QuizPlayerSe
   }
 
   const row = (data as QuizPlayerSettings[] | null)?.[0];
-  return row ?? { ...DEFAULT_SETTINGS, brand_name: null, brand_logo_url: null, favicon_url: null };
+  return row ?? { ...DEFAULT_SETTINGS, brand_name: null, brand_logo_url: null, favicon_url: null, rank_titles_enabled: false, rank_titles: [] };
 }
 
 /** Pre-auth branding for the quiz admin login page — no company context exists yet (global unique usernames, no company code field), so this resolves to the first company with the module enabled, same fallback the main LMS login uses before a company code is typed. */

@@ -9,7 +9,8 @@ import { saveSessionToFinalResult, listSavedSessionFolders } from "../../reposit
 import { buildDetailedReportCsv, buildTraineeSummaryCsv, computeChampions } from "../../services/quiz/quizReportService";
 import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
-import SessionResultCard, { GRADE_STYLE } from "../../components/quiz/SessionResultCard";
+import SessionResultCard from "../../components/quiz/SessionResultCard";
+import GradeBadge from "../../components/quiz/GradeBadge";
 import { useQuizLocation, matchesQuizLocation } from "../../services/quiz/quizLocationStore";
 import type {
   QuizSession,
@@ -546,9 +547,7 @@ export default function QuizResultsPage() {
                     </td>
                     <td className="px-3 py-2 font-mono text-slate-300">{r.percent_correct}%</td>
                     <td className="px-3 py-2">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${GRADE_STYLE[r.grade]}`}>
-                        {r.grade.replace("_", " ")}
-                      </span>
+                      <GradeBadge grade={r.grade} rank={r.rank} isOpenLink={!!r.open_link_id} />
                     </td>
                   </tr>
                 ))

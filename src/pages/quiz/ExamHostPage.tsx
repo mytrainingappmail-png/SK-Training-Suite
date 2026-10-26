@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
+import GradeBadge from "../../components/quiz/GradeBadge";
 import { ZoneOverlay, pointInZone } from "../../components/quiz/hotspotZones";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
@@ -11,7 +12,7 @@ import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
   getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant, renameExamParticipant, resetExamParticipant,
-  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant, isExamSessionPractice,
+  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant, getExamSessionFlags,
 } from "../../repositories/exam/examAdminRepository";
 import { practiceLeave } from "../../repositories/quiz/quizSessionRepository";
 import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat, ExamLiveRow, ExamLiveQuestion } from "../../types/exam";
@@ -78,9 +79,10 @@ export default function ExamHostPage() {
 
   // A practice run: plays like the real exam, but nothing is kept (see migration 20261021100000)
   const [isPractice, setIsPractice] = useState(false);
+  const [isOpenLink, setIsOpenLink] = useState(false);
   useEffect(() => {
     if (!sessionId) return;
-    void isExamSessionPractice(sessionId).then(setIsPractice).catch(() => {});
+    void getExamSessionFlags(sessionId).then((f) => { setIsPractice(f.practice); setIsOpenLink(f.openLink); }).catch(() => {});
   }, [sessionId]);
 
   async function leaveExam() {
@@ -270,6 +272,8 @@ export default function ExamHostPage() {
 
   const ranked = useMemo(() => (results ?? []).slice().sort((a, b) => totalOf(b) - totalOf(a) || a.display_name.localeCompare(b.display_name)), [results]);
   const pendingTotal = ranked.reduce((s, r) => s + r.pending_written, 0);
+  // rank by total marks, equal marks share a rank
+  const rankOfResult = (r: ExamResultRow) => 1 + ranked.filter((o) => totalOf(o) > totalOf(r)).length;
 
   function exportCsv() {
     if (!session) return;
@@ -580,7 +584,11 @@ export default function ExamHostPage() {
                         <td className="py-2 pr-3 font-medium">{r.display_name}{r.tab_switches > 0 && <span className="ml-2 text-[10px] text-amber-300" title="Times they left the exam tab">⚠ {r.tab_switches}×</span>}</td>
                         <td className="py-2 pr-3 font-mono text-xs">{totalOf(r)}/{r.possible_marks}</td>
                         <td className="py-2 pr-3 font-mono text-xs">{pctOf(r)}%</td>
-                        <td className="py-2 pr-3"><span className={`text-xs font-bold rounded-full px-2 py-0.5 ${pass ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{pass ? "Pass" : "Fail"}</span></td>
+                        <td className="py-2 pr-3">
+                          {pass
+                            ? <GradeBadge grade="PASS" rank={rankOfResult(r)} isOpenLink={isOpenLink} label="Pass" className="!text-xs !normal-case !rounded-full !px-2" />
+                            : <span className="text-xs font-bold rounded-full px-2 py-0.5 bg-red-500/15 text-red-300">Fail</span>}
+                        </td>
                         <td className="py-2 pr-3 text-xs">{r.pending_written > 0 ? <span className="text-amber-300">{r.pending_written} to mark</span> : <span className="text-slate-500">—</span>}</td>
                         <td className="py-2 text-right whitespace-nowrap">{pass && admin && !isPractice && r.pending_written === 0 && <span className="mr-2 inline-block align-middle"><QuizAdminCertificateButton kind="exam" participantId={r.participant_id} companyId={admin.company_id} /></span>}<button onClick={() => void openDetail(r)} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View / mark</button></td>
                       </tr>

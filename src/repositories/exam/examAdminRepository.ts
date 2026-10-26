@@ -161,10 +161,10 @@ export async function moveExamSessionToFolder(sessionId: string, folderId: strin
   if (error) fail("moveExamSessionToFolder", error);
 }
 
-/** Is this exam session a practice run? (read straight from the table: the admin view function does not carry it) */
-export async function isExamSessionPractice(sessionId: string): Promise<boolean> {
-  const { data } = await supabaseQuiz.from("exam_sessions").select("is_practice").eq("id", sessionId).maybeSingle();
-  return data?.is_practice === true;
+/** Is this exam session a practice run / a one-trainee attempt of an open link? (read straight from the table: the admin view function does not carry them) */
+export async function getExamSessionFlags(sessionId: string): Promise<{ practice: boolean; openLink: boolean }> {
+  const { data } = await supabaseQuiz.from("exam_sessions").select("is_practice, open_link_id").eq("id", sessionId).maybeSingle();
+  return { practice: data?.is_practice === true, openLink: !!data?.open_link_id };
 }
 
 export async function listExamSessions(quizId: string): Promise<ExamSession[]> {
