@@ -3,6 +3,7 @@ import { RANK_BADGE_CLASS, type RankTitle } from "../../utils/rankTitles";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
+import { EXAM_RESULT_WATCH_SECONDS } from "../../constants/examTiming";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
@@ -383,6 +384,38 @@ export default function ExamPaperPage() {
   useEffect(() => {
     if (phase === "result" && !result) getMyExamResult(sessionId).then(setResult).catch(() => {});
   }, [phase, result, sessionId]);
+
+  // While the result is on screen, watch the trainer's switch: the moment results are hidden again, take the result off this
+  // screen (the database refuses to hand it out while hidden, so nothing can be fetched either).
+  useEffect(() => {
+    if (phase !== "result") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function check() {
+      clearTimeout(timer);
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const before = Date.now();
+          const s = await getExamState(sessionId);
+          if (cancelled) return;
+          applyState(s, (before + Date.now()) / 2);
+          if (!s.results_released) {
+            setResult(null);
+            setRankInfo(null);
+            setPhase("submitted");
+            return;
+          }
+        } catch { /* transient — the next check retries */ }
+      }
+      if (!cancelled) timer = setTimeout(() => { void check(); }, EXAM_RESULT_WATCH_SECONDS * 1000 * (0.6 + Math.random() * 0.4));
+    }
+    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    timer = setTimeout(() => { void check(); }, EXAM_RESULT_WATCH_SECONDS * 1000 * (0.6 + Math.random() * 0.4));
+    return () => { cancelled = true; clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, sessionId]);
 
   useEffect(() => {
     if (phase === "result") void getMyExamRankTitle(sessionId).then(setRankInfo);
