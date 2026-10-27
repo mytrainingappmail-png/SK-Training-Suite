@@ -18,7 +18,8 @@ import { hindiOf, optionWithHindi, originOf } from "../../repositories/quiz/quiz
 import QuestionHindiPanel from "../../components/quiz/QuestionHindiPanel";
 import QuestionTransferModal, { type TransferRequest, type TransferOutcome } from "../../components/quiz/QuestionTransferModal";
 import SyncChoiceModal, { type SyncItem } from "../../components/quiz/SyncChoiceModal";
-import { getQuestionLinks, syncQuestionCopies, questionContentKey, questionForOtherTest, copyQuestionsToTest, createTestFromQuestions, type QuestionLink } from "../../services/quiz/quizLinkService";
+import DeleteChoiceModal from "../../components/quiz/DeleteChoiceModal";
+import { getQuestionLinks, syncQuestionCopies, questionContentKey, questionForOtherTest, copyQuestionsToTest, createTestFromQuestions, deleteQuestionCopies, type QuestionLink } from "../../services/quiz/quizLinkService";
 import { hasHindi, translateQuestionsToHindi } from "../../services/quiz/quizHindiService";
 import type { QuizDifficulty } from "../../types/quiz";
 
@@ -122,6 +123,9 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
   const baseline = useRef<Map<string, string>>(new Map());
   const [syncAsk, setSyncAsk] = useState<SyncItem[] | null>(null);
   const syncResolver = useRef<((uids: string[] | null) => void) | null>(null);
+  // a question that is also in other tests was deleted here: which one is being asked about, and which were chosen to go from every test
+  const [deleteAsk, setDeleteAsk] = useState<{ localId: string; label: string; links: QuestionLink[] } | null>(null);
+  const deleteEverywhere = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (isNew && !canEdit) navigate(listRoute, { replace: true });
@@ -271,6 +275,13 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
     }
     const text = questions[index].question_text.trim().replace(/\s+/g, " ");
     const label = text ? `"${text.length > 70 ? text.slice(0, 70) + "…" : text}"` : "this empty question";
+    // also used in other tests: ask whether it goes from them too
+    const uid = questions[index].origin_uid;
+    const where = uid ? links.get(uid) ?? [] : [];
+    if (where.length > 0) {
+      setDeleteAsk({ localId, label: `Q${index + 1} - ${label}`, links: where });
+      return;
+    }
     if (!confirm(`Delete question ${index + 1}: ${label}?
 
 It is removed from this screen only - nothing is permanent until you click Save / Publish.`)) return;
@@ -568,8 +579,20 @@ It is removed from this screen only - nothing is permanent until you click Save 
         return null;
       }
 
-      // the other tests now get the same version
+      // questions the trainer chose to delete from every test
       let extra = "";
+      if (deleteEverywhere.current.size > 0) {
+        try {
+          const gone = await deleteQuestionCopies(id, [...deleteEverywhere.current]);
+          deleteEverywhere.current = new Set();
+          if (gone.deleted.length > 0) extra += ` Also deleted from ${gone.deleted.map((u) => u.code).join(", ")}.`;
+          if (gone.skipped.length > 0) extra += ` ${gone.skipped.map((u) => u.code).join(", ")} ${gone.skipped.length === 1 ? "is" : "are"} running or scheduled right now, so the question was kept there.`;
+        } catch (e) {
+          setError(`Saved here, but the question could not be deleted from the other tests: ${e instanceof Error ? e.message : "unknown error"}`);
+        }
+      }
+
+      // the other tests now get the same version
       if (updateUids.length > 0) {
         try {
           const outcome = await syncQuestionCopies(id, updateUids);
@@ -1339,6 +1362,20 @@ It is removed from this screen only - nothing is permanent until you click Save 
           currentTitle={form.title}
           onClose={() => setTransferOpen(false)}
           onConfirm={handleTransfer}
+        />
+      )}
+      {deleteAsk && (
+        <DeleteChoiceModal
+          label={deleteAsk.label}
+          thisTitle={form.title}
+          links={deleteAsk.links}
+          onCancel={() => setDeleteAsk(null)}
+          onChoose={(everywhere) => {
+            const q = questions.find((x) => x.localId === deleteAsk.localId);
+            if (everywhere && q?.origin_uid) deleteEverywhere.current.add(q.origin_uid);
+            removeQuestion(deleteAsk.localId);
+            setDeleteAsk(null);
+          }}
         />
       )}
       {syncAsk && <SyncChoiceModal items={syncAsk} thisTitle={form.title} onCancel={() => answerSync(null)} onConfirm={(uids) => answerSync(uids)} />}

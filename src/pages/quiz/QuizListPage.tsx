@@ -7,6 +7,8 @@ import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, dup
 import { launchSession, purgePracticeSessions } from "../../services/quiz/quizSessionService";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
 import LobbyMusicSettings from "../../components/quiz/LobbyMusicSettings";
+import BulkLocationControl from "../../components/quiz/BulkLocationControl";
+import { setQuizzesLocation } from "../../repositories/quiz/quizLocationRepository";
 import type { LobbyMusicChoice } from "../../services/quiz/quizSoundService";
 import { describePlayMode, hasPerPlayerShuffle } from "../../utils/quizPlayMode";
 import { useQuizLocation, matchesQuizLocation, locationName } from "../../services/quiz/quizLocationStore";
@@ -146,6 +148,24 @@ export default function QuizListPage() {
     }
   }
 
+  const [movingLocation, setMovingLocation] = useState(false);
+
+  async function handleMoveLocation(locationId: string | null) {
+    if (selected.size === 0) return;
+    setMovingLocation(true);
+    setError("");
+    try {
+      await setQuizzesLocation([...selected], locationId);
+      setNotice(`Moved ${selected.size} quiz${selected.size === 1 ? "" : "zes"} to ${locationId ? "📍 " + (locationName(locations, locationId) ?? "the location") : "no location"}.`);
+      setSelected(new Set());
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not move the quizzes.");
+    } finally {
+      setMovingLocation(false);
+    }
+  }
+
   async function handleDuplicate(q: Quiz) {
     if (!admin) return;
     setBusyId(q.id);
@@ -260,6 +280,15 @@ export default function QuizListPage() {
       />
 
       <div className="flex flex-wrap items-center gap-3">
+        {canEdit && filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map((q) => q.id)))}
+            className="text-xs font-semibold text-slate-300 hover:text-white border border-dashed border-slate-700 rounded-lg px-3 py-2"
+          >
+            {selected.size === filtered.length ? "Clear selection" : `Select all ${filtered.length} shown`}
+          </button>
+        )}
         <input
           className="flex-1 min-w-[16rem] rounded-lg bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white outline-none focus:border-violet-500"
           placeholder="🔍  Search quizzes or code…"
@@ -406,6 +435,9 @@ export default function QuizListPage() {
               >
                 🔗 Merge / Add
               </button>
+              <div className="w-full">
+                <BulkLocationControl locations={locations} busy={movingLocation} onApply={(id) => void handleMoveLocation(id)} />
+              </div>
               <button
                 onClick={handleBulkDelete}
                 disabled={bulkDeleting}

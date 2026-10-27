@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import LobbyMusicSettings from "../../components/quiz/LobbyMusicSettings";
+import BulkLocationControl from "../../components/quiz/BulkLocationControl";
+import { setQuizzesLocation } from "../../repositories/quiz/quizLocationRepository";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
@@ -60,6 +62,10 @@ export default function ExamListPage() {
   const [feedbackSeconds, setFeedbackSeconds] = useState(3);
   const [feedbackSize, setFeedbackSize] = useState<HotspotFeedbackSize>("small");
   const [revealSaving, setRevealSaving] = useState(false);
+  // exams ticked to be moved to a location
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [movingLocation, setMovingLocation] = useState(false);
+  const [notice, setNotice] = useState("");
   const [revealMessage, setRevealMessage] = useState("");
 
   function refresh() {
@@ -81,6 +87,22 @@ export default function ExamListPage() {
       setFeedbackSize(s.exam_hotspot_feedback_size);
     }).catch(() => {});
   }, [admin]);
+
+  async function handleMoveLocation(locationId: string | null) {
+    if (selected.size === 0) return;
+    setMovingLocation(true);
+    setError("");
+    try {
+      await setQuizzesLocation([...selected], locationId);
+      setNotice(`Moved ${selected.size} exam${selected.size === 1 ? "" : "s"} to ${locationId ? "📍 " + (locationName(locations, locationId) ?? "the location") : "no location"}.`);
+      setSelected(new Set());
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not move the exams.");
+    } finally {
+      setMovingLocation(false);
+    }
+  }
 
   async function handleSaveReveal() {
     if (!admin) return;
@@ -266,13 +288,25 @@ export default function ExamListPage() {
         </div>
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search exams or code…"
-        className="w-full sm:max-w-xs rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        {canEdit && filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map((q) => q.id)))}
+            className="text-xs font-semibold text-slate-300 hover:text-white border border-dashed border-slate-700 rounded-lg px-3 py-2"
+          >
+            {selected.size === filtered.length ? "Clear selection" : `Select all ${filtered.length} shown`}
+          </button>
+        )}
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search exams or code…"
+          className="w-full sm:max-w-xs rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+        />
+      </div>
 
+      {notice && <div className="text-sm text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">{notice}</div>}
       {error && <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>}
 
       {loading ? (
@@ -286,9 +320,18 @@ export default function ExamListPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((q) => (
-            <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div key={q.id} className={`bg-slate-900 border rounded-2xl p-4 space-y-3 ${selected.has(q.id) ? "border-violet-500" : "border-slate-800"}`}>
               <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0">
+                {canEdit && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(q.id)}
+                    onChange={() => setSelected((prev) => { const next = new Set(prev); if (next.has(q.id)) next.delete(q.id); else next.add(q.id); return next; })}
+                    title="Tick to move to a location"
+                    className="mt-1 h-4 w-4 accent-violet-500"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold text-white break-words"><span className="mr-2 inline-block rounded bg-slate-800 px-1.5 py-0.5 align-middle font-mono text-[11px] font-bold text-amber-300" title="Test code">{q.code}</span>{q.title}</p>
                   {locationName(locations, q.location_id) && (
                     <p className="text-[11px] font-semibold text-amber-300 mt-0.5">📍 {locationName(locations, q.location_id)}</p>
@@ -380,6 +423,16 @@ export default function ExamListPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {canEdit && selected.size >= 1 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900 border border-violet-500 rounded-2xl shadow-2xl p-4 w-[92%] max-w-lg space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-white font-semibold flex-1">{selected.size} exam{selected.size === 1 ? "" : "s"} selected</span>
+            <button onClick={() => setSelected(new Set())} className="text-xs text-slate-400 hover:text-white px-2">Clear</button>
+          </div>
+          <BulkLocationControl locations={locations} busy={movingLocation} onApply={(id) => void handleMoveLocation(id)} />
         </div>
       )}
 

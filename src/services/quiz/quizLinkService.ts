@@ -154,3 +154,35 @@ export async function createTestFromQuestions(
   await quizRepo.appendQuestions(created.id, questions.filter((q) => fitsMode(q, created.mode)));
   return created;
 }
+
+export interface DeleteOutcome {
+  deleted: { code: string; title: string }[];
+  /** Running or scheduled tests, left as they were. */
+  skipped: { code: string; title: string }[];
+}
+
+interface DeleteRow {
+  r_quiz_id: string;
+  r_title: string;
+  r_code: string;
+  r_deleted: boolean;
+}
+
+/** Deletes these questions from every OTHER test that has a copy (not from the test named here). */
+export async function deleteQuestionCopies(exceptQuizId: string, originUids: string[]): Promise<DeleteOutcome> {
+  if (originUids.length === 0) return { deleted: [], skipped: [] };
+  const { data, error } = await supabaseQuiz.rpc("delete_question_copies", { p_exclude_quiz: exceptQuizId, p_origin_uids: originUids });
+  if (error) {
+    console.error("[quizLinkService] deleteQuestionCopies:", error);
+    throw new Error(error.message);
+  }
+  const out: DeleteOutcome = { deleted: [], skipped: [] };
+  const seen = new Set<string>();
+  for (const r of (data ?? []) as DeleteRow[]) {
+    const key = `${r.r_deleted}:${r.r_quiz_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    (r.r_deleted ? out.deleted : out.skipped).push({ code: r.r_code, title: r.r_title });
+  }
+  return out;
+}

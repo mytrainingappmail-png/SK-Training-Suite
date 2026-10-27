@@ -40,6 +40,16 @@ export async function createLocation(companyId: string, name: string): Promise<Q
   return data;
 }
 
+/** Puts these tests (quizzes / exams) at a location - or at none (null). Sessions already run keep the location they had. */
+export async function setQuizzesLocation(quizIds: string[], locationId: string | null): Promise<void> {
+  if (quizIds.length === 0) return;
+  const { error } = await supabaseQuiz.from("quizzes").update({ location_id: locationId }).in("id", quizIds);
+  if (error) {
+    console.error("[quizLocationRepository] setQuizzesLocation:", error);
+    throw new Error(error.message);
+  }
+}
+
 export async function renameLocation(id: string, name: string): Promise<void> {
   const clean = name.trim().replace(/\s+/g, " ");
   if (!clean) throw new Error("Type the location name.");
