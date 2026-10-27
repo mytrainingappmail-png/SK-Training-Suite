@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
@@ -14,8 +14,11 @@ import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
 import type { ExportQuiz } from "../../services/quiz/quizExportService";
 import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
-import { hindiOf, optionWithHindi } from "../../repositories/quiz/quizRepository";
+import { hindiOf, optionWithHindi, originOf } from "../../repositories/quiz/quizRepository";
 import QuestionHindiPanel from "../../components/quiz/QuestionHindiPanel";
+import QuestionTransferModal, { type TransferRequest, type TransferOutcome } from "../../components/quiz/QuestionTransferModal";
+import SyncChoiceModal, { type SyncItem } from "../../components/quiz/SyncChoiceModal";
+import { getQuestionLinks, syncQuestionCopies, questionContentKey, questionForOtherTest, copyQuestionsToTest, createTestFromQuestions, type QuestionLink } from "../../services/quiz/quizLinkService";
 import { hasHindi, translateQuestionsToHindi } from "../../services/quiz/quizHindiService";
 import type { QuizDifficulty } from "../../types/quiz";
 
@@ -112,6 +115,14 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
   const [removeSourceChoice, setRemoveSourceChoice] = useState("");
   const [bulkMarkImage, setBulkMarkImage] = useState<string | null>(null);
 
+  // questions ticked for "new test / copy / move", where each question is also used, and what each looked like when it was loaded or last saved
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [links, setLinks] = useState<Map<string, QuestionLink[]>>(new Map());
+  const baseline = useRef<Map<string, string>>(new Map());
+  const [syncAsk, setSyncAsk] = useState<SyncItem[] | null>(null);
+  const syncResolver = useRef<((uids: string[] | null) => void) | null>(null);
+
   useEffect(() => {
     if (isNew && !canEdit) navigate(listRoute, { replace: true });
   }, [isNew, canEdit, navigate]);
@@ -125,6 +136,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           return;
         }
         setForm({
+          code: quiz.code,
           title: quiz.title,
           description: quiz.description,
           category_id: quiz.category_id,
@@ -142,7 +154,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           allow_early_next: quiz.allow_early_next ?? null,
           location_id: quiz.location_id ?? null,
         });
-        setQuestions(
+        const loadedQuestions: EditableQuestion[] =
           quiz.questions.length > 0
             ? quiz.questions.map((q) => ({
                 localId: nextLocalId(),
@@ -154,6 +166,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                 is_hidden: q.is_hidden,
                 source_label: q.source_label,
                 source_question_id: q.source_question_id,
+                ...originOf(q),
                 ...hindiOf(q),
                 options: q.options.map(optionWithHindi),
                 image_url: q.image_url,
@@ -162,11 +175,29 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                 target_radius: q.target_radius,
                 hotspot_zones: q.hotspot_zones,
               }))
-            : [blankQuestion()]
-        );
+            : [blankQuestion()];
+        setQuestions(loadedQuestions);
+        void refreshLinks(loadedQuestions, quiz.id);
       })
       .finally(() => setLoading(false));
   }, [quizId, isNew]);
+
+  /** Remembers what each shared question looks like now (to tell later what was edited) and where else each one is used. */
+  async function refreshLinks(list: EditableQuestion[], forQuizId: string, resetBaseline = true) {
+    const next = new Map<string, string>();
+    for (const q of list) if (q.origin_uid) next.set(q.origin_uid, questionContentKey(q));
+    if (resetBaseline) baseline.current = next;
+    const uids = [...next.keys()];
+    if (uids.length === 0) { setLinks(new Map()); return; }
+    try {
+      const rows = await getQuestionLinks(uids, forQuizId);
+      const grouped = new Map<string, QuestionLink[]>();
+      for (const r of rows) grouped.set(r.origin_uid, [...(grouped.get(r.origin_uid) ?? []), r]);
+      setLinks(grouped);
+    } catch {
+      setLinks(new Map()); // the chips are a convenience - saving still works
+    }
+  }
 
   function updateQuestion(localId: string, patch: Partial<EditableQuestion>) {
     setQuestions((prev) => prev.map((q) => (q.localId === localId ? { ...q, ...patch } : q)));
@@ -272,6 +303,9 @@ It is removed from this screen only - nothing is permanent until you click Save 
       const copy: EditableQuestion = {
         ...prev[index],
         localId: nextLocalId(),
+        // a duplicate is a new question of its own (not another copy of the shared one)
+        origin_uid: null,
+        home_quiz_id: null,
         options: prev[index].options.map((o) => ({ ...o })),
       };
       return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
@@ -292,6 +326,8 @@ It is removed from this screen only - nothing is permanent until you click Save 
       const copies: EditableQuestion[] = zones.map((z, i) => ({
         ...src,
         localId: nextLocalId(),
+        origin_uid: null,
+        home_quiz_id: null,
         question_text: `Tap: ${z.label?.trim() || `Spot ${i + 1}`}`,
         marks: each,
         options: src.options.map((o) => ({ ...o })),
@@ -303,11 +339,11 @@ It is removed from this screen only - nothing is permanent until you click Save 
   }
 
   /** Pulls the CURRENT content of a merged question's original into this local copy — same edit-then-Save flow as any other change, so nothing is written until Save/Publish is clicked afterward. */
-  async function handleResync(localId: string, sourceQuestionId: string) {
+  async function handleResync(localId: string, sourceQuestionId: string | null, originUid?: string | null, homeQuizId?: string | null) {
     setResyncingId(localId);
     setResyncError("");
     try {
-      const content = await resyncQuestionFromSource(sourceQuestionId);
+      const content = await resyncQuestionFromSource(sourceQuestionId, originUid, homeQuizId);
       if (!content) {
         setResyncError("The original question no longer exists — it may have been deleted.");
         return;
@@ -482,9 +518,41 @@ It is removed from this screen only - nothing is permanent until you click Save 
     setSaving(true);
 
     try {
+      if (form.code && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,15}$/.test(form.code.trim())) {
+        setError("The test code can only have letters, numbers, - and _ (up to 16 characters), e.g. V001.");
+        return null;
+      }
+
+      // Questions that are also used in other tests and were edited here: ask whether the other tests should get the change too.
+      let toSave = questions;
+      let updateUids: string[] = [];
+      if (savedQuizId) {
+        const changed = questions.filter((q) => q.origin_uid && baseline.current.has(q.origin_uid) && baseline.current.get(q.origin_uid) !== questionContentKey(q));
+        if (changed.length > 0) {
+          const fresh = await getQuestionLinks(changed.map((q) => q.origin_uid as string), savedQuizId);
+          const items: SyncItem[] = changed
+            .map((q) => ({
+              uid: q.origin_uid as string,
+              label: `Q${questionNumber.get(q.localId) ?? questions.indexOf(q) + 1} - ${q.question_text.trim().slice(0, 70)}`,
+              links: fresh.filter((l) => l.origin_uid === q.origin_uid),
+            }))
+            .filter((it) => it.links.length > 0);
+          if (items.length > 0) {
+            const choice = await askSync(items);
+            if (choice === null) return null; // cancelled: nothing was saved
+            updateUids = choice;
+            const unlink = new Set(items.map((it) => it.uid).filter((uid) => !choice.includes(uid)));
+            if (unlink.size > 0) {
+              toSave = questions.map((q) => (q.origin_uid && unlink.has(q.origin_uid) ? { ...q, origin_uid: crypto.randomUUID(), home_quiz_id: savedQuizId } : q));
+              setQuestions(toSave);
+            }
+          }
+        }
+      }
+
       let id = savedQuizId;
       if (!id) {
-        const created = await createQuiz(admin.company_id, admin.id, { ...form, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
+        const created = await createQuiz(admin.company_id, admin.id, { ...form, code: form.code?.trim() || undefined, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
         id = created.id;
         setSavedQuizId(id);
       } else {
@@ -493,26 +561,105 @@ It is removed from this screen only - nothing is permanent until you click Save 
 
       const result = await saveQuestions(
         id,
-        questions.map(({ localId: _localId, ...rest }) => rest)
+        toSave.map(({ localId: _localId, ...rest }) => rest)
       );
       if (!result.ok) {
         setError(result.error ?? "Could not save questions.");
         return null;
       }
 
+      // the other tests now get the same version
+      let extra = "";
+      if (updateUids.length > 0) {
+        try {
+          const outcome = await syncQuestionCopies(id, updateUids);
+          if (outcome.updated.length > 0) extra += ` Also updated in ${outcome.updated.map((u) => u.code).join(", ")}.`;
+          if (outcome.skipped.length > 0) extra += ` ${outcome.skipped.map((u) => u.code).join(", ")} ${outcome.skipped.length === 1 ? "is" : "are"} running or scheduled right now, so ${outcome.skipped.length === 1 ? "it was" : "they were"} not changed.`;
+        } catch (e) {
+          setError(`Saved here, but the other tests could not be updated: ${e instanceof Error ? e.message : "unknown error"}`);
+        }
+      }
+      void refreshLinks(toSave, id);
+
       if (publish) {
         await publishQuiz(id);
-        setNotice("Quiz published!");
+        setNotice(`Quiz published!${extra}`);
       } else {
-        setNotice("Draft saved.");
+        setNotice(`Draft saved.${extra}`);
       }
       return id;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save.");
+      const message = e instanceof Error ? e.message : "Failed to save.";
+      setError(/quizzes_company_code_uq|duplicate key/i.test(message) ? `The test code ${form.code?.trim().toUpperCase()} is already used by another test. Pick a different one.` : message);
       return null;
     } finally {
       setSaving(false);
     }
+  }
+
+  function askSync(items: SyncItem[]): Promise<string[] | null> {
+    return new Promise((resolve) => {
+      syncResolver.current = resolve;
+      setSyncAsk(items);
+    });
+  }
+
+  function answerSync(uids: string[] | null) {
+    setSyncAsk(null);
+    syncResolver.current?.(uids);
+    syncResolver.current = null;
+  }
+
+  // ── pick questions: new test / copy / move ──
+  function toggleSelected(localId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(localId)) next.delete(localId);
+      else next.add(localId);
+      return next;
+    });
+  }
+
+  async function handleTransfer(req: TransferRequest): Promise<TransferOutcome> {
+    if (!admin) throw new Error("Sign in again.");
+    if (!savedQuizId) throw new Error("Save this test first (Save as Draft), then you can send its questions to another test.");
+    const chosen = questions.filter((q) => selected.has(q.localId));
+    if (chosen.length === 0) throw new Error("Tick at least one question.");
+
+    // a question that was never saved gets its identity now, so the copy stays linked to it
+    const withIdentity = chosen.map((q) => (q.origin_uid ? q : { ...q, origin_uid: crypto.randomUUID(), home_quiz_id: savedQuizId }));
+    const byId = new Map(withIdentity.map((q) => [q.localId, q]));
+    setQuestions((prev) => prev.map((q) => byId.get(q.localId) ?? q));
+    const copies = withIdentity.map((q) => questionForOtherTest(q, req.linked, form.title.trim() || "another test"));
+
+    let message: string;
+    let openUrl: string | undefined;
+    if (req.kind === "new") {
+      const created = await createTestFromQuestions(
+        admin.company_id,
+        admin.id,
+        { ...form, description: "", code: undefined, location_id: form.location_id === undefined ? selectedLocationId : form.location_id },
+        req.title,
+        req.code,
+        copies
+      );
+      message = `Created ${created.code} · ${created.title} with ${copies.length} question${copies.length === 1 ? "" : "s"}. It is a draft - open it, check it and publish.`;
+      openUrl = (created.mode === "exam" ? ROUTES.QUIZ_ADMIN_EXAM_EDIT : ROUTES.QUIZ_ADMIN_BUILDER_EDIT).replace(":quizId", created.id);
+    } else {
+      const result = await copyQuestionsToTest(req.target, copies);
+      message = `${req.kind === "move" ? "Moved" : "Copied"} ${result.added} question${result.added === 1 ? "" : "s"} to ${req.target.code} · ${req.target.title}.`;
+      if (result.skippedWritten > 0) message += ` ${result.skippedWritten} typed-answer question${result.skippedWritten === 1 ? " was" : "s were"} left out because that is a live quiz.`;
+      openUrl = (req.target.mode === "exam" ? ROUTES.QUIZ_ADMIN_EXAM_EDIT : ROUTES.QUIZ_ADMIN_BUILDER_EDIT).replace(":quizId", req.target.id);
+      if (req.kind === "move") {
+        const movedIds = new Set(withIdentity.filter((q) => req.target.mode === "exam" || q.type !== "written").map((q) => q.localId));
+        const remaining = questions.filter((q) => !movedIds.has(q.localId));
+        setQuestions(remaining.length > 0 ? remaining : [blankQuestion()]);
+        message += " They are removed from this test on screen - press Save to keep that.";
+      }
+    }
+    setSelected(new Set());
+    void refreshLinks(questions.map((q) => byId.get(q.localId) ?? q), savedQuizId, false);
+    return { message, openUrl };
   }
 
   // This same toggle also lives in Settings' quiz list, as an instant-save
@@ -569,6 +716,20 @@ It is removed from this screen only - nothing is permanent until you click Save 
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             placeholder="e.g. RERA Compliance Q3 2026"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Test code</label>
+          <input
+            className="w-full sm:max-w-[12rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 font-mono text-sm uppercase text-white outline-none focus:border-violet-500"
+            value={form.code ?? ""}
+            maxLength={16}
+            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/\s+/g, "") })}
+            placeholder={isNew ? "auto, e.g. V001" : "V001"}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            A short name for finding this {isExam ? "exam" : "quiz"}, e.g. V001 for Vatika. Questions you merge or copy from it keep this code, so a change to a shared question can follow it everywhere.
+            {isNew ? " Leave it empty and one is made from the title." : ""}
+          </p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Description</label>
@@ -866,6 +1027,34 @@ It is removed from this screen only - nothing is permanent until you click Save 
           )}
         </div>
 
+        {canEdit && questions.length > 0 && (
+          <div className={`sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 ${selected.size > 0 ? "border-violet-500/60 bg-slate-900/95 backdrop-blur" : "border-dashed border-slate-700 bg-slate-900/60"}`}>
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-300">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-violet-500"
+                checked={selected.size > 0 && selected.size === questions.length}
+                onChange={(e) => setSelected(e.target.checked ? new Set(questions.map((q) => q.localId)) : new Set())}
+              />
+              {selected.size > 0 ? `${selected.size} selected` : "Select questions"}
+            </label>
+            {selected.size === 0 ? (
+              <span className="text-[11px] text-slate-500">Tick questions to make a new test from them, or copy / move them to another test.</span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setTransferOpen(true)}
+                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
+                >
+                  ✨ New test · 📋 Copy · ➡ Move…
+                </button>
+                <button type="button" onClick={() => setSelected(new Set())} className="text-xs font-semibold text-slate-400 hover:text-white">Clear</button>
+              </>
+            )}
+          </div>
+        )}
+
         {canEdit && sourceLabelCounts.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 bg-slate-900/60 border border-dashed border-slate-700 rounded-xl px-3 py-2.5">
             <span className="text-xs font-semibold text-slate-400">🧹 Remove a merged-in project:</span>
@@ -910,7 +1099,27 @@ It is removed from this screen only - nothing is permanent until you click Save 
           <div key={q.localId} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
+                {canEdit && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(q.localId)}
+                    onChange={() => toggleSelected(q.localId)}
+                    title="Tick to make a new test from the ticked questions, or to copy / move them to another test"
+                    className="h-4 w-4 accent-violet-500"
+                  />
+                )}
                 <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">{q.is_hidden ? "Hidden" : `Q${questionNumber.get(q.localId) ?? qi + 1}`}</span>
+                {q.origin_uid && (links.get(q.origin_uid)?.length ?? 0) > 0 && (() => {
+                  const where = links.get(q.origin_uid as string) as QuestionLink[];
+                  return (
+                    <span
+                      title={`Also in: ${where.map((l) => `${l.code} ${l.title}${l.is_home ? " (original)" : ""}`).join(" · ")}. Changes made here can update these too - you are asked when you save.`}
+                      className="text-[10px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded-full px-2 py-0.5"
+                    >
+                      🔗 {where.slice(0, 3).map((l) => l.code).join(", ")}{where.length > 3 ? ` +${where.length - 3}` : ""}
+                    </span>
+                  );
+                })()}
                 {q.type === "hotspot" && effectiveZones(q).length === 0 && (
                   <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
                     ⚠ {q.image_url ? "Area not marked" : "Image needed"}
@@ -921,9 +1130,9 @@ It is removed from this screen only - nothing is permanent until you click Save 
                     📎 {q.source_label}
                   </span>
                 )}
-                {q.source_question_id && (
+                {(q.source_question_id || (q.origin_uid && q.home_quiz_id && q.home_quiz_id !== savedQuizId)) && (
                   <button
-                    onClick={() => handleResync(q.localId, q.source_question_id as string)}
+                    onClick={() => handleResync(q.localId, q.source_question_id, q.origin_uid, q.home_quiz_id)}
                     disabled={resyncingId === q.localId}
                     title="Pull the latest content from the original question — overwrites this copy's text/options/image below. Click Save/Publish afterward to keep it."
                     className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 hover:bg-emerald-500/20 disabled:opacity-50"
@@ -1122,6 +1331,17 @@ It is removed from this screen only - nothing is permanent until you click Save 
           onClose={() => setBulkMarkImage(null)}
         />
       )}
+      {transferOpen && admin && (
+        <QuestionTransferModal
+          companyId={admin.company_id}
+          count={selected.size}
+          currentQuizId={savedQuizId}
+          currentTitle={form.title}
+          onClose={() => setTransferOpen(false)}
+          onConfirm={handleTransfer}
+        />
+      )}
+      {syncAsk && <SyncChoiceModal items={syncAsk} thisTitle={form.title} onCancel={() => answerSync(null)} onConfirm={(uids) => answerSync(uids)} />}
     </div>
   );
 }

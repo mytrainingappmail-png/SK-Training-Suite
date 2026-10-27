@@ -1,7 +1,7 @@
 import * as quizRepo from "../../repositories/quiz/quizRepository";
 import type { Quiz, QuizWithQuestions } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
-import { hindiOf, optionWithHindi } from "../../repositories/quiz/quizRepository";
+import { hindiOf, optionWithHindi, originOf } from "../../repositories/quiz/quizRepository";
 
 export async function listQuizzes(companyId: string): Promise<Quiz[]> {
   return quizRepo.listQuizzes(companyId);
@@ -189,6 +189,7 @@ function toMergedQuestionForm(q: { title: string }, question: QuizWithQuestions[
     // The specific original row, for the "🔄 Sync from source" resync
     // feature — lets a later edit to the original be pulled into this copy.
     source_question_id: question.id,
+    ...originOf(question),
     ...hindiOf(question),
     options: question.options.map(optionWithHindi),
     image_url: question.image_url,
@@ -210,6 +211,7 @@ function toCarriedQuestionForm(question: QuizWithQuestions["questions"][number])
     is_hidden: question.is_hidden,
     source_label: question.source_label,
     source_question_id: question.source_question_id,
+    ...originOf(question),
     ...hindiOf(question),
     options: question.options.map(optionWithHindi),
     image_url: question.image_url,
@@ -338,8 +340,14 @@ export type ResyncedQuestionContent = Pick<QuestionForm, "question_text" | "ques
  * Returns null if the source question no longer exists (deleted since the
  * merge, or its whole quiz was removed).
  */
-export async function resyncQuestionFromSource(sourceQuestionId: string): Promise<ResyncedQuestionContent | null> {
-  const source = await quizRepo.getQuestionById(sourceQuestionId);
+export async function resyncQuestionFromSource(
+  sourceQuestionId: string | null,
+  originUid?: string | null,
+  homeQuizId?: string | null
+): Promise<ResyncedQuestionContent | null> {
+  // the row the copy was made from may be gone (saving a test re-creates its questions): then find it by its shared identity
+  let source = sourceQuestionId ? await quizRepo.getQuestionById(sourceQuestionId) : null;
+  if (!source && originUid && homeQuizId) source = await quizRepo.getQuestionByOrigin(originUid, homeQuizId);
   if (!source) return null;
   return {
     question_text: source.question_text,

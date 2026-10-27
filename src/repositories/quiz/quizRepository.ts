@@ -3,6 +3,8 @@ import type { Quiz, QuizQuestion, QuizWithQuestions, HotspotZone } from "../../t
 
 export interface QuizForm {
   title: string;
+  /** Short test code (V001). Leave out when creating - one is made from the title. */
+  code?: string;
   description: string;
   category_id: string | null;
   difficulty: Quiz["difficulty"];
@@ -34,11 +36,19 @@ export function hindiOf(q: { question_text_hi?: string | null; explanation_hi?: 
   return { question_text_hi: q.question_text_hi ?? null, explanation_hi: q.explanation_hi ?? null };
 }
 
+/** The identity of a question, carried along when a question is copied INTO another test so the copies stay linked. */
+export function originOf(q: { origin_uid?: string | null; home_quiz_id?: string | null }): { origin_uid: string | null; home_quiz_id: string | null } {
+  return { origin_uid: q.origin_uid ?? null, home_quiz_id: q.home_quiz_id ?? null };
+}
+
 export function optionWithHindi(o: { option_text: string; is_correct: boolean; option_text_hi?: string | null }): QuestionOptionForm {
   return { option_text: o.option_text, is_correct: o.is_correct, option_text_hi: o.option_text_hi ?? null };
 }
 
 export interface QuestionForm {
+  /** Shared by every copy of this question in other tests; null/absent = a new question gets its own. */
+  origin_uid?: string | null;
+  home_quiz_id?: string | null;
   question_text: string;
   question_text_hi?: string | null;
   type: QuizQuestion["type"];
@@ -126,6 +136,26 @@ export async function getQuestionById(questionId: string): Promise<QuizQuestion 
   };
 }
 
+/** The question as it lives in its home test, found by its shared identity (still works after that test was saved again, unlike a row id). */
+export async function getQuestionByOrigin(originUid: string, homeQuizId: string): Promise<QuizQuestion | null> {
+  const { data, error } = await supabaseQuiz
+    .from("quiz_questions")
+    .select("*, options:quiz_question_options(*)")
+    .eq("origin_uid", originUid)
+    .eq("quiz_id", homeQuizId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[quizRepository] getQuestionByOrigin:", error);
+    throw new Error(error.message);
+  }
+  if (!data) return null;
+  return {
+    ...data,
+    options: (data.options ?? []).slice().sort((a: { display_order: number }, b: { display_order: number }) => a.display_order - b.display_order),
+  };
+}
+
 export async function createQuiz(companyId: string, createdBy: string | null, form: QuizForm): Promise<Quiz> {
   const { data, error } = await supabaseQuiz
     .from("quizzes")
@@ -200,6 +230,26 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
     throw new Error(delError.message);
   }
 
+  await insertQuestionRows(quizId, questions, 0);
+}
+
+/** Adds questions after the ones a test already has, without touching those (used by "copy / move questions to a test"). */
+export async function appendQuestions(quizId: string, questions: QuestionForm[]): Promise<void> {
+  if (questions.length === 0) return;
+  const { data: last, error } = await supabaseQuiz
+    .from("quiz_questions")
+    .select("display_order")
+    .eq("quiz_id", quizId)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  if (error) {
+    console.error("[quizRepository] appendQuestions (position):", error);
+    throw new Error(error.message);
+  }
+  await insertQuestionRows(quizId, questions, last && last.length > 0 ? last[0].display_order + 1 : 0);
+}
+
+async function insertQuestionRows(quizId: string, questions: QuestionForm[], startOrder: number): Promise<void> {
   if (questions.length === 0) return;
 
   const { data: insertedQuestions, error: qError } = await supabaseQuiz
@@ -207,6 +257,8 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
     .insert(
       questions.map((q, i) => ({
         quiz_id: quizId,
+        origin_uid: q.origin_uid ?? crypto.randomUUID(),
+        home_quiz_id: q.home_quiz_id ?? quizId,
         question_text: q.question_text,
         question_text_hi: q.question_text_hi?.trim() || null,
         type: q.type,
@@ -217,7 +269,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
         is_hidden: q.is_hidden,
         source_label: q.source_label,
         source_question_id: q.source_question_id,
-        display_order: i,
+        display_order: startOrder + i,
         image_url: q.image_url,
         target_x: q.target_x,
         target_y: q.target_y,
@@ -228,7 +280,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
     .select("id");
 
   if (qError) {
-    console.error("[quizRepository] replaceQuestions (insert questions):", qError);
+    console.error("[quizRepository] insertQuestionRows (questions):", qError);
     throw new Error(qError.message);
   }
 
@@ -246,7 +298,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
 
   const { error: oError } = await supabaseQuiz.from("quiz_question_options").insert(optionRows);
   if (oError) {
-    console.error("[quizRepository] replaceQuestions (insert options):", oError);
+    console.error("[quizRepository] insertQuestionRows (options):", oError);
     throw new Error(oError.message);
   }
 }

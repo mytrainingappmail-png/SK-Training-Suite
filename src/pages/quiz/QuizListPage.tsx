@@ -77,7 +77,7 @@ export default function QuizListPage() {
   useEffect(refresh, [admin]);
 
   const { locations, selectedId: locationFilter } = useQuizLocation();
-  const filtered = quizzes.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()) && matchesQuizLocation(q.location_id, locationFilter));
+  const filtered = quizzes.filter((q) => (q.title.toLowerCase().includes(search.toLowerCase()) || (q.code ?? "").toLowerCase().includes(search.toLowerCase())) && matchesQuizLocation(q.location_id, locationFilter));
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this quiz? This cannot be undone.")) return;
@@ -262,7 +262,7 @@ export default function QuizListPage() {
       <div className="flex flex-wrap items-center gap-3">
         <input
           className="flex-1 min-w-[16rem] rounded-lg bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white outline-none focus:border-violet-500"
-          placeholder="🔍  Search quizzes…"
+          placeholder="🔍  Search quizzes or code…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -310,7 +310,7 @@ export default function QuizListPage() {
                   {q.difficulty}
                 </span>
               </div>
-              <div className="font-semibold text-white text-sm mb-1">{q.title}</div>
+              <div className="font-semibold text-white text-sm mb-1"><span className="mr-2 inline-block rounded bg-slate-800 px-1.5 py-0.5 align-middle font-mono text-[11px] font-bold text-amber-300" title="Test code">{q.code}</span>{q.title}</div>
               {locationName(locations, q.location_id) && (
                 <div className="text-[11px] font-semibold text-amber-300 mb-1">📍 {locationName(locations, q.location_id)}</div>
               )}
@@ -469,7 +469,7 @@ export default function QuizListPage() {
                     {quizzes
                       .filter((q) => !selected.has(q.id))
                       .map((q) => (
-                        <option key={q.id} value={q.id}>{q.title}</option>
+                        <option key={q.id} value={q.id}>{q.code} · {q.title}</option>
                       ))}
                   </select>
                   <p className="text-[11px] text-slate-500">

@@ -99,6 +99,8 @@ export interface Quiz {
   company_id: string;
   created_by: string | null;
   title: string;
+  /** Short code of the test, e.g. V001 - unique in the company, editable. */
+  code: string;
   description: string;
   category_id: string | null;
   difficulty: QuizDifficulty;
@@ -155,6 +157,10 @@ export interface QuizQuestion {
   marks: number;
   explanation: string;
   explanation_hi?: string | null;
+  /** The same question in several tests shares this id (it survives re-saving a test). Editing one can update them all. */
+  origin_uid?: string;
+  /** The test this question was first written in. */
+  home_quiz_id?: string | null;
   display_order: number;
   /** Skipped entirely when the quiz is launched live, and excluded from every total-question/percentage/pass-fail calculation — reversible, unlike deleting the question. */
   is_hidden: boolean;

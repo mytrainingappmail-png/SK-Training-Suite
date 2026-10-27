@@ -115,7 +115,7 @@ export default function ExamListPage() {
   }
 
   const { locations, selectedId: locationFilter } = useQuizLocation();
-  const filtered = exams.filter((q) => q.title.toLowerCase().includes(search.toLowerCase()) && matchesQuizLocation(q.location_id, locationFilter));
+  const filtered = exams.filter((q) => (q.title.toLowerCase().includes(search.toLowerCase()) || (q.code ?? "").toLowerCase().includes(search.toLowerCase())) && matchesQuizLocation(q.location_id, locationFilter));
 
   async function run(id: string, fn: () => Promise<unknown>, fallback: string) {
     setBusyId(id);
@@ -269,7 +269,7 @@ export default function ExamListPage() {
       <input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search exams…"
+        placeholder="Search exams or code…"
         className="w-full sm:max-w-xs rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
       />
 
@@ -289,7 +289,7 @@ export default function ExamListPage() {
             <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <p className="font-semibold text-white break-words">{q.title}</p>
+                  <p className="font-semibold text-white break-words"><span className="mr-2 inline-block rounded bg-slate-800 px-1.5 py-0.5 align-middle font-mono text-[11px] font-bold text-amber-300" title="Test code">{q.code}</span>{q.title}</p>
                   {locationName(locations, q.location_id) && (
                     <p className="text-[11px] font-semibold text-amber-300 mt-0.5">📍 {locationName(locations, q.location_id)}</p>
                   )}
