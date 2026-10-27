@@ -100,6 +100,10 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
     timer: col("timer"),
     marks: col("marks"),
     explanation: col("explanation"),
+    // optional Hindi columns (written by "Download this test" when the test has Hindi)
+    questionHi: col("question_hindi"),
+    explanationHi: col("explanation_hindi"),
+    optHi: [1, 2, 3, 4, 5, 6].map((n) => col(`option${n}_hindi`)),
   };
 
   if (idx.question === -1 || idx.correct === -1) {
@@ -119,12 +123,14 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
     const rawType = (idx.type >= 0 ? r[idx.type] : "").trim().toLowerCase();
     const type: QuestionForm["type"] = rawType === "truefalse" || rawType === "true/false" ? "truefalse" : "mcq";
 
-    const optionTexts =
+    const optionCols = [idx.opt1, idx.opt2, idx.opt3, idx.opt4, idx.opt5, idx.opt6];
+    const optionPairs =
       type === "truefalse"
-        ? ["True", "False"]
-        : [idx.opt1, idx.opt2, idx.opt3, idx.opt4, idx.opt5, idx.opt6]
-            .map((oi) => (oi >= 0 ? (r[oi] ?? "").trim() : ""))
-            .filter((t) => t !== "");
+        ? [{ text: "True", hi: "" }, { text: "False", hi: "" }]
+        : optionCols
+            .map((oi, n) => ({ text: oi >= 0 ? (r[oi] ?? "").trim() : "", hi: idx.optHi[n] >= 0 ? (r[idx.optHi[n]] ?? "").trim() : "" }))
+            .filter((p) => p.text !== "");
+    const optionTexts = optionPairs.map((p) => p.text);
 
     if (optionTexts.length < 2) {
       errors.push(`Row ${rowNum} ("${questionText.slice(0, 40)}…"): needs at least 2 options — skipped.`);
@@ -147,10 +153,12 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
       timer_seconds: Number.isFinite(timer) && timer > 0 ? timer : null,
       marks: Number.isFinite(marks) && marks > 0 ? marks : 1,
       explanation: idx.explanation >= 0 ? (r[idx.explanation] ?? "").trim() : "",
+      question_text_hi: idx.questionHi >= 0 ? (r[idx.questionHi] ?? "").trim() || null : null,
+      explanation_hi: idx.explanationHi >= 0 ? (r[idx.explanationHi] ?? "").trim() || null : null,
       is_hidden: false,
       source_label: null,
       source_question_id: null,
-      options: optionTexts.map((option_text, oi) => ({ option_text, is_correct: oi === correctIndex })),
+      options: optionPairs.map((p, oi) => ({ option_text: p.text, option_text_hi: p.hi || null, is_correct: oi === correctIndex })),
       image_url: null,
       target_x: null,
       target_y: null,

@@ -138,6 +138,8 @@ export interface QuizQuestionOption {
   id: string;
   question_id: string;
   option_text: string;
+  /** Hindi version (Devanagari with common English words), optional. */
+  option_text_hi?: string | null;
   is_correct: boolean;
   display_order: number;
 }
@@ -146,10 +148,13 @@ export interface QuizQuestion {
   id: string;
   quiz_id: string;
   question_text: string;
+  /** Hindi version (Devanagari with common English words), optional. */
+  question_text_hi?: string | null;
   type: QuizQuestionType;
   timer_seconds: number | null;
   marks: number;
   explanation: string;
+  explanation_hi?: string | null;
   display_order: number;
   /** Skipped entirely when the quiz is launched live, and excluded from every total-question/percentage/pass-fail calculation — reversible, unlike deleting the question. */
   is_hidden: boolean;
@@ -204,6 +209,12 @@ export interface QuizSession {
   is_practice?: boolean;
   /** Set when this session is a one-trainee attempt of an open link (no ranking there). */
   open_link_id?: string | null;
+  /** Lobby wait music frozen at launch (null = none was set: no music). */
+  lobby_music?: ChampMusic | null;
+  lobby_music_url?: string | null;
+  lobby_music_volume?: number | null;
+  /** When the host's start countdown ends (database time); null = the host starts it by hand. */
+  scheduled_start_at?: string | null;
   /** The location its quiz had when it was launched. */
   location_id?: string | null;
   /** When the current question actually started, server time — the clock every device's countdown (and the auto-advance safety net) anchors to, instead of each device timing its own fresh countdown from whenever it happened to load the question. */
@@ -403,6 +414,10 @@ export interface QuizSettings {
   exam_lobby_music: ChampMusic;
   exam_lobby_music_url: string | null;
   exam_lobby_music_volume: number;
+  /** Wait music for live-quiz lobbies (copied into each session at launch). */
+  quiz_lobby_music?: ChampMusic;
+  quiz_lobby_music_url?: string | null;
+  quiz_lobby_music_volume?: number;
   /** Instant right/wrong feedback during an exam (never the running score/marks) — mcq/truefalse color the chosen option, hotspot colors each confirmed tap. */
   exam_reveal_answers: boolean;
   /** Company default for Live Quizzes: tell a player right / wrong the moment they answer. A quiz can override it in its own settings. */

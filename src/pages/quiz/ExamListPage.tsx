@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import LobbyMusicSettings from "../../components/quiz/LobbyMusicSettings";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
@@ -194,50 +195,22 @@ export default function ExamListPage() {
         )}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">🎵 Lobby Wait Music</div>
-        <p className="text-xs text-slate-500">Plays on a candidate's phone while they wait for the exam to open. Paste a URL to use your own track (e.g. a Hindi motivational tune you have the rights to) — the built-in option is a plain synthesized chime, not a real song.</p>
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <select
-            disabled={!canEdit}
-            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
-            value={lobbyMusic}
-            onChange={(e) => setLobbyMusic(e.target.value as ChampMusic)}
-          >
-            <option value="builtin">🔔 Built-in (gentle chime)</option>
-            <option value="custom">🔗 Custom URL</option>
-            <option value="off">🔇 Off</option>
-          </select>
-          {lobbyMusic === "custom" && (
-            <input
-              disabled={!canEdit}
-              className="flex-1 min-w-[14rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
-              placeholder="https://… (mp3/ogg URL)"
-              value={lobbyMusicUrl}
-              onChange={(e) => setLobbyMusicUrl(e.target.value)}
-            />
-          )}
-          <input
-            disabled={!canEdit}
-            type="range"
-            min={0}
-            max={100}
-            value={lobbyMusicVolume}
-            onChange={(e) => setLobbyMusicVolume(Number(e.target.value))}
-            className="w-32 disabled:opacity-50"
-          />
-          {canEdit && (
-            <button
-              onClick={handleSaveLobbyMusic}
-              disabled={lobbyMusicSaving}
-              className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg px-4 py-2"
-            >
-              💾 {lobbyMusicSaving ? "Saving…" : "Save"}
-            </button>
-          )}
-          {lobbyMusicMessage && <span className="text-xs text-emerald-300">{lobbyMusicMessage}</span>}
-        </div>
-      </div>
+      <LobbyMusicSettings
+        title="🎵 Lobby Wait Music"
+        description="Plays on a candidate's phone while they wait for the exam to open. Paste a URL to use your own track (e.g. a Hindi motivational tune you have the rights to) — the built-in option is a plain synthesized chime, not a real song. Press Play to hear it yourself before saving."
+        choice={lobbyMusic}
+        url={lobbyMusicUrl}
+        volume={lobbyMusicVolume}
+        onChange={(p) => {
+          if (p.choice !== undefined) setLobbyMusic(p.choice);
+          if (p.url !== undefined) setLobbyMusicUrl(p.url);
+          if (p.volume !== undefined) setLobbyMusicVolume(p.volume);
+        }}
+        onSave={handleSaveLobbyMusic}
+        saving={lobbyMusicSaving}
+        message={lobbyMusicMessage}
+        canEdit={canEdit}
+      />
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">🎯 Instant Answer Feedback</div>

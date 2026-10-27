@@ -15,13 +15,14 @@ export async function createSession(
   questionOrder: string[] | null = null,
   revealAnswers = true,
   allowEarlyNext = false,
-  isPractice = false
+  isPractice = false,
+  lobbyMusic: { choice: "builtin" | "custom" | "off"; url: string | null; volume: number } | null = null
 ): Promise<QuizSession> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const pin = randomPin();
     const { data, error } = await supabaseQuiz
       .from("quiz_sessions")
-      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext, is_practice: isPractice })
+      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext, is_practice: isPractice, lobby_music: lobbyMusic?.choice ?? null, lobby_music_url: lobbyMusic?.url ?? null, lobby_music_volume: lobbyMusic?.volume ?? null })
       .select()
       .single();
 
@@ -74,6 +75,16 @@ export async function advanceQuizSessionNow(sessionId: string, fromIndex?: numbe
     throw new Error(error.message);
   }
   return data as "question" | "ended";
+}
+
+/** The host's "start in N seconds" (0 / null clears it). Returns the database time the quiz will start at, or null. */
+export async function setQuizStartTimer(sessionId: string, seconds: number | null): Promise<string | null> {
+  const { data, error } = await supabaseQuiz.rpc("set_quiz_start_timer", { p_session_id: sessionId, p_seconds: seconds ?? 0 });
+  if (error) {
+    console.error("[quizSessionRepository] setQuizStartTimer:", error);
+    throw new Error(error.message);
+  }
+  return (data as string | null) ?? null;
 }
 
 export async function pauseQuizSessionNow(sessionId: string): Promise<void> {

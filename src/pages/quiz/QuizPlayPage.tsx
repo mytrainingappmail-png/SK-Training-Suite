@@ -19,6 +19,10 @@ import { rankByMarks, MEDALS } from "../../services/quiz/quizRankingService";
 import QuizCertificateButton from "../../components/quiz/QuizCertificateButton";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
 import { rankTitleFor, parseRankTitles } from "../../utils/rankTitles";
+import RetryMistakes, { type RetryQuestion } from "../../components/quiz/RetryMistakes";
+import LanguageToggle from "../../components/quiz/LanguageToggle";
+import { useLobbyMusic } from "../../hooks/quiz/useLobbyMusic";
+import { useQuestionTranslations, useQuizLang } from "../../services/quiz/quizTranslationService";
 import type { PublicQuizQuestion, SubmitAnswerResult, SubmitHotspotAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
 const DEFAULT_REVIEW_VISIBLE_SECONDS = 5 * 60;
@@ -55,6 +59,7 @@ export default function QuizPlayPage() {
   const [certificate, setCertificate] = useState<QuizCertificate | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [reviewQuestions, setReviewQuestions] = useState<AnswerReviewQuestion[] | null>(null);
+  const [retryOpen, setRetryOpen] = useState(false);
   const [reviewSecondsLeft, setReviewSecondsLeft] = useState(DEFAULT_REVIEW_VISIBLE_SECONDS);
   const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
   const [endStep, setEndStep] = useState<"splash" | "details">("splash");
@@ -408,6 +413,34 @@ export default function QuizPlayPage() {
     }
   }
 
+  // the Hindi version, for the questions the trainer wrote one for (the English text is what the server sends)
+  const lang = useQuizLang();
+  const ended = session?.phase === "ended";
+  const translationIds = ended
+    ? (reviewQuestions ?? []).flatMap((q) => q.options.map((o) => o.option_id))
+    : question ? [question.question_id, ...question.options.map((o) => o.option_id)] : [];
+  const tr = useQuestionTranslations(sessionId, translationIds, ended ? "ended" : "live");
+  const hi = lang === "hi";
+
+  // lobby: the trainer's wait music (frozen into the session at launch) and, if set, the start countdown
+  const [musicOn, setMusicOn] = useState(true);
+  const inLobby = session?.phase === "lobby";
+  const lobbyMusic = useLobbyMusic({
+    active: inLobby,
+    on: musicOn,
+    choice: session?.lobby_music ?? "off",
+    url: session?.lobby_music_url,
+    volume: session?.lobby_music_volume ?? 60,
+  });
+  const startAt = inLobby && session?.scheduled_start_at ? new Date(session.scheduled_start_at).getTime() : null;
+  const [, setLobbyTick] = useState(0);
+  useEffect(() => {
+    if (startAt === null) return;
+    const t = setInterval(() => setLobbyTick((n) => n + 1), 500);
+    return () => clearInterval(t);
+  }, [startAt]);
+  const lobbySecondsLeft = startAt === null ? null : Math.max(0, Math.ceil((startAt - serverNow()) / 1000));
+
   if (!session) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-500">Loading…</div>;
   }
@@ -419,8 +452,32 @@ export default function QuizPlayPage() {
           <img src={playerSettings.brand_logo_url} alt="" className="h-16 w-16 object-contain rounded-xl" />
         )}
         <div className="h-8 w-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-        <div className="text-lg font-semibold text-white">Waiting for trainer to start…</div>
+        {lobbySecondsLeft !== null ? (
+          <>
+            <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">The quiz starts in</div>
+            <div className="font-mono text-6xl font-black text-amber-400">
+              {lobbySecondsLeft > 0
+                ? `${Math.floor(lobbySecondsLeft / 60)}:${String(lobbySecondsLeft % 60).padStart(2, "0")}`
+                : "0:00"}
+            </div>
+            <div className="text-sm text-slate-300">{lobbySecondsLeft > 0 ? "Stay on this screen — it starts by itself." : "Starting…"}</div>
+          </>
+        ) : (
+          <div className="text-lg font-semibold text-white">Waiting for trainer to start…</div>
+        )}
         <div className="text-sm text-slate-400">{locationState.quizTitle}</div>
+        {session.lobby_music && session.lobby_music !== "off" && (
+          <div className="flex flex-col items-center gap-2">
+            <button type="button" onClick={() => setMusicOn((v) => !v)} className="text-xs text-slate-400 hover:text-slate-200">
+              {musicOn ? "🔊 Music on — tap to mute" : "🔇 Music off — tap to unmute"}
+            </button>
+            {musicOn && lobbyMusic.blocked && (
+              <button type="button" onClick={lobbyMusic.playNow} className="rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-amber-950 hover:bg-amber-300">
+                🔊 Tap to play the wait music
+              </button>
+            )}
+          </div>
+        )}
         {!connected && <div className="text-xs font-bold text-red-400 animate-pulse">⚠ Reconnecting…</div>}
       </div>
     );
@@ -499,6 +556,19 @@ export default function QuizPlayPage() {
       !!session.open_link_id
     );
 
+    // the choice questions this trainee missed (a hotspot cannot be re-tried here)
+    const mistakes: RetryQuestion[] = (reviewQuestions ?? [])
+      .filter((q) => q.type !== "hotspot" && q.options.length > 0 && !q.options.some((o) => o.was_chosen && o.is_correct))
+      .map((q) => {
+        const qid = tr.questionIdOfOptions(q.options.map((o) => o.option_id));
+        return {
+          key: String(q.question_index),
+          text: (hi && qid && tr.question(qid)) || q.question_text,
+          explanation: (hi && qid && tr.explanation(qid)) || q.explanation || undefined,
+          options: q.options.map((o) => ({ id: o.option_id, text: (hi && tr.option(o.option_id)) || o.option_text, correct: o.is_correct })),
+        };
+      });
+
     const commonStyles = (
       <style>{`
         @keyframes quiz-pop-in {
@@ -556,14 +626,32 @@ export default function QuizPlayPage() {
 
         {certificate && <QuizCertificateButton cert={certificate} />}
 
+        {mistakes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setRetryOpen(true)}
+            className="w-full max-w-lg mt-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm py-3"
+          >
+            🔁 Practice my {mistakes.length} mistake{mistakes.length === 1 ? "" : "s"}
+          </button>
+        )}
+        {retryOpen && <RetryMistakes questions={mistakes} onClose={() => setRetryOpen(false)} />}
+
         {reviewQuestions && reviewQuestions.length > 0 && (
           <div className="w-full max-w-lg mt-4 text-left">
-            <div className="text-sm font-semibold text-white mb-2">📋 Your Answer Sheet</div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-sm font-semibold text-white">📋 Your Answer Sheet</div>
+              {tr.any && <LanguageToggle />}
+            </div>
             <div className="flex flex-col gap-3 pb-6">
-              {reviewQuestions.map((q) => (
+              {reviewQuestions.map((q) => {
+                const qid = tr.questionIdOfOptions(q.options.map((o) => o.option_id));
+                const qText = (hi && qid && tr.question(qid)) || q.question_text;
+                const qExplanation = (hi && qid && tr.explanation(qid)) || q.explanation;
+                return (
                 <div key={q.question_index} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                   <div className="text-sm font-semibold text-white mb-2">
-                    Q{q.question_index + 1}. {q.question_text}
+                    Q{q.question_index + 1}. {qText}
                   </div>
                   {q.type === "hotspot" && q.hotspot ? (
                     q.hotspot.image_url && (
@@ -594,15 +682,16 @@ export default function QuizPlayPage() {
                               : "border-slate-700 text-slate-400"
                         }`}
                       >
-                        {opt.option_text}
+                        {(hi && tr.option(opt.option_id)) || opt.option_text}
                         {opt.is_correct ? " ✓" : opt.was_chosen ? " ✗ (your answer)" : ""}
                       </div>
                     ))}
                   </div>
                   )}
-                  {q.explanation && <div className="text-xs text-slate-500 mt-2 italic">{q.explanation}</div>}
+                  {qExplanation && <div className="text-xs text-slate-500 mt-2 italic">{qExplanation}</div>}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -640,6 +729,7 @@ export default function QuizPlayPage() {
           Q{question.question_index + 1} of {question.total_questions}
         </span>
         <div className="flex items-center gap-2">
+          {(tr.question(question.question_id) || question.options.some((o) => tr.option(o.option_id))) && <LanguageToggle />}
           <button
             onClick={() => setShowCalc((v) => !v)}
             className={`h-9 w-9 rounded-full border flex items-center justify-center text-base ${showCalc ? "bg-violet-600 border-violet-500 text-white" : "bg-slate-800 border-slate-700 text-slate-300"}`}
@@ -660,7 +750,7 @@ export default function QuizPlayPage() {
       <ExamCalculator open={showCalc} onClose={() => setShowCalc(false)} />
 
       <div className="flex-1 flex flex-col">
-        <div className="px-6 py-8 text-center text-lg font-semibold text-white">{question.question_text}</div>
+        <div className="px-6 py-8 text-center text-lg font-semibold text-white">{(hi && tr.question(question.question_id)) || question.question_text}</div>
 
         {question.type === "hotspot" ? (
           question.image_url && (
@@ -688,7 +778,7 @@ export default function QuizPlayPage() {
                   answered && !isSelected && !isCorrectReveal ? "opacity-30" : "opacity-100"
                 } ${isCorrectReveal ? "ring-4 ring-white/70" : ""}`}
               >
-                {opt.option_text}
+                {(hi && tr.option(opt.option_id)) || opt.option_text}
               </button>
             );
           })}

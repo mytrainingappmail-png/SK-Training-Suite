@@ -9,13 +9,15 @@ import type { HotspotZone, QuizQuestionType, QuizWithQuestions } from "../../typ
 
 export interface ExportQuestion {
   question_text: string;
+  question_text_hi?: string | null;
+  explanation_hi?: string | null;
   type: QuizQuestionType;
   /** The question's own timer (null = follows the quiz timer). */
   timer_seconds: number | null;
   marks: number;
   explanation: string;
   is_hidden: boolean;
-  options: { option_text: string; is_correct: boolean }[];
+  options: { option_text: string; option_text_hi?: string | null; is_correct: boolean }[];
   image_url: string | null;
   hotspot_zones: HotspotZone[] | null;
   target_x: number | null;
@@ -55,12 +57,14 @@ export function fromQuizWithQuestions(quiz: QuizWithQuestions): ExportQuiz {
     exam_duration_minutes: quiz.exam_duration_minutes,
     questions: quiz.questions.map((q) => ({
       question_text: q.question_text,
+      question_text_hi: q.question_text_hi ?? null,
+      explanation_hi: q.explanation_hi ?? null,
       type: q.type,
       timer_seconds: q.timer_seconds,
       marks: q.marks,
       explanation: q.explanation,
       is_hidden: q.is_hidden,
-      options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+      options: q.options.map((o) => ({ option_text: o.option_text, option_text_hi: o.option_text_hi ?? null, is_correct: o.is_correct })),
       image_url: q.image_url,
       hotspot_zones: q.hotspot_zones,
       target_x: q.target_x,
@@ -88,10 +92,13 @@ const MAX_CSV_OPTIONS = 6;
 export function buildQuizCsv(quiz: ExportQuiz): string {
   const qs = visibleQuestions(quiz);
   const optionCount = Math.min(MAX_CSV_OPTIONS, Math.max(4, ...qs.map((q) => q.options.length)));
+  // the Hindi columns are only added when at least one question has a Hindi version
+  const anyHindi = qs.some((q) => q.question_text_hi?.trim() || q.explanation_hi?.trim() || q.options.some((o) => o.option_text_hi?.trim()));
   const header = [
     "Question", "Type",
     ...Array.from({ length: optionCount }, (_, i) => `Option${i + 1}`),
     "CorrectAnswer", "Timer", "Marks", "Explanation", "ImageURL",
+    ...(anyHindi ? ["Question_Hindi", ...Array.from({ length: optionCount }, (_, i) => `Option${i + 1}_Hindi`), "Explanation_Hindi"] : []),
   ];
   const rows = qs.map((q) => [
     q.question_text,
@@ -103,6 +110,13 @@ export function buildQuizCsv(quiz: ExportQuiz): string {
     String(q.marks),
     q.explanation ?? "",
     q.image_url ?? "",
+    ...(anyHindi
+      ? [
+          q.question_text_hi ?? "",
+          ...Array.from({ length: optionCount }, (_, i) => (q.type === "hotspot" || q.type === "written" ? "" : q.options[i]?.option_text_hi ?? "")),
+          q.explanation_hi ?? "",
+        ]
+      : []),
   ]);
   return [header, ...rows].map((line) => line.map((v) => csvEscape(String(v))).join(",")).join("\r\n");
 }

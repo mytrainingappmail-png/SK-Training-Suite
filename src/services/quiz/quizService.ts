@@ -1,6 +1,7 @@
 import * as quizRepo from "../../repositories/quiz/quizRepository";
 import type { Quiz, QuizWithQuestions } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
+import { hindiOf, optionWithHindi } from "../../repositories/quiz/quizRepository";
 
 export async function listQuizzes(companyId: string): Promise<Quiz[]> {
   return quizRepo.listQuizzes(companyId);
@@ -159,7 +160,8 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
         is_hidden: q.is_hidden,
         source_label: q.source_label,
         source_question_id: q.source_question_id,
-        options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+        ...hindiOf(q),
+        options: q.options.map(optionWithHindi),
         image_url: q.image_url,
         target_x: q.target_x,
         target_y: q.target_y,
@@ -187,7 +189,8 @@ function toMergedQuestionForm(q: { title: string }, question: QuizWithQuestions[
     // The specific original row, for the "🔄 Sync from source" resync
     // feature — lets a later edit to the original be pulled into this copy.
     source_question_id: question.id,
-    options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    ...hindiOf(question),
+    options: question.options.map(optionWithHindi),
     image_url: question.image_url,
     target_x: question.target_x,
     target_y: question.target_y,
@@ -207,7 +210,8 @@ function toCarriedQuestionForm(question: QuizWithQuestions["questions"][number])
     is_hidden: question.is_hidden,
     source_label: question.source_label,
     source_question_id: question.source_question_id,
-    options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    ...hindiOf(question),
+    options: question.options.map(optionWithHindi),
     image_url: question.image_url,
     target_x: question.target_x,
     target_y: question.target_y,
@@ -324,7 +328,7 @@ export async function mergeQuizzes(
 }
 
 /** Just the syncable content fields — deliberately excludes source_label/source_question_id/is_hidden, which are the merged copy's own identity within its quiz, not content to overwrite. */
-export type ResyncedQuestionContent = Pick<QuestionForm, "question_text" | "type" | "timer_seconds" | "marks" | "explanation" | "options" | "image_url" | "target_x" | "target_y" | "target_radius" | "hotspot_zones">;
+export type ResyncedQuestionContent = Pick<QuestionForm, "question_text" | "question_text_hi" | "explanation_hi" | "type" | "timer_seconds" | "marks" | "explanation" | "options" | "image_url" | "target_x" | "target_y" | "target_radius" | "hotspot_zones">;
 
 /**
  * Fetches the current content of a merged question's original source
@@ -343,7 +347,8 @@ export async function resyncQuestionFromSource(sourceQuestionId: string): Promis
     timer_seconds: source.timer_seconds,
     marks: source.marks,
     explanation: source.explanation,
-    options: source.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+    ...hindiOf(source),
+    options: source.options.map(optionWithHindi),
     image_url: source.image_url,
     target_x: source.target_x,
     target_y: source.target_y,

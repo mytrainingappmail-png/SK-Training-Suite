@@ -146,6 +146,21 @@ export async function getMyExamRankTitle(sessionId: string): Promise<{ rank: num
   return { rank: row.my_rank, title: row.title ? parseRankTitles([row.title])[0] ?? null : null };
 }
 
+export interface ExamMistake {
+  question_id: string;
+  question_order: number;
+  question_text: string;
+  explanation: string;
+  options: { option_id: string; option_text: string; is_correct: boolean }[];
+}
+
+/** The choice questions this trainee got wrong, for "Practice my mistakes" (only after results are released). */
+export async function getMyExamMistakes(sessionId: string): Promise<ExamMistake[]> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_my_exam_mistakes", { p_session_id: sessionId });
+  if (error) fail("getMyExamMistakes", error);
+  return (data as ExamMistake[] | null) ?? [];
+}
+
 export async function getMyExamResult(sessionId: string): Promise<MyExamResultRow[]> {
   const { data, error } = await supabaseQuizPlayer.rpc("get_my_exam_result", { p_session_id: sessionId });
   if (error) fail("getMyExamResult", error);

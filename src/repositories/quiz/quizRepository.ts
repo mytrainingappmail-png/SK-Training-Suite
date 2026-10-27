@@ -24,15 +24,28 @@ export interface QuizForm {
 
 export interface QuestionOptionForm {
   option_text: string;
+  /** Hindi version (Devanagari with common English words), optional. */
+  option_text_hi?: string | null;
   is_correct: boolean;
+}
+
+/** The Hindi side of a question, carried along wherever a question is copied, merged, backed up or restored. */
+export function hindiOf(q: { question_text_hi?: string | null; explanation_hi?: string | null }): { question_text_hi: string | null; explanation_hi: string | null } {
+  return { question_text_hi: q.question_text_hi ?? null, explanation_hi: q.explanation_hi ?? null };
+}
+
+export function optionWithHindi(o: { option_text: string; is_correct: boolean; option_text_hi?: string | null }): QuestionOptionForm {
+  return { option_text: o.option_text, is_correct: o.is_correct, option_text_hi: o.option_text_hi ?? null };
 }
 
 export interface QuestionForm {
   question_text: string;
+  question_text_hi?: string | null;
   type: QuizQuestion["type"];
   timer_seconds: number | null;
   marks: number;
   explanation: string;
+  explanation_hi?: string | null;
   is_hidden: boolean;
   source_label: string | null;
   /** See QuizQuestion — the original question this was copied from via merge, if any. */
@@ -195,10 +208,12 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
       questions.map((q, i) => ({
         quiz_id: quizId,
         question_text: q.question_text,
+        question_text_hi: q.question_text_hi?.trim() || null,
         type: q.type,
         timer_seconds: q.timer_seconds,
         marks: q.marks,
         explanation: q.explanation,
+        explanation_hi: q.explanation_hi?.trim() || null,
         is_hidden: q.is_hidden,
         source_label: q.source_label,
         source_question_id: q.source_question_id,
@@ -221,6 +236,7 @@ export async function replaceQuestions(quizId: string, questions: QuestionForm[]
     questions[qi].options.map((opt, oi) => ({
       question_id: row.id,
       option_text: opt.option_text,
+      option_text_hi: opt.option_text_hi?.trim() || null,
       is_correct: opt.is_correct,
       display_order: oi,
     }))

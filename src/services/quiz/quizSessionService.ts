@@ -21,7 +21,9 @@ export async function launchSession(
   /** The company default for "players may press Next early" — the quiz's own choice, if it has one, wins. */
   earlyNextDefault = false,
   /** A practice run: no shuffle, right / wrong shown, nothing kept (see migration 20261021100000). The quiz itself is not changed. */
-  practice = false
+  practice = false,
+  /** The company's lobby wait music; each session keeps the music it had at launch. */
+  lobbyMusic: { choice: "builtin" | "custom" | "off"; url: string | null; volume: number } | null = null
 ): Promise<QuizSession> {
   const quiz = await getQuiz(quizId);
   if (!quiz) throw new Error("Quiz not found.");
@@ -41,7 +43,8 @@ export async function launchSession(
     quizId, companyId, hostAdminId, joinMode, questionOrder,
     practice ? true : quiz.reveal_answers ?? revealDefault,
     quiz.allow_early_next ?? earlyNextDefault,
-    practice
+    practice,
+    lobbyMusic
   );
 }
 

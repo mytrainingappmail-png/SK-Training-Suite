@@ -4,13 +4,16 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
 import { EXAM_RESULT_WATCH_SECONDS } from "../../constants/examTiming";
+import RetryMistakes, { type RetryQuestion } from "../../components/quiz/RetryMistakes";
+import LanguageToggle from "../../components/quiz/LanguageToggle";
+import { useQuestionTranslations, useQuizLang } from "../../services/quiz/quizTranslationService";
 import HotspotPlayer from "../../components/quiz/HotspotPlayer";
 import ExamCalculator from "../../components/quiz/ExamCalculator";
 import {
-  getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult, getMyExamRankTitle,
+  getExamState, getExamPaper, saveExamAnswer, submitExam, flagExamTabSwitch, getMyExamResult, getMyExamRankTitle, getMyExamMistakes,
   uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap, getExamSessionSettings, getExamMyControl,
 } from "../../repositories/exam/examPlayRepository";
-import { startLobbyAmbience } from "../../services/quiz/quizSoundService";
+import { useLobbyMusic } from "../../hooks/quiz/useLobbyMusic";
 import FallingWords, { DEFAULT_MOTIVATIONAL_WORDS } from "../../components/quiz/FallingWords";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
 import type { QuizPublicBranding } from "../../types/quiz";
@@ -63,6 +66,9 @@ export default function ExamPaperPage() {
   const [result, setResult] = useState<MyExamResultRow[] | null>(null);
   // the trainer's top-rank wording when this trainee is one of the three best passing results
   const [rankInfo, setRankInfo] = useState<{ rank: number; title: RankTitle | null } | null>(null);
+  // the choice questions this trainee missed, for "Practice my mistakes"
+  const [mistakes, setMistakes] = useState<RetryQuestion[]>([]);
+  const [retryOpen, setRetryOpen] = useState(false);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [photoError, setPhotoError] = useState<Record<string, string>>({});
@@ -71,8 +77,6 @@ export default function ExamPaperPage() {
   const failedPhotoRef = useRef<Record<string, File>>({});
   const [branding, setBranding] = useState<QuizPublicBranding | null>(null);
   const [musicOn, setMusicOn] = useState(true);
-  const lobbyAudioRef = useRef<HTMLAudioElement | null>(null);
-  const lobbyStopRef = useRef<(() => void) | null>(null);
 
   // Written answers can't lock on the first keystroke (that would cap you at
   // one character) — instead the candidate composes freely, then explicitly
@@ -271,29 +275,15 @@ export default function ExamPaperPage() {
   // This exam's own settings (not "the first company's") — needs the joined session.
   useEffect(() => { getExamSessionSettings(sessionId).then(setBranding).catch(() => {}); }, [sessionId]);
 
-  // Lobby wait music — admin-configurable (builtin/custom/off), starts once the
-  // lobby screen is showing and settings have loaded, stops the moment the
-  // paper opens or the candidate mutes it. Never plays outside the lobby.
-  useEffect(() => {
-    function stopAll() {
-      lobbyStopRef.current?.();
-      lobbyStopRef.current = null;
-      lobbyAudioRef.current?.pause();
-      lobbyAudioRef.current = null;
-    }
-    if (phase !== "lobby" || !branding || !musicOn) return stopAll;
-    const choice = branding.exam_lobby_music;
-    if (choice === "builtin") {
-      lobbyStopRef.current = startLobbyAmbience(branding.exam_lobby_music_volume);
-    } else if (choice === "custom" && branding.exam_lobby_music_url) {
-      const audio = new Audio(branding.exam_lobby_music_url);
-      audio.loop = true;
-      audio.volume = Math.min(1, Math.max(0, branding.exam_lobby_music_volume / 100));
-      audio.play().catch(() => {});
-      lobbyAudioRef.current = audio;
-    }
-    return stopAll;
-  }, [phase, branding, musicOn]);
+  // Lobby wait music - admin-configurable (builtin / custom link / off). Starts while the lobby screen shows and stops the
+  // moment the paper opens or the candidate mutes it. A phone that has not allowed sound yet gets a "tap to play" prompt.
+  const lobbyMusic = useLobbyMusic({
+    active: phase === "lobby" && !!branding,
+    on: musicOn,
+    choice: branding?.exam_lobby_music ?? "off",
+    url: branding?.exam_lobby_music_url,
+    volume: branding?.exam_lobby_music_volume ?? 60,
+  });
 
   // ── Clocks (database time, corrected for this device) ───────────────────
   useEffect(() => {
@@ -403,6 +393,8 @@ export default function ExamPaperPage() {
           if (!s.results_released) {
             setResult(null);
             setRankInfo(null);
+            setMistakes([]);
+            setRetryOpen(false);
             setPhase("submitted");
             return;
           }
@@ -419,6 +411,23 @@ export default function ExamPaperPage() {
 
   useEffect(() => {
     if (phase === "result") void getMyExamRankTitle(sessionId).then(setRankInfo);
+  }, [phase, sessionId]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let cancelled = false;
+    getMyExamMistakes(sessionId)
+      .then((rows) => {
+        if (cancelled) return;
+        setMistakes(rows.filter((r) => r.options.length > 0).map((r) => ({
+          key: r.question_id,
+          text: r.question_text,
+          explanation: r.explanation || undefined,
+          options: r.options.map((o) => ({ id: o.option_id, text: o.option_text, correct: o.is_correct })),
+        })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [phase, sessionId]);
 
   // Flush the moment the connection or the tab comes back.
@@ -552,6 +561,20 @@ export default function ExamPaperPage() {
   // ── Screens ─────────────────────────────────────────────────────────────
   const shell = "min-h-screen bg-slate-950 text-white";
 
+  // the Hindi version, for the questions the trainer wrote one for (the English text is what the server sends)
+  const lang = useQuizLang();
+  const hi = lang === "hi";
+  const translationIds = phase === "result"
+    ? mistakes.flatMap((m) => [m.key, ...m.options.map((o) => o.id)])
+    : paper.flatMap((q) => [q.question_id, ...q.options.map((o) => o.option_id)]);
+  const tr = useQuestionTranslations(sessionId, translationIds, phase === "result" ? "result" : "paper");
+  const retryQuestions: RetryQuestion[] = mistakes.map((m) => ({
+    ...m,
+    text: (hi && tr.question(m.key)) || m.text,
+    explanation: (hi && tr.explanation(m.key)) || m.explanation,
+    options: m.options.map((o) => ({ ...o, text: (hi && tr.option(o.id)) || o.text })),
+  }));
+
   if (phase === "loading") return <div className={`${shell} flex items-center justify-center text-slate-500`}>Loading…</div>;
 
   if (phase === "error") {
@@ -587,6 +610,14 @@ export default function ExamPaperPage() {
               className="mt-5 text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-1.5 mx-auto"
             >
               {musicOn ? "🔊 Music on — tap to mute" : "🔇 Music off — tap to unmute"}
+            </button>
+          )}
+          {branding && branding.exam_lobby_music !== "off" && musicOn && lobbyMusic.blocked && (
+            <button
+              onClick={lobbyMusic.playNow}
+              className="mt-3 block w-full rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-amber-950 hover:bg-amber-300"
+            >
+              🔊 Tap to play the wait music
             </button>
           )}
         </div>
@@ -631,6 +662,13 @@ export default function ExamPaperPage() {
               </p>
             )}
           </div>
+          {mistakes.length > 0 && (
+            <button type="button" onClick={() => setRetryOpen(true)} className="w-full rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm py-3">
+              🔁 Practice my {mistakes.length} mistake{mistakes.length === 1 ? "" : "s"}
+            </button>
+          )}
+          {tr.any && mistakes.length > 0 && <div className="flex justify-end"><LanguageToggle /></div>}
+          {retryOpen && <RetryMistakes key={lang} questions={retryQuestions} onClose={() => setRetryOpen(false)} />}
           {rows.map((r) => (
             <div key={r.question_order} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-left">
               <p className="text-sm font-semibold mb-2">Q{r.question_order + 1}. {r.question_text}</p>
@@ -679,6 +717,7 @@ export default function ExamPaperPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {tr.any && <LanguageToggle />}
           <button
             onClick={() => setShowCalc((s) => !s)}
             className={`rounded-full h-9 w-9 flex items-center justify-center text-base border ${showCalc ? "bg-violet-600 border-violet-500 text-white" : "bg-slate-800 border-slate-700 text-slate-300"}`}
@@ -714,7 +753,7 @@ export default function ExamPaperPage() {
                 </button>
               </div>
 
-              <p className="text-base font-semibold leading-snug mb-3 whitespace-pre-wrap">{q.question_text}</p>
+              <p className="text-base font-semibold leading-snug mb-3 whitespace-pre-wrap">{(hi && tr.question(q.question_id)) || q.question_text}</p>
 
               {(q.type === "mcq" || q.type === "truefalse") && (() => {
                 const locked = isAnswered(d);
@@ -745,7 +784,7 @@ export default function ExamPaperPage() {
                           }}
                           className={`w-full text-left rounded-xl px-4 py-3 min-h-[48px] text-[15px] border-2 transition-colors ${selClass} ${locked && !sel ? "opacity-40" : ""}`}
                         >
-                          {pending ? "📍 " : sel ? (reveal ? (d.selected_is_correct ? "✓ " : "✗ ") : "● ") : "○ "}{o.option_text}
+                          {pending ? "📍 " : sel ? (reveal ? (d.selected_is_correct ? "✓ " : "✗ ") : "● ") : "○ "}{(hi && tr.option(o.option_id)) || o.option_text}
                         </button>
                       );
                     })}

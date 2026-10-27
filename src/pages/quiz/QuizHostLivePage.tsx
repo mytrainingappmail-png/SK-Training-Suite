@@ -9,7 +9,7 @@ import { supabaseQuiz } from "../../lib/supabaseQuiz";
 import { getQuiz } from "../../services/quiz/quizService";
 import { startQuiz, advanceQuestion, endSession, practiceLeave } from "../../services/quiz/quizSessionService";
 import { canEditQuizContent, getCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
-import { getSessionResults } from "../../repositories/quiz/quizSessionRepository";
+import { getSessionResults, setQuizStartTimer } from "../../repositories/quiz/quizSessionRepository";
 import { getAnswerDistribution } from "../../repositories/quiz/quizAnalyticsRepository";
 import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { buildDetailedReportCsv } from "../../services/quiz/quizReportService";
@@ -56,6 +56,12 @@ export default function QuizHostLivePage() {
   const [controlBusy, setControlBusy] = useState<string | null>(null);
   const [controlError, setControlError] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  // the start countdown: minutes typed by the host, and the database time it ends (undefined = whatever the session row says)
+  const [timerMinutes, setTimerMinutes] = useState("");
+  const [timerBusy, setTimerBusy] = useState(false);
+  const [timerError, setTimerError] = useState("");
+  const [startAtOverride, setStartAtOverride] = useState<string | null | undefined>(undefined);
+  const autoStartedRef = useRef(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoAdvancedRef = useRef(false);
@@ -82,6 +88,24 @@ export default function QuizHostLivePage() {
     if (!admin) return;
     getSettings(admin.company_id).then(setSettings);
   }, []);
+
+  // Start countdown: while the quiz is in the lobby and a start time is set, count down on the database clock and start the quiz
+  // when it reaches zero (it waits for the first player if nobody has joined yet). The host screen does the starting, so it stays open.
+  const startAtIso = startAtOverride !== undefined ? startAtOverride : session?.scheduled_start_at ?? null;
+  const countdownActive = session?.phase === "lobby" && !!startAtIso;
+  const [, setCountdownTick] = useState(0);
+  useEffect(() => {
+    if (!countdownActive || !startAtIso || !sessionId) return;
+    const startMs = new Date(startAtIso).getTime();
+    const t = setInterval(() => {
+      setCountdownTick((n) => n + 1);
+      if (!autoStartedRef.current && serverNow() >= startMs && participants.length > 0) {
+        autoStartedRef.current = true;
+        void startQuiz(sessionId).catch(() => { autoStartedRef.current = false; });
+      }
+    }, 500);
+    return () => clearInterval(t);
+  }, [countdownActive, startAtIso, sessionId, participants.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A "last seen" presence dot needs to visibly go stale over time even
   // without new data arriving — this just forces a re-render every few
@@ -265,6 +289,22 @@ export default function QuizHostLivePage() {
     await startQuiz(sessionId);
   }
 
+  async function handleSetTimer(minutes: number | null) {
+    if (!sessionId) return;
+    setTimerBusy(true);
+    setTimerError("");
+    try {
+      const at = await setQuizStartTimer(sessionId, minutes === null ? null : Math.round(minutes * 60));
+      setStartAtOverride(at);
+      autoStartedRef.current = false;
+      if (minutes === null) setTimerMinutes("");
+    } catch (e) {
+      setTimerError(e instanceof Error ? e.message : "Could not set the timer.");
+    } finally {
+      setTimerBusy(false);
+    }
+  }
+
   async function handleNext(fromIndex?: number) {
     if (!sessionId || !quiz) return;
     if (advancingRef.current) return; // already advancing — ignore a racing second trigger
@@ -423,6 +463,52 @@ export default function QuizHostLivePage() {
                     {p.display_name}
                   </span>
                 ))}
+              </div>
+              <div className="mx-auto max-w-md rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">⏱ Start timer (optional)</div>
+                {startAtIso ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs text-slate-400">The quiz starts by itself in</div>
+                      <div className="font-mono text-3xl font-black text-amber-400">
+                        {(() => {
+                          const left = Math.max(0, Math.ceil((new Date(startAtIso).getTime() - serverNow()) / 1000));
+                          return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+                        })()}
+                      </div>
+                      {participants.length === 0 && <div className="text-[11px] text-amber-300">Waiting for the first player to join.</div>}
+                    </div>
+                    <button
+                      onClick={() => void handleSetTimer(null)}
+                      disabled={timerBusy}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white disabled:opacity-50"
+                    >
+                      ✕ Cancel timer
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400">Start in</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={timerMinutes}
+                      onChange={(e) => setTimerMinutes(e.target.value)}
+                      placeholder="minutes"
+                      className="w-24 rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-sm text-white outline-none focus:border-violet-500"
+                    />
+                    <button
+                      onClick={() => void handleSetTimer(Number(timerMinutes))}
+                      disabled={timerBusy || !(Number(timerMinutes) > 0)}
+                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      Start the countdown
+                    </button>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500">Players see the countdown on their phones. Keep this screen open - it starts the quiz at zero. You can still press Start any time.</p>
+                {timerError && <div className="text-xs text-red-300">{timerError}</div>}
               </div>
               <button
                 onClick={handleStart}

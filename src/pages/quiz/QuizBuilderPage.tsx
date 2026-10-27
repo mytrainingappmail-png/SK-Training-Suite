@@ -14,6 +14,9 @@ import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
 import type { ExportQuiz } from "../../services/quiz/quizExportService";
 import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
+import { hindiOf, optionWithHindi } from "../../repositories/quiz/quizRepository";
+import QuestionHindiPanel from "../../components/quiz/QuestionHindiPanel";
+import { hasHindi, translateQuestionsToHindi } from "../../services/quiz/quizHindiService";
 import type { QuizDifficulty } from "../../types/quiz";
 
 let localIdCounter = 0;
@@ -104,6 +107,8 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
   const [notice, setNotice] = useState("");
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [csvImportedCount, setCsvImportedCount] = useState<number | null>(null);
+  const [hindiBusy, setHindiBusy] = useState(false);
+  const [hindiMessage, setHindiMessage] = useState("");
   const [removeSourceChoice, setRemoveSourceChoice] = useState("");
   const [bulkMarkImage, setBulkMarkImage] = useState<string | null>(null);
 
@@ -149,7 +154,8 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                 is_hidden: q.is_hidden,
                 source_label: q.source_label,
                 source_question_id: q.source_question_id,
-                options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+                ...hindiOf(q),
+                options: q.options.map(optionWithHindi),
                 image_url: q.image_url,
                 target_x: q.target_x,
                 target_y: q.target_y,
@@ -222,6 +228,22 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
 
   function removeQuestion(localId: string) {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
+  }
+
+  /** The 🗑 button: always ask first, naming the question so the wrong one is not removed by a slip of the finger. */
+  function handleRemoveQuestionClick(localId: string) {
+    const index = questions.findIndex((q) => q.localId === localId);
+    if (index === -1) return;
+    if (questions.length <= 1) {
+      alert("A quiz needs at least one question, so the last one cannot be deleted.");
+      return;
+    }
+    const text = questions[index].question_text.trim().replace(/\s+/g, " ");
+    const label = text ? `"${text.length > 70 ? text.slice(0, 70) + "…" : text}"` : "this empty question";
+    if (!confirm(`Delete question ${index + 1}: ${label}?
+
+It is removed from this screen only - nothing is permanent until you click Save / Publish.`)) return;
+    removeQuestion(localId);
   }
 
   /** Bulk-remove every question tagged with this source (see mergeQuizzes)
@@ -395,8 +417,9 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           timer_seconds: q.timer_seconds,
           marks: q.marks,
           explanation: q.explanation,
+          ...hindiOf(q),
           is_hidden: q.is_hidden,
-          options: q.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+          options: q.options.map(optionWithHindi),
           image_url: q.image_url,
           hotspot_zones: q.hotspot_zones,
           target_x: q.target_x,
@@ -404,6 +427,24 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           target_radius: q.target_radius,
         })),
     };
+  }
+
+  /** Writes a first Hindi draft for every question that has none yet (questions that already have Hindi are left alone). */
+  async function handleAutoFillAllHindi() {
+    const todo = questions.filter((q) => q.question_text.trim() !== "" && !hasHindi(q));
+    if (todo.length === 0) { setHindiMessage("Every question already has a Hindi version (or is empty)."); return; }
+    setHindiBusy(true);
+    setHindiMessage("");
+    try {
+      const patches = await translateQuestionsToHindi(todo, (done, total) => setHindiMessage(`Writing Hindi… ${done} of ${total}`));
+      const byId = new Map(todo.map((q, i) => [q.localId, patches[i]]));
+      setQuestions((prev) => prev.map((q) => (byId.has(q.localId) ? { ...q, ...byId.get(q.localId)! } : q)));
+      setHindiMessage(`✅ Hindi added to ${todo.length} question${todo.length === 1 ? "" : "s"}. Open "🇮🇳 हिंदी version" under a question to check or edit it, then Save.`);
+    } catch (e) {
+      setHindiMessage(e instanceof Error ? e.message : "Could not auto-fill Hindi.");
+    } finally {
+      setHindiBusy(false);
+    }
   }
 
   function handleDownloadSampleCsv() {
@@ -781,6 +822,29 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
       </div>
       )}
 
+      {/* Hindi version of every question */}
+      {canEdit && (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-300">🇮🇳 हिंदी version of the questions</h2>
+        <p className="text-xs text-slate-500">
+          Trainees who prefer Hindi get a language switch on every question that has a Hindi version (Devanagari with the usual English
+          words kept in English). Auto-fill writes a first draft for all questions that have none yet - you can read and edit each one
+          under its question before saving.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void handleAutoFillAllHindi()}
+            disabled={hindiBusy}
+            className="text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-3 py-1.5 disabled:opacity-50"
+          >
+            {hindiBusy ? "Writing Hindi…" : "✨ Auto-fill Hindi for all questions"}
+          </button>
+          {hindiMessage && <span className="text-xs text-slate-300">{hindiMessage}</span>}
+        </div>
+      </div>
+      )}
+
       {/* Questions */}
       <fieldset disabled={!canEdit} className="space-y-4">
         <div className="flex items-center justify-between">
@@ -931,7 +995,8 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                   ⧉
                 </button>
                 <button
-                  onClick={() => removeQuestion(q.localId)}
+                  onClick={() => handleRemoveQuestionClick(q.localId)}
+                  title="Delete this question"
                   className="text-xs text-red-300 hover:text-red-200 px-2"
                 >
                   🗑
@@ -1022,6 +1087,8 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
               value={q.explanation}
               onChange={(e) => updateQuestion(q.localId, { explanation: e.target.value })}
             />
+
+            <QuestionHindiPanel question={q} onChange={(patch) => updateQuestion(q.localId, patch)} />
           </div>
         ))}
       </fieldset>

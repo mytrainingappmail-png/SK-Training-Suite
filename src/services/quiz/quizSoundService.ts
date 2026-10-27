@@ -131,3 +131,61 @@ export function startLobbyAmbience(volumePercent: number): () => void {
     if (timer) clearTimeout(timer);
   };
 }
+
+// ── Lobby wait music (exam and live quiz), shared by the trainee's lobby and the trainer's "play to check" button ──────────
+// Browsers refuse to play sound until the person has touched the page, and they leave a freshly created audio context
+// "suspended". So starting music can end three ways: "playing", "blocked" (needs a tap first - the caller shows a tap-to-play
+// prompt and tries again on the next touch) or "failed" (e.g. a custom link that is not an audio file).
+
+export type LobbyMusicChoice = "builtin" | "custom" | "off";
+export type LobbyMusicResult = "playing" | "blocked" | "failed";
+
+export interface LobbyMusicHandle {
+  stop: () => void;
+  result: Promise<LobbyMusicResult>;
+}
+
+export function startLobbyMusic(choice: LobbyMusicChoice, url: string | null | undefined, volumePercent: number): LobbyMusicHandle {
+  let stopFn: (() => void) | null = null;
+  let cancelled = false;
+  const stop = () => {
+    cancelled = true;
+    stopFn?.();
+    stopFn = null;
+  };
+  const volume = Math.min(1, Math.max(0, volumePercent / 100));
+
+  if (choice === "custom" && url && url.trim()) {
+    const audio = new Audio(url.trim());
+    audio.loop = true;
+    audio.volume = volume;
+    stopFn = () => { audio.pause(); audio.removeAttribute("src"); audio.load(); };
+    const result = audio
+      .play()
+      .then((): LobbyMusicResult => (cancelled ? "failed" : "playing"))
+      .catch((e: unknown): LobbyMusicResult => (e instanceof DOMException && e.name === "NotAllowedError" ? "blocked" : "failed"));
+    return { stop, result };
+  }
+
+  if (choice === "builtin") {
+    const ctx = getContext();
+    if (!ctx) return { stop, result: Promise.resolve("failed") };
+    const result = new Promise<LobbyMusicResult>((resolve) => {
+      // a context that was never allowed to start keeps resume() pending - give it a moment, then report "blocked"
+      const giveUp = setTimeout(() => resolve("blocked"), 700);
+      ctx.resume().then(() => {
+        clearTimeout(giveUp);
+        if (cancelled) return resolve("failed");
+        if (ctx.state === "running") {
+          stopFn = startLobbyAmbience(volumePercent);
+          resolve("playing");
+        } else {
+          resolve("blocked");
+        }
+      }).catch(() => { clearTimeout(giveUp); resolve("blocked"); });
+    });
+    return { stop, result };
+  }
+
+  return { stop, result: Promise.resolve("failed") };
+}

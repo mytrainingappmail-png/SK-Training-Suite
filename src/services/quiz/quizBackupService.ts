@@ -8,6 +8,7 @@
 
 import type { HotspotZone } from "../../types/quiz";
 import * as quizRepo from "../../repositories/quiz/quizRepository";
+import { hindiOf, optionWithHindi } from "../../repositories/quiz/quizRepository";
 import { listCategories, createCategory } from "../../repositories/quiz/quizCategoryRepository";
 import { listRoster, addRosterEntry } from "../../repositories/quiz/quizRosterRepository";
 import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
@@ -145,7 +146,8 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
           explanation: question.explanation,
           is_hidden: question.is_hidden,
           source_label: question.source_label,
-          options: question.options.map((o) => ({ option_text: o.option_text, is_correct: o.is_correct })),
+          ...hindiOf(question),
+          options: question.options.map(optionWithHindi),
           image_url: question.image_url,
           target_x: question.target_x,
           target_y: question.target_y,

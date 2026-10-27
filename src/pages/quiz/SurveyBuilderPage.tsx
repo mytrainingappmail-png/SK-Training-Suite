@@ -149,6 +149,18 @@ export default function SurveyBuilderPage() {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
   }
 
+  /** The 🗑 button: always ask first, naming the question so the wrong one is not removed by a slip of the finger. */
+  function handleRemoveQuestionClick(localId: string) {
+    const index = questions.findIndex((q) => q.localId === localId);
+    if (index === -1 || questions.length <= 1) return;
+    const text = questions[index].question_text.trim().replace(/\s+/g, " ");
+    const label = text ? `"${text.length > 70 ? text.slice(0, 70) + "…" : text}"` : "this empty question";
+    if (!confirm(`Delete question ${index + 1}: ${label}?
+
+It is removed from this screen only - nothing is permanent until you click Save / Publish.`)) return;
+    removeQuestion(localId);
+  }
+
   function isBlankQuestion(q: EditableSurveyQuestion): boolean {
     return !q.question_text.trim() && q.options.every((o) => !o.option_text.trim());
   }
@@ -374,7 +386,7 @@ export default function SurveyBuilderPage() {
                   Required
                 </label>
                 <button
-                  onClick={() => removeQuestion(q.localId)}
+                  onClick={() => handleRemoveQuestionClick(q.localId)}
                   disabled={questions.length <= 1}
                   className="text-xs text-red-300 hover:text-red-200 disabled:opacity-30 px-1"
                 >

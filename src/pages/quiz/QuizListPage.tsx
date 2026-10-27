@@ -5,7 +5,9 @@ import { ROUTES } from "../../constants/routes";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listQuizzes, deleteQuiz, deleteQuizzes, publishQuiz, unpublishQuiz, duplicateQuiz, mergeQuizzes, updateQuizMeta } from "../../services/quiz/quizService";
 import { launchSession, purgePracticeSessions } from "../../services/quiz/quizSessionService";
-import { getSettings } from "../../repositories/quiz/quizSettingsRepository";
+import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsRepository";
+import LobbyMusicSettings from "../../components/quiz/LobbyMusicSettings";
+import type { LobbyMusicChoice } from "../../services/quiz/quizSoundService";
 import { describePlayMode, hasPerPlayerShuffle } from "../../utils/quizPlayMode";
 import { useQuizLocation, matchesQuizLocation, locationName } from "../../services/quiz/quizLocationStore";
 import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
@@ -28,6 +30,42 @@ export default function QuizListPage() {
   const [showMergeForm, setShowMergeForm] = useState(false);
   const [mergeMode, setMergeMode] = useState<"new" | "existing">("new");
   const [mergeTargetId, setMergeTargetId] = useState("");
+
+  // wait music for the live-quiz lobby (each launched quiz keeps the music it had when it started)
+  const [lobbyMusic, setLobbyMusic] = useState<LobbyMusicChoice>("builtin");
+  const [lobbyMusicUrl, setLobbyMusicUrl] = useState("");
+  const [lobbyMusicVolume, setLobbyMusicVolume] = useState(60);
+  const [lobbyMusicSaving, setLobbyMusicSaving] = useState(false);
+  const [lobbyMusicMessage, setLobbyMusicMessage] = useState("");
+
+  useEffect(() => {
+    if (!admin) return;
+    getSettings(admin.company_id).then((s) => {
+      setLobbyMusic(s.quiz_lobby_music ?? "builtin");
+      setLobbyMusicUrl(s.quiz_lobby_music_url ?? "");
+      setLobbyMusicVolume(s.quiz_lobby_music_volume ?? 60);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleSaveLobbyMusic() {
+    if (!admin) return;
+    setLobbyMusicSaving(true);
+    setLobbyMusicMessage("");
+    try {
+      await saveSettings(admin.company_id, {
+        quiz_lobby_music: lobbyMusic,
+        quiz_lobby_music_url: lobbyMusicUrl.trim() || null,
+        quiz_lobby_music_volume: lobbyMusicVolume,
+      });
+      setLobbyMusicMessage("Saved.");
+      setTimeout(() => setLobbyMusicMessage(""), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the music.");
+    } finally {
+      setLobbyMusicSaving(false);
+    }
+  }
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function refresh() {
@@ -96,7 +134,11 @@ export default function QuizListPage() {
     setError("");
     try {
       const settings = await getSettings(admin.company_id);
-      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode, settings.quiz_reveal_answers ?? true, settings.quiz_allow_early_next ?? false, practice);
+      const session = await launchSession(q.id, admin.company_id, admin.id, settings.default_join_mode, settings.quiz_reveal_answers ?? true, settings.quiz_allow_early_next ?? false, practice, {
+        choice: settings.quiz_lobby_music ?? "builtin",
+        url: settings.quiz_lobby_music_url ?? null,
+        volume: settings.quiz_lobby_music_volume ?? 60,
+      });
       navigate(ROUTES.QUIZ_ADMIN_HOST.replace(":sessionId", session.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to launch.");
@@ -199,6 +241,23 @@ export default function QuizListPage() {
           </Link>
         )}
       </div>
+
+      <LobbyMusicSettings
+        title="🎵 Lobby Wait Music"
+        description="Plays on a player's phone while they wait in the lobby for the quiz to start. Paste a URL to use your own track — the built-in option is a plain synthesized chime, not a real song. Press Play to hear it yourself before saving. A quiz keeps the music it had when you launched it."
+        choice={lobbyMusic}
+        url={lobbyMusicUrl}
+        volume={lobbyMusicVolume}
+        onChange={(p) => {
+          if (p.choice !== undefined) setLobbyMusic(p.choice);
+          if (p.url !== undefined) setLobbyMusicUrl(p.url);
+          if (p.volume !== undefined) setLobbyMusicVolume(p.volume);
+        }}
+        onSave={handleSaveLobbyMusic}
+        saving={lobbyMusicSaving}
+        message={lobbyMusicMessage}
+        canEdit={canEdit}
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <input
