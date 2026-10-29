@@ -16,6 +16,7 @@ import { exportBackup, downloadBackupFile, parseBackupFile, importBackup } from 
 import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
 import QuizLocationsCard from "../../components/quiz/QuizLocationsCard";
 import QuizRankTitlesCard from "../../components/quiz/QuizRankTitlesCard";
+import QuizBackgroundCard from "../../components/quiz/QuizBackgroundCard";
 import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, CertPhotoFrame, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -1400,6 +1401,8 @@ export default function QuizSettingsPage() {
       </fieldset>
 
       <QuizRankTitlesCard />
+
+      <QuizBackgroundCard />
 
       {/* Backup & Restore */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">

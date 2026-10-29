@@ -121,6 +121,9 @@ export interface Quiz {
   reveal_answers?: boolean | null;
   /** Live Quiz only: may a player press Next as soon as they have answered? null = follow the company default (off). */
   allow_early_next?: boolean | null;
+  /** Background behind the questions on the trainee's screen: null = follow the company default, 'none', 'logo' or 'image' (bg_image_url). */
+  bg_kind?: QuizBackgroundKind | null;
+  bg_image_url?: string | null;
   /** Where this quiz / exam is for (null = no location). New sessions take it at launch. */
   location_id?: string | null;
   status: QuizStatus;
@@ -159,6 +162,8 @@ export interface QuizQuestion {
   explanation_hi?: string | null;
   /** The same question in several tests shares this id (it survives re-saving a test). Editing one can update them all. */
   origin_uid?: string;
+  /** What this question is about (e.g. "RERA", "Payment plan") - used by the topic report on the Results screens. */
+  topic?: string | null;
   /** The test this question was first written in. */
   home_quiz_id?: string | null;
   display_order: number;
@@ -430,6 +435,15 @@ export interface QuizSettings {
   quiz_reveal_answers: boolean;
   /** Company default for Live Quizzes: let players press Next as soon as they have answered. A quiz can override it. */
   quiz_allow_early_next: boolean;
+  /** Company default for the background behind the questions on the trainee's screen (a quiz / exam can differ). */
+  bg_kind: QuizBackgroundKind;
+  bg_image_url: string | null;
+  /** How strong the background is, in percent - limited to a range that keeps the text readable (see QUIZ_BG_OPACITY_MIN/MAX). */
+  bg_opacity: number;
+  bg_layout: QuizBackgroundLayout;
+  /** The trainee's own name, faint and tiled over the screen (deters screenshots being shared). */
+  bg_name_watermark: boolean;
+  bg_name_opacity: number;
   /** How long a hotspot tap's name/"wrong spot" label stays on screen before fading. 0 = stays until the next tap. */
   exam_hotspot_feedback_seconds: number;
   exam_hotspot_feedback_size: HotspotFeedbackSize;
@@ -437,6 +451,25 @@ export interface QuizSettings {
 }
 
 export type HotspotFeedbackSize = "small" | "medium" | "large";
+
+export type QuizBackgroundKind = "none" | "logo" | "image";
+export type QuizBackgroundLayout = "center" | "tile" | "corner" | "fill";
+
+/** What a trainee's screen shows behind the questions, already worked out by the database (quiz's own choice, else the company default). */
+export interface QuizBackground {
+  kind: QuizBackgroundKind;
+  url: string | null;
+  opacity: number;
+  layout: QuizBackgroundLayout;
+  name_watermark: boolean;
+  name_opacity: number;
+}
+
+/** Limits the database enforces; the settings screen uses the same so the text always stays readable. */
+export const QUIZ_BG_OPACITY_MIN = 3;
+export const QUIZ_BG_OPACITY_MAX = 25;
+export const QUIZ_BG_NAME_OPACITY_MIN = 2;
+export const QUIZ_BG_NAME_OPACITY_MAX = 15;
 
 /** One saved certificate design. A company can keep several (e.g. a
  * "gold seal" version and a plain one) and switch which is_active one
@@ -502,6 +535,8 @@ export interface QuizPlayerSettings {
   result_close_minutes: number;
   rank_titles_enabled?: boolean;
   rank_titles?: RankTitle[] | null;
+  /** The background behind the questions (null = none). */
+  bg?: QuizBackground | null;
 }
 
 /** The calling participant's own outcome, via get_my_result RPC. */
@@ -534,6 +569,8 @@ export interface QuizPublicBranding {
   exam_reveal_answers: boolean;
   exam_hotspot_feedback_seconds: number;
   exam_hotspot_feedback_size: HotspotFeedbackSize;
+  /** Exam screens only: the background behind the questions (null = none). */
+  bg?: QuizBackground | null;
 }
 
 export interface QuizCertificate {

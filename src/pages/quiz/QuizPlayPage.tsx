@@ -11,6 +11,7 @@ import ExamCalculator from "../../components/quiz/ExamCalculator";
 import { effectiveZones } from "../../components/quiz/hotspotZones";
 import { listParticipants, getQuizMyControl } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
+import { backgroundStyle } from "../../utils/quizBackground";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
@@ -83,6 +84,8 @@ export default function QuizPlayPage() {
   // re-fetch the SAME question without wiping the answer the employee
   // already gave, which used to make it look like the question repeated.
   const shownIndexRef = useRef<number | null>(null);
+  // the trainer's chosen background behind the questions (a faded logo / image, and optionally this trainee's own name)
+  const bgStyle = backgroundStyle(playerSettings?.bg, participants.find((p) => p.id === participantId)?.display_name);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -442,12 +445,12 @@ export default function QuizPlayPage() {
   const lobbySecondsLeft = startAt === null ? null : Math.max(0, Math.ceil((startAt - serverNow()) / 1000));
 
   if (!session) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-500">Loading…</div>;
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-500" style={bgStyle}>Loading…</div>;
   }
 
   if (session.phase === "lobby") {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center" style={bgStyle}>
         {playerSettings?.brand_logo_url && (
           <img src={playerSettings.brand_logo_url} alt="" className="h-16 w-16 object-contain rounded-xl" />
         )}
@@ -485,7 +488,7 @@ export default function QuizPlayPage() {
 
   if (earlyNext && session.phase === "question" && pos?.finished) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6" style={bgStyle}>
         <div className="max-w-sm space-y-3">
           <div className="text-6xl">🎉</div>
           <div className="text-xl font-bold text-white">You have answered every question</div>
@@ -497,7 +500,7 @@ export default function QuizPlayPage() {
 
   if (hostPause && session.phase !== "ended") {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6" style={bgStyle}>
         <div className="max-w-sm space-y-3">
           <div className="text-6xl">⏸</div>
           <div className="text-xl font-bold text-white">You are paused</div>
@@ -510,7 +513,7 @@ export default function QuizPlayPage() {
 
   if (session.phase === "paused") {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-center px-6" style={bgStyle}>
         <div>
           <div className="text-3xl mb-2">⏸</div>
           <div className="text-lg font-semibold text-white">Quiz paused by trainer</div>
@@ -585,7 +588,7 @@ export default function QuizPlayPage() {
 
     if (endStep === "splash") {
       return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 px-6 text-center">
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 px-6 text-center" style={bgStyle}>
           {showConfetti && <QuizConfetti />}
           {commonStyles}
           <div className="flex flex-col items-center gap-1 animate-[quiz-pop-in_0.5s_ease-out]">
@@ -608,7 +611,7 @@ export default function QuizPlayPage() {
     }
 
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center gap-3 px-6 py-10 text-center overflow-y-auto">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center gap-3 px-6 py-10 text-center overflow-y-auto" style={bgStyle}>
         {commonStyles}
         <div className="text-xs font-mono text-amber-400">
           Closing in {reviewMins}:{String(reviewSecs).padStart(2, "0")}
@@ -700,7 +703,7 @@ export default function QuizPlayPage() {
   }
 
   if (!question) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-500">Loading question…</div>;
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-500" style={bgStyle}>Loading question…</div>;
   }
 
   const fallbackColors = [
@@ -713,7 +716,7 @@ export default function QuizPlayPage() {
   const fontSize = playerSettings?.option_font_size ?? 16;
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-950 flex flex-col" style={bgStyle}>
       {!connected && (
         <div className="bg-red-500 text-white text-center text-xs font-bold py-1.5 animate-pulse">
           ⚠ Reconnecting… you may be behind — hold on

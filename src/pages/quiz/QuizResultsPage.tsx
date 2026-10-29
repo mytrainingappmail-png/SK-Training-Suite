@@ -12,6 +12,8 @@ import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
 import SessionResultCard from "../../components/quiz/SessionResultCard";
 import GradeBadge from "../../components/quiz/GradeBadge";
 import SelectedResultsModal from "../../components/quiz/SelectedResultsModal";
+import TopicReportModal from "../../components/quiz/TopicReportModal";
+import { loadQuizTopicInputs } from "../../repositories/quiz/quizTopicRepository";
 import { loadRankTitleConfig } from "../../hooks/quiz/useRankTitleConfig";
 import { useQuizLocation, matchesQuizLocation } from "../../services/quiz/quizLocationStore";
 import type {
@@ -76,6 +78,7 @@ export default function QuizResultsPage() {
   const [exportToTime, setExportToTime] = useState("");
   const [excludedExport, setExcludedExport] = useState<Set<string>>(new Set());
   const [viewOpen, setViewOpen] = useState(false);
+  const [topicsOpen, setTopicsOpen] = useState(false);
 
   const [champFrom, setChampFrom] = useState("");
   const [champTo, setChampTo] = useState("");
@@ -742,6 +745,7 @@ export default function QuizResultsPage() {
             <span className="flex-1 text-sm font-semibold text-white">{selectedSessionIds.size} result{selectedSessionIds.size === 1 ? "" : "s"} selected</span>
             <button onClick={() => setViewOpen(true)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500">👁 View</button>
             <button onClick={() => void handleDownloadSelected()} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-300">⬇ Download</button>
+            <button onClick={() => setTopicsOpen(true)} className="rounded-lg border border-slate-600 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800" title="Which topics the team is weak in">📚 Topics</button>
             {canEdit && (
               <button
                 onClick={handleBulkDeleteSessions}
@@ -754,6 +758,15 @@ export default function QuizResultsPage() {
             <button onClick={() => setSelectedSessionIds(new Set())} className="px-1 text-xs text-slate-400 hover:text-white">Clear</button>
           </div>
         </div>
+      )}
+
+      {topicsOpen && selectedResultRows.length > 0 && (
+        <TopicReportModal
+          title={[...new Set(selectedResultRows.map((r) => r.quiz_title))].join(" · ")}
+          load={() => loadQuizTopicInputs(selectedResultRows)}
+          defaultThreshold={selectedResultRows[0].passing_score_pct}
+          onClose={() => setTopicsOpen(false)}
+        />
       )}
 
       {viewOpen && selectedResultRows.length > 0 && (

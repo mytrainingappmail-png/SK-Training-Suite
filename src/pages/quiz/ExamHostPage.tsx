@@ -17,6 +17,8 @@ import {
   getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant, getExamSessionFlags,
 } from "../../repositories/exam/examAdminRepository";
 import { practiceLeave } from "../../repositories/quiz/quizSessionRepository";
+import TopicReportModal from "../../components/quiz/TopicReportModal";
+import { loadExamTopicInput } from "../../repositories/quiz/quizTopicRepository";
 import type { ExamSessionAdmin, ExamParticipantAdmin, ExamResultRow, ExamDetailRow, ExamQuestionStat, ExamLiveRow, ExamLiveQuestion } from "../../types/exam";
 
 const POLL_MS = 4000;
@@ -43,6 +45,7 @@ export default function ExamHostPage() {
   const [session, setSession] = useState<ExamSessionAdmin | null>(null);
   const [participants, setParticipants] = useState<ExamParticipantAdmin[]>([]);
   const [results, setResults] = useState<ExamResultRow[] | null>(null);
+  const [topicsOpen, setTopicsOpen] = useState(false);
   const [stats, setStats] = useState<ExamQuestionStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -558,6 +561,7 @@ export default function ExamHostPage() {
                   </select>
                 )}
                 {!isPractice && <button onClick={exportCsv} className="text-xs font-semibold text-slate-200 border border-slate-700 hover:bg-slate-800 rounded-lg px-3 py-1.5">⬇ Download CSV</button>}
+                <button onClick={() => setTopicsOpen(true)} className="text-xs font-semibold text-slate-200 border border-slate-700 hover:bg-slate-800 rounded-lg px-3 py-1.5" title="Which topics the candidates are weak in">📚 Topics</button>
                 <button
                   onClick={() => { if (!session.results_released && pendingTotal > 0 && !confirm(`${pendingTotal} written answer(s) are still unmarked and will show as 0. Share results anyway?`)) return; void act(() => releaseExamResults(sessionId, !session.results_released)); }}
                   disabled={busy}
@@ -726,6 +730,14 @@ export default function ExamHostPage() {
             </div>
           </div>
         </div>
+      )}
+      {topicsOpen && session && (
+        <TopicReportModal
+          title={session.quiz_title}
+          load={async () => [await loadExamTopicInput(session.session_id, session.quiz_id)]}
+          defaultThreshold={session.passing_score_pct}
+          onClose={() => setTopicsOpen(false)}
+        />
       )}
     </div>
   );

@@ -104,6 +104,8 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
     questionHi: col("question_hindi"),
     explanationHi: col("explanation_hindi"),
     optHi: [1, 2, 3, 4, 5, 6].map((n) => col(`option${n}_hindi`)),
+    // optional Topic column (written by "Download this test" when questions have topics)
+    topic: col("topic"),
   };
 
   if (idx.question === -1 || idx.correct === -1) {
@@ -153,6 +155,7 @@ export function csvRowsToQuestions(rows: string[][]): CsvImportResult {
       timer_seconds: Number.isFinite(timer) && timer > 0 ? timer : null,
       marks: Number.isFinite(marks) && marks > 0 ? marks : 1,
       explanation: idx.explanation >= 0 ? (r[idx.explanation] ?? "").trim() : "",
+      topic: idx.topic >= 0 ? (r[idx.topic] ?? "").trim().slice(0, 60) || null : null,
       question_text_hi: idx.questionHi >= 0 ? (r[idx.questionHi] ?? "").trim() || null : null,
       explanation_hi: idx.explanationHi >= 0 ? (r[idx.explanationHi] ?? "").trim() || null : null,
       is_hidden: false,

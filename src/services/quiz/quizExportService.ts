@@ -11,6 +11,8 @@ export interface ExportQuestion {
   question_text: string;
   question_text_hi?: string | null;
   explanation_hi?: string | null;
+  /** What the question is about (optional) - written as a Topic column when any question has one. */
+  topic?: string | null;
   type: QuizQuestionType;
   /** The question's own timer (null = follows the quiz timer). */
   timer_seconds: number | null;
@@ -94,11 +96,13 @@ export function buildQuizCsv(quiz: ExportQuiz): string {
   const optionCount = Math.min(MAX_CSV_OPTIONS, Math.max(4, ...qs.map((q) => q.options.length)));
   // the Hindi columns are only added when at least one question has a Hindi version
   const anyHindi = qs.some((q) => q.question_text_hi?.trim() || q.explanation_hi?.trim() || q.options.some((o) => o.option_text_hi?.trim()));
+  const anyTopic = qs.some((q) => q.topic?.trim());
   const header = [
     "Question", "Type",
     ...Array.from({ length: optionCount }, (_, i) => `Option${i + 1}`),
     "CorrectAnswer", "Timer", "Marks", "Explanation", "ImageURL",
     ...(anyHindi ? ["Question_Hindi", ...Array.from({ length: optionCount }, (_, i) => `Option${i + 1}_Hindi`), "Explanation_Hindi"] : []),
+    ...(anyTopic ? ["Topic"] : []),
   ];
   const rows = qs.map((q) => [
     q.question_text,
@@ -117,6 +121,7 @@ export function buildQuizCsv(quiz: ExportQuiz): string {
           q.explanation_hi ?? "",
         ]
       : []),
+    ...(anyTopic ? [q.topic ?? ""] : []),
   ]);
   return [header, ...rows].map((line) => line.map((v) => csvEscape(String(v))).join(",")).join("\r\n");
 }

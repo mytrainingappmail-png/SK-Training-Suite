@@ -14,7 +14,8 @@ import QuizDownloadMenu from "../../components/quiz/QuizDownloadMenu";
 import type { ExportQuiz } from "../../services/quiz/quizExportService";
 import type { HotspotZone } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
-import { hindiOf, optionWithHindi, originOf } from "../../repositories/quiz/quizRepository";
+import { hindiOf, listTopics, optionWithHindi, originOf, topicOf } from "../../repositories/quiz/quizRepository";
+import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField";
 import QuestionHindiPanel from "../../components/quiz/QuestionHindiPanel";
 import QuestionTransferModal, { type TransferRequest, type TransferOutcome } from "../../components/quiz/QuestionTransferModal";
 import SyncChoiceModal, { type SyncItem } from "../../components/quiz/SyncChoiceModal";
@@ -74,6 +75,8 @@ const DEFAULT_FORM: QuizForm = {
   exam_duration_minutes: null,
   reveal_answers: null,
   allow_early_next: null,
+  bg_kind: null,
+  bg_image_url: null,
   location_id: undefined, // new quiz: follows the location switch at the top until chosen here
 };
 
@@ -118,6 +121,10 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
 
   // questions ticked for "new test / copy / move", where each question is also used, and what each looked like when it was loaded or last saved
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // topics this company already uses (suggestions while typing) and the one being typed for the ticked questions
+  const [topicChoices, setTopicChoices] = useState<string[]>([]);
+  const [bulkTopic, setBulkTopic] = useState("");
+  useEffect(() => { void listTopics().then(setTopicChoices); }, []);
   const [transferOpen, setTransferOpen] = useState(false);
   const [links, setLinks] = useState<Map<string, QuestionLink[]>>(new Map());
   const baseline = useRef<Map<string, string>>(new Map());
@@ -156,6 +163,8 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           exam_duration_minutes: quiz.exam_duration_minutes,
           reveal_answers: quiz.reveal_answers ?? null,
           allow_early_next: quiz.allow_early_next ?? null,
+          bg_kind: quiz.bg_kind ?? null,
+          bg_image_url: quiz.bg_image_url ?? null,
           location_id: quiz.location_id ?? null,
         });
         const loadedQuestions: EditableQuestion[] =
@@ -172,6 +181,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
                 source_question_id: q.source_question_id,
                 ...originOf(q),
                 ...hindiOf(q),
+                ...topicOf(q),
                 options: q.options.map(optionWithHindi),
                 image_url: q.image_url,
                 target_x: q.target_x,
@@ -465,6 +475,7 @@ It is removed from this screen only - nothing is permanent until you click Save 
           marks: q.marks,
           explanation: q.explanation,
           ...hindiOf(q),
+          ...topicOf(q),
           is_hidden: q.is_hidden,
           options: q.options.map(optionWithHindi),
           image_url: q.image_url,
@@ -961,6 +972,30 @@ It is removed from this screen only - nothing is permanent until you click Save 
             </p>
           </div>
         )}
+        <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">🖼️ Background behind the questions (trainee's screen)</label>
+          <select
+            className="w-full sm:max-w-md rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+            value={form.bg_kind ?? "default"}
+            onChange={(e) => setForm({ ...form, bg_kind: e.target.value === "default" ? null : (e.target.value as "none" | "logo" | "image") })}
+          >
+            <option value="default">Follow my default setting</option>
+            <option value="none">None — plain screen for this {isExam ? "exam" : "quiz"}</option>
+            <option value="logo">Company logo, faded</option>
+            <option value="image">An image of my own for this {isExam ? "exam" : "quiz"}…</option>
+          </select>
+          {form.bg_kind === "image" && admin && (
+            <QuizBrandingImageField
+              label="Image for this background"
+              hint="Kept faint and under a dark layer so the text stays readable. Strength and position come from Quiz Settings → Background."
+              value={form.bg_image_url ?? null}
+              kind="screen-background"
+              companyId={admin.company_id}
+              onChange={(url) => setForm({ ...form, bg_image_url: url })}
+            />
+          )}
+          <p className="text-xs text-slate-500">Your default (and the optional trainee-name watermark) is in Quiz Settings → Background behind the Questions.</p>
+        </div>
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
@@ -1107,6 +1142,29 @@ It is removed from this screen only - nothing is permanent until you click Save 
                 >
                   ✨ New test · 📋 Copy · ➡ Move…
                 </button>
+                <span className="flex items-center gap-1.5">
+                  <input
+                    list="quiz-topic-choices"
+                    value={bulkTopic}
+                    maxLength={60}
+                    onChange={(e) => setBulkTopic(e.target.value)}
+                    placeholder="Topic for these…"
+                    className="w-40 rounded-lg bg-slate-800 border border-slate-700 px-2 py-1.5 text-xs text-white outline-none focus:border-violet-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={!bulkTopic.trim()}
+                    onClick={() => {
+                      const topic = bulkTopic.trim();
+                      setQuestions((prev) => prev.map((q) => (selected.has(q.localId) ? { ...q, topic } : q)));
+                      setTopicChoices((prev) => (prev.includes(topic) ? prev : [topic, ...prev]));
+                      setBulkTopic("");
+                    }}
+                    className="rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    🏷 Set topic
+                  </button>
+                </span>
                 <button type="button" onClick={() => setSelected(new Set())} className="text-xs font-semibold text-slate-400 hover:text-white">Clear</button>
               </>
             )}
@@ -1355,10 +1413,29 @@ It is removed from this screen only - nothing is permanent until you click Save 
               onChange={(e) => updateQuestion(q.localId, { explanation: e.target.value })}
             />
 
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs font-semibold text-slate-400">🏷 Topic</span>
+              <input
+                list="quiz-topic-choices"
+                maxLength={60}
+                className="w-full sm:max-w-xs rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-violet-500"
+                placeholder="optional - e.g. RERA, Payment plan"
+                value={q.topic ?? ""}
+                onChange={(e) => updateQuestion(q.localId, { topic: e.target.value })}
+                onBlur={(e) => {
+                  const t = e.target.value.trim();
+                  if (t && !topicChoices.includes(t)) setTopicChoices((prev) => [t, ...prev]);
+                }}
+              />
+            </div>
+
             <QuestionHindiPanel question={q} onChange={(patch) => updateQuestion(q.localId, patch)} />
           </div>
         ))}
       </fieldset>
+      <datalist id="quiz-topic-choices">
+        {topicChoices.map((t) => <option key={t} value={t} />)}
+      </datalist>
 
       {canEdit ? (
       <div className="flex gap-3 justify-end sticky bottom-4">

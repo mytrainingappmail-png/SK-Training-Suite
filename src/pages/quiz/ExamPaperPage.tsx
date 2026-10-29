@@ -1,3 +1,4 @@
+import { backgroundStyle } from "../../utils/quizBackground";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RANK_BADGE_CLASS, type RankTitle } from "../../utils/rankTitles";
 import { useNavigate, useParams } from "react-router-dom";
@@ -560,6 +561,8 @@ export default function ExamPaperPage() {
 
   // ── Screens ─────────────────────────────────────────────────────────────
   const shell = "min-h-screen bg-slate-950 text-white";
+  // the trainer's chosen background behind the questions (a faded logo / image, and optionally this candidate's own name)
+  const bgStyle = backgroundStyle(branding?.bg, state?.display_name);
 
   // the Hindi version, for the questions the trainer wrote one for (the English text is what the server sends)
   const lang = useQuizLang();
@@ -575,11 +578,11 @@ export default function ExamPaperPage() {
     options: m.options.map((o) => ({ ...o, text: (hi && tr.option(o.id)) || o.text })),
   }));
 
-  if (phase === "loading") return <div className={`${shell} flex items-center justify-center text-slate-500`}>Loading…</div>;
+  if (phase === "loading") return <div className={`${shell} flex items-center justify-center text-slate-500`} style={bgStyle}>Loading…</div>;
 
   if (phase === "error") {
     return (
-      <div className={`${shell} flex items-center justify-center px-4`}>
+      <div className={`${shell} flex items-center justify-center px-4`} style={bgStyle}>
         <div className="max-w-sm text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
           <p className="text-sm text-red-300 mb-4">{error}</p>
           <button onClick={() => navigate(ROUTES.EXAM_JOIN)} className="text-sm font-semibold bg-violet-600 hover:bg-violet-500 rounded-lg px-4 py-2.5">Back</button>
@@ -595,7 +598,7 @@ export default function ExamPaperPage() {
         : DEFAULT_MOTIVATIONAL_WORDS
     );
     return (
-      <div className={`${shell} relative flex items-center justify-center px-4 overflow-hidden`}>
+      <div className={`${shell} relative flex items-center justify-center px-4 overflow-hidden`} style={bgStyle}>
         {lobbyWords && lobbyWords.length > 0 && <FallingWords words={lobbyWords} />}
         <div className="relative max-w-sm w-full text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
           <div className="h-2.5 w-2.5 rounded-full bg-amber-400 mx-auto mb-3 animate-pulse" />
@@ -627,7 +630,7 @@ export default function ExamPaperPage() {
 
   if (phase === "submitted" && state) {
     return (
-      <div className={`${shell} flex items-center justify-center px-4`}>
+      <div className={`${shell} flex items-center justify-center px-4`} style={bgStyle}>
         <div className="max-w-sm w-full text-center bg-slate-900 border border-slate-800 rounded-2xl p-8">
           <div className="text-5xl mb-3">✅</div>
           <h1 className="text-lg font-bold mb-1">Submitted, {state.display_name}!</h1>
@@ -644,7 +647,7 @@ export default function ExamPaperPage() {
     const pct = possible > 0 ? Math.round((total / possible) * 1000) / 10 : 0;
     const passed = pct >= state.passing_score_pct;
     return (
-      <div className={`${shell} px-4 py-8`}>
+      <div className={`${shell} px-4 py-8`} style={bgStyle}>
         <div className="max-w-lg mx-auto space-y-4">
           <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <p className="text-xs uppercase tracking-widest text-slate-500 mb-1">{state.quiz_title}</p>
@@ -690,7 +693,7 @@ export default function ExamPaperPage() {
   const unanswered = paper.length - answeredCount;
 
   return (
-    <div className={`${shell} pb-28`}>
+    <div className={`${shell} pb-28`} style={bgStyle}>
       {paused && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/97 px-5 text-center">
           <div className="max-w-sm space-y-3">

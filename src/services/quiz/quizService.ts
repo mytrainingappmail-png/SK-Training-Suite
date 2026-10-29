@@ -1,7 +1,7 @@
 import * as quizRepo from "../../repositories/quiz/quizRepository";
 import type { Quiz, QuizWithQuestions } from "../../types/quiz";
 import type { QuizForm, QuestionForm } from "../../repositories/quiz/quizRepository";
-import { hindiOf, optionWithHindi, originOf } from "../../repositories/quiz/quizRepository";
+import { hindiOf, optionWithHindi, originOf, topicOf } from "../../repositories/quiz/quizRepository";
 
 export async function listQuizzes(companyId: string): Promise<Quiz[]> {
   return quizRepo.listQuizzes(companyId);
@@ -145,6 +145,8 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     exam_duration_minutes: source.exam_duration_minutes,
     reveal_answers: source.reveal_answers ?? null,
     allow_early_next: source.allow_early_next ?? null,
+    bg_kind: source.bg_kind ?? null,
+    bg_image_url: source.bg_image_url ?? null,
     location_id: source.location_id ?? null,
   });
 
@@ -161,6 +163,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
         source_label: q.source_label,
         source_question_id: q.source_question_id,
         ...hindiOf(q),
+        ...topicOf(q),
         options: q.options.map(optionWithHindi),
         image_url: q.image_url,
         target_x: q.target_x,
@@ -191,6 +194,7 @@ function toMergedQuestionForm(q: { title: string }, question: QuizWithQuestions[
     source_question_id: question.id,
     ...originOf(question),
     ...hindiOf(question),
+    ...topicOf(question),
     options: question.options.map(optionWithHindi),
     image_url: question.image_url,
     target_x: question.target_x,
@@ -213,6 +217,7 @@ function toCarriedQuestionForm(question: QuizWithQuestions["questions"][number])
     source_question_id: question.source_question_id,
     ...originOf(question),
     ...hindiOf(question),
+    ...topicOf(question),
     options: question.options.map(optionWithHindi),
     image_url: question.image_url,
     target_x: question.target_x,
@@ -356,6 +361,7 @@ export async function resyncQuestionFromSource(
     marks: source.marks,
     explanation: source.explanation,
     ...hindiOf(source),
+    ...topicOf(source),
     options: source.options.map(optionWithHindi),
     image_url: source.image_url,
     target_x: source.target_x,

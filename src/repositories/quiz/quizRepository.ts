@@ -1,5 +1,5 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
-import type { Quiz, QuizQuestion, QuizWithQuestions, HotspotZone } from "../../types/quiz";
+import type { Quiz, QuizQuestion, QuizWithQuestions, HotspotZone, QuizBackgroundKind } from "../../types/quiz";
 
 export interface QuizForm {
   title: string;
@@ -20,6 +20,9 @@ export interface QuizForm {
   /** null / absent = follow the company default */
   reveal_answers?: boolean | null;
   allow_early_next?: boolean | null;
+  /** Background behind the questions on the trainee's screen: null / absent = follow the company default. */
+  bg_kind?: QuizBackgroundKind | null;
+  bg_image_url?: string | null;
   /** Where this quiz / exam is for (null = no location). */
   location_id?: string | null;
 }
@@ -36,6 +39,26 @@ export function hindiOf(q: { question_text_hi?: string | null; explanation_hi?: 
   return { question_text_hi: q.question_text_hi ?? null, explanation_hi: q.explanation_hi ?? null };
 }
 
+/** Every topic this company has used on its questions (for the suggestions while typing a topic), most used first. */
+export async function listTopics(): Promise<string[]> {
+  const { data, error } = await supabaseQuiz.from("quiz_questions").select("topic").not("topic", "is", null).limit(5000);
+  if (error) {
+    console.error("[quizRepository] listTopics:", error);
+    return [];
+  }
+  const counts = new Map<string, number>();
+  for (const r of data ?? []) {
+    const t = (r.topic as string | null)?.trim();
+    if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+}
+
+/** The topic of a question, carried along wherever a question is copied, merged, backed up or restored. */
+export function topicOf(q: { topic?: string | null }): { topic: string | null } {
+  return { topic: q.topic?.trim() || null };
+}
+
 /** The identity of a question, carried along when a question is copied INTO another test so the copies stay linked. */
 export function originOf(q: { origin_uid?: string | null; home_quiz_id?: string | null }): { origin_uid: string | null; home_quiz_id: string | null } {
   return { origin_uid: q.origin_uid ?? null, home_quiz_id: q.home_quiz_id ?? null };
@@ -49,6 +72,8 @@ export interface QuestionForm {
   /** Shared by every copy of this question in other tests; null/absent = a new question gets its own. */
   origin_uid?: string | null;
   home_quiz_id?: string | null;
+  /** What the question is about (optional) - feeds the topic report. */
+  topic?: string | null;
   question_text: string;
   question_text_hi?: string | null;
   type: QuizQuestion["type"];
@@ -259,6 +284,7 @@ async function insertQuestionRows(quizId: string, questions: QuestionForm[], sta
         quiz_id: quizId,
         origin_uid: q.origin_uid ?? crypto.randomUUID(),
         home_quiz_id: q.home_quiz_id ?? quizId,
+        topic: q.topic?.trim() || null,
         question_text: q.question_text,
         question_text_hi: q.question_text_hi?.trim() || null,
         type: q.type,

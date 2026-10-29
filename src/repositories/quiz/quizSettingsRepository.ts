@@ -44,6 +44,12 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   exam_reveal_answers: true,
   quiz_reveal_answers: true,
   quiz_allow_early_next: false,
+  bg_kind: "none",
+  bg_image_url: null,
+  bg_opacity: 10,
+  bg_layout: "center",
+  bg_name_watermark: false,
+  bg_name_opacity: 6,
   exam_hotspot_feedback_seconds: 3,
   exam_hotspot_feedback_size: "small",
 };
