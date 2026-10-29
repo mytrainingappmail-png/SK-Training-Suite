@@ -7,7 +7,8 @@ import { parseRankTitles, type RankTitleConfig } from "../../utils/rankTitles";
 
 const cache = new Map<string, Promise<RankTitleConfig>>();
 
-function load(companyId: string): Promise<RankTitleConfig> {
+/** The company's top-rank wording, loaded once and shared (also used when a report is built, so a download never misses it). */
+export function loadRankTitleConfig(companyId: string): Promise<RankTitleConfig> {
   let p = cache.get(companyId);
   if (!p) {
     p = getSettings(companyId)
@@ -29,7 +30,7 @@ export function useRankTitleConfig(): RankTitleConfig | null {
   useEffect(() => {
     if (!companyId) return;
     let cancelled = false;
-    void load(companyId).then((c) => { if (!cancelled) setConfig(c); });
+    void loadRankTitleConfig(companyId).then((c) => { if (!cancelled) setConfig(c); });
     return () => { cancelled = true; };
   }, [companyId]);
   return config;

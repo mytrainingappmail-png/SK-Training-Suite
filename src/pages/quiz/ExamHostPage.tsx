@@ -4,6 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
 import GradeBadge from "../../components/quiz/GradeBadge";
+import { useRankTitleConfig } from "../../hooks/quiz/useRankTitleConfig";
+import { resultLabel } from "../../services/quiz/quizReportService";
 import { ZoneOverlay, pointInZone } from "../../components/quiz/hotspotZones";
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
 import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
@@ -274,13 +276,16 @@ export default function ExamHostPage() {
   const pendingTotal = ranked.reduce((s, r) => s + r.pending_written, 0);
   // rank by total marks, equal marks share a rank
   const rankOfResult = (r: ExamResultRow) => 1 + ranked.filter((o) => totalOf(o) > totalOf(r)).length;
+  const rankTitles = useRankTitleConfig();
 
   function exportCsv() {
     if (!session) return;
     const head = ["Rank", "Name", "Auto marks", "Written marks", "Total", "Out of", "Percent", "Result", "Written pending", "Tab switches", "Submitted", "How"];
     const lines = ranked.map((r, i) => [
       String(i + 1), r.display_name, String(r.auto_marks), String(r.manual_marks), String(totalOf(r)), String(r.possible_marks), `${pctOf(r)}%`,
-      pctOf(r) >= session.passing_score_pct ? "Pass" : "Fail", String(r.pending_written), String(r.tab_switches),
+      pctOf(r) >= session.passing_score_pct
+        ? resultLabel({ rank: rankOfResult(r), grade: "PASS", open_link_id: isOpenLink ? "x" : null }, rankTitles).replace(/^PASS$/, "Pass")
+        : "Fail", String(r.pending_written), String(r.tab_switches),
       r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "", r.submit_reason ?? "",
     ]);
     const csv = [head, ...lines].map((row) => row.map(csvEscape).join(",")).join("\r\n");

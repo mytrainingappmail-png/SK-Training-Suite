@@ -11,6 +11,8 @@ import { downloadCsvFile } from "../../services/quiz/quizCsvService";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
 import SessionResultCard from "../../components/quiz/SessionResultCard";
 import GradeBadge from "../../components/quiz/GradeBadge";
+import SelectedResultsModal from "../../components/quiz/SelectedResultsModal";
+import { loadRankTitleConfig } from "../../hooks/quiz/useRankTitleConfig";
 import { useQuizLocation, matchesQuizLocation } from "../../services/quiz/quizLocationStore";
 import type {
   QuizSession,
@@ -22,11 +24,11 @@ import type {
   CertEligibility,
 } from "../../types/quiz";
 
-function toIsoStart(dateStr: string): string | undefined {
-  return dateStr ? new Date(`${dateStr}T00:00:00`).toISOString() : undefined;
+function toIsoStart(dateStr: string, timeStr = ""): string | undefined {
+  return dateStr ? new Date(`${dateStr}T${timeStr || "00:00"}:00`).toISOString() : undefined;
 }
-function toIsoEnd(dateStr: string): string | undefined {
-  return dateStr ? new Date(`${dateStr}T23:59:59.999`).toISOString() : undefined;
+function toIsoEnd(dateStr: string, timeStr = ""): string | undefined {
+  return dateStr ? new Date(`${dateStr}T${timeStr || "23:59"}:59.999`).toISOString() : undefined;
 }
 function inRange(iso: string | null, fromIso?: string, toIso?: string): boolean {
   if (!iso) return false;
@@ -69,6 +71,11 @@ export default function QuizResultsPage() {
 
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
+  // two tests on one day: the time narrows it down, and a test can be un-ticked from the list below
+  const [exportFromTime, setExportFromTime] = useState("");
+  const [exportToTime, setExportToTime] = useState("");
+  const [excludedExport, setExcludedExport] = useState<Set<string>>(new Set());
+  const [viewOpen, setViewOpen] = useState(false);
 
   const [champFrom, setChampFrom] = useState("");
   const [champTo, setChampTo] = useState("");
@@ -141,12 +148,23 @@ export default function QuizResultsPage() {
     [unfiledResults]
   );
 
-  const exportFromIso = toIsoStart(exportFrom);
-  const exportToIso = toIsoEnd(exportTo);
-  const exportRows = useMemo(
+  const exportFromIso = toIsoStart(exportFrom, exportFromTime);
+  const exportToIso = toIsoEnd(exportTo, exportToTime);
+  const exportRangeRows = useMemo(
     () => unfiledResults.filter((r) => inRange(r.ended_at, exportFromIso, exportToIso)),
     [unfiledResults, exportFromIso, exportToIso]
   );
+  // the tests that fall in the range (oldest first), so it is clear which ones a download will contain
+  const exportSessions = useMemo(() => {
+    const map = new Map<string, { id: string; title: string; endedAt: string; count: number }>();
+    for (const r of exportRangeRows) {
+      const known = map.get(r.session_id);
+      if (known) known.count += 1;
+      else map.set(r.session_id, { id: r.session_id, title: r.quiz_title, endedAt: r.ended_at ?? "", count: 1 });
+    }
+    return [...map.values()].sort((a, b) => a.endedAt.localeCompare(b.endedAt));
+  }, [exportRangeRows]);
+  const exportRows = useMemo(() => exportRangeRows.filter((r) => !excludedExport.has(r.session_id)), [exportRangeRows, excludedExport]);
   const exportSessionCount = useMemo(() => new Set(exportRows.map((r) => r.session_id)).size, [exportRows]);
 
   const perfFromIso = toIsoStart(perfFrom);
@@ -266,9 +284,18 @@ export default function QuizResultsPage() {
     }
   }
 
-  function handleDetailedReport() {
+  async function handleDetailedReport() {
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadCsvFile(`quiz-detailed-report-${stamp}.csv`, buildDetailedReportCsv(exportRows));
+    const titles = admin ? await loadRankTitleConfig(admin.company_id) : null;
+    downloadCsvFile(`quiz-detailed-report-${stamp}.csv`, buildDetailedReportCsv(exportRows, titles));
+  }
+
+  const selectedResultRows = useMemo(() => allResults.filter((r) => selectedSessionIds.has(r.session_id)), [allResults, selectedSessionIds]);
+
+  async function handleDownloadSelected() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const titles = admin ? await loadRankTitleConfig(admin.company_id) : null;
+    downloadCsvFile(`quiz-results-${stamp}.csv`, buildDetailedReportCsv(selectedResultRows, titles));
   }
 
   function handleTraineeSummary() {
@@ -276,9 +303,10 @@ export default function QuizResultsPage() {
     downloadCsvFile(`quiz-trainee-summary-${stamp}.csv`, buildTraineeSummaryCsv(exportRows));
   }
 
-  function handlePerformanceDownload() {
+  async function handlePerformanceDownload() {
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadCsvFile(`quiz-performance-${stamp}.csv`, buildDetailedReportCsv(perfRows));
+    const titles = admin ? await loadRankTitleConfig(admin.company_id) : null;
+    downloadCsvFile(`quiz-performance-${stamp}.csv`, buildDetailedReportCsv(perfRows, titles));
   }
 
   function applyQuickFilter(kind: "lastWeek" | "lastMonth" | "thisWeek" | "thisMonth") {
@@ -350,7 +378,7 @@ export default function QuizResultsPage() {
       {/* Export Reports */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
         <h2 className="font-semibold text-white">📄 Export Reports (Excel/CSV)</h2>
-        <p className="text-xs text-slate-500">Choose a date range — leave blank for all time</p>
+        <p className="text-xs text-slate-500">Choose a date range — leave blank for all time. Two tests on the same day? Add a time too, or untick the one you do not want below.</p>
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-xs text-slate-400">From</label>
           <input
@@ -359,12 +387,28 @@ export default function QuizResultsPage() {
             value={exportFrom}
             onChange={(e) => setExportFrom(e.target.value)}
           />
+          <input
+            type="time"
+            title="From time (optional)"
+            disabled={!exportFrom}
+            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-40"
+            value={exportFromTime}
+            onChange={(e) => setExportFromTime(e.target.value)}
+          />
           <label className="text-xs text-slate-400">To</label>
           <input
             type="date"
             className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
             value={exportTo}
             onChange={(e) => setExportTo(e.target.value)}
+          />
+          <input
+            type="time"
+            title="To time (optional)"
+            disabled={!exportTo}
+            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-40"
+            value={exportToTime}
+            onChange={(e) => setExportToTime(e.target.value)}
           />
           <button
             onClick={handleDetailedReport}
@@ -384,6 +428,34 @@ export default function QuizResultsPage() {
         <div className="text-xs text-emerald-300">
           ✅ {exportSessionCount} session{exportSessionCount === 1 ? "" : "s"} · {exportRows.length} trainee entries in range
         </div>
+        {exportSessions.length > 0 && (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+            <div className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tests in this range (untick to leave one out)</div>
+            <div className="max-h-44 space-y-0.5 overflow-y-auto">
+              {exportSessions.map((t) => (
+                <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-800/60">
+                  <input
+                    type="checkbox"
+                    checked={!excludedExport.has(t.id)}
+                    onChange={() =>
+                      setExcludedExport((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(t.id)) next.delete(t.id);
+                        else next.add(t.id);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="shrink-0 font-mono text-slate-300">
+                    {t.endedAt ? new Date(t.endedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : ""}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-white">{t.title}</span>
+                  <span className="shrink-0 text-slate-500">{t.count} trainee{t.count === 1 ? "" : "s"}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Champions */}
@@ -564,34 +636,15 @@ export default function QuizResultsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {canEdit && (
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={selectAllSessions}
-                className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5"
-              >
-                ☑ Select All ({unfiledSessions.length})
-              </button>
-              {selectedSessionIds.size > 0 && (
-                <>
-                  <span className="text-xs text-slate-400">{selectedSessionIds.size} selected</span>
-                  <button
-                    onClick={handleBulkDeleteSessions}
-                    disabled={bulkDeletingSessions}
-                    className="text-xs font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg px-3 py-1.5"
-                  >
-                    {bulkDeletingSessions ? "Deleting…" : "🗑 Delete Selected"}
-                  </button>
-                  <button
-                    onClick={() => setSelectedSessionIds(new Set())}
-                    className="text-xs text-slate-400 hover:text-white px-1"
-                  >
-                    Clear
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={selectAllSessions}
+              className="text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-1.5"
+            >
+              ☑ Select All ({unfiledSessions.length})
+            </button>
+            <span className="text-[11px] text-slate-500">Tick a result to view it or download it.</span>
+          </div>
 
           {unfiledSessions.map((s) => {
             const rows = allResults.filter((r) => r.session_id === s.id);
@@ -608,16 +661,17 @@ export default function QuizResultsPage() {
                 certEligibility={certEligibility}
                 companyId={admin?.company_id ?? null}
                 actions={
-                  canEdit ? (
+                  (
                     <div className="relative flex items-center gap-1 shrink-0">
                       <input
                         type="checkbox"
                         checked={selectedSessionIds.has(s.id)}
                         onChange={() => toggleSessionSelected(s.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="mr-1 h-4 w-4"
+                        className="mr-1 h-5 w-5 accent-violet-500"
                         aria-label="Select this session"
                       />
+                      {canEdit && (<>
                       <button
                         onClick={() => {
                           setMovingSessionId(isMoveOpen ? null : s.id);
@@ -672,13 +726,38 @@ export default function QuizResultsPage() {
                           </div>
                         </div>
                       )}
+                      </>)}
                     </div>
-                  ) : undefined
+                  )
                 }
               />
             );
           })}
         </div>
+      )}
+
+      {selectedSessionIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 z-40 w-[92%] max-w-lg -translate-x-1/2 rounded-2xl border border-violet-500 bg-slate-900 p-4 shadow-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex-1 text-sm font-semibold text-white">{selectedSessionIds.size} result{selectedSessionIds.size === 1 ? "" : "s"} selected</span>
+            <button onClick={() => setViewOpen(true)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500">👁 View</button>
+            <button onClick={() => void handleDownloadSelected()} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-300">⬇ Download</button>
+            {canEdit && (
+              <button
+                onClick={handleBulkDeleteSessions}
+                disabled={bulkDeletingSessions}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {bulkDeletingSessions ? "Deleting…" : "🗑"}
+              </button>
+            )}
+            <button onClick={() => setSelectedSessionIds(new Set())} className="px-1 text-xs text-slate-400 hover:text-white">Clear</button>
+          </div>
+        </div>
+      )}
+
+      {viewOpen && selectedResultRows.length > 0 && (
+        <SelectedResultsModal rows={selectedResultRows} onDownload={() => void handleDownloadSelected()} onClose={() => setViewOpen(false)} />
       )}
 
       {revealChampions && (

@@ -2,6 +2,7 @@
 // over already-fetched QuizSessionResultRow[], no extra DB round-trips.
 
 import { csvEscape } from "./quizCsvService";
+import { rankTitleFor, type RankTitleConfig } from "../../utils/rankTitles";
 import type { QuizSessionResultRow, ChampionRow } from "../../types/quiz";
 
 function formatDate(iso: string | null): string {
@@ -10,11 +11,48 @@ function formatDate(iso: string | null): string {
   return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 }
 
-/** One row per participant per session — the "Detailed Report" / Performance table shape. */
-export function buildDetailedReportCsv(rows: QuizSessionResultRow[]): string {
-  const header = ["Date", "Test Name", "Trainee", "Score", "Correct", "Total", "Marks", "Total Marks", "Percent", "Rank", "Result"];
-  const lines = [header, ...rows.map((r) => [
+function formatTime(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase();
+}
+
+/** The trainer's rank wording is written for screens ("🏆 TOPPER"); in a spreadsheet only the words are wanted. */
+function plainWords(text: string): string {
+  const cleaned = text.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "").replace(/\s+/g, " ").trim();
+  return cleaned || text;
+}
+
+/** What the Result column says: the top three passing results get the trainer's own rank word (TOPPER, 2nd RANK, 3rd RANK), everyone else PASS / NEED IMPROVEMENT / FAIL. */
+export function resultLabel(r: Pick<QuizSessionResultRow, "rank" | "grade" | "open_link_id">, config: RankTitleConfig | null | undefined): string {
+  const title = rankTitleFor(r.rank, r.grade, config, !!r.open_link_id);
+  return title ? plainWords(title.badge) : r.grade.replace("_", " ");
+}
+
+/** One test after the other (oldest first), and inside each test the best result first - rank 1 at the top, then 2, 3 ... */
+export function sortResultsForReport(rows: QuizSessionResultRow[]): QuizSessionResultRow[] {
+  const sessionTime = new Map<string, string>();
+  for (const r of rows) {
+    const t = r.ended_at ?? "";
+    const known = sessionTime.get(r.session_id);
+    if (known === undefined || t < known) sessionTime.set(r.session_id, t);
+  }
+  const rankKey = (r: QuizSessionResultRow) => (r.open_link_id ? Number.MAX_SAFE_INTEGER : r.rank);
+  return rows.slice().sort(
+    (a, b) =>
+      (sessionTime.get(a.session_id) ?? "").localeCompare(sessionTime.get(b.session_id) ?? "") ||
+      a.session_id.localeCompare(b.session_id) ||
+      rankKey(a) - rankKey(b) ||
+      b.percent_correct - a.percent_correct ||
+      a.display_name.localeCompare(b.display_name)
+  );
+}
+
+/** One row per participant per session — the "Detailed Report" / Performance table shape. Best result first inside each test. */
+export function buildDetailedReportCsv(rows: QuizSessionResultRow[], rankTitles?: RankTitleConfig | null): string {
+  const header = ["Date", "Time", "Test Name", "Trainee", "Score", "Correct", "Total", "Marks", "Total Marks", "Percent", "Rank", "Result"];
+  const lines = [header, ...sortResultsForReport(rows).map((r) => [
     formatDate(r.ended_at),
+    formatTime(r.ended_at),
     r.quiz_title,
     r.display_name,
     String(r.score),
@@ -24,7 +62,7 @@ export function buildDetailedReportCsv(rows: QuizSessionResultRow[]): string {
     r.marks_obtained != null && r.total_marks != null ? String(r.total_marks) : "",
     `${r.percent_correct}%`,
     r.open_link_id ? "" : String(r.rank),
-    r.grade.replace("_", " "),
+    resultLabel(r, rankTitles),
   ])];
   return lines.map((line) => line.map((v) => csvEscape(String(v))).join(",")).join("\r\n");
 }
