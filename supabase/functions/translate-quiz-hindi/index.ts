@@ -25,18 +25,28 @@ const clean = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").tr
 const DEVANAGARI = /[ऀ-ॿ]/g;
 const LATIN = /[A-Za-z]/g;
 
-/** True when a translation really is Hindi script: enough Devanagari letters, not just the English text handed back. */
-function looksHindi(source: string, out: string): boolean {
-  const sourceLatin = (source.match(LATIN) ?? []).length;
-  if (sourceLatin < 12) return true; // a number, a name or a very short word may stay as it is
-  const hindi = (out.match(DEVANAGARI) ?? []).length;
-  const latin = (out.match(LATIN) ?? []).length;
-  return hindi >= 6 && hindi >= latin * 0.4;
+/** A real sentence (not a name, a number or a short label like "School- MatriKaran"): only these are expected to come back in Hindi. */
+function isSentence(source: string): boolean {
+  return source.trim().split(/\s+/).length >= 5 && (source.match(LATIN) ?? []).length >= 20;
 }
 
-function buildPrompt(texts: string[], strict = false): string {
+/** True when a sentence really came back in Hindi script: some Devanagari letters, not just the English text handed back. */
+function looksHindi(out: string): boolean {
+  const hindi = (out.match(DEVANAGARI) ?? []).length;
+  const latin = (out.match(LATIN) ?? []).length;
+  return hindi >= 3 && hindi >= latin * 0.1;
+}
+
+/** Positions of the sentences in this batch that came back without Hindi script. */
+function englishSentences(source: string[], out: string[]): number[] {
+  return source.map((s, k) => k).filter((k) => isSentence(source[k]) && !looksHindi(out[k]));
+}
+
+/** level 0 = normal; 1 = firm reminder after an English-lettered answer; 2 = last resort, English words are also written in Devanagari (the trainer can switch them back while editing). */
+function buildPrompt(texts: string[], level = 0): string {
+  const strict = level >= 1;
   return `Translate each English text below into natural, conversational Hindi written in Devanagari script - the mixed "Hinglish" style Indian real estate sales teams really speak.
-${strict ? "IMPORTANT: your last answer was mostly English letters. This time every sentence MUST be written mainly in Devanagari. Only the individual English nouns listed below stay in Latin letters.\n" : ""}Rules:
+${level === 2 ? "LAST ATTEMPT: your previous answers were still in English letters. Write EVERY word in Devanagari script, including English terms (e.g. प्रोजेक्ट, बुकिंग, रजिस्ट्री). Names of people, places and brands may stay in English letters.\n" : strict ? "IMPORTANT: your last answer was mostly English letters. This time every sentence MUST be written mainly in Devanagari. Only the individual English nouns listed below stay in Latin letters.\n" : ""}Rules:
 - The grammar and everyday words (is, are, what, which, how much, in, of, the, for, and, or, not, who, when, after, before, should, can, will, verbs, question words, numbers in words) MUST be Devanagari Hindi: क्या, कौन सा, कितना, में, का, की, के, से, पर, को, है, हैं, होता, करना, चाहिए, नहीं, और, या.
 - Only commonly used English NOUNS and terms stay in English letters (for example project, booking, loan, token amount, site visit, possession, registry, agreement, builder, brochure, follow-up, target, closing). Do not leave a whole sentence in English.
 - Example: "What is the booking amount of this project?" becomes "इस project का booking amount कितना है?"
@@ -92,8 +102,8 @@ serve(async (req) => {
       let translated: string[];
       const source = todo.map((x) => x.t);
       // one round with the model; returns the translations or null when the reply is unusable
-      const ask = async (strict: boolean): Promise<string[] | null> => {
-        const raw = await callGemini(buildPrompt(source, strict), apiKey!, { json: true, temperature: strict ? 0.1 : 0.2 });
+      const ask = async (level: number): Promise<string[] | null> => {
+        const raw = await callGemini(buildPrompt(source, level), apiKey!, { json: true, temperature: level ? 0.1 : 0.2 });
         let parsed: { texts?: unknown };
         try { parsed = JSON.parse(raw); } catch { return null; }
         const arr = Array.isArray(parsed.texts) ? (parsed.texts as unknown[]).map((v) => (typeof v === "string" ? v.trim() : "")) : [];
@@ -102,11 +112,15 @@ serve(async (req) => {
       if (useMock) {
         translated = source.map((t) => `(हिंदी) ${t}`);
       } else {
-        let arr = await ask(false);
-        // the model sometimes hands the English back (or writes Hindi in English letters): ask once more, firmly
-        if (arr && arr.some((v, k) => !looksHindi(source[k], v))) arr = (await ask(true)) ?? arr;
+        let arr = await ask(0);
+        // the model sometimes hands the English back (or writes Hindi in English letters): ask again, firmer each time
+        for (const level of [1, 2]) {
+          if (arr && englishSentences(source, arr).length > 0) arr = (await ask(level)) ?? arr;
+        }
         if (!arr) throw new HttpError(502, "The AI's reply was incomplete. Please try once more.");
-        if (arr.some((v, k) => !looksHindi(source[k], v))) throw new HttpError(502, "The AI wrote it in English letters instead of Hindi. Please try once more.");
+        // names and short labels may stay in English; refuse only when every sentence is still English
+        const sentences = source.filter(isSentence).length;
+        if (sentences > 0 && englishSentences(source, arr).length === sentences) throw new HttpError(502, "The AI wrote it in English letters instead of Hindi. Please try once more.");
         translated = arr;
       }
       todo.forEach((x, k) => { out[x.i] = translated[k]; });
