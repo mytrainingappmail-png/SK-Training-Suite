@@ -476,10 +476,25 @@ It is removed from this screen only - nothing is permanent until you click Save 
     };
   }
 
-  /** Writes a first Hindi draft for every question that has none yet (questions that already have Hindi are left alone). */
-  async function handleAutoFillAllHindi() {
-    const todo = questions.filter((q) => q.question_text.trim() !== "" && !hasHindi(q));
+  /** Takes the Hindi version off every question (they go back to "not added"); nothing is saved until Save. */
+  function handleRemoveAllHindi() {
+    const withHindi = questions.filter(hasHindi).length;
+    if (withHindi === 0) { setHindiMessage("No question has a Hindi version."); return; }
+    if (!confirm(`Remove the Hindi version from ${withHindi} question${withHindi === 1 ? "" : "s"}? The English questions stay as they are. (Takes effect when you press Save.)`)) return;
+    setQuestions((prev) => prev.map((q) => ({
+      ...q,
+      question_text_hi: "",
+      explanation_hi: "",
+      options: q.options.map((o) => ({ ...o, option_text_hi: null })),
+    })));
+    setHindiMessage(`Hindi removed from ${withHindi} question${withHindi === 1 ? "" : "s"}. Press Save to keep this.`);
+  }
+
+  /** Writes a first Hindi draft for every question that has none yet - or, with `redo`, a fresh one for all of them (replacing what is there). */
+  async function handleAutoFillAllHindi(redo = false) {
+    const todo = questions.filter((q) => q.question_text.trim() !== "" && (redo || !hasHindi(q)));
     if (todo.length === 0) { setHindiMessage("Every question already has a Hindi version (or is empty)."); return; }
+    if (redo && !confirm(`Write the Hindi again for ${todo.length} question${todo.length === 1 ? "" : "s"}? What is there now (including your edits) will be replaced.`)) return;
     setHindiBusy(true);
     setHindiMessage("");
     try {
@@ -1024,6 +1039,26 @@ It is removed from this screen only - nothing is permanent until you click Save 
           >
             {hindiBusy ? "Writing Hindi…" : "✨ Auto-fill Hindi for all questions"}
           </button>
+          {questions.some(hasHindi) && (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleAutoFillAllHindi(true)}
+                disabled={hindiBusy}
+                className="text-xs font-semibold border border-slate-600 text-slate-200 hover:bg-slate-800 rounded-lg px-3 py-1.5 disabled:opacity-50"
+              >
+                ↻ Write again for all
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveAllHindi}
+                disabled={hindiBusy}
+                className="text-xs font-semibold border border-red-500/40 text-red-300 hover:bg-red-500/10 rounded-lg px-3 py-1.5 disabled:opacity-50"
+              >
+                🗑 Remove Hindi from all
+              </button>
+            </>
+          )}
           {hindiMessage && <span className="text-xs text-slate-300">{hindiMessage}</span>}
         </div>
       </div>

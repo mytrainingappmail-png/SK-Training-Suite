@@ -22,10 +22,26 @@ const CALLS_PER_HOUR_PER_COMPANY = 60;
 
 const clean = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, MAX_TEXT_CHARS) : "");
 
-function buildPrompt(texts: string[]): string {
-  return `Translate each English text below into natural, conversational Hindi written in Devanagari script - the mixed style Indian real estate sales teams really speak.
-Rules:
-- Write Hindi in Devanagari, but keep commonly used English words in English letters (for example project, booking, loan, token amount, site visit, possession, registry, agreement, builder, brochure, follow-up, target, closing).
+const DEVANAGARI = /[ऀ-ॿ]/g;
+const LATIN = /[A-Za-z]/g;
+
+/** True when a translation really is Hindi script: enough Devanagari letters, not just the English text handed back. */
+function looksHindi(source: string, out: string): boolean {
+  const sourceLatin = (source.match(LATIN) ?? []).length;
+  if (sourceLatin < 12) return true; // a number, a name or a very short word may stay as it is
+  const hindi = (out.match(DEVANAGARI) ?? []).length;
+  const latin = (out.match(LATIN) ?? []).length;
+  return hindi >= 6 && hindi >= latin * 0.4;
+}
+
+function buildPrompt(texts: string[], strict = false): string {
+  return `Translate each English text below into natural, conversational Hindi written in Devanagari script - the mixed "Hinglish" style Indian real estate sales teams really speak.
+${strict ? "IMPORTANT: your last answer was mostly English letters. This time every sentence MUST be written mainly in Devanagari. Only the individual English nouns listed below stay in Latin letters.\n" : ""}Rules:
+- The grammar and everyday words (is, are, what, which, how much, in, of, the, for, and, or, not, who, when, after, before, should, can, will, verbs, question words, numbers in words) MUST be Devanagari Hindi: क्या, कौन सा, कितना, में, का, की, के, से, पर, को, है, हैं, होता, करना, चाहिए, नहीं, और, या.
+- Only commonly used English NOUNS and terms stay in English letters (for example project, booking, loan, token amount, site visit, possession, registry, agreement, builder, brochure, follow-up, target, closing). Do not leave a whole sentence in English.
+- Example: "What is the booking amount of this project?" becomes "इस project का booking amount कितना है?"
+- Example: "Which document is required for registry?" becomes "registry के लिए कौन सा document ज़रूरी है?"
+- Example: "Call the customer after the site visit." becomes "site visit के बाद customer को call करें।"
 - Keep numbers, prices, areas, dates, names, brand names and abbreviations like RERA, BHK, sqft, GST, EMI, ROI, CRM, PLC exactly as they are.
 - Keep the meaning exactly the same. Do not add, remove, explain or reorder anything. Keep it short and simple, like the original.
 - A text that is already Hindi, or only a number or name, stays as it is.
@@ -74,14 +90,23 @@ serve(async (req) => {
     const out = texts.map(() => "");
     if (todo.length > 0) {
       let translated: string[];
-      if (useMock) {
-        translated = todo.map((x) => `(हिंदी) ${x.t}`);
-      } else {
-        const raw = await callGemini(buildPrompt(todo.map((x) => x.t)), apiKey!, { json: true, temperature: 0.2 });
+      const source = todo.map((x) => x.t);
+      // one round with the model; returns the translations or null when the reply is unusable
+      const ask = async (strict: boolean): Promise<string[] | null> => {
+        const raw = await callGemini(buildPrompt(source, strict), apiKey!, { json: true, temperature: strict ? 0.1 : 0.2 });
         let parsed: { texts?: unknown };
-        try { parsed = JSON.parse(raw); } catch { throw new HttpError(502, "The AI's reply could not be read. Please try once more."); }
+        try { parsed = JSON.parse(raw); } catch { return null; }
         const arr = Array.isArray(parsed.texts) ? (parsed.texts as unknown[]).map((v) => (typeof v === "string" ? v.trim() : "")) : [];
-        if (arr.length !== todo.length || arr.some((v) => !v)) throw new HttpError(502, "The AI's reply was incomplete. Please try once more.");
+        return arr.length === source.length && arr.every((v) => v) ? arr : null;
+      };
+      if (useMock) {
+        translated = source.map((t) => `(हिंदी) ${t}`);
+      } else {
+        let arr = await ask(false);
+        // the model sometimes hands the English back (or writes Hindi in English letters): ask once more, firmly
+        if (arr && arr.some((v, k) => !looksHindi(source[k], v))) arr = (await ask(true)) ?? arr;
+        if (!arr) throw new HttpError(502, "The AI's reply was incomplete. Please try once more.");
+        if (arr.some((v, k) => !looksHindi(source[k], v))) throw new HttpError(502, "The AI wrote it in English letters instead of Hindi. Please try once more.");
         translated = arr;
       }
       todo.forEach((x, k) => { out[x.i] = translated[k]; });

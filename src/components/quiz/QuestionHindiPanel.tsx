@@ -48,6 +48,13 @@ export default function QuestionHindiPanel<O extends HindiOption>({ question, on
     }
   }
 
+  /** Takes the Hindi version away: the question goes back to "not added" and trainees get no language switch for it. */
+  function removeHindi() {
+    if (!confirm("Remove the Hindi version of this question? The English question stays as it is.")) return;
+    setError("");
+    onChange({ question_text_hi: "", explanation_hi: "", options: question.options.map((o) => ({ ...o, option_text_hi: null })) });
+  }
+
   function setOptionHi(index: number, text: string) {
     onChange({ options: question.options.map((o, i) => (i === index ? { ...o, option_text_hi: text } : o)) });
   }
@@ -68,8 +75,18 @@ export default function QuestionHindiPanel<O extends HindiOption>({ question, on
             disabled={busy}
             className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
           >
-            {busy ? "Writing Hindi…" : "✨ Auto-fill from English"}
+            {busy ? "Writing Hindi…" : done ? "↻ Auto-fill again" : "✨ Auto-fill from English"}
           </button>
+          {done && (
+            <button
+              type="button"
+              onClick={removeHindi}
+              disabled={busy}
+              className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+            >
+              🗑 Remove Hindi
+            </button>
+          )}
           <span className="text-[11px] text-slate-500">Devanagari with the usual English words (project, booking, loan…) kept in English. Check it, then Save.</span>
         </div>
         {error && <div className="text-xs text-red-300">{error}</div>}
