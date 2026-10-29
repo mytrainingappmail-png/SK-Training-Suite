@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
+import { QUIZ_ALL_DONE_AWAY_SECONDS, QUIZ_ALL_DONE_PAUSE_SECONDS } from "../../constants/quizTiming";
 import { useQuizSessionRealtime } from "../../hooks/quiz/useQuizSessionRealtime";
 import { useServerClock } from "../../hooks/quiz/useServerClock";
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
@@ -134,6 +135,22 @@ export default function QuizHostLivePage() {
   const totalQuestions = orderedQuestions.length;
   const totalMarks = orderedQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
   const currentQuestion = session ? orderedQuestions[session.current_question_index] ?? null : null;
+
+  // "Move ahead" quiz: every player has pressed Finish, so there is nothing left to wait for. Without this the host timer kept
+  // counting question by question and the trainer had to press Next all the way to the end to get the results.
+  // A player who has been away a while (closed the page, lost signal) is not waited for.
+  const playerFinished = (p: { my_index?: number | null }) => p.my_index != null && p.my_index >= totalQuestions;
+  const playerAway = (p: { last_seen_at: string | null; joined_at: string }) =>
+    now - new Date(p.last_seen_at ?? p.joined_at).getTime() > QUIZ_ALL_DONE_AWAY_SECONDS * 1000;
+  const everyoneFinished =
+    canEdit && session?.phase === "question" && session.allow_early_next === true && totalQuestions > 0 &&
+    participants.some(playerFinished) && !participants.some((p) => !playerFinished(p) && !playerAway(p));
+
+  useEffect(() => {
+    if (!everyoneFinished || !sessionId) return;
+    const t = setTimeout(() => { void endSession(sessionId).catch(() => { /* the End button still works */ }); }, QUIZ_ALL_DONE_PAUSE_SECONDS * 1000);
+    return () => clearTimeout(t);
+  }, [everyoneFinished, sessionId]);
 
   const liveActive = !!session && (session.phase === "question" || session.phase === "paused");
   useEffect(() => {
@@ -525,6 +542,11 @@ export default function QuizHostLivePage() {
               {quiz.shuffle_options && !quiz.shuffle_questions_per_participant && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                   🔀 Answer order is shuffled on every player's phone — their A/B/C/D will not match the order shown here. (Turn off “Shuffle answer order for each player” in the quiz settings to keep it the same.)
+                </div>
+              )}
+              {everyoneFinished && (
+                <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-200">
+                  ✅ Everyone has finished - ending the quiz and showing the results…
                 </div>
               )}
               <div className="flex items-center justify-between gap-4">
