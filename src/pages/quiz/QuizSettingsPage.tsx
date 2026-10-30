@@ -17,6 +17,7 @@ import QuizBrandingImageField from "../../components/quiz/QuizBrandingImageField
 import QuizLocationsCard from "../../components/quiz/QuizLocationsCard";
 import QuizRankTitlesCard from "../../components/quiz/QuizRankTitlesCard";
 import QuizBackgroundCard from "../../components/quiz/QuizBackgroundCard";
+import QuizLiveTopCard from "../../components/quiz/QuizLiveTopCard";
 import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, CertPhotoFrame, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -1401,6 +1402,8 @@ export default function QuizSettingsPage() {
       </fieldset>
 
       <QuizRankTitlesCard />
+
+      <QuizLiveTopCard />
 
       <QuizBackgroundCard />
 

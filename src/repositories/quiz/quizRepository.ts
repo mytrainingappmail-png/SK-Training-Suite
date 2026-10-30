@@ -20,6 +20,8 @@ export interface QuizForm {
   /** null / absent = follow the company default */
   reveal_answers?: boolean | null;
   allow_early_next?: boolean | null;
+  /** Live Quiz: show the top ranks on each trainee's screen. null / absent = follow the company default. */
+  live_top_enabled?: boolean | null;
   /** Background behind the questions on the trainee's screen: null / absent = follow the company default. */
   bg_kind?: QuizBackgroundKind | null;
   bg_image_url?: string | null;

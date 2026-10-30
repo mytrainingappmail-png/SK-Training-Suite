@@ -145,6 +145,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     exam_duration_minutes: source.exam_duration_minutes,
     reveal_answers: source.reveal_answers ?? null,
     allow_early_next: source.allow_early_next ?? null,
+    live_top_enabled: source.live_top_enabled ?? null,
     bg_kind: source.bg_kind ?? null,
     bg_image_url: source.bg_image_url ?? null,
     location_id: source.location_id ?? null,

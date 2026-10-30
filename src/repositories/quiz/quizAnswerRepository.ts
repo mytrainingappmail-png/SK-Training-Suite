@@ -1,5 +1,5 @@
 import { supabaseQuizPlayer } from "../../lib/supabaseQuizPlayer";
-import type { PublicQuizQuestion, PublicQuizQuestionOption, SubmitAnswerResult, SubmitHotspotAnswerResult, AnswerReviewOptionRow, AnswerReviewQuestion, MyQuizResult, QuizQuestionType } from "../../types/quiz";
+import type { PublicQuizQuestion, PublicQuizQuestionOption, SubmitAnswerResult, SubmitHotspotAnswerResult, AnswerReviewOptionRow, AnswerReviewQuestion, MyQuizResult, QuizQuestionType, LiveTopRow } from "../../types/quiz";
 
 interface RawQuestionOptionRow {
   question_id: string;
@@ -72,6 +72,13 @@ export async function moveAhead(sessionId: string, fromIndex: number): Promise<{
   const r = (data as { question_index: number; started_at: string | null; finished: boolean; moved: boolean }[] | null)?.[0];
   if (!r) throw new Error("Could not move to the next question.");
   return { index: r.question_index, startedAt: r.started_at, finished: r.finished, moved: r.moved };
+}
+
+/** The live top ranks for this trainee's screen: place and name only (the database never sends points). Empty while the board is off. */
+export async function getQuizLiveTop(sessionId: string): Promise<LiveTopRow[]> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_quiz_live_top", { p_session_id: sessionId });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { rank: number; display_name: string; is_me: boolean }[]).map((r) => ({ rank: r.rank, display_name: r.display_name, is_me: r.is_me }));
 }
 
 /** Correctness is computed server-side — the client never decides whether its own answer was right. */

@@ -121,6 +121,8 @@ export interface Quiz {
   reveal_answers?: boolean | null;
   /** Live Quiz only: may a player press Next as soon as they have answered? null = follow the company default (off). */
   allow_early_next?: boolean | null;
+  /** Live Quiz: show the top ranks on each trainee's screen while the quiz runs. null = follow the company default (off). */
+  live_top_enabled?: boolean | null;
   /** Background behind the questions on the trainee's screen: null = follow the company default, 'none', 'logo' or 'image' (bg_image_url). */
   bg_kind?: QuizBackgroundKind | null;
   bg_image_url?: string | null;
@@ -435,6 +437,16 @@ export interface QuizSettings {
   quiz_reveal_answers: boolean;
   /** Company default for Live Quizzes: let players press Next as soon as they have answered. A quiz can override it. */
   quiz_allow_early_next: boolean;
+  /** Live Quiz: the top ranks (names and place only, never points) on the trainee's own screen while the quiz runs. Company default; one quiz may differ. */
+  live_top_enabled: boolean;
+  /** How many names the board shows (3-10). */
+  live_top_count: number;
+  /** A trainee who is outside the top list still sees their own place. */
+  live_top_show_me: boolean;
+  /** "full" = the whole name, "first" = first name only. */
+  live_top_name_style: LiveTopNameStyle;
+  /** How often a trainee's board refreshes, in seconds (3-30). */
+  live_top_refresh_seconds: number;
   /** Company default for the background behind the questions on the trainee's screen (a quiz / exam can differ). */
   bg_kind: QuizBackgroundKind;
   bg_image_url: string | null;
@@ -451,6 +463,30 @@ export interface QuizSettings {
 }
 
 export type HotspotFeedbackSize = "small" | "medium" | "large";
+
+export type LiveTopNameStyle = "full" | "first";
+
+/** The live board's setup for one session, worked out by the database (quiz's own choice, else company default; off while right/wrong is hidden). */
+export interface LiveTopConfig {
+  enabled: boolean;
+  count: number;
+  show_me: boolean;
+  name_style: LiveTopNameStyle;
+  refresh_seconds: number;
+}
+
+/** One line of the live board: place and name only. */
+export interface LiveTopRow {
+  rank: number;
+  display_name: string;
+  is_me: boolean;
+}
+
+/** Limits the database enforces; the settings screen uses the same. */
+export const LIVE_TOP_COUNT_MIN = 3;
+export const LIVE_TOP_COUNT_MAX = 10;
+export const LIVE_TOP_REFRESH_MIN = 3;
+export const LIVE_TOP_REFRESH_MAX = 30;
 
 export type QuizBackgroundKind = "none" | "logo" | "image";
 export type QuizBackgroundLayout = "center" | "tile" | "corner" | "fill";
@@ -537,6 +573,8 @@ export interface QuizPlayerSettings {
   rank_titles?: RankTitle[] | null;
   /** The background behind the questions (null = none). */
   bg?: QuizBackground | null;
+  /** The live top-ranks board (off when absent). */
+  live_top?: LiveTopConfig | null;
 }
 
 /** The calling participant's own outcome, via get_my_result RPC. */

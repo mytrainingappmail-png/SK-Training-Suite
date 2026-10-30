@@ -75,6 +75,7 @@ const DEFAULT_FORM: QuizForm = {
   exam_duration_minutes: null,
   reveal_answers: null,
   allow_early_next: null,
+  live_top_enabled: null,
   bg_kind: null,
   bg_image_url: null,
   location_id: undefined, // new quiz: follows the location switch at the top until chosen here
@@ -163,6 +164,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           exam_duration_minutes: quiz.exam_duration_minutes,
           reveal_answers: quiz.reveal_answers ?? null,
           allow_early_next: quiz.allow_early_next ?? null,
+          live_top_enabled: quiz.live_top_enabled ?? null,
           bg_kind: quiz.bg_kind ?? null,
           bg_image_url: quiz.bg_image_url ?? null,
           location_id: quiz.location_id ?? null,
@@ -969,6 +971,23 @@ It is removed from this screen only - nothing is permanent until you click Save 
               Decided when the quiz is launched. Allowed: after answering, a player sees a “Next question” button; it moves only that player and the next question gets its own full timer.
               Your host screen, timer, leaderboard and results stay exactly the same, and nobody gets stuck (a player who does not press Next is moved on with the host).
               Players who move ahead see upcoming questions before the room, so it suits practice quizzes better than strict tests.
+            </p>
+          </div>
+        )}
+        {!isExam && (
+          <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">🏆 Top ranks on the trainee's screen</label>
+            <select
+              className="w-full sm:max-w-md rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              value={form.live_top_enabled === null || form.live_top_enabled === undefined ? "default" : form.live_top_enabled ? "on" : "off"}
+              onChange={(e) => setForm({ ...form, live_top_enabled: e.target.value === "default" ? null : e.target.value === "on" })}
+            >
+              <option value="default">Follow my default setting</option>
+              <option value="on">Show — trainees see who is leading</option>
+              <option value="off">Do not show</option>
+            </select>
+            <p className="text-xs text-slate-500">
+              Names and places only, never points. It stays off for a quiz that hides right / wrong from players. How many names, name style and refresh time are in Quiz Settings → Live Top Ranks.
             </p>
           </div>
         )}

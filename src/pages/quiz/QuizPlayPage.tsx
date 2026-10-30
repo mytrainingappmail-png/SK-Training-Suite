@@ -12,6 +12,7 @@ import { effectiveZones } from "../../components/quiz/hotspotZones";
 import { listParticipants, getQuizMyControl } from "../../repositories/quiz/quizParticipantRepository";
 import { getPlayerSettings } from "../../repositories/quiz/quizSettingsRepository";
 import { backgroundStyle } from "../../utils/quizBackground";
+import LiveTopCard from "../../components/quiz/LiveTopCard";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
@@ -751,6 +752,8 @@ export default function QuizPlayPage() {
       </div>
 
       <ExamCalculator open={showCalc} onClose={() => setShowCalc(false)} />
+
+      {sessionId && <LiveTopCard sessionId={sessionId} config={playerSettings?.live_top} />}
 
       <div className="flex-1 flex flex-col">
         <div className="px-6 py-8 text-center text-lg font-semibold text-white">{(hi && tr.question(question.question_id)) || question.question_text}</div>
