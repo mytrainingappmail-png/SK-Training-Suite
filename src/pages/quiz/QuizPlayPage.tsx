@@ -806,8 +806,9 @@ export default function QuizPlayPage() {
               <>
                 <div className="text-3xl mb-1">{activeFeedback.is_correct ? "✅" : hasAnswerAttempt ? "❌" : "⏰"}</div>
                 <div className="font-bold text-white">
-                  {activeFeedback.is_correct ? `Correct! +${activeFeedback.points_awarded}` : hasAnswerAttempt ? "Wrong answer" : "Time's up!"}
+                  {activeFeedback.is_correct ? `Correct! +${activeFeedback.points_awarded}` : hasAnswerAttempt ? "Wrong answer" : "Time's up! Skipped"}
                 </div>
+                {!activeFeedback.is_correct && !hasAnswerAttempt && <div className="text-xs text-slate-400 mt-1">No answer given, so no marks for this one.</div>}
                 {activeFeedback.explanation && (
                   <div className="text-sm text-slate-300 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-3 max-w-md mx-auto text-left">
                     💡 {activeFeedback.explanation}
