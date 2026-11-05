@@ -15,6 +15,7 @@ import { backgroundStyle } from "../../utils/quizBackground";
 import LiveTopCard from "../../components/quiz/LiveTopCard";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
+import { QUIZ_AUTO_NEXT_PAUSE_SECONDS } from "../../constants/quizTiming";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
 import { getMyAnswerReview, getMyResult, flagTabSwitch } from "../../repositories/quiz/quizAnswerRepository";
 import { rankByMarks, MEDALS } from "../../services/quiz/quizRankingService";
@@ -78,6 +79,11 @@ export default function QuizPlayPage() {
   const viewStartedAt = earlyNext && pos ? pos.startedAt : session?.question_started_at ?? null;
 
   const questionStartedAt = useRef<number>(0);
+  // the latest server start time of the question on screen, for the countdown below to read on every beat
+  const startedAtRef = useRef<string | null>(null);
+  startedAtRef.current = viewStartedAt;
+  // set the moment an answer is sent (state alone lags a render behind), so the running countdown never sends a second, empty one
+  const answeredRef = useRef(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endedHandled = useRef(false);
   // The question index this device last showed — lets a pause/resume (phase
@@ -221,6 +227,7 @@ export default function QuizPlayPage() {
     shownIndexRef.current = viewIndex;
     if (isNewQuestion) {
       setAnswered(false);
+      answeredRef.current = false;
       setFeedback(null);
       setSelectedOptionId(null);
       setHotspotFeedback(null);
@@ -291,25 +298,35 @@ export default function QuizPlayPage() {
 
   useEffect(() => {
     if (tickRef.current) clearInterval(tickRef.current);
-    if (!question || answered) return;
+    if (!question) return;
 
+    // The circle keeps running after an answer too, so everyone sees the same clock until the question really ends.
+    // The time left is worked out from the database's question start time on every beat, never by counting down: a phone that
+    // sleeps, locks its screen or switches app would otherwise keep showing time it no longer has (the server stops taking
+    // answers at the real end). Everyone's clock therefore agrees, whatever their device did in between.
+    let shown = -1;
     tickRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          if (question.type === "hotspot") handleHotspotSubmit(null, null);
-          else handleSubmit(null);
-          return 0;
-        }
-        if (s <= 6 && playerSettings?.sound_enabled !== false) playTone("tick");
-        return s - 1;
-      });
-    }, 1000);
+      const startedAt = startedAtRef.current;
+      const left = startedAt
+        ? Math.max(0, Math.min(question.timer_seconds, question.timer_seconds - Math.floor((serverNow() - new Date(startedAt).getTime()) / 1000)))
+        : Math.max(0, (shown < 0 ? question.timer_seconds : shown) - 1);
+      if (left === shown) return;
+      shown = left;
+      setSecondsLeft(left);
+      if (answeredRef.current) return; // already answered: only the clock moves
+      if (left <= 0) {
+        if (question.type === "hotspot") handleHotspotSubmit(null, null);
+        else handleSubmit(null);
+      } else if (left <= 6 && playerSettings?.sound_enabled !== false) {
+        playTone("tick");
+      }
+    }, 250);
 
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question, answered]);
+  }, [question]);
 
   useEffect(() => {
     if (!sessionId || session?.phase !== "ended" || endedHandled.current) return;
@@ -389,11 +406,31 @@ export default function QuizPlayPage() {
     }
   }
 
+  // With "move ahead" on, a player whose own question time is over goes on to their next question BY THEMSELVES (after a short
+  // pause to read the result) - pressing Next is only for those who finish early. The database allows it once the time is up;
+  // if it refuses (clock a hair off) it is simply tried again a few seconds later until the position changes.
+  const moveNextRef = useRef(handleMoveNext);
+  moveNextRef.current = handleMoveNext;
+  const lastAutoTry = useRef(0);
+  useEffect(() => {
+    if (!earlyNext || !pos || pos.finished || !question || !viewStartedAt || session?.phase !== "question") return;
+    if (question.question_index !== pos.index) return;
+    const deadline = new Date(viewStartedAt).getTime() + (question.timer_seconds + QUIZ_AUTO_NEXT_PAUSE_SECONDS) * 1000;
+    const t = setInterval(() => {
+      if (serverNow() >= deadline && Date.now() - lastAutoTry.current > 3000) {
+        lastAutoTry.current = Date.now();
+        void moveNextRef.current();
+      }
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [earlyNext, pos?.index, pos?.finished, question?.question_id, viewStartedAt, session?.phase]);
+
   async function handleSubmit(optionId: string | null) {
-    if (!sessionId || !question || answered) return;
+    if (!sessionId || !question || answered || answeredRef.current) return;
+    answeredRef.current = true;
     setAnswered(true);
     setSelectedOptionId(optionId);
-    if (tickRef.current) clearInterval(tickRef.current);
 
     const responseTimeMs = Date.now() - questionStartedAt.current;
     const result = await sendWithRetry(() => submitAnswer(sessionId, question.question_id, optionId, responseTimeMs));
@@ -404,10 +441,10 @@ export default function QuizPlayPage() {
   }
 
   async function handleHotspotSubmit(x: number | null, y: number | null) {
-    if (!sessionId || !question || answered) return;
+    if (!sessionId || !question || answered || answeredRef.current) return;
+    answeredRef.current = true;
     setAnswered(true);
     setMyTap(x !== null && y !== null ? { x, y } : null);
-    if (tickRef.current) clearInterval(tickRef.current);
 
     const responseTimeMs = Date.now() - questionStartedAt.current;
     const result = await sendWithRetry(() => submitHotspotAnswer(sessionId, question.question_id, x, y, responseTimeMs));
@@ -741,13 +778,31 @@ export default function QuizPlayPage() {
           >
             🧮
           </button>
-          <span
-            className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-mono font-bold ${
-              secondsLeft <= 5 ? "border-red-500 text-red-400 animate-pulse" : "border-amber-400 text-white"
-            }`}
-          >
-            {secondsLeft}
-          </span>
+          {/* a ring that empties as the time runs out, green -> amber -> red, so the time left reads at a glance */}
+          {(() => {
+            const total = Math.max(1, question.timer_seconds);
+            const frac = Math.max(0, Math.min(1, secondsLeft / total));
+            const ringColor = frac > 0.5 ? "#34d399" : frac > 0.25 ? "#fbbf24" : "#ef4444";
+            const R = 20;
+            const C = 2 * Math.PI * R;
+            return (
+              <span
+                className={`relative h-12 w-12 shrink-0 flex items-center justify-center font-mono font-bold ${secondsLeft <= 5 ? "text-red-400 animate-pulse" : "text-white"}`}
+                role="timer"
+                aria-label={`${secondsLeft} seconds left`}
+              >
+                <svg viewBox="0 0 48 48" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+                  <circle cx="24" cy="24" r={R} fill="none" stroke="#334155" strokeWidth="3" />
+                  <circle
+                    cx="24" cy="24" r={R} fill="none" stroke={ringColor} strokeWidth="3" strokeLinecap="round"
+                    strokeDasharray={C} strokeDashoffset={C * (1 - frac)}
+                    style={{ transition: "stroke-dashoffset 0.3s linear, stroke 0.3s" }}
+                  />
+                </svg>
+                <span className="relative">{secondsLeft}</span>
+              </span>
+            );
+          })()}
         </div>
       </div>
 
@@ -829,7 +884,7 @@ export default function QuizPlayPage() {
                 >
                   {movingNext ? "…" : pos.index + 1 >= pos.total ? "Finish ✓" : "Next question →"}
                 </button>
-                <div className="text-xs text-slate-500 mt-2">…or just wait — the host moves everyone on.</div>
+                <div className="text-xs text-slate-500 mt-2">…or just wait — it moves on by itself when the time is over.</div>
               </div>
             ) : (
               <div className="text-xs text-slate-500 mt-2">Waiting for the next question…</div>

@@ -214,29 +214,38 @@ export default function QuizHostLivePage() {
     // the reveal pause ends, the server ignores the request instead of skipping one.
     const timerQuestionIndex = session.current_question_index;
 
+    // The time left is worked out from the database's start time on every beat, never by counting down, so a host laptop whose
+    // tab was in the background (timers slowed or paused) shows the true time and advances on time, in step with the trainees.
+    const startedAt = session.question_started_at;
+    let shown = -1;
     tickRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          if (!autoAdvancedRef.current) {
-            autoAdvancedRef.current = true;
-            // Pop the correct option in color for the host before auto-advancing,
-            // instead of jumping straight to the next question.
-            setRevealed(true);
-            revealTimerRef.current = setTimeout(() => handleNext(timerQuestionIndex), REVEAL_PAUSE_MS);
-          }
-          return 0;
+      const left = startedAt
+        ? Math.max(0, Math.min(total, total - Math.floor((serverNow() - new Date(startedAt).getTime()) / 1000)))
+        : Math.max(0, (shown < 0 ? total : shown) - 1);
+      if (left === shown) return;
+      shown = left;
+      setSecondsLeft(left);
+      if (left <= 0) {
+        if (!autoAdvancedRef.current) {
+          autoAdvancedRef.current = true;
+          // Pop the correct option in color for the host before auto-advancing,
+          // instead of jumping straight to the next question.
+          setRevealed(true);
+          revealTimerRef.current = setTimeout(() => handleNext(timerQuestionIndex), REVEAL_PAUSE_MS);
         }
-        if (s <= 6) playTone("tick");
-        return s - 1;
-      });
-    }, 1000);
+      } else if (left <= 6) {
+        playTone("tick");
+      }
+    }, 250);
 
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
       if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
     };
+    // currentQuestion?.id is in the list because, when the host reloads this page in the middle of a question, the questions
+    // arrive AFTER the session - without it the countdown would stay at 0 (and not run) for the rest of that question.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.phase, session?.current_question_index, session?.question_started_at]);
+  }, [session?.phase, session?.current_question_index, session?.question_started_at, currentQuestion?.id]);
 
   // Live "X of Y answered" — subscribes to new quiz_answers rows for this
   // session and counts the ones matching whichever question is current,
