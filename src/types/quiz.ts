@@ -111,6 +111,8 @@ export interface Quiz {
   shuffle_questions: boolean;
   /** Anti-cheat — independent of shuffle_questions. Each participant gets their OWN deterministic order of the same question set (like shuffle_options already does per-participant), so looking at a neighbor's screen shows a different question at the same "Q3 of 10". When on, there's no longer one "current question" for the whole session, so the host/TV screen can't show its content — see QuizHostLivePage. */
   shuffle_questions_per_participant: boolean;
+  /** Random subset per trainee: each person gets this many of the questions (their own random set). null / absent = all of them. Only used while shuffle_questions_per_participant is on. */
+  pick_count?: number | null;
   /** Off for practice/ungraded quizzes — no certificate is offered regardless of score. */
   issue_certificate: boolean;
   /** "live" = the Live Quiz (one question at a time, everyone together); "exam" = a paper-style test (see the Exams tab). */

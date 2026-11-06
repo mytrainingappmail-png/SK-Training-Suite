@@ -16,13 +16,15 @@ export async function createSession(
   revealAnswers = true,
   allowEarlyNext = false,
   isPractice = false,
-  lobbyMusic: { choice: "builtin" | "custom" | "off"; url: string | null; volume: number } | null = null
+  lobbyMusic: { choice: "builtin" | "custom" | "off"; url: string | null; volume: number } | null = null,
+  /** Each player gets this many random questions of the quiz (null = all). Frozen into the session; each player's own set is drawn when they join. */
+  pickCount: number | null = null
 ): Promise<QuizSession> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const pin = randomPin();
     const { data, error } = await supabaseQuiz
       .from("quiz_sessions")
-      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext, is_practice: isPractice, lobby_music: lobbyMusic?.choice ?? null, lobby_music_url: lobbyMusic?.url ?? null, lobby_music_volume: lobbyMusic?.volume ?? null })
+      .insert({ quiz_id: quizId, company_id: companyId, host_admin_id: hostAdminId, pin, join_mode: joinMode, question_order: questionOrder, reveal_answers: revealAnswers, allow_early_next: allowEarlyNext, is_practice: isPractice, lobby_music: lobbyMusic?.choice ?? null, lobby_music_url: lobbyMusic?.url ?? null, lobby_music_volume: lobbyMusic?.volume ?? null, pick_count: pickCount })
       .select()
       .single();
 

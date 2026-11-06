@@ -24,7 +24,8 @@ export interface TopicAnswer {
 /** One test's worth of data (a live quiz session or an exam session). */
 export interface TopicSessionInput {
   questions: TopicQuestion[];
-  participants: { id: string; name: string }[];
+  /** questionIds: the questions this person actually got when the test gives everyone their own random N (null / absent = every question). */
+  participants: { id: string; name: string; questionIds?: string[] | null }[];
   answers: TopicAnswer[];
 }
 
@@ -86,7 +87,9 @@ export function buildTopicReport(sessions: TopicSessionInput[], weakBelowPercent
       const key = personKey(p.name);
       if (!people.has(key)) people.set(key, { name: p.name.trim(), buckets: new Map() });
       const person = people.get(key)!;
+      const mine = p.questionIds ? new Set(p.questionIds) : null;
       for (const q of s.questions) {
+        if (mine && !mine.has(q.id)) continue; // not one of this person's own questions: it does not count for or against them
         const topic = q.topic?.trim() || NO_TOPIC_LABEL;
         const answer = answerOf.get(`${p.id}|${q.id}`);
         if (answer && answer.earned === null) continue; // not graded yet

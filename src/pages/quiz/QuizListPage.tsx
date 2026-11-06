@@ -121,13 +121,13 @@ export default function QuizListPage() {
 
   async function handleMakeSameAndLaunch(q: Quiz) {
     try {
-      await updateQuizMeta(q.id, { shuffle_options: false, shuffle_questions_per_participant: false });
+      await updateQuizMeta(q.id, { shuffle_options: false, shuffle_questions_per_participant: false, pick_count: null });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not update the quiz.");
       return;
     }
     setLaunchCheck(null);
-    await handleLaunch({ ...q, shuffle_options: false, shuffle_questions_per_participant: false });
+    await handleLaunch({ ...q, shuffle_options: false, shuffle_questions_per_participant: false, pick_count: null });
   }
 
   async function handleLaunch(q: Quiz, practice = false) {

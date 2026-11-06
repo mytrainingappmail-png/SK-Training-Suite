@@ -37,14 +37,25 @@ export async function launchSession(
   // single value broadcast to everyone, so every player must see the same order.
   // Always pre-filtered to visible questions, whether or not shuffle is on —
   // this is what keeps a hidden question from ever being served live.
-  const questionOrder = quiz.shuffle_questions && !practice ? shuffleArray(visibleIds) : visibleIds;
+  // "Each player gets N random questions": the trainer's number (any number from 1 up), used only with the per-player shuffle on and when it is
+  // fewer than the questions there are. The session then has N question slots (the host timeline is N long); each player's own set of N is
+  // drawn by the database when they join. Practice runs always use every question.
+  const pickWanted =
+    !practice && quiz.shuffle_questions_per_participant && quiz.pick_count && quiz.pick_count >= 1 && quiz.pick_count < visibleIds.length
+      ? Math.floor(quiz.pick_count)
+      : null;
+
+  const questionOrder = pickWanted
+    ? shuffleArray(visibleIds).slice(0, pickWanted)
+    : quiz.shuffle_questions && !practice ? shuffleArray(visibleIds) : visibleIds;
 
   return sessionRepo.createSession(
     quizId, companyId, hostAdminId, joinMode, questionOrder,
     practice ? true : quiz.reveal_answers ?? revealDefault,
     quiz.allow_early_next ?? earlyNextDefault,
     practice,
-    lobbyMusic
+    lobbyMusic,
+    pickWanted
   );
 }
 

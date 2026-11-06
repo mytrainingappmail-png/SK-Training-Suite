@@ -70,6 +70,7 @@ const DEFAULT_FORM: QuizForm = {
   shuffle_options: false,
   shuffle_questions: false,
   shuffle_questions_per_participant: false,
+  pick_count: null,
   issue_certificate: true,
   mode: "live",
   exam_duration_minutes: null,
@@ -159,6 +160,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           shuffle_options: quiz.shuffle_options,
           shuffle_questions: quiz.shuffle_questions,
           shuffle_questions_per_participant: quiz.shuffle_questions_per_participant,
+          pick_count: quiz.pick_count ?? null,
           issue_certificate: quiz.issue_certificate,
           mode: quiz.mode,
           exam_duration_minutes: quiz.exam_duration_minutes,
@@ -589,13 +591,15 @@ It is removed from this screen only - nothing is permanent until you click Save 
         }
       }
 
+      // "Each person gets N random questions" only means something with the per-person shuffle on and a real number; otherwise it is cleared.
+      const pickToSave = form.shuffle_questions_per_participant && form.pick_count && form.pick_count >= 1 ? Math.floor(form.pick_count) : null;
       let id = savedQuizId;
       if (!id) {
-        const created = await createQuiz(admin.company_id, admin.id, { ...form, code: form.code?.trim() || undefined, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
+        const created = await createQuiz(admin.company_id, admin.id, { ...form, pick_count: pickToSave, code: form.code?.trim() || undefined, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
         id = created.id;
         setSavedQuizId(id);
       } else {
-        await updateQuizMeta(id, { ...form, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
+        await updateQuizMeta(id, { ...form, pick_count: pickToSave, location_id: form.location_id === undefined ? selectedLocationId : form.location_id });
       }
 
       const result = await saveQuestions(
@@ -906,7 +910,7 @@ It is removed from this screen only - nothing is permanent until you click Save 
             type="checkbox"
             className="mt-0.5"
             checked={form.shuffle_questions_per_participant}
-            onChange={(e) => setForm({ ...form, shuffle_questions_per_participant: e.target.checked })}
+            onChange={(e) => setForm({ ...form, shuffle_questions_per_participant: e.target.checked, pick_count: e.target.checked ? form.pick_count ?? null : null })}
           />
           <span>
             🕵️ Anti-cheat: different question order for every employee
@@ -917,6 +921,41 @@ It is removed from this screen only - nothing is permanent until you click Save 
             </span>
           </span>
         </label>
+        {form.shuffle_questions_per_participant && (
+          <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 px-3 py-2.5 space-y-1.5">
+            <label className="block text-xs font-semibold text-violet-200 uppercase tracking-wide">
+              🎲 {isExam ? "How many questions should each candidate get?" : "How many questions should each player get?"}
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                placeholder={`All ${activeQuestionCount}`}
+                value={form.pick_count ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  setForm({ ...form, pick_count: v === "" ? null : Math.max(1, Math.floor(Number(v)) || 1) });
+                }}
+                className="w-32 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              />
+              <span className="text-xs text-slate-400">of the {activeQuestionCount} question{activeQuestionCount === 1 ? "" : "s"} in this {isExam ? "exam" : "quiz"}</span>
+              {form.pick_count !== null && form.pick_count !== undefined && (
+                <button type="button" onClick={() => setForm({ ...form, pick_count: null })} className="text-xs text-slate-400 underline hover:text-slate-200">
+                  Everyone gets every question
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              {form.pick_count && form.pick_count >= activeQuestionCount
+                ? `You asked for ${form.pick_count}, which is not fewer than the ${activeQuestionCount} questions you have, so everyone will get all of them.`
+                : form.pick_count
+                  ? `Every ${isExam ? "candidate" : "player"} gets their own random ${form.pick_count}, so two neighbours rarely get the same ones. Percentage, rank and certificate are worked out on each person's own ${form.pick_count} question${form.pick_count === 1 ? "" : "s"}. Keep marks equal across questions so it stays fair. Decided when the ${isExam ? "exam is started" : "quiz is launched"}.`
+                  : `Leave empty to give everyone every question. Add more questions than you need (for example 40 questions, 25 each) and each person gets a different random set.`}
+            </p>
+          </div>
+        )}
         {!isExam && (() => {
           const mode = describePlayMode(form);
           return (
@@ -927,7 +966,7 @@ It is removed from this screen only - nothing is permanent until you click Save 
               {!mode.sameOnEveryScreen && (
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, shuffle_options: false, shuffle_questions_per_participant: false })}
+                  onClick={() => setForm({ ...form, shuffle_options: false, shuffle_questions_per_participant: false, pick_count: null })}
                   className="mt-1 rounded-md bg-amber-400 px-2.5 py-1 font-semibold text-amber-950 hover:bg-amber-300"
                 >
                   🎯 Make it the same on every screen

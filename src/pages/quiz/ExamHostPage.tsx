@@ -36,6 +36,10 @@ function totalOf(r: ExamResultRow): number {
 function pctOf(r: ExamResultRow): number {
   return r.possible_marks > 0 ? Math.round((totalOf(r) / r.possible_marks) * 1000) / 10 : 0;
 }
+/** The unrounded share of their OWN paper - what candidates are ranked by, so candidates with different papers ("N random questions each") compare fairly. With equal papers it orders exactly like total marks. */
+function shareOf(r: ExamResultRow): number {
+  return r.possible_marks > 0 ? totalOf(r) / r.possible_marks : 0;
+}
 
 /** One exam session, start to finish: lobby -> live monitor -> (only once it's over) everyone's results, hand-marking of written answers, and releasing results to employees. */
 export default function ExamHostPage() {
@@ -253,7 +257,9 @@ export default function ExamHostPage() {
   const liveOrdered = useMemo(() => {
     const list = participants.slice();
     if (!showScores) return list;
-    return list.sort((a, b) => (liveRows[b.participant_id]?.auto_marks ?? 0) - (liveRows[a.participant_id]?.auto_marks ?? 0)
+    const share = (id: string) => { const r = liveRows[id]; return r && r.possible_marks > 0 ? r.auto_marks / r.possible_marks : 0; };
+    return list.sort((a, b) => share(b.participant_id) - share(a.participant_id)
+      || (liveRows[b.participant_id]?.auto_marks ?? 0) - (liveRows[a.participant_id]?.auto_marks ?? 0)
       || (liveRows[b.participant_id]?.correct_count ?? 0) - (liveRows[a.participant_id]?.correct_count ?? 0));
   }, [participants, liveRows, showScores]);
 
@@ -262,8 +268,10 @@ export default function ExamHostPage() {
     const writing = participants.filter((p) => !p.submitted_at && !liveRows[p.participant_id]?.stopped_at).length;
     const stopped = participants.filter((p) => !p.submitted_at && liveRows[p.participant_id]?.stopped_at).length;
     const withAnswers = rows.filter((r) => r.answered_count > 0);
-    const avgPct = withAnswers.length && withAnswers[0].possible_marks > 0
-      ? Math.round((withAnswers.reduce((sum, r) => sum + r.auto_marks, 0) / withAnswers.length / withAnswers[0].possible_marks) * 1000) / 10
+    // each candidate's percentage is on THEIR OWN possible marks (candidates may have different papers: "N random questions each")
+    const scored = withAnswers.filter((r) => r.possible_marks > 0);
+    const avgPct = scored.length
+      ? Math.round((scored.reduce((sum, r) => sum + r.auto_marks / r.possible_marks, 0) / scored.length) * 1000) / 10
       : null;
     return { writing, stopped, avgPct };
   }, [participants, liveRows]);
@@ -275,10 +283,10 @@ export default function ExamHostPage() {
     .sort((a, b) => b.missPct - a.missPct || b.attempted - a.attempted)
     .slice(0, 3), [liveQs]);
 
-  const ranked = useMemo(() => (results ?? []).slice().sort((a, b) => totalOf(b) - totalOf(a) || a.display_name.localeCompare(b.display_name)), [results]);
+  const ranked = useMemo(() => (results ?? []).slice().sort((a, b) => shareOf(b) - shareOf(a) || a.display_name.localeCompare(b.display_name)), [results]);
   const pendingTotal = ranked.reduce((s, r) => s + r.pending_written, 0);
-  // rank by total marks, equal marks share a rank
-  const rankOfResult = (r: ExamResultRow) => 1 + ranked.filter((o) => totalOf(o) > totalOf(r)).length;
+  // rank by the share of their own paper (same as total marks when everyone had the same paper), equal shares share a rank
+  const rankOfResult = (r: ExamResultRow) => 1 + ranked.filter((o) => shareOf(o) > shareOf(r)).length;
   const rankTitles = useRankTitleConfig();
 
   function exportCsv() {

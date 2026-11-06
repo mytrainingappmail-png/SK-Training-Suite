@@ -14,6 +14,24 @@ async function visibleQuestions(quizId: string): Promise<TopicQuestion[]> {
   return (quiz?.questions ?? []).filter((q) => !q.is_hidden).map((q) => ({ id: q.id, topic: q.topic ?? null, marks: q.marks || 1 }));
 }
 
+/**
+ * When a test gives every person their own random N questions, which ones each person got (participant id -> question ids).
+ * People who got every question are simply absent. If the lookup is unavailable the report falls back to "everyone got everything".
+ */
+async function loadParticipantSets(rpc: "get_quiz_participant_sets" | "get_exam_participant_sets", sessionId: string): Promise<Map<string, string[]>> {
+  const sets = new Map<string, string[]>();
+  try {
+    const { data, error } = await supabaseQuiz.rpc(rpc, { p_session_id: sessionId });
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as { participant_id: string; question_ids: string[] | null }[]) {
+      if (r.question_ids) sets.set(r.participant_id, r.question_ids);
+    }
+  } catch (e) {
+    console.warn("[quizTopicRepository] could not load each person's question set:", e);
+  }
+  return sets;
+}
+
 /** Live quiz sessions: the ticked results (one row per trainee per session) in, one input per session out. */
 export async function loadQuizTopicInputs(rows: QuizSessionResultRow[]): Promise<TopicSessionInput[]> {
   const bySession = new Map<string, QuizSessionResultRow[]>();
@@ -46,9 +64,10 @@ export async function loadQuizTopicInputs(rows: QuizSessionResultRow[]): Promise
       if ((data?.length ?? 0) < PAGE) break;
     }
 
+    const sets = await loadParticipantSets("get_quiz_participant_sets", sessionId);
     inputs.push({
       questions,
-      participants: list.map((r) => ({ id: r.participant_id, name: r.display_name })),
+      participants: list.map((r) => ({ id: r.participant_id, name: r.display_name, questionIds: sets.get(r.participant_id) ?? null })),
       answers,
     });
   }
@@ -80,5 +99,6 @@ export async function loadExamTopicInput(sessionId: string, quizId: string): Pro
     if (rows.length < PAGE) break;
   }
 
-  return { questions, participants: [...participants].map(([id, name]) => ({ id, name })), answers };
+  const sets = await loadParticipantSets("get_exam_participant_sets", sessionId);
+  return { questions, participants: [...participants].map(([id, name]) => ({ id, name, questionIds: sets.get(id) ?? null })), answers };
 }

@@ -14,6 +14,8 @@ export interface QuizForm {
   shuffle_options: boolean;
   shuffle_questions: boolean;
   shuffle_questions_per_participant: boolean;
+  /** "Every trainee gets N of the questions" (random, their own set): any number from 1 up; null / absent = every question. Needs the per-trainee shuffle above. */
+  pick_count?: number | null;
   issue_certificate: boolean;
   mode: Quiz["mode"];
   exam_duration_minutes: number | null;

@@ -77,3 +77,27 @@ describe("buildTopicReport", () => {
     expect(csv.length).toBe(4);
   });
 });
+
+describe('buildTopicReport with each person getting their own random questions', () => {
+  it('counts only the questions a person actually got - an unanswered question outside their set is not held against them', () => {
+    const r = buildTopicReport(
+      [{
+        ...session,
+        participants: [
+          { id: 'p1', name: 'Rahul Sharma', questionIds: ['q1', 'q3'] }, // never got q2 or q4
+          { id: 'p2', name: 'Nisha' }, // got everything (no set)
+        ],
+      }],
+      60,
+    );
+    const rahul = r.people.find((p) => p.name === 'Rahul Sharma')!;
+    // Rahul: q1 (1/1 RERA) + q3 (0/2 Payment plan) = 1 of 3, not 3 of 5 with q2 / q4 counted
+    expect(rahul.byTopic['RERA']).toMatchObject({ earned: 1, possible: 1, percent: 100 });
+    expect(rahul.byTopic['Payment plan']).toMatchObject({ earned: 0, possible: 2, percent: 0 });
+    expect(rahul.byTopic[NO_TOPIC_LABEL]).toBeUndefined();
+    expect(rahul.overall).toMatchObject({ earned: 1, possible: 3 });
+    // Nisha is unchanged
+    const nisha = r.people.find((p) => p.name === 'Nisha')!;
+    expect(nisha.overall).toMatchObject({ earned: 3, possible: 5 });
+  });
+});
