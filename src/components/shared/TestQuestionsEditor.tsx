@@ -9,6 +9,8 @@ import { defaultQuestionForm } from '../../types/question';
 import type { Question, QuestionWithOptionsForm } from '../../types/question';
 import AiQuizMakerModal from './AiQuizMakerModal';
 import type { AiQuestion } from '../../services/aiQuiz/aiQuizService';
+import ImportFromQuizModal from './ImportFromQuizModal';
+import type { ImportedQuestion } from './ImportFromQuizModal';
 
 type Opt = { option_text: string; is_correct: boolean };
 
@@ -27,7 +29,8 @@ interface Row {
   savedText: string;
   savedMarks: number;
   savedOpts: string;            // the options part of the snapshot alone
-  explanation?: string;         // only for questions drafted by the AI Quiz Maker — saved with the new question
+  explanation?: string;         // only for questions drafted by the AI Quiz Maker / imported from a quiz — saved with the new question
+  imageUrl?: string;            // only for questions imported from a quiz that had a picture
 }
 
 const OPTION_TYPES = ['mcq', 'multiple_select', 'true_false'];
@@ -81,6 +84,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
   const [saving, setSaving] = useState(false);
   const [bulkMarks, setBulkMarks] = useState('1');
   const [showAi, setShowAi] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Start again from what is stored whenever it is (re)loaded. A text signature, not the array identity,
   // decides that — the parent may hand over a fresh array on every render without anything having changed.
@@ -123,6 +127,24 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
     ]);
     setShowAi(false);
     showToast(`Added ${list.length} AI question${list.length === 1 ? '' : 's'} at the bottom — read them, fix anything, then press Save all changes.`);
+  }
+
+  /** Questions picked from a Live Quiz / Exam also go in as NEW, unsaved rows - read, edit, then "Save all changes". */
+  function addImportedQuestions(list: ImportedQuestion[]) {
+    setRows((rs) => [
+      ...rs,
+      ...list.map((q) => ({
+        ...blankRow(0),
+        type: q.type,
+        text: q.text,
+        marks: q.marks,
+        options: pad(q.options, q.type),
+        explanation: q.explanation,
+        imageUrl: q.image_url,
+      })),
+    ]);
+    setShowImport(false);
+    showToast(`Added ${list.length} question${list.length === 1 ? '' : 's'} from the quiz at the bottom — read them, then press Save all changes.`);
   }
 
   function duplicate(key: string) {
@@ -193,7 +215,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
             mandatory: r.q.mandatory, randomize_options: r.q.randomize_options, attachment_url: r.q.attachment_url, image_url: r.q.image_url, active: r.q.active,
             display_order: r.q.display_order, question_text: '', marks: 1, options: [],
           }
-          : { ...defaultQuestionForm, assessment_id: assessmentId, question_code: r.code, display_order: nextOrder++, explanation: r.explanation ?? '' };
+          : { ...defaultQuestionForm, assessment_id: assessmentId, question_code: r.code, question_type: r.type as QuestionWithOptionsForm['question_type'], display_order: nextOrder++, explanation: r.explanation ?? '', image_url: r.imageUrl ?? '' };
         const form = { ...base, question_text: r.text.trim(), marks: Math.max(1, Number(r.marks) || 1), options };
         if (r.id) await saveQuestion(r.id, form); else toCreate.push(form);
       }
@@ -322,6 +344,9 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
           <button type="button" onClick={() => setShowAi(true)} className="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
             ✨ Make questions with AI
           </button>
+          <button type="button" onClick={() => setShowImport(true)} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+            📥 Import from a Quiz / Exam
+          </button>
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs font-semibold ${changedCount ? 'text-amber-600' : 'text-slate-400'}`}>
@@ -340,6 +365,7 @@ export default function TestQuestionsEditor({ assessmentId, questions, optionsBy
           >{saving ? 'Saving…' : 'Save all changes'}</button>
         </div>
       </div>
+      {showImport && <ImportFromQuizModal existingTexts={live.map((r) => r.text)} onAdd={addImportedQuestions} onClose={() => setShowImport(false)} />}
       {showAi && <AiQuizMakerModal sourceText={aiSourceText} onAdd={addAiQuestions} onClose={() => setShowAi(false)} />}
     </div>
   );
