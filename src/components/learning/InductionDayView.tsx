@@ -5,7 +5,7 @@
 // Used by the employee's Induction screen and by the owner's/admin's "Preview" (preview = nothing is
 // saved, nothing is locked by anyone else's progress).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ThumbnailCard from '../shared/ThumbnailCard';
 import Projects from './Projects';
 import AcknowledgeCard from './inductionCards/AcknowledgeCard';
@@ -76,6 +76,14 @@ export default function InductionDayView({
   const opened = reading.filter((s) => cardDone(s, viewedIds.has(s.id), responses[s.id])).length;
   const allOpened = opened >= reading.length;
   const openSection = sections.find((s) => s.id === openSectionId) ?? null;
+
+  // A "Focused projects" card shows its projects right here on the day page (no extra card to click first), so it
+  // counts as opened as soon as the day opens - the same thing opening a card would have recorded.
+  const projectCardKey = sections.filter((s) => s.section_type === 'projects').map((s) => s.id).join(',');
+  useEffect(() => {
+    sections.filter((s) => s.section_type === 'projects' && !viewedIds.has(s.id)).forEach((s) => onOpenSection(s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectCardKey]);
 
   async function submitFor(s: InductionDaySection, payload: Record<string, unknown>) {
     if (!onSubmitResponse) throw new Error('Saving is not available here.');
@@ -195,6 +203,14 @@ export default function InductionDayView({
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {sections.map((s, i) => {
+              if (s.section_type === 'projects') {
+                return (
+                  <div key={s.id} className="col-span-full">
+                    {sections.length > 1 && <h3 className="mb-3 text-base font-bold text-slate-800">{s.title}</h3>}
+                    <Projects embedded onlyProjectIds={s.project_ids ?? []} />
+                  </div>
+                );
+              }
               const isTest = s.section_type === 'test';
               const passed = isTest && s.assessment_id ? passedTestIds.has(s.assessment_id) : false;
               const seen = !isTest && viewedIds.has(s.id);
