@@ -105,12 +105,12 @@ export default function InductionDayView({
           <IconArrowLeft className="h-3.5 w-3.5" /> Back to {dayLabel || day.title}
         </button>
         <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
-          <div
-            className="bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-5 sm:px-8 sm:py-7 text-white"
-            style={openSection.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.78), rgba(124,58,237,.82)), url(${openSection.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-          >
-            <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel ? `${dayLabel.toUpperCase()} · ` : ''}{idx + 1} OF {sections.length}</span>
-            <h2 className="mt-3 text-2xl font-bold">{openSection.title}</h2>
+          <div className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white">
+            {openSection.thumbnail_url && <img src={openSection.thumbnail_url} alt="" className="block h-auto max-h-[75vh] w-full object-contain" />}
+            <div className="px-4 py-5 sm:px-8 sm:py-7">
+              <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel ? `${dayLabel.toUpperCase()} · ` : ''}{idx + 1} OF {sections.length}</span>
+              <h2 className="mt-3 text-2xl font-bold">{openSection.title}</h2>
+            </div>
           </div>
           <div className="p-3 sm:p-8">
             {openSection.section_type === 'page' && (
@@ -178,16 +178,17 @@ export default function InductionDayView({
       </button>
 
       <div className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
-        <div
-          className="relative bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-6 sm:px-8 sm:py-8 text-white"
-          style={day.thumbnail_url ? { backgroundImage: `linear-gradient(rgba(79,70,229,.75), rgba(124,58,237,.8)), url(${day.thumbnail_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-        >
-          {dayLabel && <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel.toUpperCase()}</span>}
-          <h2 className={`${dayLabel ? 'mt-3' : ''} text-2xl font-bold`}>{day.title}</h2>
-          {day.description && <p className="mt-1 text-sm text-white/80">{day.description}</p>}
-          {reading.length > 0 && (
-            <p className="mt-3 text-xs font-semibold text-white/90">{opened} of {reading.length} required cards done</p>
-          )}
+        <div className="relative bg-gradient-to-r from-indigo-500 to-violet-500 text-white">
+          {/* The Day's picture is shown whole and clear (it is often a poster with its own text) - the title bar sits under it. */}
+          {day.thumbnail_url && <img src={day.thumbnail_url} alt="" className="block h-auto max-h-[75vh] w-full object-contain" />}
+          <div className="px-4 py-6 sm:px-8 sm:py-8">
+            {dayLabel && <span className="rounded-full bg-black/30 px-2.5 py-0.5 text-xs font-bold">{dayLabel.toUpperCase()}</span>}
+            <h2 className={`${dayLabel ? 'mt-3' : ''} text-2xl font-bold`}>{day.title}</h2>
+            {day.description && <p className="mt-1 text-sm text-white/80">{day.description}</p>}
+            {reading.length > 0 && (
+              <p className="mt-3 text-xs font-semibold text-white/90">{opened} of {reading.length} required cards done</p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6 p-3 sm:p-8">

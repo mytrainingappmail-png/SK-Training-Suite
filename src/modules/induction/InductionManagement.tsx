@@ -457,12 +457,26 @@ function InductionManagement() {
     setPendingThumbFile(file);
   }
 
+  // A picture chosen for something that is ALREADY saved is stored at once - there is no second "Save" to forget
+  // (a picture that only sat in the editor never reached the employees). A brand-new day / card keeps it until its first Save.
+  async function persistDayPicture(url: string | null) {
+    if (!editingDayId || editingDayId === 'new') return;
+    try { await editDay(editingDayId, { thumbnail_url: url }); fetchAll(); showToast(url ? 'Picture saved.' : 'Picture removed.'); }
+    catch (err) { showToast(err instanceof Error ? err.message : 'The picture could not be saved - press Save Day.'); }
+  }
+  async function persistSectionPicture(url: string | null) {
+    if (!editingSectionId || editingSectionId === 'new' || !editingDayId || editingDayId === 'new') return;
+    try { await editSection(editingSectionId, { thumbnail_url: url }); fetchSections(editingDayId); showToast(url ? 'Picture saved.' : 'Picture removed.'); }
+    catch (err) { showToast(err instanceof Error ? err.message : 'The picture could not be saved - press Save Section.'); }
+  }
+
   async function handleThumbnailEdited(file: File) {
     setPendingThumbFile(null);
     setUploadingThumb(true);
     try {
       const url = await uploadInlineImage(file);
       setDraft((d) => ({ ...d, thumbnail_url: url }));
+      await persistDayPicture(url);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to upload thumbnail.');
     } finally {
@@ -476,6 +490,7 @@ function InductionManagement() {
     try {
       const url = await uploadInlineImage(file);
       setSectionDraft((d) => (d ? { ...d, thumbnail_url: url } : d));
+      await persistSectionPicture(url);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to upload the picture.');
     } finally {
@@ -1032,7 +1047,7 @@ function InductionManagement() {
                       <button type="button" onClick={() => sectionThumbInputRef.current?.click()} disabled={uploadingSectionThumb} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                         {uploadingSectionThumb ? 'Uploading…' : sectionDraft.thumbnail_url ? 'Replace picture' : 'Add picture'}
                       </button>
-                      {sectionDraft.thumbnail_url && <button type="button" onClick={() => setSectionDraft((d) => (d ? { ...d, thumbnail_url: null } : d))} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>}
+                      {sectionDraft.thumbnail_url && <button type="button" onClick={() => { setSectionDraft((d) => (d ? { ...d, thumbnail_url: null } : d)); void persistSectionPicture(null); }} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>}
                       {!sectionDraft.thumbnail_url && <span className="text-xs text-slate-400">Optional — a colourful card is drawn if you skip it.</span>}
                     </div>
                     {pendingSectionThumb && (
