@@ -1563,6 +1563,7 @@ function TestEditorPanel({ lessonId }: { lessonId: string }) {
             <ToggleRow label="Show Correct Answers" on={assessment.show_correct_answers} onChange={() => handleSettingsChange({ show_correct_answers: !assessment.show_correct_answers })} />
             <ToggleRow label="Auto Submit on Timer End" on={assessment.auto_submit} onChange={() => handleSettingsChange({ auto_submit: !assessment.auto_submit })} />
             <ToggleRow label="Certificate on Pass" on={assessment.certificate_enabled} onChange={() => handleSettingsChange({ certificate_enabled: !assessment.certificate_enabled })} />
+            <ToggleRow label="Employees must pass this test" on={assessment.must_pass} onChange={() => handleSettingsChange({ must_pass: !assessment.must_pass })} />
           </div>
           <div className="flex items-center justify-between border-t border-slate-800 pt-4">
             <span className="text-xs text-slate-500">

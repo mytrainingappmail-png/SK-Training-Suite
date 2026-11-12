@@ -49,6 +49,9 @@ export interface Assessment {
 
   certificate_enabled: boolean;
 
+  // The admin's "employees must pass this test" switch (off = the test is optional, as before).
+  must_pass: boolean;
+
   active: boolean;
 
   created_at: string;
@@ -82,5 +85,6 @@ export const defaultAssessmentForm: AssessmentForm = {
   show_correct_answers:    true,
   auto_submit:             true,
   certificate_enabled:     false,
+  must_pass:               false,
   active:                  true,
 };

@@ -1108,6 +1108,7 @@ function AssessmentManagement() {
                       <ToggleRow label="Question Timer" on={activeAssessment.question_timer_enabled} onChange={() => updateAssessmentField({ question_timer_enabled: !activeAssessment.question_timer_enabled })} />
                       <ToggleRow label="Auto Submit" on={activeAssessment.auto_submit} onChange={() => updateAssessmentField({ auto_submit: !activeAssessment.auto_submit })} />
                       <ToggleRow label="Certificate Eligible" on={activeAssessment.certificate_enabled} onChange={() => updateAssessmentField({ certificate_enabled: !activeAssessment.certificate_enabled })} />
+                      <ToggleRow label="Employees must pass this test" on={activeAssessment.must_pass} onChange={() => updateAssessmentField({ must_pass: !activeAssessment.must_pass })} />
                       <ToggleRow label="Show Result Immediately" on={activeAssessment.show_result_immediately} onChange={() => updateAssessmentField({ show_result_immediately: !activeAssessment.show_result_immediately })} />
                       <ToggleRow label="Show Correct Answers" on={activeAssessment.show_correct_answers} onChange={() => updateAssessmentField({ show_correct_answers: !activeAssessment.show_correct_answers })} />
                     </div>

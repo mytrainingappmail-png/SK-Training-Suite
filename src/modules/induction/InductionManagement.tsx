@@ -357,7 +357,7 @@ function InductionManagement() {
   // its own private assessment+questions (never picked from the shared,
   // company-wide Assessment pool), same pattern as Real Estate Project
   // Test sections. Plus CSV bulk import/export for questions.
-  const DEFAULT_TEST_SETTINGS = { passing_percentage: 70, duration_minutes: 15, shuffle_questions: true, shuffle_options: true };
+  const DEFAULT_TEST_SETTINGS = { passing_percentage: 70, duration_minutes: 15, shuffle_questions: true, shuffle_options: true, must_pass: false };
   const [testSettingsDraft, setTestSettingsDraft] = useState(DEFAULT_TEST_SETTINGS);
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [testQuestionOptions, setTestQuestionOptions] = useState<Record<string, { option_text: string; is_correct: boolean }[]>>({});
@@ -564,6 +564,7 @@ function InductionManagement() {
           duration_minutes: a.duration_minutes,
           shuffle_questions: a.shuffle_questions,
           shuffle_options: a.shuffle_options,
+          must_pass: a.must_pass ?? false,
         });
       }
       setTestQuestions(loaded.questions);
@@ -689,6 +690,7 @@ function InductionManagement() {
           duration_minutes: testSettingsDraft.duration_minutes,
           shuffle_questions: testSettingsDraft.shuffle_questions,
           shuffle_options: testSettingsDraft.shuffle_options,
+          must_pass: testSettingsDraft.must_pass,
         };
         if (assessmentId) {
           await saveAssessmentSettings(assessmentId, settingsPayload);
@@ -1138,6 +1140,10 @@ function InductionManagement() {
                             Shuffle Options
                           </label>
                         </div>
+                        <label className="mt-3 flex items-start gap-2 text-xs text-slate-700">
+                          <input type="checkbox" className="mt-0.5" checked={testSettingsDraft.must_pass} onChange={(e) => setTestSettingsDraft((d) => ({ ...d, must_pass: e.target.checked }))} />
+                          <span><b>Employees must pass this test</b> — it shows in Reports → Pending tests until they pass, and the next step stays locked until then. Off = optional.</span>
+                        </label>
                         <p className="mt-2 text-xs text-slate-400">
                           Employees get {testSettingsDraft.duration_minutes} minute(s) and need {testSettingsDraft.passing_percentage}% to pass. Score shows up in Results and Reports automatically. Save this section once to store these settings.
                         </p>

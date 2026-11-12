@@ -381,6 +381,7 @@ function AssessmentModal({
           show_correct_answers:    editing.show_correct_answers,
           auto_submit:             editing.auto_submit,
           certificate_enabled:     editing.certificate_enabled,
+          must_pass:               editing.must_pass ?? false,
           active:                  editing.active,
         }
       : { ...defaultAssessmentForm }
@@ -702,6 +703,13 @@ function AssessmentModal({
                 sub="Issue certificate on passing"
                 on={form.certificate_enabled}
                 onChange={() => field("certificate_enabled", !form.certificate_enabled)}
+                disabled={saving}
+              />
+              <ToggleRow
+                label="Must pass"
+                sub="Employees must pass this test"
+                on={form.must_pass}
+                onChange={() => field("must_pass", !form.must_pass)}
                 disabled={saving}
               />
               <ToggleRow
