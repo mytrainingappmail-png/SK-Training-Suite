@@ -142,6 +142,36 @@ export async function notifyCourseAssigned(
   await sendNotificationNow(notification, employeeIds);
 }
 
+/** Reminder for people who still have to pass a test (Reports -> Pending tests). The admin writes the title and the
+ * message; "{test}" in the message becomes the test's name, so one wording serves every test. One in-app notification
+ * per test goes to the people pending on it. Returns how many people were reminded. */
+export async function sendTestReminders(
+  companyId: string,
+  createdBy: string | null,
+  createdByName: string,
+  title: string,
+  messageTemplate: string,
+  groups: { testTitle: string; employeeIds: string[] }[]
+): Promise<number> {
+  let people = 0;
+  for (const g of groups) {
+    const ids = Array.from(new Set(g.employeeIds));
+    if (ids.length === 0) continue;
+    const notification = await repo.createNotification(companyId, createdBy, {
+      ...defaultNotificationForm,
+      type: 'assessment_reminder',
+      priority: 'high',
+      title: title.trim(),
+      message: messageTemplate.split('{test}').join(g.testTitle).trim(),
+      audience_type: 'employee',
+      created_by_name: createdByName,
+    });
+    await sendNotificationNow(notification, ids);
+    people += ids.length;
+  }
+  return people;
+}
+
 export async function notifyLearningPathAssigned(
   companyId: string,
   createdBy: string | null,

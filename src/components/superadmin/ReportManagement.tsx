@@ -12,6 +12,7 @@ import {
   loadCompanyReport,
 } from "../../services/report/reportService";
 import InductionProgressReport from "../admin/reports/InductionProgressReport";
+import PendingTestsReport from "../admin/reports/PendingTestsReport";
 import { loadCompanies }     from "../../services/company/companyService";
 import { branchService }     from "../../services/branch/branchService";
 import { departmentService } from "../../services/department/departmentService";
@@ -55,6 +56,7 @@ const REPORT_TABS: { value: ReportType; label: string }[] = [
   { value: "branch",         label: "Branch"          },
   { value: "company",        label: "Company"         },
   { value: "induction",      label: "Induction"       },
+  { value: "pending_tests",  label: "Pending tests"   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,7 +218,7 @@ function FilterPanel({
     onChange({ ...filters, [key]: val });
   }
 
-  if (active === "dashboard" || active === "induction") return null;
+  if (active === "dashboard" || active === "induction" || active === "pending_tests") return null;
 
   const showCompany      = ["employee","course","department","branch","company"].includes(active);
   const showBranch       = ["employee","branch"].includes(active);
@@ -373,6 +375,7 @@ export default function ReportManagement() {
         case "branch":       setBranchRows(await loadBranchReport(filters));            break;
         case "company":      setCompanyRows(await loadCompanyReport());                 break;
         case "induction":    break; // loaded by the Induction report itself
+        case "pending_tests": break; // loaded by the Pending tests report itself
       }
     } catch (err) {
       console.error(err);
@@ -502,7 +505,7 @@ export default function ReportManagement() {
         />
 
         {/* Search + export bar — not shown for dashboard */}
-        {activeReport !== "dashboard" && activeReport !== "induction" && (
+        {activeReport !== "dashboard" && activeReport !== "induction" && activeReport !== "pending_tests" && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
             <div className="relative min-w-[220px] flex-1">
               <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -536,6 +539,9 @@ export default function ReportManagement() {
 
         {/* ─── Induction progress (its own screen, own data) ─── */}
         {activeReport === "induction" && <InductionProgressReport />}
+
+        {/* ─── Pending tests (its own screen, own data) ─── */}
+        {activeReport === "pending_tests" && <PendingTestsReport />}
 
         {/* ─── Dashboard ─── */}
         {!loadingReport && activeReport === "dashboard" && dashboard && (

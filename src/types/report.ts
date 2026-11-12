@@ -8,7 +8,8 @@ export type ReportType =
   | "department"
   | "branch"
   | "company"
-  | "induction";
+  | "induction"
+  | "pending_tests";
 
 export interface ReportFilters {
   company_id:      string;
