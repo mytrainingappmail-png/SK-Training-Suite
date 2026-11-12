@@ -15,6 +15,7 @@ import {
   loadExistingAnswers,
   startAttempt,
   countCompletedAttempts,
+  getExtraAttempts,
   saveAnswer as repositorySaveAnswer,
   submitAssessment as repositorySubmitAssessment,
 } from "../../repositories/assessmentPlayer/assessmentPlayerRepository";
@@ -53,10 +54,13 @@ export async function startAssessment(
   if (!attempt) {
     const completedCount = await countCompletedAttempts(assessmentId, employeeId);
 
-    if (completedCount >= assessment.maximum_attempts) {
+    // the test's own limit plus any extra attempts an admin gave this person
+    const allowedAttempts = assessment.maximum_attempts + (await getExtraAttempts(assessmentId, employeeId));
+
+    if (completedCount >= allowedAttempts) {
       throw new Error(
-        `You have used all ${assessment.maximum_attempts} attempt${
-          assessment.maximum_attempts === 1 ? "" : "s"
+        `You have used all ${allowedAttempts} attempt${
+          allowedAttempts === 1 ? "" : "s"
         } for this assessment.`
       );
     }

@@ -1,7 +1,10 @@
 // Reports -> Pending tests: who still has to pass which test, built from the raw data (see the repository).
 // A row exists for every (employee, test) that was handed out and not passed yet:
-//   - assessments assigned to a single employee (Assessment -> Assignments), and
-//   - the test card of every Induction day the employee has already completed (that is when the test opens).
+//   - assessments assigned to a single employee (Assessment -> Assignments),
+//   - the test card of every Induction day the employee has already completed (that is when the test opens),
+//   - a Project's test for everyone who marked that project complete, and
+//   - a Course's test for everyone enrolled in that course
+//   (the last two only when the admin switched "employees must pass this test" on for that test).
 // All numbers come from the data (the test's own pass % and attempt limit) - nothing is fixed here.
 
 import { employeeLocationKey, visibleInLocation } from '../../constants/locations';
@@ -11,7 +14,7 @@ export type PendingStatus = 'not_started' | 'in_progress' | 'failed' | 'no_attem
 
 export interface PendingRow {
   key: string;
-  source: 'assessment' | 'induction';
+  source: 'assessment' | 'induction' | 'project' | 'course';
   employeeId: string;
   name: string;
   code: string;
@@ -21,8 +24,10 @@ export interface PendingRow {
   /** Where the test comes from, e.g. "Assessment" or "Induction · Day 2". */
   where: string;
   dueDate: string | null;
-  /** The assignment's "mandatory" switch (null for Induction tests, which have none). */
+  /** The assignment's "mandatory" switch (null for Induction tests, which have none; true for must-pass Project / Course tests). */
   mandatory: boolean | null;
+  /** Extra attempts an admin gave this person on this test (already included in maxAttempts). */
+  extraAttempts: number;
   attempts: number;
   maxAttempts: number;
   bestPct: number | null;
@@ -53,6 +58,9 @@ export function buildPendingRows(data: PendingTestsData, now: Date = new Date())
     bestPct.set(k, Math.max(bestPct.get(k) ?? 0, Number(r.percentage) || 0));
   }
 
+  const extraBy = new Map<string, number>();
+  for (const g of data.grants ?? []) extraBy.set(`${g.employee_id}:${g.assessment_id}`, g.extra_attempts);
+
   const today = now.toISOString().slice(0, 10);
   const seen = new Set<string>();
   const rows: PendingRow[] = [];
@@ -64,8 +72,10 @@ export function buildPendingRows(data: PendingTestsData, now: Date = new Date())
     const t = test.get(testId);
     if (!e || !e.active || !t) return;
     seen.add(key);
-    const attempts = attemptsBy.get(key) ?? [];
-    const maxAttempts = extra.maxAttempts || t.maximum_attempts || 1;
+    // abandoned tries do not use up an attempt (the player does not count them either)
+    const attempts = (attemptsBy.get(key) ?? []).filter((a) => a.status !== 'abandoned');
+    const given = extraBy.get(key) ?? 0;
+    const maxAttempts = (extra.maxAttempts || t.maximum_attempts || 1) + given;
     const latest = [...attempts].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))[0];
     let status: PendingStatus;
     if (attempts.some((a) => a.status === 'in_progress')) status = 'in_progress';
@@ -76,7 +86,7 @@ export function buildPendingRows(data: PendingTestsData, now: Date = new Date())
     rows.push({
       key: `${source}:${key}`, source, employeeId, name: `${e.first_name} ${e.last_name ?? ''}`.trim(), code: e.employee_code,
       branch: e.branch_id ? branchName.get(e.branch_id) ?? '' : '', testId, testTitle: t.assessment_title || 'Untitled test', where,
-      dueDate: due, mandatory: extra.mandatory, attempts: attempts.length, maxAttempts, bestPct: bestPct.has(key) ? bestPct.get(key)! : null,
+      dueDate: due, mandatory: extra.mandatory, extraAttempts: given, attempts: attempts.length, maxAttempts, bestPct: bestPct.has(key) ? bestPct.get(key)! : null,
       passPct: Number(t.passing_percentage) || 0, status,
       overdue: extra.expired || (due !== null && due < today),
       lastAttemptAt: latest ? latest.submitted_at ?? latest.completed_at ?? latest.started_at : null,
@@ -105,6 +115,18 @@ export function buildPendingRows(data: PendingTestsData, now: Date = new Date())
         add('induction', a.employee_id, s.assessment_id!, `Induction · ${day?.title ?? 'Day'}`, { dueDate: null, mandatory: null, maxAttempts: null, expired: false });
       }
     }
+  }
+
+  // A Project's / a Course's test counts for the people who actually took that project / course.
+  const projectDoneBy = new Map<string, Set<string>>();
+  for (const d of data.projectDone ?? []) projectDoneBy.set(d.project_id, (projectDoneBy.get(d.project_id) ?? new Set<string>()).add(d.employee_id));
+  for (const pt of data.projectTests ?? []) {
+    for (const empId of projectDoneBy.get(pt.ref_id) ?? []) add('project', empId, pt.assessment_id, `Project · ${pt.ref_name}`, { dueDate: null, mandatory: true, maxAttempts: null, expired: false });
+  }
+  const enrolledBy = new Map<string, Set<string>>();
+  for (const e of data.courseEnrollments ?? []) enrolledBy.set(e.course_id, (enrolledBy.get(e.course_id) ?? new Set<string>()).add(e.employee_id));
+  for (const ct of data.courseTests ?? []) {
+    for (const empId of enrolledBy.get(ct.ref_id) ?? []) add('course', empId, ct.assessment_id, `Course · ${ct.ref_name}`, { dueDate: null, mandatory: true, maxAttempts: null, expired: false });
   }
 
   return rows.sort((x, y) => Number(y.overdue) - Number(x.overdue) || STATUS_ORDER[x.status] - STATUS_ORDER[y.status] || x.name.localeCompare(y.name));

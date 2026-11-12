@@ -121,6 +121,16 @@ export async function getMyAssessments(employeeId: string): Promise<MyAssessment
     new Set(assignments.map((row) => row.assessment_id).filter(Boolean))
   );
 
+  // Extra attempts an admin gave this person (none if the table is missing or unreadable).
+  const grantsResult = await supabase
+    .from('assessment_attempt_grants')
+    .select('assessment_id, extra_attempts')
+    .eq('employee_id', employeeId)
+    .in('assessment_id', assessmentIds);
+  const extraByAssessment = new Map<string, number>(
+    grantsResult.error ? [] : ((grantsResult.data ?? []) as { assessment_id: string; extra_attempts: number }[]).map((g) => [g.assessment_id, Number(g.extra_attempts) || 0] as [string, number])
+  );
+
   const [marksResult, attemptResult, resultResult] = await Promise.all([
     supabase
       .from('question_bank')
@@ -203,7 +213,7 @@ export async function getMyAssessments(employeeId: string): Promise<MyAssessment
         dueDate:         row.end_date ?? '',
         status:          deriveStatus(attempts),
         attemptCount:    attempts.length,
-        maximumAttempts: row.maximum_attempts || assessment.maximum_attempts || 1,
+        maximumAttempts: (row.maximum_attempts || assessment.maximum_attempts || 1) + (extraByAssessment.get(row.assessment_id) ?? 0),
         lastAttemptDate:
           lastAttempt?.completed_at ?? lastAttempt?.submitted_at ?? lastAttempt?.started_at ?? null,
         resultId:   bestResult?.id         ?? null,

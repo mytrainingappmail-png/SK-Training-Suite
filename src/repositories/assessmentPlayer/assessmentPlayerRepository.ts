@@ -127,6 +127,20 @@ export async function countCompletedAttempts(
   return count ?? 0;
 }
 
+// Extra attempts an admin gave this person on this test (Reports -> Pending tests). Added to the test's own limit.
+// A missing table / unreadable row simply means "none", so the player never breaks over it.
+export async function getExtraAttempts(assessmentId: string, employeeId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("assessment_attempt_grants")
+    .select("extra_attempts")
+    .eq("assessment_id", assessmentId)
+    .eq("employee_id", employeeId)
+    .maybeSingle();
+
+  if (error || !data) return 0;
+  return Number((data as { extra_attempts: number }).extra_attempts) || 0;
+}
+
 // ─── startAttempt ─────────────────────────────────────────────────────────────
 
 export async function startAttempt(

@@ -12,6 +12,7 @@ function data(over: Partial<PendingTestsData>): PendingTestsData {
   return {
     assignments: [], assessments: [test('t1')], employees: [emp('a'), emp('b'), emp('c')], attempts: [], results: [],
     induction: { assignments: [], employees: [], branches: [], days: [], sections: [], completions: [], views: [], passes: [] },
+    grants: [], projectTests: [], projectDone: [], courseTests: [], courseEnrollments: [],
     ...over,
   } as PendingTestsData;
 }
@@ -75,5 +76,38 @@ describe('buildPendingRows', () => {
     const rows = buildPendingRows(data({ induction: induction as never, assignments: [assign('a', 't1')] }));
     expect(rows).toHaveLength(1);
     expect(rows[0].source).toBe('assessment');
+  });
+});
+
+describe('buildPendingRows - project, course, extra attempts', () => {
+  it('a must-pass project test is pending only for people who marked that project complete', () => {
+    const rows = buildPendingRows(data({
+      projectTests: [{ assessment_id: 't1', ref_id: 'p1', ref_name: 'Tower A' }],
+      projectDone: [{ project_id: 'p1', employee_id: 'a' }],
+    }));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ source: 'project', employeeId: 'a', where: 'Project · Tower A', mandatory: true, status: 'not_started' });
+  });
+  it('a must-pass course test is pending for everyone enrolled, and not once passed', () => {
+    const rows = buildPendingRows(data({
+      courseTests: [{ assessment_id: 't1', ref_id: 'c1', ref_name: 'Sales 101' }],
+      courseEnrollments: [{ course_id: 'c1', employee_id: 'a' }, { course_id: 'c1', employee_id: 'b' }],
+      results: [result('b', 't1', 90, true)],
+    }));
+    expect(rows.map((r) => r.employeeId)).toEqual(['a']);
+    expect(rows[0].where).toBe('Course · Sales 101');
+  });
+  it('extra attempts raise the limit, so "no attempts left" becomes "failed - can retry"', () => {
+    const base = { assignments: [assign('a', 't1')], attempts: [attempt('a', 't1'), attempt('a', 't1'), attempt('a', 't1')], results: [result('a', 't1', 30, false)] };
+    expect(buildPendingRows(data(base))[0].status).toBe('no_attempts_left');
+    const withGrant = buildPendingRows(data({ ...base, grants: [{ assessment_id: 't1', employee_id: 'a', extra_attempts: 2 }] }))[0];
+    expect(withGrant.status).toBe('failed');
+    expect(withGrant.maxAttempts).toBe(5);
+    expect(withGrant.extraAttempts).toBe(2);
+  });
+  it('abandoned tries do not use up attempts', () => {
+    const rows = buildPendingRows(data({ assignments: [assign('a', 't1')], attempts: [attempt('a', 't1', 'abandoned'), attempt('a', 't1', 'abandoned'), attempt('a', 't1', 'abandoned')] }));
+    expect(rows[0].status).toBe('not_started');
+    expect(rows[0].attempts).toBe(0);
   });
 });
