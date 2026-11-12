@@ -27,6 +27,8 @@ export interface CoursePlayerLesson {
   completed:       boolean;
   /** Set only for a 'quiz'-type lesson that has a linked Assessment — this is that module's test. */
   assessmentId:    string | null;
+  /** The admin switched "employees must pass this test" on for it: the next module stays locked until it is passed. */
+  assessmentMustPass: boolean;
 }
 
 export interface CoursePlayerModule {

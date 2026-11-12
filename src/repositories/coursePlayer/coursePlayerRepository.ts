@@ -44,7 +44,7 @@ interface SBLesson {
   display_order:    number;
   downloadable:     boolean;
   learning_resources: SBResource[] | null;
-  assessments:      { id: string } | { id: string }[] | null;
+  assessments:      { id: string; must_pass: boolean | null } | { id: string; must_pass: boolean | null }[] | null;
 }
 
 interface SBModule {
@@ -127,6 +127,7 @@ function normaliseLesson(l: SBLesson, completedIds: Set<string>): CoursePlayerLe
                        .sort((a, b) => a.displayOrder - b.displayOrder),
     completed:       completedIds.has(l.id),
     assessmentId:    assessment?.id ?? null,
+    assessmentMustPass: assessment?.must_pass ?? false,
   };
 }
 
@@ -233,7 +234,8 @@ export async function getCoursePlayerData(
                downloadable
              ),
              assessments (
-               id
+               id,
+               must_pass
              )
            )
          )
@@ -326,4 +328,18 @@ export async function getPassedAssessmentIds(
   if (error) throw new Error(error.message);
 
   return new Set((data ?? []).map((r) => r.assessment_id as string));
+}
+// Returns the subset of `assessmentIds` the admin has switched to "employees must pass this test".
+export async function getMustPassAssessmentIds(assessmentIds: string[]): Promise<Set<string>> {
+  if (assessmentIds.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from('assessments')
+    .select('id')
+    .eq('must_pass', true)
+    .in('id', assessmentIds);
+
+  if (error) throw new Error(error.message);
+
+  return new Set((data ?? []).map((r) => r.id as string));
 }

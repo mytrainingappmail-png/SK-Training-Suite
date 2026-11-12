@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed, loadMyLocationKey,
 } from '../../services/induction/inductionService';
-import { getPassedTestIds } from '../../services/induction/inductionProgressService';
+import { getPassedTestIds, getMustPassTestIds } from '../../services/induction/inductionProgressService';
 import { getMyCardResponses, saveMyCardResponse } from '../../repositories/induction/inductionCardRepository';
 import { getMyInductionCertificate } from '../../repositories/induction/inductionSettingsRepository';
 import { Link } from 'react-router-dom';
@@ -59,6 +59,8 @@ function Induction() {
   const [sectionsByDay, setSectionsByDay] = useState<Record<string, InductionDaySection[]>>({});
   const [completions, setCompletions] = useState<InductionDayCompletion[]>([]);
   const [passedTestIds, setPassedTestIds] = useState<Set<string>>(new Set());
+  // Tests the admin switched to "employees must pass this test": the next day stays locked until each one is passed.
+  const [mustPassIds, setMustPassIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [openDayId, setOpenDayId] = useState<string | null>(null);
@@ -108,8 +110,9 @@ function Induction() {
         setCompletions(comps);
 
         const testAssessmentIds = allSections.filter((s) => s.section_type === 'test' && s.assessment_id).map((s) => s.assessment_id!);
-        const passed = await getPassedTestIds(user.id, testAssessmentIds);
+        const [passed, mustPass] = await Promise.all([getPassedTestIds(user.id, testAssessmentIds), getMustPassTestIds(testAssessmentIds).catch(() => new Set<string>())]);
         setPassedTestIds(passed);
+        setMustPassIds(mustPass);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load induction.'))
       .finally(() => setLoading(false));
@@ -122,11 +125,20 @@ function Induction() {
   const labels = dayLabels(days);
   const nameOf = (i: number) => (days[i] ? refName(labels[i], days[i].title) : 'the next day');
 
+  // Is the previous day's must-pass test (switched on by the admin) still not passed? Then this day stays locked,
+  // however it is set to open (even "anytime").
+  function blockedByMustPassTest(index: number): boolean {
+    const prevIndex = previousInOrder(days, index);
+    if (prevIndex < 0) return false;
+    return (sectionsByDay[days[prevIndex].id] ?? []).some((s) => s.section_type === 'test' && !!s.assessment_id && mustPassIds.has(s.assessment_id) && !passedTestIds.has(s.assessment_id));
+  }
+
   function dayStatus(index: number): DayStatus {
     const day = days[index];
     if (completionByDay.has(day.id)) return 'completed';
     // A standalone part (no label, e.g. a company overview) is always open and outside the day-by-day order.
     if (isStandaloneDay(day)) return 'available';
+    if (blockedByMustPassTest(index)) return 'locked';
     // The admin chooses, day by day, how a Day opens (see InductionUnlockMode).
     if (day.unlock_mode === 'anytime') return 'available';
     // The first day IN THE ORDER is open from the start; later ones follow the previous day in the order.
@@ -153,6 +165,10 @@ function Induction() {
     if (status === 'date-locked') {
       const prevCompletedAt = completionByDay.get(days[previousInOrder(days, index)].id)!;
       showToast(`${nameOf(index)} unlocks on ${formatUnlockDate(nextUnlockDate(prevCompletedAt))} — one new day at a time, so it actually sinks in.`);
+      return;
+    }
+    if (blockedByMustPassTest(index)) {
+      showToast(`Pass the test of ${nameOf(previousInOrder(days, index))} first to unlock ${nameOf(index)}.`);
       return;
     }
     showToast(`Complete ${nameOf(previousInOrder(days, index))} first to unlock ${nameOf(index)}.`);
@@ -305,7 +321,7 @@ function Induction() {
             >
               {status !== 'completed' && status !== 'available' && (
                 <p className="text-xs text-slate-400">
-                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : `Complete ${nameOf(previousInOrder(days, i))} first.`}
+                  {status === 'date-locked' ? 'Come back tomorrow to continue.' : blockedByMustPassTest(i) ? `Pass the test of ${nameOf(previousInOrder(days, i))} first.` : `Complete ${nameOf(previousInOrder(days, i))} first.`}
                 </p>
               )}
             </ThumbnailCard>

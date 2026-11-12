@@ -430,6 +430,12 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
     return mod.lessons.find((l) => l.lessonType === 'quiz' && l.assessmentId) ?? null;
   }
 
+  // Is passing this module's test needed before moving on? Either the whole course says so, or this one test is
+  // switched to "must pass" by the admin.
+  function moduleTestRequired(mod: CoursePlayerModule): boolean {
+    return !!data?.course.testCompulsoryAfterModule || !!moduleQuizLesson(mod)?.assessmentMustPass;
+  }
+
   function moduleTestPassed(mod: CoursePlayerModule): boolean {
     const quiz = moduleQuizLesson(mod);
     if (!quiz || !quiz.assessmentId) return true;
@@ -447,10 +453,10 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
       if (allLessons.slice(0, idx).some((l) => !l.completed)) return true;
     }
 
-    if (data.course.testCompulsoryAfterModule) {
+    {
       const lessonModuleIdx = data.course.modules.findIndex((m) => m.lessons.some((l) => l.id === lesson.id));
       for (let i = 0; i < lessonModuleIdx; i++) {
-        if (!moduleTestPassed(data.course.modules[i])) return true;
+        if (moduleTestRequired(data.course.modules[i]) && !moduleTestPassed(data.course.modules[i])) return true;
       }
     }
 
@@ -462,7 +468,7 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   function canAdvanceFromModule(mod: CoursePlayerModule): boolean {
     if (!data) return true;
     if (data.course.requireCompletionBeforeNext && !moduleCompleted(mod)) return false;
-    if (data.course.testCompulsoryAfterModule && !moduleTestPassed(mod)) return false;
+    if (moduleTestRequired(mod) && !moduleTestPassed(mod)) return false;
     return true;
   }
 
@@ -607,7 +613,7 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
         const currentModule = data.course.modules.find((m) => m.lessons.some((l) => l.id === activeLesson.id));
         const nextModule    = data.course.modules.find((m) => m.lessons.some((l) => l.id === next.id));
         const crossingModule = !!currentModule && !!nextModule && currentModule.id !== nextModule.id;
-        const blockedByTest = data.course.testCompulsoryAfterModule && crossingModule && currentModule && !moduleTestPassed(currentModule);
+        const blockedByTest = crossingModule && currentModule && moduleTestRequired(currentModule) && !moduleTestPassed(currentModule);
         if (!blockedByTest) goNext();
         else showToast('Pass this module\'s test to continue.');
       }
@@ -790,7 +796,7 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   <div className="mt-6 flex flex-col items-end gap-2">
                     {!canAdvanceFromModule(selectedModule) && (
                       <p className="text-xs font-medium text-slate-500">
-                        {data.course.testCompulsoryAfterModule && !moduleTestPassed(selectedModule)
+                        {moduleTestRequired(selectedModule) && !moduleTestPassed(selectedModule)
                           ? 'Pass this module\'s test to unlock the next module.'
                           : 'Complete every lesson in this module to unlock the next one.'}
                       </p>
