@@ -758,6 +758,14 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     return 'FAQ';
   }
 
+  // The message pop-up ("Saved", "Give the test a subject line first", ...). Both the project list AND the project
+  // editor show it - the editor used to have none, so its errors were silent and Save looked dead.
+  const toastBanner = toast ? (
+    <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+      {toast}
+    </div>
+  ) : null;
+
   if (loading) {
     return <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div>;
   }
@@ -1102,6 +1110,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
             </button>
           </div>
         </div>
+        {toastBanner}
       </div>
     );
   }
@@ -1314,11 +1323,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
         />
       )}
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
-          {toast}
-        </div>
-      )}
+      {toastBanner}
     </div>
   );
 }

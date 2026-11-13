@@ -97,6 +97,7 @@ function toAssessmentForm(a: Assessment): AssessmentForm {
     show_correct_answers: a.show_correct_answers,
     auto_submit: a.auto_submit,
     certificate_enabled: a.certificate_enabled,
+    must_pass: a.must_pass ?? false,
     active: a.active,
   };
 }
@@ -749,6 +750,7 @@ function AssessmentManagement() {
         show_correct_answers: true,
         auto_submit: true,
         certificate_enabled: false,
+        must_pass: false,
         active: true,
       });
       setCreatingOpen(false);
