@@ -55,6 +55,8 @@ interface BackupQuiz {
   shuffle_questions_per_participant?: boolean;
   /** Absent in an older backup - restore gives everyone every question. */
   pick_count?: number | null;
+  /** Absent in an older backup - restore leaves attempts uncounted. */
+  track_attempts?: boolean;
   issue_certificate: boolean;
   /** Absent in a backup made before Exams existed - treated as a Live Quiz. */
   mode?: "live" | "exam";
@@ -135,6 +137,7 @@ export async function exportBackup(companyId: string): Promise<QuizBackup> {
         shuffle_questions: q.shuffle_questions,
         shuffle_questions_per_participant: q.shuffle_questions_per_participant,
         pick_count: q.pick_count ?? null,
+        track_attempts: q.track_attempts ?? false,
         issue_certificate: q.issue_certificate,
         mode: q.mode,
         exam_duration_minutes: q.exam_duration_minutes,
@@ -273,6 +276,7 @@ export async function importBackup(
       shuffle_questions: quiz.shuffle_questions ?? false,
       shuffle_questions_per_participant: quiz.shuffle_questions_per_participant ?? false,
       pick_count: quiz.pick_count ?? null,
+      track_attempts: quiz.track_attempts ?? false,
       issue_certificate: quiz.issue_certificate ?? true,
       mode: quiz.mode ?? "live",
       exam_duration_minutes: quiz.exam_duration_minutes ?? null,

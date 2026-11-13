@@ -14,8 +14,10 @@ import { csvEscape, downloadCsvFile } from "../../services/quiz/quizCsvService";
 import {
   getExamSessionAdmin, getExamParticipantsAdmin, getExamResults, getExamParticipantDetail, getExamQuestionStats,
   getExamSessionFolder, moveExamSessionToFolder, startExamNow, extendExamSession, endExamSession, releaseExamResults, gradeExamAnswer, signedPhotoUrls, regradeExamQuestion, reopenExamParticipant, renameExamParticipant, resetExamParticipant,
-  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant, getExamSessionFlags,
+  getExamLiveAdmin, getExamLiveQuestions, stopExamParticipant, resumeExamParticipant, getExamSessionFlags, getQuizTrackAttempts, listFinishedExamSessionsForAttempts,
 } from "../../repositories/exam/examAdminRepository";
+import { buildAttemptInfo, attemptLabel, percentTrail } from "../../services/quiz/quizAttempts";
+import type { AttemptInfo, AttemptInput } from "../../services/quiz/quizAttempts";
 import { practiceLeave } from "../../repositories/quiz/quizSessionRepository";
 import TopicReportModal from "../../components/quiz/TopicReportModal";
 import { loadExamTopicInput } from "../../repositories/quiz/quizTopicRepository";
@@ -49,6 +51,9 @@ export default function ExamHostPage() {
   const [session, setSession] = useState<ExamSessionAdmin | null>(null);
   const [participants, setParticipants] = useState<ExamParticipantAdmin[]>([]);
   const [results, setResults] = useState<ExamResultRow[] | null>(null);
+  // "Count each person's attempts" (only when switched on for this exam): attempt number + history per candidate
+  const [attemptInfo, setAttemptInfo] = useState<Map<string, AttemptInfo> | null>(null);
+  const otherSessionRows = useRef(new Map<string, ExamResultRow[]>());
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [stats, setStats] = useState<ExamQuestionStat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,15 +294,47 @@ export default function ExamHostPage() {
   const rankOfResult = (r: ExamResultRow) => 1 + ranked.filter((o) => shareOf(o) > shareOf(r)).length;
   const rankTitles = useRankTitleConfig();
 
+  // Attempts of the same person (same name) across the sessions of this exam, when the owner switched that on.
+  useEffect(() => {
+    if (!session || session.status !== "finished" || !results || isPractice) {
+      setAttemptInfo(null);
+      return;
+    }
+    let live = true;
+    (async () => {
+      try {
+        if (!(await getQuizTrackAttempts(session.quiz_id))) { if (live) setAttemptInfo(null); return; }
+        const sessions = await listFinishedExamSessionsForAttempts(session.quiz_id);
+        const entries: AttemptInput[] = [];
+        const add = (rows: ExamResultRow[], at: string) => {
+          for (const r of rows) entries.push({ key: r.participant_id, quizId: session.quiz_id, name: r.display_name, at, percent: pctOf(r), passed: pctOf(r) >= session.passing_score_pct });
+        };
+        for (const s of sessions) {
+          if (s.id === sessionId) { add(results, s.opens_at); continue; }
+          let rows = otherSessionRows.current.get(s.id);
+          if (!rows) { rows = await getExamResults(s.id).catch(() => [] as ExamResultRow[]); otherSessionRows.current.set(s.id, rows); }
+          add(rows, s.opens_at);
+        }
+        if (!sessions.some((s) => s.id === sessionId)) add(results, session.opens_at);
+        if (live) setAttemptInfo(buildAttemptInfo(entries, new Set([session.quiz_id])));
+      } catch {
+        if (live) setAttemptInfo(null);
+      }
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.status, session?.quiz_id, session?.passing_score_pct, session?.opens_at, results, sessionId, isPractice]);
+
   function exportCsv() {
     if (!session) return;
-    const head = ["Rank", "Name", "Auto marks", "Written marks", "Total", "Out of", "Percent", "Result", "Written pending", "Tab switches", "Submitted", "How"];
+    const head = ["Rank", "Name", "Auto marks", "Written marks", "Total", "Out of", "Percent", "Result", "Written pending", "Tab switches", "Submitted", "How", ...(attemptInfo ? ["Attempt"] : [])];
     const lines = ranked.map((r, i) => [
       String(i + 1), r.display_name, String(r.auto_marks), String(r.manual_marks), String(totalOf(r)), String(r.possible_marks), `${pctOf(r)}%`,
       pctOf(r) >= session.passing_score_pct
         ? resultLabel({ rank: rankOfResult(r), grade: "PASS", open_link_id: isOpenLink ? "x" : null }, rankTitles).replace(/^PASS$/, "Pass")
         : "Fail", String(r.pending_written), String(r.tab_switches),
       r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "", r.submit_reason ?? "",
+      ...(attemptInfo ? [attemptInfo.get(r.participant_id) ? attemptLabel(attemptInfo.get(r.participant_id)!) : ""] : []),
     ]);
     const csv = [head, ...lines].map((row) => row.map(csvEscape).join(",")).join("\r\n");
     downloadCsvFile(`${session.quiz_title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-exam-results.csv`, csv);
@@ -605,6 +642,11 @@ export default function ExamHostPage() {
                           {pass
                             ? <GradeBadge grade="PASS" rank={rankOfResult(r)} isOpenLink={isOpenLink} label="Pass" className="!text-xs !normal-case !rounded-full !px-2" />
                             : <span className="text-xs font-bold rounded-full px-2 py-0.5 bg-red-500/15 text-red-300">Fail</span>}
+                          {attemptInfo?.get(r.participant_id) && (
+                            <div className="mt-0.5 text-[10px] text-slate-400 whitespace-nowrap" title={percentTrail(attemptInfo.get(r.participant_id)!.history)}>
+                              {attemptLabel(attemptInfo.get(r.participant_id)!)}
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-xs">{r.pending_written > 0 ? <span className="text-amber-300">{r.pending_written} to mark</span> : <span className="text-slate-500">—</span>}</td>
                         <td className="py-2 text-right whitespace-nowrap">{pass && admin && !isPractice && r.pending_written === 0 && <span className="mr-2 inline-block align-middle"><QuizAdminCertificateButton kind="exam" participantId={r.participant_id} companyId={admin.company_id} /></span>}<button onClick={() => void openDetail(r)} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View / mark</button></td>

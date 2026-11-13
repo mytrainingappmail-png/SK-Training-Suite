@@ -141,6 +141,7 @@ export async function duplicateQuiz(quizId: string, companyId: string, createdBy
     shuffle_questions: source.shuffle_questions,
     shuffle_questions_per_participant: source.shuffle_questions_per_participant,
     pick_count: source.pick_count ?? null,
+    track_attempts: source.track_attempts ?? false,
     issue_certificate: source.issue_certificate,
     mode: source.mode,
     exam_duration_minutes: source.exam_duration_minutes,

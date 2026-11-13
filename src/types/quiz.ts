@@ -113,6 +113,8 @@ export interface Quiz {
   shuffle_questions_per_participant: boolean;
   /** Random subset per trainee: each person gets this many of the questions (their own random set). null / absent = all of them. Only used while shuffle_questions_per_participant is on. */
   pick_count?: number | null;
+  /** Count each person's attempts on this test (same name across its sessions) and show on which attempt they passed. Off = not counted (e.g. a test repeated on the floor). */
+  track_attempts?: boolean;
   /** Off for practice/ungraded quizzes — no certificate is offered regardless of score. */
   issue_certificate: boolean;
   /** "live" = the Live Quiz (one question at a time, everyone together); "exam" = a paper-style test (see the Exams tab). */

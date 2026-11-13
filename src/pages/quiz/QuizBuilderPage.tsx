@@ -71,6 +71,7 @@ const DEFAULT_FORM: QuizForm = {
   shuffle_questions: false,
   shuffle_questions_per_participant: false,
   pick_count: null,
+  track_attempts: false,
   issue_certificate: true,
   mode: "live",
   exam_duration_minutes: null,
@@ -161,6 +162,7 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           shuffle_questions: quiz.shuffle_questions,
           shuffle_questions_per_participant: quiz.shuffle_questions_per_participant,
           pick_count: quiz.pick_count ?? null,
+          track_attempts: quiz.track_attempts ?? false,
           issue_certificate: quiz.issue_certificate,
           mode: quiz.mode,
           exam_duration_minutes: quiz.exam_duration_minutes,
@@ -975,6 +977,20 @@ It is removed from this screen only - nothing is permanent until you click Save 
             </div>
           );
         })()}
+        <label className="flex items-start gap-2 text-sm text-slate-300 bg-sky-500/5 border border-sky-500/20 rounded-lg px-3 py-2">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={!!form.track_attempts}
+            onChange={(e) => setForm({ ...form, track_attempts: e.target.checked })}
+          />
+          <span>
+            <span className="font-semibold text-sky-300">Count each person's attempts on this {isExam ? "exam" : "quiz"}</span>
+            <span className="block text-xs text-slate-400">
+              The results then number every person's tries (the same name, across the sessions of this {isExam ? "exam" : "quiz"}) and show on which attempt they passed - for example "passed on the 2nd attempt". Leave it off for a {isExam ? "exam" : "quiz"} you run again and again on the floor.
+            </span>
+          </span>
+        </label>
         <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
           <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
             {isExam ? "Tell candidates right / wrong while they answer" : "Tell players right / wrong while they answer"}

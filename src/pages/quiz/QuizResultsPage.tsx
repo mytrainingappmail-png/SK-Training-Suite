@@ -7,7 +7,9 @@ import { getSettings, saveSettings } from "../../repositories/quiz/quizSettingsR
 import { listFoldersForCompany, createFolder } from "../../repositories/quiz/quizResultFolderRepository";
 import { saveSessionToFinalResult, listSavedSessionFolders } from "../../repositories/quiz/quizFinalResultRepository";
 import { buildDetailedReportCsv, buildTraineeSummaryCsv, computeChampions } from "../../services/quiz/quizReportService";
-import { downloadCsvFile } from "../../services/quiz/quizCsvService";
+import { downloadCsvFile, csvEscape } from "../../services/quiz/quizCsvService";
+import { listQuizzes } from "../../services/quiz/quizService";
+import { buildAttemptInfo, buildPersonAttempts, attemptLabel, ordinal, percentTrail } from "../../services/quiz/quizAttempts";
 import QuizChampionsReveal from "../../components/quiz/QuizChampionsReveal";
 import SessionResultCard from "../../components/quiz/SessionResultCard";
 import GradeBadge from "../../components/quiz/GradeBadge";
@@ -65,6 +67,10 @@ export default function QuizResultsPage() {
 
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [allResults, setAllResults] = useState<QuizSessionResultRow[]>([]);
+  // quizzes whose owner switched on "Count each person's attempts" (floor tests stay off)
+  const [trackedQuizIds, setTrackedQuizIds] = useState<Set<string>>(new Set());
+  const [attFilter, setAttFilter] = useState<"all" | "1" | "2" | "3plus" | "not">("all");
+  const [attQuiz, setAttQuiz] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -121,8 +127,10 @@ export default function QuizResultsPage() {
       getSettings(admin.company_id),
       listFoldersForCompany(admin.company_id),
       listSavedSessionFolders(admin.company_id).catch(() => new Map<string, string>()),
+      listQuizzes(admin.company_id).catch(() => []),
     ])
-      .then(([s, r, settings, f, saved]) => {
+      .then(([s, r, settings, f, saved, quizList]) => {
+        setTrackedQuizIds(new Set(quizList.filter((q) => q.track_attempts).map((q) => q.id)));
         setSavedFolders(saved);
         setSessions(s.filter((x) => x.phase === "ended"));
         setAllResults(r);
@@ -145,6 +153,46 @@ export default function QuizResultsPage() {
   const { selectedId: locationFilter } = useQuizLocation();
   const unfiledSessions = useMemo(() => sessions.filter((s) => !s.folder_id && matchesQuizLocation(s.location_id, locationFilter)), [sessions, locationFilter]);
   const unfiledResults = useMemo(() => allResults.filter((r) => !r.folder_id && matchesQuizLocation(r.location_id, locationFilter)), [allResults, locationFilter]);
+
+  // Attempts of the same person on the same test (only for tests with "Count each person's attempts" switched on).
+  // Every real result counts, including the ones already moved into a Final Result folder.
+  const attemptRows = useMemo(
+    () => allResults.map((r) => ({ key: r.participant_id, quizId: r.quiz_id, name: r.display_name, at: r.started_at ?? r.ended_at ?? "", percent: Number(r.percent_correct) || 0, passed: r.grade === "PASS" })),
+    [allResults]
+  );
+  const attemptInfo = useMemo(() => buildAttemptInfo(attemptRows, trackedQuizIds), [attemptRows, trackedQuizIds]);
+  const quizTitleById = useMemo(() => new Map(allResults.map((r) => [r.quiz_id, r.quiz_title])), [allResults]);
+  const personAttempts = useMemo(() => {
+    const list = buildPersonAttempts(attemptRows, trackedQuizIds);
+    return list.sort((a, b) => (quizTitleById.get(a.quizId) ?? "").localeCompare(quizTitleById.get(b.quizId) ?? "") || a.name.localeCompare(b.name));
+  }, [attemptRows, trackedQuizIds, quizTitleById]);
+  const shownPersonAttempts = useMemo(
+    () =>
+      personAttempts.filter(
+        (p) =>
+          (!attQuiz || p.quizId === attQuiz) &&
+          (attFilter === "all" ||
+            (attFilter === "not" ? p.passedOnAttempt === null : attFilter === "1" ? p.passedOnAttempt === 1 : attFilter === "2" ? p.passedOnAttempt === 2 : (p.passedOnAttempt ?? 0) >= 3))
+      ),
+    [personAttempts, attQuiz, attFilter]
+  );
+  const attemptTests = useMemo(() => [...new Set(personAttempts.map((p) => p.quizId))].map((id) => ({ id, title: quizTitleById.get(id) ?? "Test" })), [personAttempts, quizTitleById]);
+  const attemptCounts = useMemo(() => {
+    const c = { first: 0, second: 0, later: 0, not: 0 };
+    for (const p of personAttempts.filter((x) => !attQuiz || x.quizId === attQuiz)) {
+      if (p.passedOnAttempt === null) c.not += 1;
+      else if (p.passedOnAttempt === 1) c.first += 1;
+      else if (p.passedOnAttempt === 2) c.second += 1;
+      else c.later += 1;
+    }
+    return c;
+  }, [personAttempts, attQuiz]);
+
+  function downloadAttempts() {
+    const head = ["Trainee", "Test", "Attempts", "Scores (oldest first)", "Passed on attempt"];
+    const lines = shownPersonAttempts.map((p) => [p.name, quizTitleById.get(p.quizId) ?? "", String(p.history.length), percentTrail(p.history), p.passedOnAttempt === null ? "Not yet" : ordinal(p.passedOnAttempt)]);
+    downloadCsvFile(`quiz-attempts-${todayStr()}.csv`, [head, ...lines].map((l) => l.map(csvEscape).join(",")).join("\r\n"));
+  }
 
   const traineeNames = useMemo(
     () => [...new Set(unfiledResults.map((r) => r.display_name.trim()))].sort(),
@@ -599,12 +647,13 @@ export default function QuizResultsPage() {
                 <th className="px-3 py-2">Correct</th>
                 <th className="px-3 py-2">%</th>
                 <th className="px-3 py-2">Result</th>
+                {trackedQuizIds.size > 0 && <th className="px-3 py-2">Attempt</th>}
               </tr>
             </thead>
             <tbody>
               {perfRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={trackedQuizIds.size > 0 ? 8 : 7} className="px-3 py-6 text-center text-slate-500">
                     No results in range.
                   </td>
                 </tr>
@@ -624,6 +673,15 @@ export default function QuizResultsPage() {
                     <td className="px-3 py-2">
                       <GradeBadge grade={r.grade} rank={r.rank} isOpenLink={!!r.open_link_id} />
                     </td>
+                    {trackedQuizIds.size > 0 && (
+                      <td className="px-3 py-2 text-xs text-slate-300 whitespace-nowrap">
+                        {attemptInfo.get(r.participant_id) ? (
+                          <span title={percentTrail(attemptInfo.get(r.participant_id)!.history)}>{attemptLabel(attemptInfo.get(r.participant_id)!)}</span>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -631,6 +689,69 @@ export default function QuizResultsPage() {
           </table>
         </div>
       </div>
+
+      {/* Attempts report - only for tests with "Count each person's attempts" switched on */}
+      {personAttempts.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-semibold text-white">🔁 Attempts</h2>
+              <p className="text-xs text-slate-500">For tests with "Count each person's attempts" switched on: how many tries each person took and on which one they passed (same name = same person).</p>
+            </div>
+            <button onClick={downloadAttempts} disabled={shownPersonAttempts.length === 0} className="text-sm font-semibold bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-amber-950 rounded-lg px-4 py-2">
+              ⬇ Download Excel/CSV
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {([["1", "Passed on 1st attempt", attemptCounts.first], ["2", "Passed on 2nd attempt", attemptCounts.second], ["3plus", "Passed on 3rd or later", attemptCounts.later], ["not", "Not passed yet", attemptCounts.not]] as const).map(([k, label, n]) => (
+              <button key={k} type="button" onClick={() => setAttFilter(attFilter === k ? "all" : k)} className={`rounded-xl border px-3 py-2 text-left ${attFilter === k ? "border-violet-500 bg-violet-500/10" : "border-slate-700 bg-slate-800/50 hover:bg-slate-800"}`}>
+                <p className="text-[11px] text-slate-400">{label}</p>
+                <p className="text-2xl font-bold text-white">{n}</p>
+              </button>
+            ))}
+          </div>
+          <select className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500" value={attQuiz} onChange={(e) => setAttQuiz(e.target.value)}>
+            <option value="">All these tests</option>
+            {attemptTests.map((t) => (
+              <option key={t.id} value={t.id}>{t.title}</option>
+            ))}
+          </select>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-slate-800">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800/60 sticky top-0">
+                <tr className="text-left text-xs text-slate-400 uppercase tracking-wide">
+                  <th className="px-3 py-2">Trainee</th>
+                  <th className="px-3 py-2">Test</th>
+                  <th className="px-3 py-2">Attempts</th>
+                  <th className="px-3 py-2">Scores</th>
+                  <th className="px-3 py-2">Passed on</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shownPersonAttempts.length === 0 ? (
+                  <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">No one matches this filter.</td></tr>
+                ) : (
+                  shownPersonAttempts.map((p) => (
+                    <tr key={`${p.quizId}-${p.name}`} className="border-t border-slate-800">
+                      <td className="px-3 py-2 text-white font-medium">{p.name}</td>
+                      <td className="px-3 py-2 text-slate-300 max-w-xs truncate">{quizTitleById.get(p.quizId)}</td>
+                      <td className="px-3 py-2 text-slate-300">{p.history.length}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-300">
+                        {p.history.map((h, i) => (
+                          <span key={h.key}>{i > 0 && " → "}<span className={h.passed ? "text-emerald-400 font-semibold" : ""}>{Math.round(h.percent)}%</span></span>
+                        ))}
+                      </td>
+                      <td className="px-3 py-2">
+                        {p.passedOnAttempt === null ? <span className="text-amber-400 text-xs font-semibold">Not yet</span> : <span className="text-emerald-400 text-xs font-semibold">✓ {ordinal(p.passedOnAttempt)} attempt</span>}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Session list */}
       {unfiledSessions.length === 0 ? (

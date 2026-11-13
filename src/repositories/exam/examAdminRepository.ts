@@ -167,6 +167,27 @@ export async function getExamSessionFlags(sessionId: string): Promise<{ practice
   return { practice: data?.is_practice === true, openLink: !!data?.open_link_id };
 }
 
+/** Is "Count each person's attempts" switched on for this exam? (A missing column / unreadable row simply means no.) */
+export async function getQuizTrackAttempts(quizId: string): Promise<boolean> {
+  const { data, error } = await supabaseQuiz.from("quizzes").select("track_attempts").eq("id", quizId).maybeSingle();
+  if (error || !data) return false;
+  return (data as { track_attempts?: boolean }).track_attempts === true;
+}
+
+/** Every finished, real (not practice) session of this exam, oldest first - the attempts of one person are counted across them. */
+export async function listFinishedExamSessionsForAttempts(quizId: string): Promise<{ id: string; opens_at: string; finished_at: string }[]> {
+  const { data, error } = await supabaseQuiz
+    .from("exam_sessions")
+    .select("id, opens_at, finished_at")
+    .eq("quiz_id", quizId)
+    .eq("is_practice", false)
+    .not("finished_at", "is", null)
+    .order("opens_at", { ascending: true })
+    .limit(100);
+  if (error) fail("listFinishedExamSessionsForAttempts", error);
+  return (data ?? []) as { id: string; opens_at: string; finished_at: string }[];
+}
+
 export async function listExamSessions(quizId: string): Promise<ExamSession[]> {
   const { data, error } = await supabaseQuiz
     .from("exam_sessions")

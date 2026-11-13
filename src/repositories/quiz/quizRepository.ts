@@ -16,6 +16,8 @@ export interface QuizForm {
   shuffle_questions_per_participant: boolean;
   /** "Every trainee gets N of the questions" (random, their own set): any number from 1 up; null / absent = every question. Needs the per-trainee shuffle above. */
   pick_count?: number | null;
+  /** Count each person's attempts on this test (same name across its sessions) and show when they passed. Off = not counted. */
+  track_attempts?: boolean;
   issue_certificate: boolean;
   mode: Quiz["mode"];
   exam_duration_minutes: number | null;
