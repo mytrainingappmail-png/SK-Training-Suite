@@ -72,6 +72,59 @@ export async function copyProjectIndependent(projectId: string, intoSectionId: s
   return data as string;
 }
 
+/**
+ * A copy made between the main Projects and an Induction card remembers which project it was copied from, so it can be
+ * brought up to date from the other side ("Update the copy too"). These are the pieces the editor and the list use.
+ * Until the database part exists they quietly report "no linked copies" instead of failing.
+ */
+export interface ProjectCopyLink {
+  link_id: string;
+  other_id: string;
+  other_name: string;
+  /** "Projects" or "Induction · <day> › <card>". */
+  other_place: string;
+  /** Update the copy automatically when this project is closed after changes. */
+  auto_sync: boolean;
+  /** This project changed after the last update of the copy. */
+  behind: boolean;
+  /** The copy has changes of its own since the last update. */
+  other_changed: boolean;
+}
+
+export async function loadProjectCopyLinks(projectId: string): Promise<ProjectCopyLink[]> {
+  const { data, error } = await supabase.rpc('get_project_copy_links', { p_project: projectId });
+  if (error) return [];
+  return (data ?? []) as ProjectCopyLink[];
+}
+
+/** Brings the other copy up to date from this one (adds and changes only - nothing is ever removed over there). */
+export async function syncProjectCopy(fromId: string, toId: string): Promise<void> {
+  const { error } = await supabase.rpc('sync_project_copy', { p_from: fromId, p_to: toId });
+  if (error) throw new Error(error.message);
+}
+
+export async function setProjectCopyAuto(linkId: string, projectId: string, auto: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_project_copy_auto', { p_link: linkId, p_project: projectId, p_auto: auto });
+  if (error) throw new Error(error.message);
+}
+
+/** Called when a project is closed: updates the linked copies that are set to follow it (returns how many). */
+export async function syncProjectCopiesAuto(projectId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('sync_project_copies_auto', { p_project: projectId });
+  if (error) {
+    if (/could not find the function/i.test(error.message)) return 0;
+    throw new Error(error.message);
+  }
+  return Number(data) || 0;
+}
+
+/** Projects whose linked copy is behind (they changed after the last update) - for the mark in the list. */
+export async function loadProjectsWithStaleCopies(): Promise<Set<string>> {
+  const { data, error } = await supabase.rpc('projects_with_stale_copies');
+  if (error) return new Set();
+  return new Set(((data ?? []) as string[]).map(String));
+}
+
 /** A separate copy of a project in the same place (main Projects, or the same Induction card) — named "… (Copy)". */
 export async function duplicateProject(projectId: string): Promise<string> {
   const { data, error } = await supabase.rpc('duplicate_project', { p_project: projectId });

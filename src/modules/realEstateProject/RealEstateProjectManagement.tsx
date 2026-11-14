@@ -31,8 +31,9 @@ import {
   loadAllBrochures, addBrochure, addBrochureLink, removeBrochure,
   uploadThumbnail, uploadInlineImage,
   loadSectionsForProject, saveSection, editSection, removeSection, reorderSections,
-  cloneProjectToBranch,
+  cloneProjectToBranch, syncProjectCopiesAuto, loadProjectsWithStaleCopies,
 } from '../../services/realEstateProject/realEstateProjectService';
+import LinkedCopiesBar from './LinkedCopiesBar';
 import { branchService } from '../../services/branch/branchService';
 import type { Branch } from '../../types/branch';
 import {
@@ -278,6 +279,8 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   // 'Preview' of a project exactly as an employee sees it (nothing saved).
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
+  // projects whose linked copy (main Projects <-> Induction card) is behind - marked in the list
+  const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const [brochures, setBrochures] = useState<RealEstateProjectBrochure[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
@@ -322,9 +325,10 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadProjects(scope ? { inductionSectionId: scope.inductionSectionId } : undefined), loadAllBrochures(), branchService.getAll(), loadCompany()])
-      .then(([p, b, br, co]) => {
+    Promise.all([loadProjects(scope ? { inductionSectionId: scope.inductionSectionId } : undefined), loadAllBrochures(), branchService.getAll(), loadCompany(), loadProjectsWithStaleCopies()])
+      .then(([p, b, br, co, stale]) => {
         setProjects(p);
+        setStaleIds(stale);
         if (scope?.onChanged) {
           const ids = p.map((x) => x.id);
           const key = ids.join(',');
@@ -456,6 +460,21 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     }
   }
 
+  /** Leaving the editor: the linked copies that are set to follow this project are brought up to date first. */
+  async function closeEditor() {
+    const id = editingProjectId;
+    if (id && id !== 'new') {
+      try {
+        const n = await syncProjectCopiesAuto(id);
+        if (n > 0) showToast(n === 1 ? 'The linked copy was updated too.' : `${n} linked copies were updated too.`);
+      } catch (err) {
+        showToast(`The linked copy could not be updated: ${err instanceof Error ? err.message : 'unknown problem'}`);
+      }
+    }
+    setEditingProjectId(null);
+    fetchAll();
+  }
+
   async function handleSaveProject() {
     if (!user?.companyId) return;
     setSavingProject(true);
@@ -472,6 +491,17 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
         }
       } else if (editingProjectId) {
         await editProject(editingProjectId, draft);
+        let copyNote = '';
+        try {
+          const n = await syncProjectCopiesAuto(editingProjectId);
+          if (n > 0) copyNote = n === 1 ? ' The linked copy was updated too.' : ` ${n} linked copies were updated too.`;
+        } catch (err) {
+          copyNote = ` The linked copy could not be updated: ${err instanceof Error ? err.message : 'unknown problem'}`;
+        }
+        setEditingProjectId(null);
+        fetchAll();
+        showToast(`Project saved.${copyNote}`);
+        return;
       }
       setEditingProjectId(null);
       fetchAll();
@@ -774,7 +804,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <button onClick={() => setEditingProjectId(null)} className="text-sm font-semibold text-slate-500 hover:text-slate-800">
+          <button onClick={() => void closeEditor()} className="text-sm font-semibold text-slate-500 hover:text-slate-800">
             ← Back to Projects
           </button>
           {editingProjectId !== 'new' && (
@@ -782,6 +812,8 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
           )}
         </div>
         {previewProjectId && <ProjectPreview projectId={previewProjectId} onClose={() => setPreviewProjectId(null)} />}
+
+        {editingProjectId !== 'new' && <LinkedCopiesBar projectId={editingProjectId} refreshKey={toast} onToast={showToast} onSynced={fetchAll} />}
 
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-lg font-bold text-slate-900">{editingProjectId === 'new' ? 'New Project' : 'Edit Project'}</h2>
@@ -1098,7 +1130,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
           </div>
 
           <div className="mt-6 flex justify-end gap-2">
-            <button onClick={() => setEditingProjectId(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button onClick={() => void closeEditor()} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               Cancel
             </button>
             <button
@@ -1219,6 +1251,9 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                   )}
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{p.project_name}</p>
+                    {staleIds.has(p.id) && (
+                      <span className="mt-0.5 mr-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="This project changed after its linked copy was last updated. Open it and press Update the copy now.">⚠ Linked copy is behind</span>
+                    )}
                     {!scope && (
                       <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.branch_id ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-500'}`}>
                         {branchName(p.branch_id)}
