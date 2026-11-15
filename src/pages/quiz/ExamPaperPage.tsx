@@ -99,7 +99,14 @@ export default function ExamPaperPage() {
   // MCQ/truefalse pick a pending option first — same "tap then confirm"
   // pattern as hotspot, so a locked-in wrong answer never comes from an
   // accidental scroll-tap, and gives an explicit Not Sure escape hatch.
-  const [pendingMcq, setPendingMcq] = useState<Record<string, string>>({});
+  // The choice is remembered on this phone (like the locked written answers), so a reload does not lose the "chosen, not confirmed yet" mark.
+  const pendingMcqKey = `exam-pending-mcq-${sessionId}`;
+  const [pendingMcq, setPendingMcq] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(pendingMcqKey) || "{}") as Record<string, string>; } catch { return {}; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(pendingMcqKey, JSON.stringify(pendingMcq)); } catch { /* ignore */ }
+  }, [pendingMcq, pendingMcqKey]);
 
   // Brief "already answered" flash for MCQ/True-False — hotspot has its own
   // version of this built into HotspotPlayer itself.
@@ -551,12 +558,69 @@ export default function ExamPaperPage() {
     void removeAnswerPhoto(path);
   }
 
-  const answeredCount = useMemo(() => paper.filter((q) => isAnswered(answers[q.question_id])).length, [paper, answers]);
   const flaggedCount = useMemo(() => paper.filter((q) => answers[q.question_id]?.flagged).length, [paper, answers]);
+
+  // ── Which questions are still pending (so the candidate can find them again) ──
+  // done        : answered and final (MCQ / True-False confirmed, hotspot with all its taps, written answer locked)
+  // unconfirmed : an option was chosen but Confirm was not pressed - this will NOT count if left like that
+  // open        : started but not final (some hotspot taps still to give, or a written answer not locked yet - it is saved)
+  // blank       : nothing given yet
+  type PaperQ = (typeof paper)[number];
+  type QStatus = "done" | "unconfirmed" | "open" | "blank";
+  function statusOf(q: PaperQ): QStatus {
+    const d = answers[q.question_id];
+    if (q.type === "mcq" || q.type === "truefalse") {
+      if (d && d.selected_option_id !== null) return "done";
+      return pendingMcq[q.question_id] ? "unconfirmed" : "blank";
+    }
+    if (q.type === "hotspot") {
+      if (!d) return "blank";
+      if (d.click_x !== null || d.hotspot_taps.length >= (q.hotspotZoneCount ?? 1)) return "done";
+      return d.hotspot_taps.length > 0 ? "open" : "blank";
+    }
+    if (!isAnswered(d)) return "blank";
+    return lockedWritten.has(q.question_id) ? "done" : "open";
+  }
+  const statusById = useMemo(() => Object.fromEntries(paper.map((q) => [q.question_id, statusOf(q)])) as Record<string, QStatus>,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paper, answers, pendingMcq, lockedWritten]);
+  const pendingList = useMemo(() => paper.filter((q) => statusById[q.question_id] !== "done"), [paper, statusById]);
+  const doneCount = paper.length - pendingList.length;
+  const [paletteFilter, setPaletteFilter] = useState<"all" | "pending" | "marked">("all");
+  const [highlightQid, setHighlightQid] = useState<string | null>(null);
+
+  // The question the candidate was last taken to. Near the end of the paper the page cannot scroll any further, so such a
+  // question never reaches the top of the screen - remembering it keeps "Next pending" moving on instead of repeating it.
+  const lastJumpRef = useRef(-1);
+
+  function scrollToQuestion(qid: string) {
+    lastJumpRef.current = paper.findIndex((q) => q.question_id === qid);
+    document.getElementById(`q-${qid}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightQid(qid);
+    setTimeout(() => setHighlightQid((cur) => (cur === qid ? null : cur)), 1800);
+  }
 
   function jumpTo(qid: string) {
     setShowPalette(false);
-    document.getElementById(`q-${qid}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToQuestion(qid);
+  }
+
+  /** The next pending question after the one being read now (wraps round to the first one). */
+  function jumpToNextPending() {
+    if (pendingList.length === 0) return;
+    let current = -1;
+    paper.forEach((q, i) => {
+      const el = document.getElementById(`q-${q.question_id}`);
+      if (el && el.getBoundingClientRect().top <= 100) current = i;
+    });
+    // the question we last jumped to still counts as "the one being read" while it is on screen
+    const last = lastJumpRef.current;
+    if (last >= 0 && paper[last]) {
+      const top = document.getElementById(`q-${paper[last].question_id}`)?.getBoundingClientRect().top;
+      if (top !== undefined && top > -40 && top < window.innerHeight - 140) current = Math.max(current, last);
+    }
+    const next = pendingList.find((q) => paper.indexOf(q) > current) ?? pendingList[0];
+    scrollToQuestion(next.question_id);
   }
 
   // ── Screens ─────────────────────────────────────────────────────────────
@@ -690,7 +754,6 @@ export default function ExamPaperPage() {
 
   // ── The paper ───────────────────────────────────────────────────────────
   const urgent = secondsLeft <= 300;
-  const unanswered = paper.length - answeredCount;
 
   return (
     <div className={`${shell} pb-28`} style={bgStyle}>
@@ -742,10 +805,10 @@ export default function ExamPaperPage() {
         {paper.map((q) => {
           const d = answers[q.question_id] ?? EMPTY_DRAFT;
           return (
-            <div key={q.question_id} id={`q-${q.question_id}`} className={`scroll-mt-20 bg-slate-900 border rounded-2xl p-4 ${d.flagged ? "border-amber-500/60" : "border-slate-800"}`}>
+            <div key={q.question_id} id={`q-${q.question_id}`} className={`scroll-mt-20 bg-slate-900 border rounded-2xl p-4 transition-shadow ${highlightQid === q.question_id ? "ring-2 ring-sky-400" : ""} ${d.flagged ? "border-amber-500/60" : "border-slate-800"}`}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-mono rounded px-2 py-0.5 ${isAnswered(d) ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>Q{q.position}</span>
+                  <span className={`text-xs font-mono rounded px-2 py-0.5 ${statusById[q.question_id] === "done" ? "bg-emerald-500/20 text-emerald-300" : statusById[q.question_id] === "blank" ? "bg-slate-800 text-slate-400" : "bg-amber-500/20 text-amber-300"}`}>Q{q.position}</span>
                   <span className="text-[11px] text-slate-500">{q.marks} mark{q.marks === 1 ? "" : "s"}</span>
                 </div>
                 <button
@@ -928,8 +991,11 @@ export default function ExamPaperPage() {
         <div className="max-w-2xl mx-auto flex items-center gap-2">
           <button onClick={() => setShowPalette(true)} className="flex-1 text-left rounded-xl border border-slate-700 px-3 py-2">
             <span className="block text-[11px] text-slate-500">Questions</span>
-            <span className="text-sm font-semibold">{answeredCount}/{paper.length} answered{flaggedCount > 0 && <span className="text-amber-300"> · 🚩{flaggedCount}</span>}</span>
+            <span className="text-sm font-semibold">{doneCount}/{paper.length} answered{pendingList.length > 0 && <span className="text-amber-300"> · {pendingList.length} pending</span>}{flaggedCount > 0 && <span className="text-amber-300"> · 🚩{flaggedCount}</span>}</span>
           </button>
+          {pendingList.length > 0 && (
+            <button onClick={jumpToNextPending} className="rounded-xl bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold px-3 py-3 text-xs leading-tight">⏭ Next<br />pending</button>
+          )}
           <button onClick={() => setShowConfirm(true)} className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-3 text-sm">Submit</button>
         </div>
       </div>
@@ -943,14 +1009,29 @@ export default function ExamPaperPage() {
               <p className="text-sm font-bold">Jump to a question</p>
               <button onClick={() => setShowPalette(false)} className="text-slate-400 text-sm">Close</button>
             </div>
-            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
-              {paper.map((q) => {
-                const d = answers[q.question_id];
-                const cls = d?.flagged ? "bg-amber-500/20 border-amber-500 text-amber-200" : isAnswered(d) ? "bg-emerald-500/20 border-emerald-500 text-emerald-200" : "bg-slate-800 border-slate-700 text-slate-300";
-                return <button key={q.question_id} onClick={() => jumpTo(q.question_id)} className={`h-11 rounded-lg border text-sm font-semibold ${cls}`}>{q.position}</button>;
-              })}
+            <div className="flex gap-2 mb-3">
+              {([["all", `All ${paper.length}`], ["pending", `Pending ${pendingList.length}`], ["marked", `🚩 Marked ${flaggedCount}`]] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setPaletteFilter(k)} className={`text-xs font-semibold rounded-full border px-3 py-1.5 ${paletteFilter === k ? "border-violet-500 bg-violet-500/20 text-white" : "border-slate-700 text-slate-300"}`}>{label}</button>
+              ))}
             </div>
-            <p className="text-[11px] text-slate-500 mt-3">Green = answered · Amber = marked for review · Grey = not answered</p>
+            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+              {paper
+                .filter((q) => paletteFilter === "all" || (paletteFilter === "pending" ? statusById[q.question_id] !== "done" : !!answers[q.question_id]?.flagged))
+                .map((q) => {
+                  const st = statusById[q.question_id];
+                  const cls = st === "done" ? "bg-emerald-500/20 border-emerald-500 text-emerald-200" : st === "blank" ? "bg-slate-800 border-slate-700 text-slate-300" : "bg-amber-500/20 border-amber-500 text-amber-200";
+                  return (
+                    <button key={q.question_id} onClick={() => jumpTo(q.question_id)} className={`relative h-11 rounded-lg border text-sm font-semibold ${cls}`}>
+                      {q.position}
+                      {answers[q.question_id]?.flagged && <span className="absolute -top-1 -right-1 text-[11px] leading-none">🚩</span>}
+                    </button>
+                  );
+                })}
+            </div>
+            {paletteFilter !== "all" && paper.filter((q) => paletteFilter === "pending" ? statusById[q.question_id] !== "done" : !!answers[q.question_id]?.flagged).length === 0 && (
+              <p className="text-sm text-slate-400 mt-2">{paletteFilter === "pending" ? "Nothing is pending - every question is answered." : "No question is marked for review."}</p>
+            )}
+            <p className="text-[11px] text-slate-500 mt-3">Green = answered · Amber = started or chosen but not final · Grey = not answered · 🚩 = marked for review</p>
           </div>
         </div>
       )}
@@ -959,9 +1040,26 @@ export default function ExamPaperPage() {
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <h2 className="text-base font-bold mb-2">Submit your exam?</h2>
-            <p className="text-sm text-slate-300 mb-1">{answeredCount} of {paper.length} answered.</p>
-            {unanswered > 0 && <p className="text-sm text-amber-300 mb-1">{unanswered} question{unanswered === 1 ? " is" : "s are"} still blank.</p>}
-            {flaggedCount > 0 && <p className="text-sm text-amber-300 mb-1">{flaggedCount} marked for review.</p>}
+            <p className="text-sm text-slate-300 mb-1">{doneCount} of {paper.length} answered.</p>
+            {([
+              ["blank", "Not answered yet", "text-amber-300"],
+              ["unconfirmed", "Option chosen but NOT confirmed - these will not count", "text-red-300"],
+              ["open", "Started but not final (saved as they are)", "text-amber-200"],
+            ] as const).map(([kind, label, color]) => {
+              const qs = paper.filter((q) => statusById[q.question_id] === kind);
+              if (qs.length === 0) return null;
+              return (
+                <div key={kind} className="mb-2">
+                  <p className={`text-sm ${color} mb-1`}>{label}:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {qs.map((q) => (
+                      <button key={q.question_id} onClick={() => { setShowConfirm(false); setError(""); jumpTo(q.question_id); }} className="text-xs font-bold rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5">Q{q.position} →</button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {flaggedCount > 0 && <p className="text-sm text-amber-300 mb-1">🚩 {flaggedCount} marked for review.</p>}
             <p className="text-xs text-slate-500 mt-2 mb-4">Each answer locks the moment you give it, so there's nothing left to change here — and you won't see a result until your trainer shares it.</p>
             {error && <p className="text-xs text-red-300 mb-3">{error}</p>}
             <div className="flex gap-2">
