@@ -28,7 +28,9 @@ export async function listCertificatesForCompany(companyId: string): Promise<Das
 export async function countQuestionBankSize(companyId: string): Promise<number> {
   const { count, error } = await supabaseQuiz
     .from("quiz_questions")
-    .select("id, quizzes!inner(company_id)", { count: "exact", head: true })
+    // quiz_questions has two links to quizzes (the quiz it sits in, and its "home" quiz for shared questions),
+    // so the link to follow must be named - without the name the server refuses the query and the dashboard never loads.
+    .select("id, quizzes!quiz_questions_quiz_id_fkey!inner(company_id)", { count: "exact", head: true })
     .eq("quizzes.company_id", companyId);
 
   if (error) {

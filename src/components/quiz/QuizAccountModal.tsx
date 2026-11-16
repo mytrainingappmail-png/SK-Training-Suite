@@ -3,6 +3,7 @@ import { useState } from "react";
 import { getCurrentQuizAdmin, setCurrentQuizAdmin } from "../../services/quiz/quizAdminSession";
 import { changeOwnPassword } from "../../services/quiz/quizAuthService";
 import { updateProfile } from "../../repositories/quiz/quizAdminRepository";
+import PasswordField from "./PasswordField";
 
 export default function QuizAccountModal({ onClose }: { onClose: () => void }) {
   const admin = getCurrentQuizAdmin();
@@ -137,22 +138,11 @@ export default function QuizAccountModal({ onClose }: { onClose: () => void }) {
           )}
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">New Password</label>
-            <input
-              type="password"
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="At least 8 characters"
-            />
+            <PasswordField value={newPassword} onChange={setNewPassword} placeholder="At least 8 characters" autoComplete="new-password" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Confirm Password</label>
-            <input
-              type="password"
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
+            <PasswordField value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
           </div>
           <button
             type="submit"

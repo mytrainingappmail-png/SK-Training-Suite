@@ -94,6 +94,7 @@ export default function QuizDashboardPage() {
   const { selectedId: locationFilter } = useQuizLocation();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [liveTick, setLiveTick] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,7 +105,7 @@ export default function QuizDashboardPage() {
 
   useEffect(() => {
     if (!admin) return;
-    getDashboardFilterOptions(admin.company_id, locationFilter).then(setFilterOptions);
+    getDashboardFilterOptions(admin.company_id, locationFilter).then(setFilterOptions).catch((err) => console.error("[QuizDashboardPage] filter options:", err));
   }, [admin, locationFilter]);
 
   const range = useMemo(() => presetToRange(datePreset, customFrom, customTo), [datePreset, customFrom, customTo]);
@@ -144,7 +145,11 @@ export default function QuizDashboardPage() {
     setLoading(true);
     getDashboardSnapshot(admin.company_id, filters)
       .then((snap) => {
-        if (!cancelled) setSnapshot(snap);
+        if (!cancelled) { setSnapshot(snap); setLoadError(""); }
+      })
+      .catch((err) => {
+        // Never leave the page on "Loading…" for ever - say what happened (the page keeps showing the last good numbers, if any).
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Something went wrong while loading the dashboard.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -308,8 +313,14 @@ export default function QuizDashboardPage() {
         )}
       </div>
 
+      {loadError && !loading && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex flex-wrap items-center justify-between gap-3">
+          <span><b>The dashboard could not be loaded.</b> {loadError}</span>
+          <button onClick={() => setLiveTick((n) => n + 1)} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Try again</button>
+        </div>
+      )}
       {loading || !snapshot ? (
-        <div className="text-slate-500 text-sm py-12 text-center">Loading dashboard…</div>
+        loadError && !loading ? null : <div className="text-slate-500 text-sm py-12 text-center">Loading dashboard…</div>
       ) : (
         <>
           {/* KPI Cards */}
