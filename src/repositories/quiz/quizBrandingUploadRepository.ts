@@ -60,3 +60,34 @@ export async function uploadBrandingImage(
   const { data } = supabaseQuiz.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, path };
 }
+
+// -- Own music for the wait music / champions music: an audio file picked from the phone or computer ----------------
+// Goes to the same public bucket (trainees must be able to play it without logging in), in the company's own folder.
+const MAX_MUSIC_BYTES = 15 * 1024 * 1024;
+const MUSIC_EXTENSIONS = ["mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "weba", "webm", "flac"];
+const MUSIC_TYPE_BY_EXT: Record<string, string> = {
+  mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg",
+  opus: "audio/ogg", weba: "audio/webm", webm: "audio/webm", flac: "audio/flac",
+};
+
+export async function uploadQuizMusic(companyId: string, file: File): Promise<UploadedBrandingImage & { name: string }> {
+  const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+  // some phones give an empty type for a music file, so the file name is checked too
+  if (!file.type.startsWith("audio/") && !MUSIC_EXTENSIONS.includes(ext)) {
+    throw new Error("Please choose a music file (mp3, m4a, wav, ogg).");
+  }
+  if (file.size > MAX_MUSIC_BYTES) {
+    throw new Error("The music file must be under 15 MB. Use a shorter or smaller mp3.");
+  }
+  const safeExt = MUSIC_EXTENSIONS.includes(ext) ? ext : "mp3";
+  const path = `${companyId}/music-${Date.now()}.${safeExt}`;
+  const contentType = file.type.startsWith("audio/") ? file.type : MUSIC_TYPE_BY_EXT[safeExt];
+
+  const { error } = await supabaseQuiz.storage.from(BUCKET).upload(path, file, { cacheControl: "3600", upsert: false, contentType });
+  if (error) {
+    console.error("[quizBrandingUploadRepository] uploadQuizMusic:", error);
+    throw new Error(error.message);
+  }
+  const { data } = supabaseQuiz.storage.from(BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, path, name: file.name };
+}

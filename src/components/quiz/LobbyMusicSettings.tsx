@@ -2,6 +2,7 @@
 // trainer can hear exactly what trainees will hear before saving. The same card is used for exams and for live quizzes.
 
 import { useEffect, useRef, useState } from "react";
+import MusicUploadButton from "./MusicUploadButton";
 import { startLobbyMusic, type LobbyMusicChoice, type LobbyMusicHandle } from "../../services/quiz/quizSoundService";
 
 interface Props {
@@ -21,6 +22,7 @@ export default function LobbyMusicSettings({ title, description, choice, url, vo
   const handle = useRef<LobbyMusicHandle | null>(null);
   const [playing, setPlaying] = useState(false);
   const [note, setNote] = useState("");
+  const [fileName, setFileName] = useState("");
 
   function stop() {
     handle.current?.stop();
@@ -41,7 +43,7 @@ export default function LobbyMusicSettings({ title, description, choice, url, vo
   async function play() {
     if (playing) { stop(); return; }
     if (choice === "off") { setNote("Music is off - choose the built-in chime or your own link to hear it."); return; }
-    if (choice === "custom" && !url.trim()) { setNote("Paste the link of your music first."); return; }
+    if (choice === "custom" && !url.trim()) { setNote("Upload an mp3 or paste the link of your music first."); return; }
     setNote("");
     const h = startLobbyMusic(choice, url, volume);
     handle.current = h;
@@ -69,17 +71,20 @@ export default function LobbyMusicSettings({ title, description, choice, url, vo
           onChange={(e) => change({ choice: e.target.value as LobbyMusicChoice })}
         >
           <option value="builtin">🔔 Built-in (gentle chime)</option>
-          <option value="custom">🔗 Custom URL</option>
+          <option value="custom">🎵 My own music (upload or link)</option>
           <option value="off">🔇 Off</option>
         </select>
         {choice === "custom" && (
-          <input
-            disabled={!canEdit}
-            className="flex-1 min-w-[14rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
-            placeholder="https://… (mp3/ogg URL)"
-            value={url}
-            onChange={(e) => change({ url: e.target.value })}
-          />
+          <>
+            <MusicUploadButton disabled={!canEdit} onUploaded={(u, n) => { setFileName(n); change({ url: u }); setNote("Uploaded. Press Play to check, then Save."); }} />
+            <input
+              disabled={!canEdit}
+              className="flex-1 min-w-[14rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+              placeholder="…or paste a link (mp3/ogg URL)"
+              value={url}
+              onChange={(e) => { setFileName(""); change({ url: e.target.value }); }}
+            />
+          </>
         )}
         <label className="flex items-center gap-2 text-xs text-slate-400">
           Volume
@@ -112,6 +117,7 @@ export default function LobbyMusicSettings({ title, description, choice, url, vo
         )}
         {message && <span className="text-xs text-emerald-300">{message}</span>}
       </div>
+      {choice === "custom" && fileName && <div className="text-xs text-sky-300">🎵 {fileName}</div>}
       {note && <div className="text-xs text-amber-300">{note}</div>}
     </div>
   );

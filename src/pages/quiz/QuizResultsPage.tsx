@@ -1,3 +1,4 @@
+import MusicUploadButton from "../../components/quiz/MusicUploadButton";
 import { useEffect, useMemo, useState } from "react";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
@@ -569,14 +570,15 @@ export default function QuizResultsPage() {
               onChange={(e) => setMusicChoice(e.target.value as ChampMusic)}
             >
               <option value="builtin">🎺 Built-in (fanfare + clapping)</option>
-              <option value="custom">🔗 Custom URL</option>
+              <option value="custom">🎵 My own music (upload or link)</option>
               <option value="off">🔇 Off</option>
             </select>
+            {musicChoice === "custom" && <MusicUploadButton disabled={!canEdit} onUploaded={(u) => setMusicUrl(u)} />}
             {musicChoice === "custom" && (
               <input
                 disabled={!canEdit}
                 className="flex-1 min-w-[14rem] rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
-                placeholder="https://… (mp3/ogg URL)"
+                placeholder="…or paste a link (mp3/ogg URL)"
                 value={musicUrl}
                 onChange={(e) => setMusicUrl(e.target.value)}
               />

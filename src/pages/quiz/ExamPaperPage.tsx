@@ -15,6 +15,7 @@ import {
   uploadAnswerPhoto, removeAnswerPhoto, signedOwnPhotoUrl, checkHotspotTap, getExamSessionSettings, getExamMyControl,
 } from "../../repositories/exam/examPlayRepository";
 import { useLobbyMusic } from "../../hooks/quiz/useLobbyMusic";
+import LobbyMusicPlayer from "../../components/quiz/LobbyMusicPlayer";
 import FallingWords, { DEFAULT_MOTIVATIONAL_WORDS } from "../../components/quiz/FallingWords";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
 import type { QuizPublicBranding } from "../../types/quiz";
@@ -672,20 +673,9 @@ export default function ExamPaperPage() {
           <p className="text-4xl font-mono font-black text-amber-400">{formatClock(lobbySeconds)}</p>
           <p className="text-[11px] text-slate-500 mt-2">until it starts</p>
           {branding && branding.exam_lobby_music !== "off" && (
-            <button
-              onClick={() => setMusicOn((v) => !v)}
-              className="mt-5 text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-1.5 mx-auto"
-            >
-              {musicOn ? "🔊 Music on — tap to mute" : "🔇 Music off — tap to unmute"}
-            </button>
-          )}
-          {branding && branding.exam_lobby_music !== "off" && musicOn && lobbyMusic.blocked && (
-            <button
-              onClick={lobbyMusic.playNow}
-              className="mt-3 block w-full rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-amber-950 hover:bg-amber-300"
-            >
-              🔊 Tap to play the wait music
-            </button>
+            <div className="mt-5">
+              <LobbyMusicPlayer on={musicOn} onToggle={() => setMusicOn((v) => !v)} blocked={lobbyMusic.blocked} onPlayNow={lobbyMusic.playNow} />
+            </div>
           )}
         </div>
       </div>

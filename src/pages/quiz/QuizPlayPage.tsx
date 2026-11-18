@@ -25,6 +25,7 @@ import { rankTitleFor, parseRankTitles } from "../../utils/rankTitles";
 import RetryMistakes, { type RetryQuestion } from "../../components/quiz/RetryMistakes";
 import LanguageToggle from "../../components/quiz/LanguageToggle";
 import { useLobbyMusic } from "../../hooks/quiz/useLobbyMusic";
+import LobbyMusicPlayer from "../../components/quiz/LobbyMusicPlayer";
 import { useQuestionTranslations, useQuizLang } from "../../services/quiz/quizTranslationService";
 import type { PublicQuizQuestion, SubmitAnswerResult, SubmitHotspotAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
@@ -508,16 +509,7 @@ export default function QuizPlayPage() {
         )}
         <div className="text-sm text-slate-400">{locationState.quizTitle}</div>
         {session.lobby_music && session.lobby_music !== "off" && (
-          <div className="flex flex-col items-center gap-2">
-            <button type="button" onClick={() => setMusicOn((v) => !v)} className="text-xs text-slate-400 hover:text-slate-200">
-              {musicOn ? "🔊 Music on — tap to mute" : "🔇 Music off — tap to unmute"}
-            </button>
-            {musicOn && lobbyMusic.blocked && (
-              <button type="button" onClick={lobbyMusic.playNow} className="rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-amber-950 hover:bg-amber-300">
-                🔊 Tap to play the wait music
-              </button>
-            )}
-          </div>
+          <LobbyMusicPlayer on={musicOn} onToggle={() => setMusicOn((v) => !v)} blocked={lobbyMusic.blocked} onPlayNow={lobbyMusic.playNow} />
         )}
         {!connected && <div className="text-xs font-bold text-red-400 animate-pulse">⚠ Reconnecting…</div>}
       </div>
