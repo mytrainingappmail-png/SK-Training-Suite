@@ -145,6 +145,30 @@ export default function SurveyBuilderPage() {
     setQuestions((prev) => [...prev, blankQuestion()]);
   }
 
+  /** Moves a question one place up or down (the Q number follows). The card is brought back into view so the place is not lost. */
+  function moveQuestion(localId: string, direction: "up" | "down") {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.localId === localId);
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (index === -1 || target < 0 || target >= prev.length) return prev;
+      const next = prev.slice();
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setTimeout(() => document.getElementById(`survey-q-${localId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  }
+
+  /** A copy of the question (same text, type, answers, timer) placed right below it. */
+  function duplicateQuestion(localId: string) {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.localId === localId);
+      if (index === -1) return prev;
+      const copy: EditableSurveyQuestion = { ...prev[index], localId: nextLocalId(), options: prev[index].options.map((o) => ({ ...o })) };
+      setTimeout(() => document.getElementById(`survey-q-${copy.localId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
+    });
+  }
+
   function removeQuestion(localId: string) {
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.localId !== localId) : prev));
   }
@@ -356,7 +380,7 @@ It is removed from this screen only - nothing is permanent until you click Save 
       <fieldset disabled={!canEdit} className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-300">Questions</h2>
         {questions.map((q, qi) => (
-          <div key={q.localId} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <div key={q.localId} id={`survey-q-${q.localId}`} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-xs font-mono text-slate-500 bg-slate-800 rounded px-2 py-0.5">Q{qi + 1}</span>
               <div className="flex flex-wrap items-center gap-2">
@@ -386,8 +410,32 @@ It is removed from this screen only - nothing is permanent until you click Save 
                   Required
                 </label>
                 <button
+                  onClick={() => moveQuestion(q.localId, "up")}
+                  disabled={qi === 0}
+                  title="Move this question up"
+                  className="text-xs font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1 disabled:opacity-30 disabled:hover:border-slate-700"
+                >
+                  ▲ Up
+                </button>
+                <button
+                  onClick={() => moveQuestion(q.localId, "down")}
+                  disabled={qi === questions.length - 1}
+                  title="Move this question down"
+                  className="text-xs font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1 disabled:opacity-30 disabled:hover:border-slate-700"
+                >
+                  ▼ Down
+                </button>
+                <button
+                  onClick={() => duplicateQuestion(q.localId)}
+                  title="Make a copy of this question right below it"
+                  className="text-xs font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1"
+                >
+                  ⧉ Duplicate
+                </button>
+                <button
                   onClick={() => handleRemoveQuestionClick(q.localId)}
                   disabled={questions.length <= 1}
+                  title="Delete this question"
                   className="text-xs text-red-300 hover:text-red-200 disabled:opacity-30 px-1"
                 >
                   🗑

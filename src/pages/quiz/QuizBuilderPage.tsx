@@ -323,6 +323,19 @@ It is removed from this screen only - nothing is permanent until you click Save 
     setRemoveSourceChoice("");
   }
 
+  /** Moves a question one place up or down (the number on each card follows). The card is brought back into view so the place is not lost. */
+  function moveQuestion(localId: string, direction: "up" | "down") {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.localId === localId);
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (index === -1 || target < 0 || target >= prev.length) return prev;
+      const next = prev.slice();
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setTimeout(() => document.getElementById(`quiz-q-${localId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  }
+
   function duplicateQuestion(localId: string) {
     setQuestions((prev) => {
       const index = prev.findIndex((q) => q.localId === localId);
@@ -335,6 +348,7 @@ It is removed from this screen only - nothing is permanent until you click Save 
         home_quiz_id: null,
         options: prev[index].options.map((o) => ({ ...o })),
       };
+      setTimeout(() => document.getElementById(`quiz-q-${copy.localId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
       return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
     });
   }
@@ -1286,7 +1300,7 @@ It is removed from this screen only - nothing is permanent until you click Save 
         )}
 
         {questions.map((q, qi) => (
-          <div key={q.localId} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
+          <div key={q.localId} id={`quiz-q-${q.localId}`} className={`bg-slate-900 border rounded-2xl p-5 space-y-3 ${q.is_hidden ? "border-amber-700/50 opacity-60" : "border-slate-800"}`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 {canEdit && (
@@ -1387,11 +1401,27 @@ It is removed from this screen only - nothing is permanent until you click Save 
                   </button>
                 )}
                 <button
-                  onClick={() => duplicateQuestion(q.localId)}
-                  title="Duplicate this question"
-                  className="text-xs text-slate-300 hover:text-white px-2"
+                  onClick={() => moveQuestion(q.localId, "up")}
+                  disabled={qi === 0}
+                  title="Move this question up"
+                  className="text-xs font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1 disabled:opacity-30 disabled:hover:border-slate-700"
                 >
-                  ⧉
+                  ▲ Up
+                </button>
+                <button
+                  onClick={() => moveQuestion(q.localId, "down")}
+                  disabled={qi === questions.length - 1}
+                  title="Move this question down"
+                  className="text-xs font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1 disabled:opacity-30 disabled:hover:border-slate-700"
+                >
+                  ▼ Down
+                </button>
+                <button
+                  onClick={() => duplicateQuestion(q.localId)}
+                  title="Make a copy of this question right below it"
+                  className="text-xs font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1"
+                >
+                  ⧉ Duplicate
                 </button>
                 <button
                   onClick={() => handleRemoveQuestionClick(q.localId)}
