@@ -41,6 +41,9 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { loadCourses } from '../../../services/course/courseService';
 import { loadModules, createModule, saveModule, removeModule, convertModuleToCourse } from '../../../services/module/moduleService';
+import DayModuleLinksBar from '../../shared/DayModuleLinksBar';
+import CopyDayModuleModal from '../../shared/CopyDayModuleModal';
+import { syncCourseDayCopiesAuto } from '../../../services/induction/inductionCourseCopyService';
 import {
   loadLessons,
   createLesson,
@@ -2232,6 +2235,8 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
   const [deleteModuleTarget, setDeleteModuleTarget] = useState<Module | null>(null);
   const [deletingModule, setDeletingModule] = useState(false);
   const [convertModuleTarget, setConvertModuleTarget] = useState<Module | null>(null);
+  // a Module being copied to Induction as a Day
+  const [copyToInductionModule, setCopyToInductionModule] = useState<Module | null>(null);
   const [convertingModule, setConvertingModule] = useState(false);
 
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
@@ -2482,6 +2487,14 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
       return next;
     });
   }
+
+  // Leaving the course (switching to another, or leaving the builder): update the Induction Days that follow one of its modules
+  // (only those set to "update automatically" and that are behind).
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    const courseId = selectedCourseId;
+    return () => { void syncCourseDayCopiesAuto(courseId).catch(() => undefined); };
+  }, [selectedCourseId]);
 
   function confirmDiscardIfDirty(): boolean {
     if (!isDirty) return true;
@@ -3480,8 +3493,20 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
           )}
 
           {selectedModuleId && !activeLessonId && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 px-6 py-14 text-center shadow-[0_2px_16px_-4px_rgba(0,0,0,0.4)]">
-              <p className="text-sm text-slate-500">Edit this module's properties on the right, or select an item inside it.</p>
+            <div className="space-y-3">
+              <DayModuleLinksBar kind="module" id={selectedModuleId} refreshKey={toast} onToast={showToast} dark />
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 px-6 py-14 text-center shadow-[0_2px_16px_-4px_rgba(0,0,0,0.4)]">
+                <p className="text-sm text-slate-500">Edit this module's properties on the right, or select an item inside it.</p>
+                {selectedModule && (
+                  <button
+                    onClick={() => setCopyToInductionModule(selectedModule)}
+                    className="mt-5 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-300 hover:bg-violet-500/20"
+                    title="Make this module an Induction Day"
+                  >
+                    📋 Copy to Induction as a Day
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -3615,6 +3640,10 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
           onConfirm={handleConvertModuleToCourse}
           onClose={() => setConvertModuleTarget(null)}
         />
+      )}
+
+      {copyToInductionModule && (
+        <CopyDayModuleModal mode="module-to-day" sourceId={copyToInductionModule.id} sourceName={copyToInductionModule.module_name} dark onClose={() => setCopyToInductionModule(null)} />
       )}
 
       {deletePageTarget && (

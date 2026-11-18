@@ -47,6 +47,9 @@ import ImageEditModal from '../../components/shared/ImageEditModal';
 import InductionDayPreview from './InductionDayPreview';
 import LocationPicker from '../../components/shared/LocationPicker';
 import InductionCardProjects from './InductionCardProjects';
+import DayModuleLinksBar from '../../components/shared/DayModuleLinksBar';
+import CopyDayModuleModal from '../../components/shared/CopyDayModuleModal';
+import { loadStaleDayModuleCopies, syncDayModuleCopiesAuto } from '../../services/induction/inductionCourseCopyService';
 import InductionCompletionSettings from './InductionCompletionSettings';
 import { RequirementSelect, AcknowledgeSettings, FeedbackBuilder, TaskSettings, ContactSettings } from './cards/CardSettingsEditors';
 import InductionResponsesModal from './cards/InductionResponsesModal';
@@ -320,6 +323,9 @@ function InductionManagement() {
   const [cloningDayId, setCloningDayId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
+  // Days whose linked Course Module is behind (marked in the list), and the Day being copied to a Course
+  const [staleDayIds, setStaleDayIds] = useState<Set<string>>(new Set());
+  const [copyToCourseDay, setCopyToCourseDay] = useState<InductionDay | null>(null);
 
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ title: string; description: string; thumbnail_url: string | null; active: boolean; unlock_mode: InductionUnlockMode; label_mode: 'auto' | 'custom' | 'none'; label_text: string; standalone: boolean; locations: string[] | null }>({ title: '', description: '', thumbnail_url: null, active: true, unlock_mode: 'next_day', label_mode: 'auto', label_text: '', standalone: false, locations: null });
@@ -375,8 +381,8 @@ function InductionManagement() {
 
   function fetchAll() {
     setLoading(true);
-    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), branchService.getAll(), loadCompany()])
-      .then(([d, a, e, br, co]) => { setDays(d); setAssignments(a); setEmployees(e); setBranches(br); setCompany(co); setIsOperator(co?.is_platform_operator ?? false); })
+    Promise.all([loadDays(), loadAssignments(), employeeService.getAll(), branchService.getAll(), loadCompany(), loadStaleDayModuleCopies()])
+      .then(([d, a, e, br, co, stale]) => { setDays(d); setAssignments(a); setEmployees(e); setBranches(br); setCompany(co); setIsOperator(co?.is_platform_operator ?? false); setStaleDayIds(stale.days); })
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load.'))
       .finally(() => setLoading(false));
   }
@@ -508,6 +514,23 @@ function InductionManagement() {
     if (draft.label_mode === 'auto') return null;
     if (draft.label_mode === 'none') return '';
     return draft.label_text.trim();
+  }
+
+  /** Leaving the Day editor: the linked Course Modules that are set to follow this Day are brought up to date first. */
+  async function closeDayEditor() {
+    const id = editingDayId;
+    if (id && id !== 'new') {
+      try {
+        const n = await syncDayModuleCopiesAuto('day', id);
+        if (n > 0) showToast(n === 1 ? 'The linked Course Module was updated too.' : `${n} linked Course Modules were updated too.`);
+      } catch (err) {
+        showToast(`The linked Course Module could not be updated: ${err instanceof Error ? err.message : 'unknown problem'}`);
+      }
+    }
+    setEditingDayId(null);
+    setSectionDraft(null);
+    setEditingSectionId(null);
+    fetchAll();
   }
 
   async function handleSaveDay() {
@@ -872,7 +895,7 @@ function InductionManagement() {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <button onClick={() => { setEditingDayId(null); setSectionDraft(null); setEditingSectionId(null); }} className="text-sm font-semibold text-indigo-600 hover:underline">
+          <button onClick={() => void closeDayEditor()} className="text-sm font-semibold text-indigo-600 hover:underline">
             ← Back to Days
           </button>
           {editingDayId !== 'new' && (() => { const current = days.find((d) => d.id === editingDayId); return current ? (
@@ -880,6 +903,8 @@ function InductionManagement() {
           ) : null; })()}
         </div>
         {previewModal}
+
+        {editingDayId !== 'new' && <DayModuleLinksBar kind="day" id={editingDayId} refreshKey={toast} onToast={showToast} onSynced={fetchAll} />}
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-bold text-slate-900">{editingDayId === 'new' ? 'New Day' : 'Edit Day'}</h2>
@@ -1246,7 +1271,7 @@ function InductionManagement() {
           )}
 
           <div className="mt-6 flex justify-end gap-2">
-            <button onClick={() => setEditingDayId(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+            <button onClick={() => void closeDayEditor()} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
             <button onClick={handleSaveDay} disabled={savingDay} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
               {savingDay ? 'Saving…' : 'Save Day'}
             </button>
@@ -1358,6 +1383,7 @@ function InductionManagement() {
                       {isStandaloneDay(d) ? 'Standalone · always open' : UNLOCK_CHOICES.find((c) => c.value === (d.unlock_mode ?? 'next_day'))?.short}
                     </span>
                     {d.locations && d.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {d.locations.map(locationLabel).join(', ')}</span>}
+                    {staleDayIds.has(d.id) && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="This Day changed after its linked Course Module was last updated. Open it and press Update the Module now.">⚠ Linked Module is behind</span>}
                     {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
                   </div>
                   </div>
@@ -1382,6 +1408,7 @@ function InductionManagement() {
                       </button>
                     </>
                   )}
+                  <button onClick={() => setCopyToCourseDay(d)} className="text-xs font-semibold text-violet-700 hover:underline" title="Make this Day a Module of a Course">📚 Copy to Course</button>
                   <button onClick={() => setPreviewDay(d)} className="text-xs font-semibold text-emerald-700 hover:underline">👁 Preview</button>
                   <button onClick={() => startEditDay(d)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteDay(d.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
@@ -1391,6 +1418,10 @@ function InductionManagement() {
           )}
         </div>
       </div>
+
+      {copyToCourseDay && (
+        <CopyDayModuleModal mode="day-to-course" sourceId={copyToCourseDay.id} sourceName={copyToCourseDay.title} onClose={() => setCopyToCourseDay(null)} onCopied={fetchAll} />
+      )}
 
       {reorderOpen && (
         <ReorderDaysModal days={days} saving={reordering} onReorder={handleReorderDays} onClose={() => setReorderOpen(false)} />
