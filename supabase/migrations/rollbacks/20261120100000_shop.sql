@@ -1,0 +1,26 @@
+-- Rollback: removes the shop (tables, functions, storage rules). Files already uploaded to the shop-* buckets stay until removed there.
+drop function if exists public.shop_authorize_download(text, text, uuid);
+drop function if exists public.shop_admin_set_order_status(uuid, text, text, text, text);
+drop function if exists public.shop_cancel_order(text, text);
+drop function if exists public._shop_release_order(uuid);
+drop function if exists public.shop_submit_payment(text, text, text, text);
+drop function if exists public.shop_get_order(text, text);
+drop function if exists public._shop_find_order(text, text);
+drop function if exists public.shop_place_order(jsonb, jsonb, text);
+drop function if exists public.shop_quote(jsonb, text, text);
+drop function if exists public.shop_public_products(uuid);
+drop function if exists public.shop_public_info();
+drop function if exists public._shop_calc(jsonb, text, text);
+drop function if exists public._shop_digits(text);
+drop table if exists public.shop_order_items;
+drop table if exists public.shop_orders;
+drop sequence if exists public.shop_order_seq;
+drop table if exists public.shop_coupons;
+drop table if exists public.shop_products;
+drop table if exists public.shop_settings;
+drop policy if exists shop_images_public_read on storage.objects;
+drop policy if exists shop_images_operator_write on storage.objects;
+drop policy if exists shop_ebooks_operator_all on storage.objects;
+drop policy if exists shop_proofs_customer_insert on storage.objects;
+drop policy if exists shop_proofs_operator_read on storage.objects;
+drop policy if exists shop_proofs_operator_delete on storage.objects;

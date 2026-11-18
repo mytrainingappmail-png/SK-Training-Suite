@@ -48,6 +48,7 @@ const PlanManagement = lazyWithRetry(() => import("../modules/license/PlanManage
 const CompanyOnboardingWizard = lazyWithRetry(() => import("../components/superadmin/CompanyOnboardingWizard"));
 const CompanyLicenseManagement = lazyWithRetry(() => import("../modules/license/CompanyLicenseManagement"));
 const CustomerDirectory = lazyWithRetry(() => import("../modules/platform/CustomerDirectory"));
+const ShopAdmin = lazyWithRetry(() => import("../modules/shop/ShopAdmin"));
 const AppErrors = lazyWithRetry(() => import("../modules/platform/AppErrors"));
 const DiscountCodeManagement = lazyWithRetry(() => import("../modules/license/DiscountCodeManagement"));
 const NotificationLog = lazyWithRetry(() => import("../modules/license/NotificationLog"));
@@ -456,6 +457,7 @@ function Admin() {
              (isPlatformOperator && can(PERMISSIONS.VIEW_SETTINGS) && matches("Settings")) ||
              (isPlatformOperator && matches("Legal Documents")) ||
              (isPlatformOperator && matches("Marketing Website")) ||
+             (isPlatformOperator && matches("Shop")) ||
              (isPlatformOperator && matches("Info Tips")) ||
              (isPlatformOperator && can(PERMISSIONS.VIEW_MENU) && matches("Menu")) ? (
               <div className={GROUP_CARD_CLS} style={GROUP_CARD_STYLE}>
@@ -472,6 +474,9 @@ function Admin() {
                   )}
                   {isPlatformOperator && matches("Marketing Website") && (
                     <button onClick={() => setActiveTab("marketing-website")} className={getTabClass()} style={getTabStyle("marketing-website")}>Marketing Website</button>
+                  )}
+                  {isPlatformOperator && matches("Shop") && (
+                    <button onClick={() => setActiveTab("shop")} className={getTabClass()} style={getTabStyle("shop")}>Shop</button>
                   )}
                   {isPlatformOperator && matches("Info Tips") && (
                     <button onClick={() => setActiveTab("info-tips")} className={getTabClass()} style={getTabStyle("info-tips")}>Info Tips</button>
@@ -690,6 +695,7 @@ function Admin() {
             {activeTab === "legal-documents" && isPlatformOperator && <LegalDocumentManagement />}
 
             {activeTab === "marketing-website" && isPlatformOperator && <PlatformMarketingManagement />}
+            {activeTab === "shop" && isPlatformOperator && <ShopAdmin />}
 
             {activeTab === "info-tips" && isPlatformOperator && <InfoTipManagement />}
 

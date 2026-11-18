@@ -17,6 +17,12 @@ export const ROUTES = {
   LEGAL_DOCUMENT: "/legal/:slug",
 
   CONTACT_US: "/contact",
+  // the public shop (no login)
+  SHOP: "/shop",
+  SHOP_PRODUCT: "/shop/p/:productId",
+  SHOP_CHECKOUT: "/shop/checkout",
+  SHOP_ORDER: "/shop/order/:orderNo",
+  SHOP_ORDERS: "/shop/orders",
 
   PAY_LICENSE: "/pay/:licenseId",
 

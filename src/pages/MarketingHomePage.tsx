@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import ShopNavLink from "../components/shop/ShopNavLink";
 
 import {
   loadMarketingSettings,
@@ -333,6 +334,7 @@ export default function MarketingHomePage() {
             {features.length > 0 && <a href="#why-us" className="transition hover:text-slate-900">Why Us</a>}
             {testimonials.length > 0 && <a href="#testimonials" className="transition hover:text-slate-900">Testimonials</a>}
             {plans.length > 0 && <a href="#pricing" className="transition hover:text-slate-900">Pricing</a>}
+            <ShopNavLink className="transition hover:text-slate-900">📚 Shop</ShopNavLink>
             <a href="#get-started" className="transition hover:text-slate-900">Contact</a>
           </nav>
 
@@ -624,6 +626,7 @@ export default function MarketingHomePage() {
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
             {settings?.contact_email && <a href={`mailto:${settings.contact_email}`} className="hover:text-white">{settings.contact_email}</a>}
             {settings?.contact_phone && <a href={`tel:${settings.contact_phone}`} className="hover:text-white">{settings.contact_phone}</a>}
+            <ShopNavLink className="hover:text-white">Shop</ShopNavLink>
             <Link to={ROUTES.CONTACT_US} className="hover:text-white">Contact Us</Link>
             <Link to={ROUTES.LOGIN} className="hover:text-white">Login</Link>
           </div>

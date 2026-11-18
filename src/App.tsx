@@ -38,6 +38,13 @@ const PerformanceTrackerTvPage = lazyWithRetry(() => import("./pages/Performance
 const BrainstormingPage = lazyWithRetry(() => import("./pages/Brainstorming"));
 const LegalDocumentPage = lazyWithRetry(() => import("./pages/LegalDocumentPage"));
 const ContactUsPage = lazyWithRetry(() => import("./pages/ContactUsPage"));
+// the public shop (no login)
+const ShopLayout = lazyWithRetry(() => import("./pages/shop/ShopLayout"));
+const ShopHomePage = lazyWithRetry(() => import("./pages/shop/ShopHomePage"));
+const ShopProductPage = lazyWithRetry(() => import("./pages/shop/ShopProductPage"));
+const ShopCheckoutPage = lazyWithRetry(() => import("./pages/shop/ShopCheckoutPage"));
+const ShopOrderPage = lazyWithRetry(() => import("./pages/shop/ShopOrderPage"));
+const ShopMyOrdersPage = lazyWithRetry(() => import("./pages/shop/ShopMyOrdersPage"));
 const PayLicensePage = lazyWithRetry(() => import("./pages/PayLicensePage"));
 const CertificateViewPage = lazyWithRetry(() => import("./components/certificate/CertificateViewPage"));
 const AttendancePage = lazyWithRetry(() => import("./pages/AttendancePage"));
@@ -159,6 +166,13 @@ function App() {
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.LEGAL_DOCUMENT} element={<LegalDocumentPage />} />
       <Route path={ROUTES.CONTACT_US} element={<ContactUsPage />} />
+      <Route element={<ShopLayout />}>
+        <Route path={ROUTES.SHOP} element={<ShopHomePage />} />
+        <Route path={ROUTES.SHOP_PRODUCT} element={<ShopProductPage />} />
+        <Route path={ROUTES.SHOP_CHECKOUT} element={<ShopCheckoutPage />} />
+        <Route path={ROUTES.SHOP_ORDERS} element={<ShopMyOrdersPage />} />
+        <Route path={ROUTES.SHOP_ORDER} element={<ShopOrderPage />} />
+      </Route>
       <Route path={ROUTES.PAY_LICENSE} element={<PayLicensePage />} />
 
       {/* Live Quiz (premium add-on) — standalone, no LMS sidebar/header,

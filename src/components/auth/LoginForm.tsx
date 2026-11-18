@@ -1,3 +1,4 @@
+import ShopNavLink from '../shop/ShopNavLink';
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import { BRAND } from '../../config/branding';
@@ -488,6 +489,7 @@ navigate('/dashboard', { replace: true });
         <a href="/legal/refund-and-cancellation" className="hover:text-white hover:underline">Refund &amp; Cancellation</a>
         <span className="mx-2">·</span>
         <a href="/contact" className="hover:text-white hover:underline">Contact Us</a>
+        <ShopNavLink className="hover:text-white hover:underline" withSeparator />
       </p>
 
       {showForgotPassword && (
