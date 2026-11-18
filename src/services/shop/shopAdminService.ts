@@ -27,6 +27,12 @@ export interface ShopSettings {
   order_prefix: string;
   phone_country_code: string;
   ebook_download_limit: number | null;
+  razorpay_enabled: boolean;
+  send_invoice_email: boolean;
+  invoice_details: string | null;
+  invoice_subject: string | null;
+  invoice_message: string | null;
+  public_site_url: string | null;
 }
 
 export interface AdminProduct {
@@ -97,6 +103,9 @@ export interface AdminOrder {
   coupon_code: string | null;
   shipping: number;
   total: number;
+  payment_method: string | null;
+  razorpay_payment_id: string | null;
+  invoice_sent_at: string | null;
   payment_utr: string | null;
   payment_proof_path: string | null;
   payment_submitted_at: string | null;
@@ -124,7 +133,7 @@ export async function loadShopSettings(): Promise<ShopSettings> {
 
 export async function saveShopSettings(s: Partial<ShopSettings>): Promise<void> {
   const patch: Record<string, unknown> = { ...s, updated_at: new Date().toISOString() };
-  for (const k of ['shop_name', 'tagline', 'intro_text', 'upi_id', 'upi_payee_name', 'upi_qr_url', 'shipping_note', 'whatsapp_number', 'contact_email', 'support_phone', 'policy_text', 'thank_you_note'] as const) {
+  for (const k of ['shop_name', 'tagline', 'intro_text', 'upi_id', 'upi_payee_name', 'upi_qr_url', 'shipping_note', 'whatsapp_number', 'contact_email', 'support_phone', 'policy_text', 'thank_you_note', 'invoice_details', 'invoice_subject', 'invoice_message', 'public_site_url'] as const) {
     if (k in patch) patch[k] = nul(patch[k] as string | null);
   }
   if ('free_shipping_above' in patch) patch.free_shipping_above = numOrNull(patch.free_shipping_above as number | null);
@@ -246,10 +255,39 @@ export async function deleteAdminCoupon(id: string): Promise<void> {
 }
 
 // ── orders ──
+/** All orders (read page by page, so a big shop is never cut off at a limit), newest first. */
 export async function loadAdminOrders(): Promise<AdminOrder[]> {
-  const { data, error } = await supabase.from('shop_orders').select('*, shop_order_items(*)').order('created_at', { ascending: false }).limit(500);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as AdminOrder[];
+  const all: AdminOrder[] = [];
+  const PAGE = 500;
+  for (let from = 0; from < 20000; from += PAGE) {
+    const { data, error } = await supabase.from('shop_orders').select('*, shop_order_items(*)').order('created_at', { ascending: false }).range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    all.push(...((data ?? []) as AdminOrder[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return all;
+}
+
+const INVOICE_REASON: Record<string, string> = {
+  no_email: 'This customer did not give an email address.',
+  not_paid: 'The invoice can only be sent once the order is paid.',
+  disabled: 'Invoice emails are switched off in Settings.',
+  already_sent: 'The invoice was already sent.',
+  email_not_configured: 'Email sending is not set up on the server yet.',
+  order_not_found: 'The order was not found.',
+};
+
+/** Emails the invoice to the customer (the server does it; only the shop owner may ask). Returns a readable result. */
+export async function sendOrderInvoice(orderId: string): Promise<{ sent: boolean; message: string }> {
+  const { data, error } = await supabase.functions.invoke('shop-send-invoice', { body: { order_id: orderId } });
+  if (error) {
+    let message = 'The invoice could not be sent.';
+    try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) message = String(j.error); } catch { /* keep */ }
+    return { sent: false, message };
+  }
+  const r = data as { sent?: boolean; reason?: string };
+  if (r.sent) return { sent: true, message: 'Invoice emailed to the customer.' };
+  return { sent: false, message: INVOICE_REASON[r.reason ?? ''] ?? (r.reason?.startsWith('email_error') ? 'The email service refused the message.' : 'The invoice could not be sent.') };
 }
 
 export async function setOrderStatus(orderId: string, status: OrderStatus, opts: { courier?: string; tracking?: string; note?: string } = {}): Promise<void> {

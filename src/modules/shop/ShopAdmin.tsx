@@ -7,9 +7,10 @@ import ShopOrdersPanel from './ShopOrdersPanel';
 import ShopProductsPanel from './ShopProductsPanel';
 import ShopCouponsPanel from './ShopCouponsPanel';
 import ShopSettingsPanel from './ShopSettingsPanel';
+import ShopReportsPanel from './ShopReportsPanel';
 import { A_BTN_LIGHT, Notice, Toggle } from './shopAdminUi';
 
-type Tab = 'orders' | 'books' | 'coupons' | 'settings';
+type Tab = 'orders' | 'books' | 'coupons' | 'reports' | 'settings';
 
 export default function ShopAdmin() {
   const [tab, setTab] = useState<Tab>('orders');
@@ -46,6 +47,7 @@ export default function ShopAdmin() {
     { key: 'orders', label: '🧾 Orders', badge: toCheck },
     { key: 'books', label: '📚 Books' },
     { key: 'coupons', label: '🏷 Coupons' },
+    { key: 'reports', label: '📊 Reports' },
     { key: 'settings', label: '⚙️ Settings' },
   ];
 
@@ -103,6 +105,7 @@ export default function ShopAdmin() {
       {settings && tab === 'orders' && <ShopOrdersPanel symbol={settings.currency_symbol} countryCode={settings.phone_country_code} onCount={setToCheck} />}
       {settings && tab === 'books' && <ShopProductsPanel symbol={settings.currency_symbol} shopUrl={shopUrl} onChanged={refresh} />}
       {settings && tab === 'coupons' && <ShopCouponsPanel symbol={settings.currency_symbol} />}
+      {settings && tab === 'reports' && <ShopReportsPanel symbol={settings.currency_symbol} />}
       {tab === 'settings' && <ShopSettingsPanel onSaved={refresh} />}
       {!settings && !error && <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />}
     </div>

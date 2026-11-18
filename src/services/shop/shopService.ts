@@ -26,6 +26,8 @@ export interface ShopInfo {
   policy_text?: string | null;
   thank_you_note?: string | null;
   has_coupons?: boolean;
+  /** The owner has switched on online payment (Razorpay). */
+  razorpay_enabled?: boolean;
 }
 
 export interface ShopProduct {
@@ -111,6 +113,7 @@ export interface OrderView {
   coupon_code: string | null;
   shipping: number;
   total: number;
+  payment_method: string | null;
   payment_utr: string | null;
   payment_submitted_at: string | null;
   paid_at: string | null;
@@ -234,4 +237,70 @@ export function upiLink(info: ShopInfo, amount: number, orderNo: string): string
   p.set('cu', 'INR');
   p.set('tn', orderNo);
   return `upi://pay?${p.toString().replace(/\+/g, '%20')}`;
+}
+
+// ── online payment (Razorpay) ──
+
+interface RazorpayCheckoutResponse { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }
+interface RazorpayOptions {
+  key: string; amount: number; currency: string; order_id: string; name: string; description: string;
+  prefill?: { name?: string; contact?: string; email?: string };
+  handler: (r: RazorpayCheckoutResponse) => void;
+  modal?: { ondismiss?: () => void };
+  theme?: { color?: string };
+}
+type RazorpayCtor = new (o: RazorpayOptions) => { open: () => void; on: (e: string, cb: (r: unknown) => void) => void };
+// (the licence payment screen already declares window.Razorpay with its own type, so this one is read through a cast)
+const rzpCtor = (): RazorpayCtor | undefined => (window as unknown as { Razorpay?: RazorpayCtor }).Razorpay;
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (rzpCtor()) { resolve(true); return; }
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
+
+async function functionError(error: unknown, fallback: string): Promise<string> {
+  try {
+    const ctx = (error as { context?: Response }).context;
+    const j = ctx ? await ctx.json() : null;
+    if (j?.error) return String(j.error);
+  } catch { /* keep the fallback */ }
+  return fallback;
+}
+
+/**
+ * Opens the Razorpay payment window for an order. Resolves "paid" once the server has verified the payment (the order is then
+ * marked paid by the server, never by this page), "closed" if the customer closed the window.
+ */
+export async function payOnline(orderNo: string, secret: string, themeColor = '#14264d'): Promise<'paid' | 'closed'> {
+  const { data, error } = await supabase.functions.invoke('shop-razorpay-order', { body: { order_no: orderNo, secret } });
+  if (error) throw new Error(await functionError(error, 'Online payment could not be started. Please try again or pay by UPI.'));
+  const p = data as { orderId: string; amount: number; currency: string; keyId: string; name: string; description: string; prefill?: RazorpayOptions['prefill'] };
+  if (!p?.orderId) throw new Error('Online payment could not be started. Please try again or pay by UPI.');
+  if (!(await loadRazorpayScript())) throw new Error('The payment window could not be loaded. Please check your internet and try again.');
+  const Razorpay = rzpCtor();
+  if (!Razorpay) throw new Error('The payment window could not be loaded. Please check your internet and try again.');
+
+  return new Promise<'paid' | 'closed'>((resolve, reject) => {
+    const rzp = new Razorpay({
+      key: p.keyId, amount: p.amount, currency: p.currency, order_id: p.orderId, name: p.name, description: p.description, prefill: p.prefill,
+      theme: { color: themeColor },
+      modal: { ondismiss: () => resolve('closed') },
+      handler: (r) => {
+        supabase.functions.invoke('shop-razorpay-verify', { body: { order_no: orderNo, secret, ...r } })
+          .then(async ({ error: vErr }) => {
+            if (vErr) reject(new Error(await functionError(vErr, 'We could not confirm the payment yet. If money was taken, your order will be confirmed shortly.')));
+            else resolve('paid');
+          })
+          .catch(() => reject(new Error('We could not confirm the payment yet. If money was taken, your order will be confirmed shortly.')));
+      },
+    });
+    rzp.on('payment.failed', () => { /* the customer can try again in the same window */ });
+    rzp.open();
+  });
 }

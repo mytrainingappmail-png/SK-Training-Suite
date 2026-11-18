@@ -2,7 +2,7 @@
 // tracking number), deliver, or cancel. The customer's page updates by itself after every step.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { loadAdminOrders, proofUrl, setOrderStatus } from '../../services/shop/shopAdminService';
+import { loadAdminOrders, proofUrl, sendOrderInvoice, setOrderStatus } from '../../services/shop/shopAdminService';
 import type { AdminOrder } from '../../services/shop/shopAdminService';
 import type { OrderStatus } from '../../services/shop/shopService';
 import { A_BTN, A_BTN_DANGER, A_BTN_GOLD, A_BTN_LIGHT, A_INPUT, Notice, money } from './shopAdminUi';
@@ -38,6 +38,7 @@ function OrderCard({ o, symbol, countryCode, onChanged }: { o: AdminOrder; symbo
   const [courier, setCourier] = useState(o.courier ?? '');
   const [tracking, setTracking] = useState(o.tracking_no ?? '');
   const [proof, setProof] = useState<string | null>(null);
+  const [info, setInfo] = useState('');
 
   useEffect(() => {
     if (open && o.payment_proof_path && !proof) void proofUrl(o.payment_proof_path).then(setProof);
@@ -46,9 +47,24 @@ function OrderCard({ o, symbol, countryCode, onChanged }: { o: AdminOrder; symbo
   async function act(status: OrderStatus, opts: { courier?: string; tracking?: string; note?: string } = {}, ask?: string) {
     if (ask && !window.confirm(ask)) return;
     setBusy(true); setErr('');
-    try { await setOrderStatus(o.id, status, opts); onChanged(); }
+    try {
+      await setOrderStatus(o.id, status, opts);
+      // confirming a payment by hand also sends the invoice (when switched on in Settings and the customer gave an email)
+      if (status === 'paid' && o.email) {
+        const r = await sendOrderInvoice(o.id);
+        setInfo(r.sent ? '✉ Invoice emailed to the customer.' : r.message);
+      }
+      onChanged();
+    }
     catch (e) { setErr(e instanceof Error ? e.message : 'Could not change the order.'); }
     finally { setBusy(false); }
+  }
+
+  async function sendInvoice() {
+    setBusy(true); setErr(''); setInfo('');
+    const r = await sendOrderInvoice(o.id);
+    if (r.sent) { setInfo('✉ ' + r.message); onChanged(); } else setErr(r.message);
+    setBusy(false);
   }
 
   const digits = o.phone.replace(/\D/g, '');
@@ -69,6 +85,7 @@ function OrderCard({ o, symbol, countryCode, onChanged }: { o: AdminOrder; symbo
         </div>
         <div className="flex items-center gap-3">
           <span className="text-base font-extrabold text-slate-900">{money(o.total, symbol)}</span>
+          {o.payment_method === 'razorpay' && ['paid', 'shipped', 'delivered'].includes(o.status) && <span className="hidden rounded-full bg-sky-100 px-2 py-1 text-[11px] font-bold text-sky-700 sm:inline">💳 Online</span>}
           <span className={`rounded-full px-3 py-1 text-xs font-bold ${b.cls}`}>{b.text}</span>
           <span className="text-slate-400">{open ? '▲' : '▼'}</span>
         </div>
@@ -96,7 +113,15 @@ function OrderCard({ o, symbol, countryCode, onChanged }: { o: AdminOrder; symbo
             </div>
           </div>
 
-          {(o.payment_utr || proof) && (
+          {o.payment_method === 'razorpay' && o.razorpay_payment_id && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Paid online (Razorpay)</p>
+              <p className="mt-1">Payment id: <span className="select-all font-mono font-extrabold text-slate-900">{o.razorpay_payment_id}</span></p>
+              <p className="mt-1 text-xs text-slate-600">The money reached your Razorpay account. To refund, use the Razorpay dashboard.</p>
+            </div>
+          )}
+
+          {(o.payment_utr || proof) && o.payment_method !== 'razorpay' && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
               <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Payment details from the customer</p>
               <div className="mt-1 flex flex-wrap items-center gap-4">
@@ -109,6 +134,7 @@ function OrderCard({ o, symbol, countryCode, onChanged }: { o: AdminOrder; symbo
           )}
 
           {err && <Notice kind="error">{err}</Notice>}
+          {info && <Notice kind="ok">{info}</Notice>}
 
           {/* what can be done now */}
           <div className="space-y-3">
@@ -143,9 +169,15 @@ function OrderCard({ o, symbol, countryCode, onChanged }: { o: AdminOrder; symbo
             {o.has_ebook && ['paid', 'shipped', 'delivered'].includes(o.status) && (
               <p className="text-xs text-slate-500">Downloads so far: {o.shop_order_items.filter((i) => i.format === 'ebook').map((i) => `${i.title} — ${i.download_count}`).join(' · ')}</p>
             )}
-            {o.admin_note && <p className="text-xs text-slate-500">Your note: {o.admin_note}</p>}
+            {o.admin_note && <p className="rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">📝 {o.admin_note}</p>}
+            {['paid', 'shipped', 'delivered'].includes(o.status) && o.email && (
+              <div className="flex flex-wrap items-center gap-3">
+                <button disabled={busy} onClick={() => void sendInvoice()} className={A_BTN_LIGHT}>✉ {o.invoice_sent_at ? 'Send invoice again' : 'Send invoice'}</button>
+                <span className="text-xs text-slate-500">{o.invoice_sent_at ? `Last sent ${new Date(o.invoice_sent_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : 'Not sent yet'}</span>
+              </div>
+            )}
             {o.status !== 'cancelled' && o.status !== 'delivered' && (
-              <button disabled={busy} onClick={() => void act('cancelled', { note }, 'Cancel this order? The stock goes back and the coupon use is given back.')} className={A_BTN_DANGER}>Cancel order</button>
+              <button disabled={busy} onClick={() => void act('cancelled', { note }, o.payment_method === 'razorpay' && o.razorpay_payment_id ? 'This order was paid online. Cancel it here AND refund the money in the Razorpay dashboard. Cancel now? (The stock goes back and the coupon use is given back.)' : 'Cancel this order? The stock goes back and the coupon use is given back.')} className={A_BTN_DANGER}>Cancel order</button>
             )}
           </div>
         </div>

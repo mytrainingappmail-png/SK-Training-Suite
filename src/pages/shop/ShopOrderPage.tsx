@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import {
-  cancelShopOrder, downloadEbook, formatMoney, getShopOrder, secretFor, submitShopPayment, upiLink, uploadPaymentProof, rememberOrder,
+  cancelShopOrder, downloadEbook, formatMoney, getShopOrder, payOnline, secretFor, submitShopPayment, upiLink, uploadPaymentProof, rememberOrder,
 } from '../../services/shop/shopService';
 import type { OrderStatus, OrderView } from '../../services/shop/shopService';
 import { useShop } from './ShopContext';
@@ -45,7 +45,9 @@ export default function ShopOrderPage() {
   const { orderNo = '' } = useParams<{ orderNo: string }>();
   const { info, symbol } = useShop();
   const [order, setOrder] = useState<OrderView | null | undefined>(undefined);
-  const [secret, setSecret] = useState<string>(() => secretFor(orderNo) ?? '');
+  // the emailed link carries the order's secret code (?t=...), so it opens on any phone
+  const [secret, setSecret] = useState<string>(() => new URLSearchParams(window.location.search).get('t') || secretFor(orderNo) || '');
+  const [payBusy, setPayBusy] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [error, setError] = useState('');
   const [utr, setUtr] = useState('');
@@ -93,6 +95,21 @@ export default function ShopOrderPage() {
       setError(e instanceof Error ? e.message : 'The details could not be sent.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function payNow() {
+    if (!order) return;
+    setPayBusy(true); setError(''); setMessage('');
+    try {
+      const r = await payOnline(order.order_no, secret);
+      if (r === 'paid') setMessage('Payment received. Thank you!');
+      await load(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The payment could not be completed.');
+      await load(true);
+    } finally {
+      setPayBusy(false);
     }
   }
 
@@ -191,9 +208,17 @@ export default function ShopOrderPage() {
             </div>
           ) : null}
 
+          {info?.razorpay_enabled && (
+            <div className="space-y-2 rounded-xl bg-gradient-to-br from-[#14264d] to-[#0e1c3d] p-4 text-white">
+              <h2 className="text-lg font-extrabold">Pay {formatMoney(order.total, symbol)} online</h2>
+              <p className="text-xs text-slate-300">Cards, UPI, netbanking and wallets. Your order is confirmed instantly and your invoice comes by email.</p>
+              <button onClick={() => void payNow()} disabled={payBusy} className={`${BTN_PRIMARY} w-full !py-3.5 text-base`}>{payBusy ? 'Opening the payment window…' : '💳 Pay online now'}</button>
+            </div>
+          )}
+
           {info?.accept_upi && info.upi_id ? (
             <>
-              <h2 className="text-lg font-extrabold text-slate-900">Pay {formatMoney(order.total, symbol)} by UPI</h2>
+              <h2 className="text-lg font-extrabold text-slate-900">{info?.razorpay_enabled ? 'Or pay' : 'Pay'} {formatMoney(order.total, symbol)} by UPI directly</h2>
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-3">
                   <p className="text-sm font-bold text-slate-700">📱 On your phone</p>
@@ -248,6 +273,7 @@ export default function ShopOrderPage() {
       {!cancelled && !toPay && (
         <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
           <p className="text-lg font-extrabold text-emerald-900">✅ Payment confirmed — thank you!</p>
+          {order.payment_method === 'razorpay' && <p className="text-xs text-emerald-800">Paid online{order.payment_utr ? ` · reference ${order.payment_utr}` : ''}. Your invoice has been emailed{order.email ? ` to ${order.email}` : ''}.</p>}
           {info?.thank_you_note && <p className="whitespace-pre-line text-sm text-emerald-900">{info.thank_you_note}</p>}
           {order.has_physical && (
             <div className="rounded-xl bg-white p-4 text-sm text-slate-700">

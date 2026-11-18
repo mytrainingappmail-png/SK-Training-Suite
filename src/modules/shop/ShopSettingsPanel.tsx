@@ -13,7 +13,8 @@ export default function ShopSettingsPanel({ onSaved }: { onSaved: () => void }) 
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const qrRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadShopSettings().then(setS).catch((e: unknown) => setMsg({ kind: 'error', text: e instanceof Error ? e.message : 'Could not load.' })); }, []);
+  // the link inside emails needs the site's address; it is filled in from the page you are on when still empty
+  useEffect(() => { loadShopSettings().then((x) => setS({ ...x, public_site_url: x.public_site_url || window.location.origin })).catch((e: unknown) => setMsg({ kind: 'error', text: e instanceof Error ? e.message : 'Could not load.' })); }, []);
   if (!s) return msg ? <Notice kind="error">{msg.text}</Notice> : <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />;
 
   function set<K extends keyof ShopSettings>(k: K, v: ShopSettings[K]) { setS((x) => (x ? { ...x, [k]: v } : x)); setMsg(null); }
@@ -67,6 +68,25 @@ export default function ShopSettingsPanel({ onSaved }: { onSaved: () => void }) 
               )}
             </div>
           </Field>
+        </div>
+      </Card>
+
+      <Card title="💳 Online payment (Razorpay)" subtitle="Customers can pay by card, UPI, netbanking or wallet; the order is confirmed by itself and nothing is left for you to check. UPI / QR with your own confirmation stays available too.">
+        <div className="space-y-3">
+          <Toggle checked={s.razorpay_enabled} onChange={(v) => set('razorpay_enabled', v)} label={s.razorpay_enabled ? 'Online payment is ON' : 'Online payment is OFF'} />
+          <p className="text-xs text-slate-500">The Razorpay account keys are kept safely on the server (the same account used for platform licence payments). Money goes to that Razorpay account. If a customer should get a refund, do it in the Razorpay dashboard and then cancel the order here.</p>
+        </div>
+      </Card>
+
+      <Card title="✉️ Invoice email" subtitle="Sent to the customer automatically when an order is paid. You can also send it again from the Orders tab.">
+        <div className="space-y-4">
+          <Toggle checked={s.send_invoice_email} onChange={(v) => set('send_invoice_email', v)} label={s.send_invoice_email ? 'Send invoices automatically' : 'Do not send invoices automatically'} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Email subject" hint="{order_no} and {shop_name} are filled in. Blank = a simple default."><input className={A_INPUT} value={text('invoice_subject')} onChange={(e) => set('invoice_subject', e.target.value)} placeholder="Your invoice - order {order_no}" /></Field>
+            <Field label="Website address used in the email link" hint="so the customer can open the order / download the e-book"><input className={A_INPUT} value={text('public_site_url')} onChange={(e) => set('public_site_url', e.target.value)} placeholder="https://yourwebsite.com" /></Field>
+            <Field label="Opening words of the email" className="sm:col-span-2" hint="Blank = a simple default."><textarea className={A_INPUT} rows={2} value={text('invoice_message')} onChange={(e) => set('invoice_message', e.target.value)} /></Field>
+            <Field label="Your business details on the invoice" className="sm:col-span-2" hint="e.g. business name, address, GSTIN / PAN, as you want them printed at the bottom"><textarea className={A_INPUT} rows={3} value={text('invoice_details')} onChange={(e) => set('invoice_details', e.target.value)} /></Field>
+          </div>
         </div>
       </Card>
 

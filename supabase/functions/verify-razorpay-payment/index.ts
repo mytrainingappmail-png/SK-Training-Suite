@@ -28,6 +28,7 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { safeEqual, serviceClient } from "../_shared/auth.ts";
+import { sendShopInvoice } from "../_shared/shopInvoice.ts";
 
 async function verifySignature(body: string, signature: string, secret: string): Promise<boolean> {
   const encoder = new TextEncoder();
@@ -74,6 +75,24 @@ serve(async (req) => {
     const notes = payment.notes ?? {};
     const companyLicenseId: string | undefined = notes.companyLicenseId;
     if (!paymentId) throw new Error("Payment has no id.");
+
+    // A payment for a SHOP order (a book): mark that order paid (once - the checkout confirmation may have done it already) and email
+    // the invoice. Licence payments carry companyLicenseId instead and go through the licence path below, unchanged.
+    const shopOrderId: string | undefined = notes.shopOrderId;
+    if (shopOrderId) {
+      const shopClient = serviceClient();
+      const { data: marked, error: markError } = await shopClient.rpc("shop_mark_paid_razorpay", {
+        p_order: shopOrderId,
+        p_payment_id: paymentId,
+        p_rzp_order: payment.order_id ?? null,
+        p_amount_paise: Number(payment.amount ?? 0),
+      });
+      if (markError) throw new Error(markError.message);
+      const result = marked as { ok?: boolean; changed?: boolean };
+      if (result?.ok && result?.changed) await sendShopInvoice(shopClient, shopOrderId).catch(() => undefined);
+      return json({ success: true, shop: true, changed: !!result?.changed });
+    }
+
     if (!companyLicenseId) {
       throw new Error("Payment has no companyLicenseId in its notes — cannot identify which license to renew.");
     }
