@@ -1,4 +1,6 @@
 import MusicUploadButton from "../../components/quiz/MusicUploadButton";
+import MusicCheckButton from "../../components/quiz/MusicCheckButton";
+import LobbyMusicSettings from "../../components/quiz/LobbyMusicSettings";
 import { useEffect, useMemo, useState } from "react";
 
 import { getCurrentQuizAdmin, canEditQuizContent } from "../../services/quiz/quizAdminSession";
@@ -96,6 +98,12 @@ export default function QuizResultsPage() {
   const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
   const [musicChoice, setMusicChoice] = useState<ChampMusic>("builtin");
   const [musicUrl, setMusicUrl] = useState("");
+  // the music that plays only on the topper's own phone
+  const [topperChoice, setTopperChoice] = useState<"off" | "custom">("off");
+  const [topperUrl, setTopperUrl] = useState("");
+  const [topperVolume, setTopperVolume] = useState(80);
+  const [topperSaving, setTopperSaving] = useState(false);
+  const [topperMessage, setTopperMessage] = useState("");
   const [musicVolume, setMusicVolume] = useState(70);
   const [musicSaving, setMusicSaving] = useState(false);
   const [musicMessage, setMusicMessage] = useState("");
@@ -139,6 +147,9 @@ export default function QuizResultsPage() {
         setMusicChoice(settings.champ_music);
         setMusicUrl(settings.champ_music_url ?? "");
         setMusicVolume(settings.champ_music_volume);
+        setTopperChoice(settings.topper_music === "custom" ? "custom" : "off");
+        setTopperUrl(settings.topper_music_url ?? "");
+        setTopperVolume(settings.topper_music_volume ?? 80);
         setFolders(f);
       })
       .finally(() => setLoading(false));
@@ -401,6 +412,24 @@ export default function QuizResultsPage() {
     }
   }
 
+  async function handleSaveTopper() {
+    if (!admin) return;
+    setTopperSaving(true);
+    setTopperMessage("");
+    try {
+      await saveSettings(admin.company_id, {
+        topper_music: topperChoice === "custom" && topperUrl.trim() ? "custom" : "off",
+        topper_music_url: topperUrl.trim() || null,
+        topper_music_volume: topperVolume,
+      });
+      setTopperMessage(topperChoice === "custom" && !topperUrl.trim() ? "Saved as Off - upload an mp3 first." : "Saved.");
+    } catch (err) {
+      setTopperMessage(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setTopperSaving(false);
+    }
+  }
+
   if (loading) return <div className="text-slate-500 text-sm">Loading…</div>;
 
   return (
@@ -592,6 +621,7 @@ export default function QuizResultsPage() {
               onChange={(e) => setMusicVolume(Number(e.target.value))}
               className="w-32 disabled:opacity-50"
             />
+            <MusicCheckButton choice={musicChoice} url={musicUrl} volume={musicVolume} />
             {canEdit && (
               <button
                 onClick={handleSaveMusic}
@@ -605,6 +635,25 @@ export default function QuizResultsPage() {
           </div>
         </div>
       </div>
+
+      {/* Music on the topper's own phone only */}
+      <LobbyMusicSettings
+        title="🏆 Topper's own phone music"
+        description="When a trainee's result shows they are the TOPPER (rank 1 and passed), this music plays on THEIR phone only - in a Live Quiz and in an Exam (an exam plays it once the results are released). Nobody else hears it."
+        choice={topperChoice}
+        url={topperUrl}
+        volume={topperVolume}
+        allowBuiltin={false}
+        onChange={(p) => {
+          if (p.choice) setTopperChoice(p.choice === "custom" ? "custom" : "off");
+          if (p.url !== undefined) setTopperUrl(p.url);
+          if (p.volume !== undefined) setTopperVolume(p.volume);
+        }}
+        onSave={() => void handleSaveTopper()}
+        saving={topperSaving}
+        message={topperMessage}
+        canEdit={canEdit}
+      />
 
       {/* Performance table */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">

@@ -8,11 +8,13 @@ interface Props {
   /** The phone is waiting for a tap before it lets sound start. */
   blocked: boolean;
   onPlayNow: () => void;
+  /** Heading of the card (default: the wait music). */
+  label?: string;
 }
 
 const BARS = [0.55, 0.9, 0.4, 1, 0.65, 0.85, 0.5, 0.95, 0.6];
 
-export default function LobbyMusicPlayer({ on, onToggle, blocked, onPlayNow }: Props) {
+export default function LobbyMusicPlayer({ on, onToggle, blocked, onPlayNow, label = "♪ Wait music" }: Props) {
   const playing = on && !blocked;
   return (
     <div className="w-full max-w-xs mx-auto rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-left">
@@ -35,7 +37,7 @@ export default function LobbyMusicPlayer({ on, onToggle, blocked, onPlayNow }: P
           ))}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">♪ Wait music</div>
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{label}</div>
           <div className={`text-sm font-bold ${playing ? "text-amber-300" : "text-slate-400"}`}>
             {!on ? "Off" : blocked ? "Tap to start" : "Playing"}
           </div>

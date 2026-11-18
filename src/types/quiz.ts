@@ -407,6 +407,10 @@ export interface QuizSettings {
   champ_music: ChampMusic;
   champ_music_url: string | null;
   champ_music_volume: number;
+  /** Music played only on the TOPPER's own phone when the result shows (rank 1, passed): "off" or "custom" (the trainer's upload). */
+  topper_music?: "off" | "custom";
+  topper_music_url?: string | null;
+  topper_music_volume?: number;
   result_pass_title: string | null;
   result_pass_message: string | null;
   result_improve_title: string | null;

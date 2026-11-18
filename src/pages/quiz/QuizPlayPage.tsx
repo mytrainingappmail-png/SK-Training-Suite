@@ -26,6 +26,7 @@ import RetryMistakes, { type RetryQuestion } from "../../components/quiz/RetryMi
 import LanguageToggle from "../../components/quiz/LanguageToggle";
 import { useLobbyMusic } from "../../hooks/quiz/useLobbyMusic";
 import LobbyMusicPlayer from "../../components/quiz/LobbyMusicPlayer";
+import TopperMusicCard from "../../components/quiz/TopperMusicCard";
 import { useQuestionTranslations, useQuizLang } from "../../services/quiz/quizTranslationService";
 import type { PublicQuizQuestion, SubmitAnswerResult, SubmitHotspotAnswerResult, QuizPlayerSettings, QuizCertificate, AnswerReviewQuestion, MyQuizResult } from "../../types/quiz";
 
@@ -616,8 +617,13 @@ export default function QuizPlayPage() {
       `}</style>
     );
 
+    // the topper (rank 1, passed, not an open-link attempt) gets the trainer's topper music on this phone - one card for both end screens
+    const isTopper = myResult?.grade === "PASS" && rank === 1 && !session.open_link_id;
+    const topperCard = isTopper ? <div className="fixed bottom-3 inset-x-3 z-40 flex justify-center"><TopperMusicCard kind="quiz" sessionId={session.id} /></div> : null;
+
     if (endStep === "splash") {
       return (
+        <>
         <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5 px-6 text-center" style={bgStyle}>
           {showConfetti && <QuizConfetti />}
           {commonStyles}
@@ -637,10 +643,13 @@ export default function QuizPlayPage() {
             Let's Go! 🚀
           </button>
         </div>
+        {topperCard}
+        </>
       );
     }
 
     return (
+      <>
       <div className="min-h-screen bg-slate-950 flex flex-col items-center gap-3 px-6 py-10 text-center overflow-y-auto" style={bgStyle}>
         {commonStyles}
         <div className="text-xs font-mono text-amber-400">
@@ -729,6 +738,8 @@ export default function QuizPlayPage() {
           </div>
         )}
       </div>
+      {topperCard}
+      </>
     );
   }
 

@@ -23,6 +23,9 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   champ_music: "builtin",
   champ_music_url: null,
   champ_music_volume: 70,
+  topper_music: "off",
+  topper_music_url: null,
+  topper_music_volume: 80,
   result_pass_title: "🏆 Champion!",
   result_pass_message: "Outstanding performance — you've mastered this!",
   result_improve_title: "📈 Need Improvement",
@@ -120,4 +123,17 @@ export async function getPublicQuizBranding(): Promise<QuizPublicBranding | null
 
   const row = (data as QuizPublicBranding[] | null)?.[0];
   return row ?? null;
+}
+
+export interface TopperMusic {
+  url: string;
+  volume: number;
+}
+
+/** The music for the topper's phone, or null when the trainer has it off (or this person did not take part). Only asked on a topper's result screen. */
+export async function getMyTopperMusic(kind: "quiz" | "exam", sessionId: string): Promise<TopperMusic | null> {
+  const { data, error } = await supabaseQuizPlayer.rpc("get_my_topper_music", { p_kind: kind, p_session_id: sessionId });
+  if (error) return null;
+  const row = ((data ?? []) as { music_url: string | null; volume: number | null }[])[0];
+  return row?.music_url ? { url: row.music_url, volume: row.volume ?? 80 } : null;
 }

@@ -16,6 +16,7 @@ import {
 } from "../../repositories/exam/examPlayRepository";
 import { useLobbyMusic } from "../../hooks/quiz/useLobbyMusic";
 import LobbyMusicPlayer from "../../components/quiz/LobbyMusicPlayer";
+import TopperMusicCard from "../../components/quiz/TopperMusicCard";
 import FallingWords, { DEFAULT_MOTIVATIONAL_WORDS } from "../../components/quiz/FallingWords";
 import type { ExamState, ExamPaperQuestion, ExamAnswerDraft, MyExamResultRow } from "../../types/exam";
 import type { QuizPublicBranding } from "../../types/quiz";
@@ -718,6 +719,8 @@ export default function ExamPaperPage() {
                 {passed ? "✓ Passed" : "Not passed"} (pass mark {state.passing_score_pct}%)
               </p>
             )}
+            {/* the topper (rank 1, passed) hears the trainer's topper music on this phone only */}
+            {passed && rankInfo?.rank === 1 && <TopperMusicCard kind="exam" sessionId={sessionId} />}
           </div>
           {mistakes.length > 0 && (
             <button type="button" onClick={() => setRetryOpen(true)} className="w-full rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm py-3">

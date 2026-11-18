@@ -16,9 +16,11 @@ interface Props {
   saving: boolean;
   message: string;
   canEdit: boolean;
+  /** false = only "my own music" or "off" (no built-in chime), used where a chime makes no sense. */
+  allowBuiltin?: boolean;
 }
 
-export default function LobbyMusicSettings({ title, description, choice, url, volume, onChange, onSave, saving, message, canEdit }: Props) {
+export default function LobbyMusicSettings({ title, description, choice, url, volume, onChange, onSave, saving, message, canEdit, allowBuiltin = true }: Props) {
   const handle = useRef<LobbyMusicHandle | null>(null);
   const [playing, setPlaying] = useState(false);
   const [note, setNote] = useState("");
@@ -70,7 +72,7 @@ export default function LobbyMusicSettings({ title, description, choice, url, vo
           value={choice}
           onChange={(e) => change({ choice: e.target.value as LobbyMusicChoice })}
         >
-          <option value="builtin">🔔 Built-in (gentle chime)</option>
+          {allowBuiltin && <option value="builtin">🔔 Built-in (gentle chime)</option>}
           <option value="custom">🎵 My own music (upload or link)</option>
           <option value="off">🔇 Off</option>
         </select>
