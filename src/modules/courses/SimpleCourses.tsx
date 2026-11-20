@@ -669,7 +669,7 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
             </div>
           )}
 
-          <LessonExtras lesson={lesson} guard={guard} refresh={refresh} />
+          <LessonExtras lesson={lesson} liveContent={lesson.lesson_type === 'text' ? content : undefined} guard={guard} refresh={refresh} />
 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onToggle} className={`${BTN} border border-slate-200 text-slate-700 hover:bg-white`}>Close</button>

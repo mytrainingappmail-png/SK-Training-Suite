@@ -25,8 +25,10 @@ interface Faq { question: string; answer: string }
 type TestSettings = { passing_percentage: number; duration_minutes: number; shuffle_questions: boolean; shuffle_options: boolean; must_pass: boolean };
 const DEFAULT_SETTINGS: TestSettings = { passing_percentage: 70, duration_minutes: 15, shuffle_questions: true, shuffle_options: true, must_pass: false };
 
-export default function LessonExtras({ lesson, guard, refresh }: {
+export default function LessonExtras({ lesson, liveContent, guard, refresh }: {
   lesson: SimpleLesson;
+  /** The reading text as typed right now (not saved yet) - the AI makes questions from THIS lesson only. */
+  liveContent?: string;
   guard: (fn: () => Promise<void>, ok?: string) => Promise<void>;
   refresh: () => Promise<void>;
 }) {
@@ -181,7 +183,7 @@ export default function LessonExtras({ lesson, guard, refresh }: {
                 optionsByQuestion={options}
                 onSaved={() => loadTest(assessmentId)}
                 showToast={say}
-                aiSourceText={`${lesson.lesson_title}\n${htmlToText(lesson.content ?? '')}`}
+                aiSourceText={`${lesson.lesson_title}\n${htmlToText(liveContent ?? lesson.content ?? '')}`}
               />
             </div>
           ) : (

@@ -1286,7 +1286,10 @@ function InductionManagement() {
                             optionsByQuestion={testQuestionOptions}
                             onSaved={() => reloadTestQuestions(sectionDraft.assessment_id!)}
                             showToast={showToast}
-                            aiSourceText={sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`).join('\n\n')}
+                            aiSourceText={sectionDraft.section_type === 'page'
+                              // a test inside a reading card is made from THAT card's own text (as typed now), not from the other cards
+                              ? `${sectionDraft.title}\n${htmlToText(sectionDraft.page_content)}`
+                              : sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`).join('\n\n')}
                           />
                         </div>
                       ) : (

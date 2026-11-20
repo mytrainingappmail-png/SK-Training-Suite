@@ -1151,10 +1151,13 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                             optionsByQuestion={testQuestionOptions}
                             onSaved={() => reloadTestQuestions(sectionDraft.assessment_id!)}
                             showToast={showToast}
-                            aiSourceText={[
-                              htmlToText(draft.full_description),
-                              ...sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`),
-                            ].filter(Boolean).join('\n\n')}
+                            aiSourceText={sectionDraft.section_type === 'page'
+                              // a test inside a reading section is made from THAT section's own text (as typed now)
+                              ? `${sectionDraft.title}\n${htmlToText(sectionDraft.page_content)}`
+                              : [
+                                htmlToText(draft.full_description),
+                                ...sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`),
+                              ].filter(Boolean).join('\n\n')}
                           />
                           </div>
                         ) : (
