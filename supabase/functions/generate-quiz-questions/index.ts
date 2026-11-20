@@ -32,6 +32,93 @@ interface Question { text: string; options: string[]; correct_index: number; exp
 
 const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
 
+// The model does not always answer in exactly the shape we asked for (a bare list instead of {"questions":[...]}, a reply cut off
+// half way, extra words around the JSON, option objects, the answer as a letter...). Instead of failing, read whatever is usable.
+function extractQuestions(text: string): unknown[] {
+  const tryParse = (t: string): unknown => { try { return JSON.parse(t); } catch { return undefined; } };
+  const fromValue = (v: unknown): unknown[] | null => {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      for (const k of ["questions", "quiz", "items", "data", "mcqs"]) if (Array.isArray(o[k])) return o[k] as unknown[];
+      for (const val of Object.values(o)) if (Array.isArray(val) && val.length && typeof val[0] === "object") return val;
+    }
+    return null;
+  };
+  let t = text.trim();
+  let got = fromValue(tryParse(t));
+  if (got) return got;
+  // JSON buried inside other words
+  const a = t.search(/[\[{]/);
+  if (a > 0) { t = t.slice(a); got = fromValue(tryParse(t)); if (got) return got; }
+  // a reply that was cut off: keep every complete {...} question object found inside it
+  const found: unknown[] = [];
+  const re = /\{\s*"(?:text|question)"\s*:/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = m.index; i < t.length; i++) {
+      const c = t[i];
+      if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        const obj = tryParse(t.slice(m.index, i + 1));
+        if (obj && typeof obj === "object") found.push(obj);
+        re.lastIndex = i + 1;
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+// options may be strings (maybe starting "A)") or {text} objects
+function readOptions(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((o) => {
+    if (typeof o === "string") return clean(o.replace(/^\s*(?:\(?[A-Da-d]\)|[A-Da-d][.):])\s+/, ""), 250);
+    if (o && typeof o === "object") {
+      const r = o as Record<string, unknown>;
+      return clean(r.text ?? r.option ?? r.value ?? r.label, 250);
+    }
+    return "";
+  });
+}
+
+// the right answer may come as 0-3, "2", "B", or the answer text itself
+function readCorrect(q: Record<string, unknown>, options: string[]): number {
+  const v = q.correct_index ?? q.correctIndex ?? q.correct ?? q.answer_index ?? q.answer ?? q.correct_answer;
+  if (typeof v === "number" && Number.isInteger(v)) return v;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (/^[0-3]$/.test(t)) return Number(t);
+    if (/^\(?[A-Da-d]\)?[.):]?$/.test(t)) return "abcd".indexOf(t.replace(/[^A-Da-d]/g, "").toLowerCase());
+    const ti = options.findIndex((o) => o.toLowerCase() === clean(t, 250).toLowerCase());
+    if (ti >= 0) return ti;
+  }
+  return -1;
+}
+
+function validate(rawList: unknown[], count: number): Question[] {
+  const seen = new Set<string>();
+  const out: Question[] = [];
+  for (const item of rawList) {
+    const q = (item ?? {}) as Record<string, unknown>;
+    const text = clean(q.text ?? q.question, 500);
+    const options = readOptions(q.options ?? q.choices);
+    const ci = readCorrect(q, options);
+    if (!text || options.length !== 4 || options.some((o) => !o) || new Set(options.map((o) => o.toLowerCase())).size !== 4) continue;
+    if (!Number.isInteger(ci) || ci < 0 || ci > 3) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ text, options, correct_index: ci, explanation: clean(q.explanation ?? q.reason, 400) });
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
 function buildPrompt(content: string, count: number, difficulty: string, language: string, extra: string): string {
   const lang = language === "hinglish"
     ? "Write the questions, options and explanations in natural, simple Hinglish (Hindi in English letters, how Indian sales teams talk). Keep numbers, project names and terms like RERA, BHK, sqft, GST, EMI, ROI in English."
@@ -106,28 +193,30 @@ serve(async (req) => {
       throw new HttpError(429, `Your company has used all ${DAILY_CAP_PER_COMPANY} AI question runs for today. Please try again tomorrow.`);
     }
 
-    let parsed: { questions?: unknown };
-    if (useMock) parsed = mock(count);
+    let questions: Question[] = [];
+    if (useMock) questions = validate(mock(count).questions, count);
     else {
-      const text = await callGemini(buildPrompt(content, count, difficulty, language, extra), apiKey!, { json: true, temperature: 0.5 });
-      try { parsed = JSON.parse(text); } catch { throw new HttpError(502, "The AI's reply could not be read. Please try once more."); }
+      // up to two tries: the free model sometimes sends an unreadable or empty answer and works on the second go
+      const prompt = buildPrompt(content, count, difficulty, language, extra);
+      let lastError: HttpError | null = null;
+      const began = Date.now();
+      for (let attempt = 1; attempt <= 2 && questions.length === 0; attempt++) {
+        if (attempt === 2 && Date.now() - began > 60_000) break; // no time left for a second go inside the function limit
+        let text: string;
+        try {
+          text = await callGemini(prompt, apiKey!, { json: true, temperature: attempt === 1 ? 0.5 : 0.3, maxOutputTokens: 16384 });
+        } catch (e) {
+          if (!(e instanceof HttpError)) throw e;
+          lastError = e;
+          continue;
+        }
+        lastError = null;
+        questions = validate(extractQuestions(text), count);
+        if (questions.length === 0) console.error("[generate-quiz-questions] attempt", attempt, "gave nothing usable; reply began:", text.slice(0, 300));
+      }
+      if (questions.length === 0 && lastError) throw lastError;
     }
-
-    const seen = new Set<string>();
-    const questions: Question[] = [];
-    for (const q of (Array.isArray(parsed.questions) ? parsed.questions : []) as RawQuestion[]) {
-      const text = clean(q?.text, 500);
-      const options = Array.isArray(q?.options) ? (q.options as unknown[]).map((o) => clean(o, 250)) : [];
-      const ci = Number(q?.correct_index);
-      if (!text || options.length !== 4 || options.some((o) => !o) || new Set(options.map((o) => o.toLowerCase())).size !== 4) continue;
-      if (!Number.isInteger(ci) || ci < 0 || ci > 3) continue;
-      const key = text.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      questions.push({ text, options, correct_index: ci, explanation: clean(q?.explanation, 400) });
-      if (questions.length >= count) break;
-    }
-    if (questions.length === 0) throw new HttpError(502, "The AI could not make good questions from this content. Try adding more detail, or a different part of the text.");
+    if (questions.length === 0) throw new HttpError(502, "The AI could not make good questions from this content this time. Please press Generate once more - if it keeps happening, paste a different or slightly longer part of the text.");
 
     await admin.from("ai_quiz_generations").insert({ company_id: caller.companyId, employee_id: caller.employeeId, requested: count, produced: questions.length });
     return jsonResponse({ questions, runs_left_today: Math.max(0, DAILY_CAP_PER_COMPANY - (used ?? 0) - 1) });

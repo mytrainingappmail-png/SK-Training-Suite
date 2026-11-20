@@ -14,7 +14,7 @@ const TOTAL_MS = 110_000;
 export async function callGemini(
   prompt: string,
   apiKey: string,
-  opts: { json?: boolean; temperature?: number } = {}
+  opts: { json?: boolean; temperature?: number; maxOutputTokens?: number } = {}
 ): Promise<string> {
   const pinned = Deno.env.get("GEMINI_MODEL");
   const models = pinned ? [pinned, ...MODELS.filter((m) => m !== pinned)] : MODELS;
@@ -33,6 +33,7 @@ export async function callGemini(
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: opts.temperature ?? 0.4,
+            ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
             ...(opts.json ? { responseMimeType: "application/json" } : {}),
           },
         }),
