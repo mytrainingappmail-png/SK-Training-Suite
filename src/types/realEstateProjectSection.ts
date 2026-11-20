@@ -15,6 +15,8 @@ export interface RealEstateProjectSection {
   page_content: string;
   assessment_id: string | null;
   faq_items: ProjectSectionFaqItem[];
+  // A reading section that carries its own test: must the employee pass it? (default yes)
+  test_required: boolean;
   // Content protection — set only via the platform operator's own account (Admin UI hides
   // these for everyone else); survives being cloned to another company since a clone copies
   // every column of the source row.
@@ -41,6 +43,7 @@ export const defaultProjectSectionForm: RealEstateProjectSectionForm = {
   page_content: '',
   assessment_id: null,
   faq_items: [],
+  test_required: true,
   watermark_enabled: false,
   watermark_text: '',
   watermark_orientation: 'diagonal',

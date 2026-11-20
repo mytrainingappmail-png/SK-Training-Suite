@@ -138,6 +138,27 @@ export default function CoursePreview({ courseId, onClose }: { courseId: string;
                   ) : <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">This reading page is empty.</p>
                 )}
 
+                {(lesson.faq_items ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-slate-800">Questions &amp; answers</p>
+                    {(lesson.faq_items ?? []).map((f, i) => (
+                      <details key={i} className="rounded-xl bg-slate-50 p-3 text-sm">
+                        <summary className="cursor-pointer font-semibold text-slate-800">{f.question}</summary>
+                        <p className="mt-2 text-slate-600">{f.answer}</p>
+                      </details>
+                    ))}
+                  </div>
+                )}
+                {lesson.assessment_id && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-amber-200 bg-amber-50 p-4">
+                    <div>
+                      <p className="text-sm font-bold text-amber-900">📝 Test on this lesson</p>
+                      <p className="text-xs text-amber-800">{lesson.test_required === false ? 'Optional for the employee.' : 'The employee must pass it to finish this lesson.'}</p>
+                    </div>
+                    <button type="button" onClick={() => showToast('Preview: the employee takes the test here. Nothing is recorded.')} className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-600">Start Test</button>
+                  </div>
+                )}
+
                 {lesson.lesson_type === 'document' && (
                   file ? (
                     <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm hover:bg-yellow-400">

@@ -75,7 +75,7 @@ async function loadProjectSide(mustPassIds: string[]): Promise<{ tests: PendingL
   if (mustPassIds.length === 0) return { tests: [], done: [] };
   const sections: { project_id: string; assessment_id: string }[] = [];
   for (const part of chunks(mustPassIds)) {
-    const { data, error } = await supabase.from('real_estate_project_sections').select('project_id, assessment_id').eq('section_type', 'test').in('assessment_id', part);
+    const { data, error } = await supabase.from('real_estate_project_sections').select('project_id, assessment_id').in('section_type', ['test', 'page']).in('assessment_id', part);
     if (error) throw new Error(`project tests: ${error.message}`);
     sections.push(...((data ?? []) as { project_id: string; assessment_id: string }[]));
   }
@@ -151,7 +151,7 @@ export async function loadPendingTestsData(): Promise<PendingTestsData> {
   ]);
 
   const testIds = new Set<string>(assignments.map((a) => a.assessment_id));
-  for (const s of induction.sections) if (s.section_type === 'test' && s.assessment_id) testIds.add(s.assessment_id);
+  for (const s of induction.sections) if ((s.section_type === 'test' || s.section_type === 'page') && s.assessment_id) testIds.add(s.assessment_id);
   for (const t of [...project.tests, ...course.tests]) testIds.add(t.assessment_id);
   const empIds = new Set<string>([
     ...assignments.map((a) => a.employee_id), ...induction.assignments.map((a) => a.employee_id),

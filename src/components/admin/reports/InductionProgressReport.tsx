@@ -80,7 +80,7 @@ function buildRows(data: InductionReportData): Row[] {
       const labels = dayLabels(days);
       const details: DayDetail[] = days.map((d, i) => {
         const secs = (sectionsByDay.get(d.id) ?? []).filter((s) => visibleInLocation(s.locations, myLocation));
-        const tests = secs.filter((s) => s.section_type === 'test' && s.assessment_id);
+        const tests = secs.filter((s) => (s.section_type === 'test' || s.section_type === 'page') && s.assessment_id);
         const reading = secs.filter((s) => s.section_type !== 'test');
         return {
           dayId: d.id, title: d.title, label: labels[i], completedAt: doneAt.get(d.id) ?? null,

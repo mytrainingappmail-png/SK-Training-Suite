@@ -29,6 +29,10 @@ export interface CoursePlayerLesson {
   assessmentId:    string | null;
   /** The admin switched "employees must pass this test" on for it: the next module stays locked until it is passed. */
   assessmentMustPass: boolean;
+  /** A FAQ that belongs to this lesson (shown below its content). */
+  faqItems: { question: string; answer: string }[];
+  /** A lesson that has its own test (assessmentId on a non-quiz lesson): must it be passed before the lesson is done? */
+  testRequired: boolean;
 }
 
 export interface CoursePlayerModule {

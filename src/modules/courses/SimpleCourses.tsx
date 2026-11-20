@@ -16,6 +16,7 @@ import { loadCompany } from '../../services/company/companyService';
 import { loadTemplates } from '../../services/certificateTemplate/certificateTemplateService';
 import FinalTestCard from './FinalTestCard';
 import CoursePreview from './CoursePreview';
+import LessonExtras from './LessonExtras';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import { uploadDocument, uploadImage, uploadVideo } from '../../services/contentEditor/contentEditorService';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
@@ -601,6 +602,8 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
           <span className="block truncate text-sm font-semibold text-slate-800">{lesson.lesson_title}</span>
           <span className="text-xs text-slate-500">
             {TYPE_LABEL[lesson.lesson_type] ?? lesson.lesson_type}
+            {(lesson.faq_items ?? []).length > 0 && <span className="ml-2 font-semibold text-violet-600">· + FAQ</span>}
+            {lesson.assessment_id && <span className="ml-2 font-semibold text-amber-600">· + Test{lesson.test_required === false ? ' (optional)' : ''}</span>}
             {incomplete && <span className="ml-2 font-semibold text-amber-600">· needs content</span>}
           </span>
         </button>
@@ -665,6 +668,8 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
               <p className="text-xs text-slate-400">PDF, Word, PowerPoint, Excel or ZIP.</p>
             </div>
           )}
+
+          <LessonExtras lesson={lesson} guard={guard} refresh={refresh} />
 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onToggle} className={`${BTN} border border-slate-200 text-slate-700 hover:bg-white`}>Close</button>

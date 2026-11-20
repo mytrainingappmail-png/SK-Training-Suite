@@ -8,7 +8,7 @@ interface FaqItem { question: string; answer: string }
 
 const INPUT = 'w-full rounded-lg bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40';
 
-export default function FaqItemsEditor({ items, onChange, footer }: { items: FaqItem[]; onChange: (next: FaqItem[]) => void; footer: ReactNode }) {
+export default function FaqItemsEditor({ items, onChange, footer }: { items: FaqItem[]; onChange: (next: FaqItem[]) => void; footer?: ReactNode }) {
   const set = (i: number, patch: Partial<FaqItem>) => onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
   return (

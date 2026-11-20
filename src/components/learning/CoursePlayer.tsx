@@ -370,12 +370,19 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
   const hasNext         = currentIndex < allLessons.length - 1;
   const completedCount  = allLessons.filter((l) => l.completed).length;
 
+  // A lesson (not a quiz lesson) that carries its own test: the learner reads, then starts it right there.
+  const lessonOwnTestId = activeLesson && activeLesson.lessonType !== 'quiz' ? activeLesson.assessmentId : null;
+  const lessonOwnTestPassed = !!lessonOwnTestId && passedAssessmentIds.has(lessonOwnTestId);
+  const lessonOwnTestBlocks = !!lessonOwnTestId && !!activeLesson?.testRequired && !lessonOwnTestPassed;
+  // the live "completed" flag (activeLesson is only a snapshot taken when the lesson was opened)
+  const activeLessonDone = activeLesson ? (allLessons.find((l) => l.id === activeLesson.id)?.completed ?? activeLesson.completed) : false;
+
   const nextLessonForGate = hasNext ? allLessons[currentIndex + 1] : null;
   const nextLessonLocked  = !!nextLessonForGate && isLessonLocked(nextLessonForGate);
   const nextLockedReason  = !nextLessonLocked
     ? ''
     : data?.course.requireCompletionBeforeNext && activeLesson && !activeLesson.completed
-      ? 'Mark this page complete to continue.'
+      ? (lessonOwnTestBlocks ? 'Pass the test on this lesson to continue.' : 'Mark this page complete to continue.')
       : 'Pass this module\'s test to continue.';
 
   // Resume Learning — first incomplete lesson in order, or the last lesson
@@ -840,6 +847,38 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   noCopy={data.course.noCopy}
                 />
 
+                {activeLesson.lessonType !== 'quiz' && activeLesson.faqItems.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="mb-2 text-sm font-bold text-slate-800">Questions &amp; answers</h3>
+                    <div className="space-y-2">
+                      {activeLesson.faqItems.map((f, i) => (
+                        <details key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                          <summary className="cursor-pointer font-semibold text-slate-800">{f.question}</summary>
+                          <p className="mt-2 text-slate-600">{f.answer}</p>
+                        </details>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {lessonOwnTestId && (
+                  <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 sm:p-5 ${lessonOwnTestPassed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-bold ${lessonOwnTestPassed ? 'text-emerald-900' : 'text-amber-900'}`}>{lessonOwnTestPassed ? '✓ Test passed — well done!' : '📝 Test on this lesson'}</p>
+                      <p className={`mt-0.5 text-xs ${lessonOwnTestPassed ? 'text-emerald-700' : 'text-amber-800'}`}>
+                        {lessonOwnTestPassed ? 'You can take it again if you want to improve your score.' : activeLesson.testRequired ? 'Go through the lesson above, then start the test. You need to pass it to finish this lesson.' : 'Go through the lesson above, then start the test whenever you are ready.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleLaunchQuiz(activeLesson)}
+                      className={`flex-shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition active:scale-95 ${lessonOwnTestPassed ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
+                    >
+                      {lessonOwnTestPassed ? 'Take again' : 'Start Test'}
+                    </button>
+                  </div>
+                )}
+
                 {/* navigation footer */}
                 <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-6">
                   <button
@@ -855,10 +894,11 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
 
                   <div className="flex flex-wrap items-center gap-3">
                     {/* A test lesson is completed by PASSING the test, never by pressing this button. */}
-                    {!activeLesson.completed && !(activeLesson.lessonType === 'quiz' && activeLesson.assessmentId) && (
+                    {!activeLessonDone && !(activeLesson.lessonType === 'quiz' && activeLesson.assessmentId) && (
                       <button
                         onClick={handleMarkComplete}
-                        disabled={completing}
+                        disabled={completing || lessonOwnTestBlocks}
+                        title={lessonOwnTestBlocks ? 'Pass the test on this lesson first' : undefined}
                         className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

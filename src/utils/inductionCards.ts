@@ -18,8 +18,19 @@ export function cardRequirement(section: Pick<InductionDaySection, 'section_type
   return r === 'complete' && !COMPLETABLE_TYPES.has(section.section_type) ? 'open' : r;
 }
 
-/** Has the employee done what this card asks (opened it / filled it in)? */
-export function cardDone(section: InductionDaySection, opened: boolean, response?: InductionCardResponse): boolean {
+/** A reading card can carry its own test (and its own FAQ): the employee reads, then starts the test on the same card. */
+export function hasAttachedTest(section: Pick<InductionDaySection, 'section_type' | 'assessment_id'>): boolean {
+  return section.section_type === 'page' && !!section.assessment_id;
+}
+
+/** Must the employee PASS the test added to this card before the card counts as done? (admin switch, default yes; an optional card never blocks) */
+export function attachedTestRequired(section: Pick<InductionDaySection, 'section_type' | 'assessment_id' | 'config' | 'requirement'>): boolean {
+  return hasAttachedTest(section) && section.config?.test_required !== false && (section.requirement ?? 'open') !== 'none';
+}
+
+/** Has the employee done what this card asks (opened it / filled it in / passed its test)? */
+export function cardDone(section: InductionDaySection, opened: boolean, response?: InductionCardResponse, testPassed = true): boolean {
+  if (attachedTestRequired(section) && !testPassed) return false;
   if (cardRequirement(section) !== 'complete') return opened;
   if (!response) return false;
   if (section.section_type === 'task') {

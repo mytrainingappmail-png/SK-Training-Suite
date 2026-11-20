@@ -76,6 +76,8 @@ export interface FeedbackQuestion {
 
 // Settings of the newer card kinds — everything is optional and every wording is the admin's own.
 export interface InductionCardConfig {
+  // page card with a test added to it: must the employee pass that test to finish the card? (default yes)
+  test_required?: boolean;
   // acknowledge
   checkbox_label?: string;
   button_label?: string;

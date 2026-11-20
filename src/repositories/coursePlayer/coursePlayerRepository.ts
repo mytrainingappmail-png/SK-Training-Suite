@@ -45,6 +45,8 @@ interface SBLesson {
   downloadable:     boolean;
   learning_resources: SBResource[] | null;
   assessments:      { id: string; must_pass: boolean | null } | { id: string; must_pass: boolean | null }[] | null;
+  faq_items:        { question: string; answer: string }[] | null;
+  test_required:    boolean | null;
 }
 
 interface SBModule {
@@ -128,6 +130,8 @@ function normaliseLesson(l: SBLesson, completedIds: Set<string>): CoursePlayerLe
     completed:       completedIds.has(l.id),
     assessmentId:    assessment?.id ?? null,
     assessmentMustPass: assessment?.must_pass ?? false,
+    faqItems:        Array.isArray(l.faq_items) ? l.faq_items : [],
+    testRequired:    l.test_required !== false,
   };
 }
 
@@ -233,6 +237,8 @@ export async function getCoursePlayerData(
                display_order,
                downloadable
              ),
+             faq_items,
+             test_required,
              assessments (
                id,
                must_pass

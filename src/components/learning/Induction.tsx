@@ -109,7 +109,8 @@ function Induction() {
         setSectionsByDay(grouped);
         setCompletions(comps);
 
-        const testAssessmentIds = allSections.filter((s) => s.section_type === 'test' && s.assessment_id).map((s) => s.assessment_id!);
+        // the day's own Test cards AND the tests added inside reading cards
+        const testAssessmentIds = allSections.filter((s) => (s.section_type === 'test' || s.section_type === 'page') && s.assessment_id).map((s) => s.assessment_id!);
         const [passed, mustPass] = await Promise.all([getPassedTestIds(user.id, testAssessmentIds), getMustPassTestIds(testAssessmentIds).catch(() => new Set<string>())]);
         setPassedTestIds(passed);
         setMustPassIds(mustPass);

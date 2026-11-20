@@ -24,6 +24,12 @@ export interface SimpleLesson {
   video_url: string | null;
   duration_minutes: number | null;
   display_order: number | null;
+  /** A FAQ that belongs to this lesson (shown below it). */
+  faq_items: { question: string; answer: string }[] | null;
+  /** Must the employee pass the lesson's own test (if it has one) before the lesson counts as done? */
+  test_required: boolean | null;
+  /** The lesson's own test, when the admin added one. */
+  assessment_id: string | null;
   resources: SimpleResource[];
 }
 
@@ -163,7 +169,7 @@ export async function getOutline(courseId: string): Promise<SimpleModule[]> {
 
   const { data: lessons, error: lError } = await supabase
     .from("lessons")
-    .select("id, module_id, lesson_title, lesson_type, content, video_url, duration_minutes, display_order")
+    .select("id, module_id, lesson_title, lesson_type, content, video_url, duration_minutes, display_order, faq_items, test_required")
     .in("module_id", mods.map((m) => m.id))
     .order("display_order", { ascending: true });
   if (lError) fail("getOutline (lessons)", lError);
@@ -174,11 +180,17 @@ export async function getOutline(courseId: string): Promise<SimpleModule[]> {
     : { data: [] as SimpleResource[], error: null };
   if (rError) fail("getOutline (files)", rError);
 
+  const { data: lessonTests, error: tError } = lessonIds.length
+    ? await supabase.from("assessments").select("id, lesson_id").in("lesson_id", lessonIds)
+    : { data: [] as { id: string; lesson_id: string }[], error: null };
+  if (tError) fail("getOutline (tests)", tError);
+  const testOfLesson = new Map(((lessonTests ?? []) as { id: string; lesson_id: string }[]).map((t) => [t.lesson_id, t.id]));
+
   return mods.map((m) => ({
     ...m,
     lessons: (lessons ?? [])
       .filter((l) => l.module_id === m.id && l.lesson_type !== "quiz") // the course's final test has its own card
-      .map((l) => ({ ...l, resources: ((resources ?? []) as SimpleResource[]).filter((r) => r.lesson_id === l.id) })),
+      .map((l) => ({ ...l, assessment_id: testOfLesson.get(l.id) ?? null, resources: ((resources ?? []) as SimpleResource[]).filter((r) => r.lesson_id === l.id) })),
   })) as SimpleModule[];
 }
 

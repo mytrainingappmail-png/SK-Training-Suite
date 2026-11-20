@@ -18,6 +18,7 @@ import { matchesProjectSearch } from '../../utils/projectSearch';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
 import { loadCompletedProjectIds, markProjectComplete } from '../../services/realEstateProject/realEstateProjectService';
 import { getCurrentUser } from '../../services/auth/session';
+import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import SectionHeroBanner from './SectionHeroBanner';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
@@ -116,13 +117,20 @@ interface ProjectDetailCardProps {
   marking: boolean;
   onMarkComplete: () => void;
   onLaunchQuiz: (assessmentId: string) => void;
+  /** Tests (by assessment id) this employee has already passed - for the tests added inside reading sections. */
+  passedIds?: Set<string>;
   indexBadge?: number;
   onRemove?: () => void;
 }
 
 export function ProjectDetailCard({
-  project, gradient, completed, marking, onMarkComplete, onLaunchQuiz, indexBadge, onRemove,
+  project, gradient, completed, marking, onMarkComplete, onLaunchQuiz, passedIds, indexBadge, onRemove,
 }: ProjectDetailCardProps) {
+  // Tests added inside reading sections: the employee reads, then starts the test right there.
+  const attachedTests = project.sections.filter((s) => s.section_type === 'page' && !!s.assessment_id);
+  const attachedPending = attachedTests.filter((s) => s.test_required !== false && !passedIds?.has(s.assessment_id!));
+  const hasFinalTest = project.sections.some((s) => s.section_type === 'test');
+  const needsCompleteBox = !completed && (hasFinalTest || attachedTests.some((s) => s.test_required !== false));
   const [showFullDetails, setShowFullDetails] = useState(false);
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
 
@@ -201,8 +209,11 @@ export function ProjectDetailCard({
                       className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:underline"
                     >
                       {openKeys.has(key) ? '▼' : '▶'} {section.title}
+                      {(section.faq_items ?? []).length > 0 && <span className="ml-2 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">+ FAQ</span>}
+                      {section.assessment_id && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{passedIds?.has(section.assessment_id) ? '✓ Test passed' : '+ Test'}</span>}
                     </button>
                     {openKeys.has(key) && (
+                      <>
                       <div className="relative">
                         <TranslatableHtml
                           className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
@@ -211,6 +222,44 @@ export function ProjectDetailCard({
                         />
                         <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
                       </div>
+                      {(section.faq_items ?? []).length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-sm font-bold text-slate-800">Questions &amp; answers</p>
+                          {section.faq_items.map((item, i) => {
+                            const fkey = `pfaq-${section.id}-${i}`;
+                            return (
+                              <div key={fkey} className="rounded-xl bg-slate-50 p-3">
+                                <button onClick={() => toggleKey(fkey)} className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-700">
+                                  {item.question}
+                                  <span className="ml-2 flex-shrink-0 text-slate-400">{openKeys.has(fkey) ? '−' : '+'}</span>
+                                </button>
+                                {openKeys.has(fkey) && <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</p>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {section.assessment_id && (() => {
+                        const passed = !!passedIds?.has(section.assessment_id!);
+                        return (
+                          <div className={`mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 ${passed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                            <div className="min-w-0">
+                              <p className={`text-sm font-bold ${passed ? 'text-emerald-900' : 'text-amber-900'}`}>{passed ? '✓ Test passed — well done!' : '📝 Test on this section'}</p>
+                              <p className={`mt-0.5 text-xs ${passed ? 'text-emerald-700' : 'text-amber-800'}`}>
+                                {passed ? 'You can take it again if you want to improve your score.' : section.test_required !== false ? 'Read the section above, then start the test. You need to pass it before you can mark this project complete.' : 'Read the section above, then start the test whenever you are ready.'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onLaunchQuiz(section.assessment_id!)}
+                              className={`flex-shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition active:scale-95 ${passed ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
+                            >
+                              {passed ? 'Take again' : 'Start Test'}
+                            </button>
+                          </div>
+                        );
+                      })()}
+                      </>
                     )}
                   </div>
                 );
@@ -271,14 +320,18 @@ export function ProjectDetailCard({
           </div>
         )}
 
-        {project.sections.some((s) => s.section_type === 'test') && !completed && (
+        {needsCompleteBox && (
           <div className="rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4 text-center">
             <p className="mb-3 text-sm font-medium text-indigo-900">
-              Read through this project, then mark it complete to unlock the mandatory test.
+              {attachedPending.length > 0
+                ? `Pass the test${attachedPending.length > 1 ? 's' : ''} inside ${attachedPending.map((s) => `“${s.title}”`).join(', ')} first, then mark this project complete.`
+                : hasFinalTest
+                ? 'Read through this project, then mark it complete to unlock the mandatory test.'
+                : 'You have passed the tests in this project. Mark it complete.'}
             </p>
             <button
               onClick={onMarkComplete}
-              disabled={marking}
+              disabled={marking || attachedPending.length > 0}
               className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
             >
               {marking ? 'Marking…' : '✓ Mark Project as Complete'}
@@ -371,6 +424,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [completedProjectIds, setCompletedProjectIds] = useState<Set<string>>(new Set());
+  const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
   const [markingProjectId, setMarkingProjectId] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -408,13 +462,25 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
     setLoading(true);
     setError('');
     loadProjectsForEmployee(user.id, user.branchId || null, { includeInduction: !!onlyProjectIds })
-      .then((all) => setProjects(onlyProjectIds
-        ? onlyProjectIds.map((id) => all.find((p) => p.projectId === id)).filter((p): p is Project => !!p)
-        : all))
+      .then((all) => {
+        const shown = onlyProjectIds
+          ? onlyProjectIds.map((id) => all.find((p) => p.projectId === id)).filter((p): p is Project => !!p)
+          : all;
+        setProjects(shown);
+        void refreshPassed(shown);
+      })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load projects.'))
       .finally(() => setLoading(false));
     loadCompletedProjectIds(user.id).then((ids) => setCompletedProjectIds(new Set(ids))).catch(() => {});
   }, [user?.id, (onlyProjectIds ?? []).join(',')]);
+
+  /** Which of the tests added inside reading sections this employee has passed. */
+  async function refreshPassed(list: Project[] = projects) {
+    if (!user?.id) return;
+    const ids = list.flatMap((p) => p.sections).filter((s) => s.section_type === 'page' && s.assessment_id).map((s) => s.assessment_id!);
+    if (ids.length === 0) return;
+    try { setPassedIds(await getPassedTestIds(user.id, ids)); } catch { /* the badge simply stays off */ }
+  }
 
   async function handleMarkComplete(projectId: string) {
     if (!user?.id) return;
@@ -492,6 +558,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
         marking={markingProjectId === openProject.projectId}
         onMarkComplete={() => handleMarkComplete(openProject.projectId)}
         onLaunchQuiz={setActiveTestAssessmentId}
+        passedIds={passedIds}
       />
 
       {activeTestAssessmentId && user?.id && (
@@ -500,7 +567,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
             <AssessmentPlayer
               assessmentId={activeTestAssessmentId}
               employeeId={user.id}
-              onFinish={() => setActiveTestAssessmentId(null)}
+              onFinish={() => { setActiveTestAssessmentId(null); void refreshPassed(); }}
             />
           </div>
         </div>

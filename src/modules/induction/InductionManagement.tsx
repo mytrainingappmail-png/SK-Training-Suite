@@ -358,6 +358,9 @@ function InductionManagement() {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [responsesFor, setResponsesFor] = useState<InductionDaySection | null>(null);
   const [savingSection, setSavingSection] = useState(false);
+  // A reading (page) card can carry its own test and FAQ instead of needing separate cards.
+  const [attachTestOn, setAttachTestOn] = useState(false);
+  const [attachFaqOn, setAttachFaqOn] = useState(false);
 
   // Induction's own dedicated Test builder — each Test section auto-creates
   // its own private assessment+questions (never picked from the shared,
@@ -598,6 +601,8 @@ function InductionManagement() {
   }
 
   function resetTestState() {
+    setAttachTestOn(false);
+    setAttachFaqOn(false);
     setTestSettingsDraft(DEFAULT_TEST_SETTINGS);
     setTestQuestions([]);
     setTestQuestionOptions({});
@@ -638,7 +643,11 @@ function InductionManagement() {
       watermark_enabled: s.watermark_enabled, watermark_text: s.watermark_text, watermark_orientation: s.watermark_orientation, watermark_opacity: s.watermark_opacity, no_copy: s.no_copy,
     });
     resetTestState();
-    if (s.section_type === 'test' && s.assessment_id) {
+    if (s.section_type === 'page') {
+      setAttachTestOn(!!s.assessment_id);
+      setAttachFaqOn((s.faq_items ?? []).length > 0);
+    }
+    if ((s.section_type === 'test' || s.section_type === 'page') && s.assessment_id) {
       fetchTestData(s.assessment_id);
     }
   }
@@ -676,6 +685,7 @@ function InductionManagement() {
   // Only the card kinds that use settings keep them; a test is always "must be opened" (its own rules apply).
   const configKinds = new Set(['acknowledge', 'feedback', 'task', 'contact']);
   function configToSave() {
+    if (sectionDraft && sectionDraft.section_type === 'page') return attachTestOn ? { test_required: sectionDraft.config.test_required !== false } : {};
     if (!sectionDraft || !configKinds.has(sectionDraft.section_type)) return {};
     const c = { ...sectionDraft.config };
     if (c.questions) c.questions = c.questions.filter((q) => q.label.trim() !== '').map((q) => (q.type === 'choice' ? { ...q, options: (q.options ?? []).map((o) => o.trim()).filter(Boolean) } : q));
@@ -696,8 +706,16 @@ function InductionManagement() {
         no_copy: sectionDraft.no_copy,
       };
       let assessmentId = sectionDraft.assessment_id;
-      if (sectionDraft.section_type === 'test') {
-        if (!sectionDraft.title.trim()) throw new Error('Give the test a subject line first.');
+      const isPage = sectionDraft.section_type === 'page';
+      const wantsTest = sectionDraft.section_type === 'test' || (isPage && attachTestOn);
+      const originalCard = editingSectionId && editingSectionId !== 'new' ? sections.find((x) => x.id === editingSectionId) : undefined;
+      // the test was taken off a reading card: it goes away together with its questions (after the card is saved without it)
+      const assessmentToDrop = isPage && !attachTestOn && originalCard?.section_type === 'page' && originalCard.assessment_id ? originalCard.assessment_id : null;
+      if (assessmentToDrop) assessmentId = null;
+      const faqToSave = isPage && !attachFaqOn ? [] : sectionDraft.faq_items;
+      const testWasMissing = wantsTest && !assessmentId;
+      if (wantsTest) {
+        if (!sectionDraft.title.trim()) throw new Error(isPage ? 'Give this section a title first.' : 'Give the test a subject line first.');
         // Every Induction Test gets its own private assessment — auto-created
         // here, never picked from the shared company-wide Assessment pool —
         // so it can't be edited/deleted from Admin → Assessments by mistake.
@@ -736,7 +754,7 @@ function InductionManagement() {
           company_id: user.companyId, day_id: editingDayId,
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items, config: configToSave(), requirement: requirementToSave(), project_ids: sectionDraft.section_type === 'projects' ? sectionDraft.project_ids : null, thumbnail_url: sectionDraft.thumbnail_url, locations: isOperator ? cleanLocations(sectionDraft.locations) : null,
+          faq_items: faqToSave, config: configToSave(), requirement: requirementToSave(), project_ids: sectionDraft.section_type === 'projects' ? sectionDraft.project_ids : null, thumbnail_url: sectionDraft.thumbnail_url, locations: isOperator ? cleanLocations(sectionDraft.locations) : null,
           display_order: sections.length,
           ...protection,
         });
@@ -745,7 +763,7 @@ function InductionManagement() {
         await editSection(editingSectionId, {
           section_type: sectionDraft.section_type, title: sectionDraft.title,
           page_content: sectionDraft.page_content, assessment_id: assessmentId,
-          faq_items: sectionDraft.faq_items, config: configToSave(), requirement: requirementToSave(), project_ids: sectionDraft.section_type === 'projects' ? sectionDraft.project_ids : null, thumbnail_url: sectionDraft.thumbnail_url, ...(isOperator ? { locations: cleanLocations(sectionDraft.locations) } : {}),
+          faq_items: faqToSave, config: configToSave(), requirement: requirementToSave(), project_ids: sectionDraft.section_type === 'projects' ? sectionDraft.project_ids : null, thumbnail_url: sectionDraft.thumbnail_url, ...(isOperator ? { locations: cleanLocations(sectionDraft.locations) } : {}),
           ...protection,
         });
       }
@@ -753,7 +771,8 @@ function InductionManagement() {
       // A Test section stays open right after saving — settings alone create
       // an (empty) assessment, so closing here would force the admin to
       // re-open the section just to see the "Add Question" / CSV upload UI.
-      if ((sectionDraft.section_type === 'test' || sectionDraft.section_type === 'projects') && savedId) {
+      if (assessmentToDrop) { try { await removeAssessmentSvc(assessmentToDrop); } catch { /* best-effort cleanup */ } }
+      if ((sectionDraft.section_type === 'test' || sectionDraft.section_type === 'projects' || (isPage && testWasMissing)) && savedId) {
         setEditingSectionId(savedId);
         setSectionDraft((d) => (d ? { ...d, assessment_id: assessmentId } : d));
         showToast(sectionDraft.section_type === 'projects' ? 'Card saved — now add its projects below.' : 'Test settings saved — now add your questions below.');
@@ -787,6 +806,32 @@ function InductionManagement() {
     }
   }
 
+  /** An old separate Test / FAQ card becomes part of the reading card right above it (its questions are kept). */
+  async function handleMergeIntoAbove(index: number) {
+    if (!editingDayId || editingDayId === 'new') return;
+    const s = sections[index];
+    const above = sections[index - 1];
+    if (!s || !above || above.section_type !== 'page') { showToast('Put this card right below the reading card it belongs to first (use the arrows).'); return; }
+    if (s.section_type === 'test') {
+      if (above.assessment_id) { showToast('The reading card above already has a test.'); return; }
+      if (!s.assessment_id) { showToast('This test has no questions yet.'); return; }
+    }
+    const what = s.section_type === 'test' ? 'test' : 'FAQ';
+    if (!window.confirm(`Move this ${what} into "${above.title}"? The employee will then see it inside that card, and this separate card goes away. Questions and answers are kept.`)) return;
+    try {
+      if (s.section_type === 'test') {
+        await editSection(above.id, { assessment_id: s.assessment_id, config: { ...(above.config ?? {}), test_required: true } });
+      } else {
+        await editSection(above.id, { faq_items: [...(above.faq_items ?? []), ...(s.faq_items ?? [])] });
+      }
+      await removeSection(s.id); // only the card goes; its test now belongs to the card above
+      fetchSections(editingDayId);
+      showToast(`The ${what} is now part of "${above.title}".`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not move it.');
+    }
+  }
+
   async function handleDeleteSection(id: string) {
     if (!editingDayId || editingDayId === 'new') return;
     const target = sections.find((x) => x.id === id);
@@ -797,7 +842,7 @@ function InductionManagement() {
     try {
       const s = target;
       await removeSection(id);
-      if (s?.section_type === 'test' && s.assessment_id) {
+      if ((s?.section_type === 'test' || s?.section_type === 'page') && s.assessment_id) {
         try { await removeAssessmentSvc(s.assessment_id); } catch { /* best-effort cleanup */ }
       }
       fetchSections(editingDayId);
@@ -1031,10 +1076,15 @@ function InductionManagement() {
                         {s.requirement === 'none' && s.section_type !== 'test' && <span className="ml-1 font-normal opacity-70">· optional</span>}
                       </span>
                       <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+                      {s.section_type === 'page' && (s.faq_items ?? []).length > 0 && <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">+ FAQ</span>}
+                      {s.section_type === 'page' && s.assessment_id && <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">+ Test{s.config?.test_required === false ? ' (optional)' : ''}</span>}
                       {s.locations && s.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {s.locations.map(locationLabel).join(', ')}</span>}
                     </div>
                     <div className="flex gap-2">
                       {isFormCard(s) && <button onClick={() => setResponsesFor(s)} className="text-xs font-semibold text-emerald-700 hover:underline">Responses</button>}
+                      {(s.section_type === 'test' || s.section_type === 'faq') && i > 0 && sections[i - 1].section_type === 'page' && (
+                        <button onClick={() => void handleMergeIntoAbove(i)} className="text-xs font-semibold text-amber-700 hover:underline">↑ Move into the card above</button>
+                      )}
                       <button onClick={() => startEditSection(s)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                       <button onClick={() => handleDeleteSection(s.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                     </div>
@@ -1116,6 +1166,35 @@ function InductionManagement() {
                     />
                   )}
 
+                  {sectionDraft.section_type === 'page' && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                      <p className="text-xs font-bold text-amber-900">Add to this section</p>
+                      <p className="mb-3 mt-0.5 text-xs text-amber-800">A FAQ or test added here stays part of THIS section: the employee reads, then starts the test on the same card. No separate card needed.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => { if (attachFaqOn && sectionDraft.faq_items.length > 0 && !window.confirm('Remove the FAQ from this section? Its questions are deleted when you save.')) return; setAttachFaqOn((v) => !v); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${attachFaqOn ? 'border-violet-300 bg-violet-100 text-violet-800' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+                          {attachFaqOn ? '− Remove FAQ' : '+ Add FAQ'}
+                        </button>
+                        <button type="button" onClick={() => { if (attachTestOn && sectionDraft.assessment_id && !window.confirm('Remove the test from this section? Its questions are deleted when you save the section.')) return; setAttachTestOn((v) => !v); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${attachTestOn ? 'border-amber-300 bg-amber-100 text-amber-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+                          {attachTestOn ? '− Remove test' : '+ Add test'}
+                        </button>
+                      </div>
+                      {attachFaqOn && (
+                        <div className="mt-4 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-slate-600">FAQ questions ({sectionDraft.faq_items.length})</p>
+                            <div className="flex flex-wrap gap-2">
+                              <button type="button" onClick={handleDownloadFaqSampleCsv} className="text-xs font-semibold text-slate-500 hover:underline">Download Sample CSV</button>
+                              <button type="button" onClick={() => faqCsvInputRef.current?.click()} className="text-xs font-semibold text-indigo-600 hover:underline">Bulk Upload CSV</button>
+                              {sectionDraft.faq_items.length > 0 && <button type="button" onClick={handleExportFaqCsv} className="text-xs font-semibold text-slate-500 hover:underline">Export CSV</button>}
+                            </div>
+                            <input ref={faqCsvInputRef} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void handleImportFaqCsv(f); }} />
+                          </div>
+                          <FaqItemsEditor items={sectionDraft.faq_items} onChange={(next) => setSectionDraft((d) => (d ? { ...d, faq_items: next } : d))} footer={null} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {sectionDraft.section_type === 'acknowledge' && (
                     <div className="mt-3"><AcknowledgeSettings config={sectionDraft.config} onChange={(c) => setSectionDraft((d) => (d ? { ...d, config: c } : d))} /></div>
                   )}
@@ -1125,10 +1204,16 @@ function InductionManagement() {
                   {sectionDraft.section_type === 'feedback' && <FeedbackBuilder config={sectionDraft.config} onChange={(c) => setSectionDraft((d) => (d ? { ...d, config: c } : d))} />}
                   {sectionDraft.section_type === 'contact' && <ContactSettings config={sectionDraft.config} onChange={(c) => setSectionDraft((d) => (d ? { ...d, config: c } : d))} />}
 
-                  {sectionDraft.section_type === 'test' && (
-                    <div className="space-y-4">
+                  {(sectionDraft.section_type === 'test' || (sectionDraft.section_type === 'page' && attachTestOn)) && (
+                    <div className="mt-4 space-y-4">
                       <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="mb-3 text-xs font-semibold text-slate-500">Test Settings — a private test just for this Day, not shared with any other section</p>
+                        <p className="mb-3 text-xs font-semibold text-slate-500">{sectionDraft.section_type === 'page' ? 'Test on this section — the employee starts it right after reading, on the same card' : 'Test Settings — a private test just for this Day, not shared with any other section'}</p>
+                        {sectionDraft.section_type === 'page' && (
+                          <label className="mb-3 flex items-start gap-2 text-xs text-slate-700">
+                            <input type="checkbox" className="mt-0.5" checked={sectionDraft.config.test_required !== false} onChange={(e) => setSectionDraft((d) => (d ? { ...d, config: { ...d.config, test_required: e.target.checked } } : d))} />
+                            <span><b>The employee must pass this test to finish this section</b> — the day cannot be completed until then. Off = the test is there but optional.</span>
+                          </label>
+                        )}
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                           <div>
                             <label className="mb-1 block text-xs text-slate-500">Pass %</label>

@@ -103,6 +103,8 @@ export function buildPendingRows(data: PendingTestsData, now: Date = new Date())
   for (const s of ind.sections) {
     if (s.section_type === 'test' && s.assessment_id) testsByDay.set(s.day_id, [...(testsByDay.get(s.day_id) ?? []), s]);
   }
+  const attachedTests = ind.sections.filter((s) => s.section_type === 'page' && s.assessment_id);
+  const openedBy = new Set(ind.views.map((v) => `${v.employee_id}:${v.section_id}`));
   for (const a of ind.assignments) {
     if (a.status === 'completed') continue;
     const e = emp.get(a.employee_id);
@@ -114,6 +116,11 @@ export function buildPendingRows(data: PendingTestsData, now: Date = new Date())
         if (!visibleInLocation(s.locations, myLocation)) continue;
         add('induction', a.employee_id, s.assessment_id!, `Induction · ${day?.title ?? 'Day'}`, { dueDate: null, mandatory: null, maxAttempts: null, expired: false });
       }
+    }
+    // A test added inside a reading card is pending for whoever has opened that card and not passed it yet.
+    for (const s of attachedTests) {
+      if (!openedBy.has(`${a.employee_id}:${s.id}`) || !visibleInLocation(s.locations, myLocation)) continue;
+      add('induction', a.employee_id, s.assessment_id!, `Induction · ${dayById.get(s.day_id)?.title ?? 'Day'}`, { dueDate: null, mandatory: null, maxAttempts: null, expired: false });
     }
   }
 

@@ -12,7 +12,7 @@ import AcknowledgeCard from './inductionCards/AcknowledgeCard';
 import FeedbackCard from './inductionCards/FeedbackCard';
 import TaskCard from './inductionCards/TaskCard';
 import ContactCard from './inductionCards/ContactCard';
-import { cardDone, cardRequirement } from '../../utils/inductionCards';
+import { attachedTestRequired, cardDone, cardRequirement, hasAttachedTest } from '../../utils/inductionCards';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import type { InductionCardResponse, InductionDay, InductionDaySection } from '../../types/induction';
 import TranslatableHtml from '../shared/TranslatableHtml';
@@ -30,6 +30,28 @@ function afterTestNote(nextDay: InductionDay | undefined, passed: boolean, nextN
   if (nextDay.unlock_mode === 'anytime') return passed ? 'Passed — well done!' : 'Pass this test to complete this day.';
   if (nextDay.unlock_mode === 'after_previous') return passed ? 'Passed — the next day is open now.' : `Pass this test to open ${nextName}.`;
   return passed ? 'Passed — the next day opens on the next date.' : `Pass this test, then ${nextName} opens on the next date.`;
+}
+
+/** The test that belongs to a reading card: start it right after reading, on the same card. */
+function AttachedTestBox({ section, passed, onStart }: { section: InductionDaySection; passed: boolean; onStart: () => void }) {
+  const required = attachedTestRequired(section);
+  return (
+    <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 sm:p-5 ${passed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+      <div className="min-w-0">
+        <p className={`text-sm font-bold ${passed ? 'text-emerald-900' : 'text-amber-900'}`}>{passed ? '✓ Test passed — well done!' : '📝 Test on this section'}</p>
+        <p className={`mt-0.5 text-xs ${passed ? 'text-emerald-700' : 'text-amber-800'}`}>
+          {passed ? 'You can take it again if you want to improve your score.' : required ? 'Read the section above, then start the test. You need to pass it to finish this section.' : 'Read the section above, then start the test whenever you are ready.'}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onStart}
+        className={`flex-shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition active:scale-95 ${passed ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
+      >
+        {passed ? 'Take again' : 'Start Test'}
+      </button>
+    </div>
+  );
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -73,7 +95,8 @@ export default function InductionDayView({
   // The cards needed to finish the day (the admin can mark any card optional), and how many are done:
   // "opened" for reading cards, "filled in" for acknowledgment / feedback / task cards set to must-complete.
   const reading = sections.filter((s) => s.section_type !== 'test' && cardRequirement(s) !== 'none');
-  const opened = reading.filter((s) => cardDone(s, viewedIds.has(s.id), responses[s.id])).length;
+  const testPassedFor = (s: InductionDaySection) => (s.assessment_id ? passedTestIds.has(s.assessment_id) : true);
+  const opened = reading.filter((s) => cardDone(s, viewedIds.has(s.id), responses[s.id], testPassedFor(s))).length;
   const allOpened = opened >= reading.length;
   const openSection = sections.find((s) => s.id === openSectionId) ?? null;
 
@@ -88,6 +111,12 @@ export default function InductionDayView({
   async function submitFor(s: InductionDaySection, payload: Record<string, unknown>) {
     if (!onSubmitResponse) throw new Error('Saving is not available here.');
     await onSubmitResponse(s, payload);
+  }
+
+  function startAttachedTest(s: InductionDaySection) {
+    if (!s.assessment_id) { showToast('This test has no questions yet.'); return; }
+    if (preview) { showToast('Preview: the employee takes the test here. Nothing is recorded.'); return; }
+    onStartTest(s.assessment_id);
   }
 
   function openCard(s: InductionDaySection) {
@@ -130,6 +159,28 @@ export default function InductionDayView({
                 />
                 <ContentWatermark config={{ enabled: openSection.watermark_enabled, text: openSection.watermark_text, orientation: openSection.watermark_orientation, opacity: openSection.watermark_opacity }} />
               </div>
+            )}
+            {openSection.section_type === 'page' && openSection.faq_items.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-sm font-bold text-slate-800">Questions &amp; answers</h3>
+                <div className="space-y-2">
+                  {openSection.faq_items.map((item, i) => (
+                    <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <button
+                        onClick={() => setOpenFaq((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                        className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-slate-800"
+                      >
+                        {item.question}
+                        <IconChevron className="h-3.5 w-3.5 flex-shrink-0" open={openFaq.has(i)} />
+                      </button>
+                      {openFaq.has(i) && <p className="mt-2 text-sm text-slate-600">{item.answer}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {hasAttachedTest(openSection) && (
+              <AttachedTestBox section={openSection} passed={testPassedFor(openSection)} onStart={() => startAttachedTest(openSection)} />
             )}
             {openSection.section_type === 'projects' && (
               <Projects embedded onlyProjectIds={openSection.project_ids ?? []} />
@@ -215,14 +266,17 @@ export default function InductionDayView({
               const passed = isTest && s.assessment_id ? passedTestIds.has(s.assessment_id) : false;
               const seen = !isTest && viewedIds.has(s.id);
               const needsFilling = !isTest && cardRequirement(s) === 'complete';
-              const filled = needsFilling && cardDone(s, seen, responses[s.id]);
+              const filled = needsFilling && cardDone(s, seen, responses[s.id], testPassedFor(s));
+              const attached = hasAttachedTest(s);
+              const attachedPassed = attached && testPassedFor(s);
+              const extras = s.section_type === 'page' ? [s.faq_items.length > 0 ? 'FAQ' : '', attached ? 'Test' : ''].filter(Boolean) : [];
               const resp = responses[s.id];
               return (
                 <ThumbnailCard
                   fullImage
                   key={s.id}
                   title={s.title}
-                  subtitle={TYPE_LABEL[s.section_type] ?? undefined}
+                  subtitle={[TYPE_LABEL[s.section_type], ...extras].filter(Boolean).join(' · ') || undefined}
                   thumbnailUrl={s.thumbnail_url}
                   badge={<span className="rounded-full bg-black/40 px-2 py-0.5 text-[11px] font-bold text-white">{i + 1} / {sections.length}</span>}
                   cornerTag={
@@ -240,6 +294,10 @@ export default function InductionDayView({
                         : resp
                         ? <span className="rounded-full bg-indigo-500/90 px-2.5 py-1 text-[11px] font-bold text-white">⏳ In review</span>
                         : <span className="rounded-full bg-rose-500/90 px-2.5 py-1 text-[11px] font-bold text-white">To do</span>
+                    ) : attached && attachedPassed ? (
+                      <span className="rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white">✓ Test passed</span>
+                    ) : attached && seen ? (
+                      <span className="rounded-full bg-amber-500/90 px-2.5 py-1 text-[11px] font-bold text-white">📝 Test to do</span>
                     ) : seen ? (
                       <span className="rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white">✓ Opened</span>
                     ) : !isTest && cardRequirement(s) === 'none' ? (
