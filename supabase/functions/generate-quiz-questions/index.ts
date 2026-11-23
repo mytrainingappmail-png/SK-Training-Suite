@@ -15,7 +15,7 @@ import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { corsHeaders, HttpError, jsonResponse, requireEmployeeCaller, serviceClient } from "../_shared/auth.ts";
 import { callGemini } from "../_shared/gemini.ts";
 
-const MAX_CONTENT = 14000;
+const MAX_CONTENT = 60000; // about 10,000 words: a whole long section with all its parts in one go
 const MIN_CONTENT = 200;
 const DAILY_CAP_PER_COMPANY = 30;
 const TEACHER_ROLES = ["SUPER_ADMIN", "ADMIN", "TRAINER", "HR"];
@@ -128,6 +128,7 @@ function buildPrompt(content: string, count: number, difficulty: string, languag
 Rules:
 - Use ONLY facts stated in the content. Never invent numbers, dates, prices or policies. If the content cannot support ${count} good questions, return fewer.
 - Each question has exactly 4 options and exactly one correct answer. Wrong options must be plausible, not silly, and never "all of the above" / "none of the above".
+- The content may have several parts or topics: cover ALL of it. Spread the questions across the whole content - do not take them only from the beginning.
 - Put the correct answer in varied positions (do not always make it option 1 or 2).
 - Each question stands alone (do not say "according to the passage" or refer to the text).
 - Difficulty — ${DIFFICULTY[difficulty] ?? DIFFICULTY.mixed}
@@ -181,8 +182,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const content = clean(body?.content, MAX_CONTENT + 1);
     if (content.length < MIN_CONTENT) throw new HttpError(400, "Add a little more content first — at least a few sentences — so the questions are based on something real.");
-    if (content.length > MAX_CONTENT) throw new HttpError(400, "That is a lot of text at once. Use about 2,500 words or less (one topic at a time gives better questions).");
-    const count = Math.min(20, Math.max(1, Math.round(Number(body?.count) || 10)));
+    if (content.length > MAX_CONTENT) throw new HttpError(400, "That is a lot of text at once. Use about 10,000 words or less.");
+    const count = Math.min(30, Math.max(1, Math.round(Number(body?.count) || 10)));
     const difficulty = ["easy", "medium", "hard", "mixed"].includes(body?.difficulty) ? body.difficulty : "mixed";
     const language = body?.language === "hinglish" ? "hinglish" : "english";
     const extra = clean(body?.extra, 300);

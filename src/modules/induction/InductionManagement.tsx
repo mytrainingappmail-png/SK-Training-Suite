@@ -57,6 +57,8 @@ import { COMPLETABLE_TYPES, isFormCard, newQuestionId, standardFeedbackQuestions
 import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
 import { htmlToText } from '../../utils/htmlToText';
 import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
+import SectionPartsEditor from '../../components/shared/SectionPartsEditor';
+import { addPart, cleanParts, partsText, readParts } from '../../types/sectionParts';
 import { locationLabel } from '../../constants/locations';
 import { dayLabels, isStandaloneDay, nextInOrder, refName, withLabel } from '../../utils/inductionDayLabel';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
@@ -685,7 +687,13 @@ function InductionManagement() {
   // Only the card kinds that use settings keep them; a test is always "must be opened" (its own rules apply).
   const configKinds = new Set(['acknowledge', 'feedback', 'task', 'contact']);
   function configToSave() {
-    if (sectionDraft && sectionDraft.section_type === 'page') return attachTestOn ? { test_required: sectionDraft.config.test_required !== false } : {};
+    if (sectionDraft && sectionDraft.section_type === 'page') {
+      const out: InductionCardConfig = {};
+      if (attachTestOn) out.test_required = sectionDraft.config.test_required !== false;
+      const parts = cleanParts(sectionDraft.config.parts);
+      if (parts.length > 0) out.parts = parts;
+      return out;
+    }
     if (!sectionDraft || !configKinds.has(sectionDraft.section_type)) return {};
     const c = { ...sectionDraft.config };
     if (c.questions) c.questions = c.questions.filter((q) => q.label.trim() !== '').map((q) => (q.type === 'choice' ? { ...q, options: (q.options ?? []).map((o) => o.trim()).filter(Boolean) } : q));
@@ -1167,10 +1175,20 @@ function InductionManagement() {
                   )}
 
                   {sectionDraft.section_type === 'page' && (
+                    <SectionPartsEditor
+                      parts={readParts(sectionDraft.config.parts)}
+                      onChange={(next) => setSectionDraft((d) => (d ? { ...d, config: { ...d.config, parts: next } } : d))}
+                      onImageUpload={uploadInlineImage}
+                      resetKey={editingSectionId ?? 'new'}
+                    />
+                  )}
+
+                  {sectionDraft.section_type === 'page' && (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
                       <p className="text-xs font-bold text-amber-900">Add to this section</p>
-                      <p className="mb-3 mt-0.5 text-xs text-amber-800">A FAQ or test added here stays part of THIS section: the employee reads, then starts the test on the same card. No separate card needed.</p>
+                      <p className="mb-3 mt-0.5 text-xs text-amber-800">A long article is easier to read in parts: add parts and the employee reads them one at a time. A FAQ or test added here stays part of THIS section: the employee reads, then starts the test on the same card. No separate card needed.</p>
                       <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setSectionDraft((d) => (d ? { ...d, config: { ...d.config, parts: addPart(readParts(d.config.parts)) } } : d))} className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">+ Add part</button>
                         <button type="button" onClick={() => { if (attachFaqOn && sectionDraft.faq_items.length > 0 && !window.confirm('Remove the FAQ from this section? Its questions are deleted when you save.')) return; setAttachFaqOn((v) => !v); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${attachFaqOn ? 'border-violet-300 bg-violet-100 text-violet-800' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
                           {attachFaqOn ? '− Remove FAQ' : '+ Add FAQ'}
                         </button>
@@ -1288,7 +1306,7 @@ function InductionManagement() {
                             showToast={showToast}
                             aiSourceText={sectionDraft.section_type === 'page'
                               // a test inside a reading card is made from THAT card's own text (as typed now), not from the other cards
-                              ? `${sectionDraft.title}\n${htmlToText(sectionDraft.page_content)}`
+                              ? [`${sectionDraft.title}\n${htmlToText(sectionDraft.page_content)}`, partsText(sectionDraft.config.parts, htmlToText)].filter(Boolean).join('\n\n')
                               : sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`).join('\n\n')}
                           />
                         </div>

@@ -47,6 +47,7 @@ interface SBLesson {
   assessments:      { id: string; must_pass: boolean | null } | { id: string; must_pass: boolean | null }[] | null;
   faq_items:        { question: string; answer: string }[] | null;
   test_required:    boolean | null;
+  parts:            { id: string; title: string; html: string }[] | null;
 }
 
 interface SBModule {
@@ -132,6 +133,7 @@ function normaliseLesson(l: SBLesson, completedIds: Set<string>): CoursePlayerLe
     assessmentMustPass: assessment?.must_pass ?? false,
     faqItems:        Array.isArray(l.faq_items) ? l.faq_items : [],
     testRequired:    l.test_required !== false,
+    parts:           Array.isArray(l.parts) ? l.parts : [],
   };
 }
 
@@ -239,6 +241,7 @@ export async function getCoursePlayerData(
              ),
              faq_items,
              test_required,
+             parts,
              assessments (
                id,
                must_pass

@@ -4,6 +4,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import PreviewModal from '../../components/shared/PreviewModal';
+import PartsReader from '../../components/shared/PartsReader';
+import { resolveParts } from '../../types/sectionParts';
 import ContentWatermark, { noCopyProps } from '../../components/shared/ContentWatermark';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
@@ -129,7 +131,14 @@ export default function CoursePreview({ courseId, onClose }: { courseId: string;
                   ) : <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">No video added yet.</p>
                 )}
 
-                {lesson.lesson_type === 'text' && (
+                {lesson.lesson_type === 'text' && resolveParts(lesson.content ?? '', lesson.parts).length > 0 && (
+                  <PartsReader
+                    parts={resolveParts(lesson.content ?? '', lesson.parts)}
+                    watermark={{ enabled: !!course.watermark_enabled, text: course.watermark_text ?? '', orientation: course.watermark_orientation ?? 'diagonal', opacity: course.watermark_opacity ?? 8 }}
+                    noCopy={!!course.no_copy}
+                  />
+                )}
+                {lesson.lesson_type === 'text' && resolveParts(lesson.content ?? '', lesson.parts).length === 0 && (
                   (lesson.content ?? '').trim() ? (
                     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                       <ContentWatermark config={{ enabled: !!course.watermark_enabled, text: course.watermark_text ?? '', orientation: course.watermark_orientation ?? 'diagonal', opacity: course.watermark_opacity ?? 8 }} />

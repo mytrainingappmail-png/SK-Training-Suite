@@ -28,6 +28,8 @@ export interface SimpleLesson {
   faq_items: { question: string; answer: string }[] | null;
   /** Must the employee pass the lesson's own test (if it has one) before the lesson counts as done? */
   test_required: boolean | null;
+  /** A reading lesson split into parts read one at a time (first entry = the lesson's own text; empty = single page). */
+  parts: { id: string; title: string; html: string }[] | null;
   /** The lesson's own test, when the admin added one. */
   assessment_id: string | null;
   resources: SimpleResource[];
@@ -169,7 +171,7 @@ export async function getOutline(courseId: string): Promise<SimpleModule[]> {
 
   const { data: lessons, error: lError } = await supabase
     .from("lessons")
-    .select("id, module_id, lesson_title, lesson_type, content, video_url, duration_minutes, display_order, faq_items, test_required")
+    .select("id, module_id, lesson_title, lesson_type, content, video_url, duration_minutes, display_order, faq_items, test_required, parts")
     .in("module_id", mods.map((m) => m.id))
     .order("display_order", { ascending: true });
   if (lError) fail("getOutline (lessons)", lError);

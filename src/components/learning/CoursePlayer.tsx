@@ -16,6 +16,8 @@ import CardPagination from '../shared/CardPagination';
 import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import TranslatableHtml from '../shared/TranslatableHtml';
+import PartsReader from '../shared/PartsReader';
+import { resolveParts } from '../../types/sectionParts';
 import type {
   CoursePlayerData,
   CoursePlayerModule,
@@ -196,7 +198,7 @@ function ResourceItem({ resource }: { resource: CoursePlayerResource }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LessonContent({
-  lesson, onLaunchAssignment, onLaunchQuiz, watermarkEnabled, watermarkText, watermarkOrientation, watermarkOpacity, noCopy,
+  lesson, onLaunchAssignment, onLaunchQuiz, watermarkEnabled, watermarkText, watermarkOrientation, watermarkOpacity, noCopy, endSlot, endUnlocked,
 }: {
   lesson: CoursePlayerLesson;
   onLaunchAssignment?: (lesson: CoursePlayerLesson) => void;
@@ -208,7 +210,12 @@ function LessonContent({
   watermarkOrientation?: 'horizontal' | 'vertical' | 'diagonal';
   watermarkOpacity?: number;
   noCopy?: boolean;
+  /** Shown after the last part of a lesson split into parts (its FAQ and test). */
+  endSlot?: React.ReactNode;
+  /** Show the end slot without having to open every part (e.g. the lesson's test was already passed). */
+  endUnlocked?: boolean;
 }) {
+  const readableParts = lesson.lessonType === 'text' ? resolveParts(lesson.content, lesson.parts) : [];
   const primaryDownload = lesson.resources.find((r) => r.downloadable) ?? null;
   const embedId = lesson.lessonType === 'video' ? youtubeEmbedId(lesson.videoUrl) : null;
 
@@ -240,7 +247,16 @@ function LessonContent({
       )}
 
       {/* Text / Reading Material content */}
-      {(lesson.lessonType === 'text' || lesson.lessonType === 'document') && lesson.content && (
+      {readableParts.length > 0 && (
+        <PartsReader
+          parts={readableParts}
+          watermark={{ enabled: !!watermarkEnabled, text: watermarkText ?? '', orientation: watermarkOrientation ?? 'diagonal', opacity: watermarkOpacity ?? 8 }}
+          noCopy={!!noCopy}
+          endSlot={endSlot}
+          endUnlocked={endUnlocked}
+        />
+      )}
+      {readableParts.length === 0 && (lesson.lessonType === 'text' || lesson.lessonType === 'document') && lesson.content && (
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
           {/* Watermark only ever applies to written/text lessons, never a
               'document' (downloadable-file) lesson or video. */}
@@ -384,6 +400,44 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
     : data?.course.requireCompletionBeforeNext && activeLesson && !activeLesson.completed
       ? (lessonOwnTestBlocks ? 'Pass the test on this lesson to continue.' : 'Mark this page complete to continue.')
       : 'Pass this module\'s test to continue.';
+
+  // the lesson's questions & answers and its own test: below the lesson (or after the last part of a lesson split into parts)
+  const lessonHasParts = !!activeLesson && activeLesson.lessonType === 'text' && resolveParts(activeLesson.content, activeLesson.parts).length > 0;
+  const lessonExtrasNode = activeLesson ? (
+    <>
+      {activeLesson.lessonType !== 'quiz' && activeLesson.faqItems.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-2 text-sm font-bold text-slate-800">Questions &amp; answers</h3>
+          <div className="space-y-2">
+            {activeLesson.faqItems.map((f, i) => (
+              <details key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                <summary className="cursor-pointer font-semibold text-slate-800">{f.question}</summary>
+                <p className="mt-2 text-slate-600">{f.answer}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lessonOwnTestId && (
+        <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 sm:p-5 ${lessonOwnTestPassed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+          <div className="min-w-0">
+            <p className={`text-sm font-bold ${lessonOwnTestPassed ? 'text-emerald-900' : 'text-amber-900'}`}>{lessonOwnTestPassed ? '✓ Test passed — well done!' : '📝 Test on this lesson'}</p>
+            <p className={`mt-0.5 text-xs ${lessonOwnTestPassed ? 'text-emerald-700' : 'text-amber-800'}`}>
+              {lessonOwnTestPassed ? 'You can take it again if you want to improve your score.' : activeLesson.testRequired ? 'Go through the lesson above, then start the test. You need to pass it to finish this lesson.' : 'Go through the lesson above, then start the test whenever you are ready.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleLaunchQuiz(activeLesson)}
+            className={`flex-shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition active:scale-95 ${lessonOwnTestPassed ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
+          >
+            {lessonOwnTestPassed ? 'Take again' : 'Start Test'}
+          </button>
+        </div>
+      )}
+    </>
+  ) : null;
 
   // Resume Learning — first incomplete lesson in order, or the last lesson
   // if everything is already complete.
@@ -845,39 +899,11 @@ function CoursePlayer({ enrollmentId, onBack, onLaunchAssignment, onLaunchQuiz }
                   watermarkOrientation={data.course.watermarkOrientation}
                   watermarkOpacity={data.course.watermarkOpacity}
                   noCopy={data.course.noCopy}
+                  endSlot={lessonExtrasNode}
+                  endUnlocked={lessonOwnTestPassed || (!!activeLesson.assessmentId && activeLesson.testRequired === false)}
                 />
 
-                {activeLesson.lessonType !== 'quiz' && activeLesson.faqItems.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="mb-2 text-sm font-bold text-slate-800">Questions &amp; answers</h3>
-                    <div className="space-y-2">
-                      {activeLesson.faqItems.map((f, i) => (
-                        <details key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
-                          <summary className="cursor-pointer font-semibold text-slate-800">{f.question}</summary>
-                          <p className="mt-2 text-slate-600">{f.answer}</p>
-                        </details>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {lessonOwnTestId && (
-                  <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 sm:p-5 ${lessonOwnTestPassed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-bold ${lessonOwnTestPassed ? 'text-emerald-900' : 'text-amber-900'}`}>{lessonOwnTestPassed ? '✓ Test passed — well done!' : '📝 Test on this lesson'}</p>
-                      <p className={`mt-0.5 text-xs ${lessonOwnTestPassed ? 'text-emerald-700' : 'text-amber-800'}`}>
-                        {lessonOwnTestPassed ? 'You can take it again if you want to improve your score.' : activeLesson.testRequired ? 'Go through the lesson above, then start the test. You need to pass it to finish this lesson.' : 'Go through the lesson above, then start the test whenever you are ready.'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleLaunchQuiz(activeLesson)}
-                      className={`flex-shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition active:scale-95 ${lessonOwnTestPassed ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
-                    >
-                      {lessonOwnTestPassed ? 'Take again' : 'Start Test'}
-                    </button>
-                  </div>
-                )}
+                {!lessonHasParts && lessonExtrasNode}
 
                 {/* navigation footer */}
                 <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-6">

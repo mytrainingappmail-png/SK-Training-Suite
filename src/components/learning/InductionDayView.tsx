@@ -16,6 +16,8 @@ import { attachedTestRequired, cardDone, cardRequirement, hasAttachedTest } from
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import type { InductionCardResponse, InductionDay, InductionDaySection } from '../../types/induction';
 import TranslatableHtml from '../shared/TranslatableHtml';
+import PartsReader from '../shared/PartsReader';
+import { resolveParts } from '../../types/sectionParts';
 
 function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>);
@@ -150,18 +152,14 @@ export default function InductionDayView({
             <h2 className="mt-3 text-2xl font-bold">{openSection.title}</h2>
           </div>
           <div className="p-3 sm:p-8">
-            {openSection.section_type === 'page' && (
-              <div className="relative">
-                <TranslatableHtml
-                  className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-5 text-sm leading-relaxed"
-                  html={openSection.page_content}
-                  {...noCopyProps(openSection.no_copy)}
-                />
-                <ContentWatermark config={{ enabled: openSection.watermark_enabled, text: openSection.watermark_text, orientation: openSection.watermark_orientation, opacity: openSection.watermark_opacity }} />
-              </div>
-            )}
-            {openSection.section_type === 'page' && openSection.faq_items.length > 0 && (
-              <div className="mt-6">
+            {openSection.section_type === 'page' && (() => {
+              const readable = resolveParts(openSection.page_content, openSection.config?.parts);
+              const watermark = { enabled: openSection.watermark_enabled, text: openSection.watermark_text, orientation: openSection.watermark_orientation, opacity: openSection.watermark_opacity };
+              // the section's questions & answers and its test come after the reading
+              const extras = (
+                <>
+                  {openSection.faq_items.length > 0 && (
+              <div>
                 <h3 className="mb-2 text-sm font-bold text-slate-800">Questions &amp; answers</h3>
                 <div className="space-y-2">
                   {openSection.faq_items.map((item, i) => (
@@ -178,10 +176,38 @@ export default function InductionDayView({
                   ))}
                 </div>
               </div>
-            )}
-            {hasAttachedTest(openSection) && (
-              <AttachedTestBox section={openSection} passed={testPassedFor(openSection)} onStart={() => startAttachedTest(openSection)} />
-            )}
+                  )}
+                  {hasAttachedTest(openSection) && (
+                    <AttachedTestBox section={openSection} passed={testPassedFor(openSection)} onStart={() => startAttachedTest(openSection)} />
+                  )}
+                </>
+              );
+              const hasExtras = openSection.faq_items.length > 0 || hasAttachedTest(openSection);
+              if (readable.length > 0) {
+                return (
+                  <PartsReader
+                    parts={readable}
+                    watermark={watermark}
+                    noCopy={openSection.no_copy}
+                    endSlot={hasExtras ? extras : undefined}
+                    endUnlocked={preview || (hasAttachedTest(openSection) && testPassedFor(openSection))}
+                  />
+                );
+              }
+              return (
+                <>
+                  <div className="relative">
+                    <TranslatableHtml
+                      className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-5 text-sm leading-relaxed"
+                      html={openSection.page_content}
+                      {...noCopyProps(openSection.no_copy)}
+                    />
+                    <ContentWatermark config={watermark} />
+                  </div>
+                  {hasExtras && <div className="mt-6">{extras}</div>}
+                </>
+              );
+            })()}
             {openSection.section_type === 'projects' && (
               <Projects embedded onlyProjectIds={openSection.project_ids ?? []} />
             )}

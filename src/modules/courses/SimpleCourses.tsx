@@ -17,6 +17,10 @@ import { loadTemplates } from '../../services/certificateTemplate/certificateTem
 import FinalTestCard from './FinalTestCard';
 import CoursePreview from './CoursePreview';
 import LessonExtras from './LessonExtras';
+import SectionPartsEditor from '../../components/shared/SectionPartsEditor';
+import { addPart, cleanParts, partsText, readParts } from '../../types/sectionParts';
+import type { SectionPart } from '../../types/sectionParts';
+import { htmlToText } from '../../utils/htmlToText';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import { uploadDocument, uploadImage, uploadVideo } from '../../services/contentEditor/contentEditorService';
 import * as repo from '../../repositories/simpleCourse/simpleCourseRepository';
@@ -531,12 +535,14 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
 }) {
   const [title, setTitle] = useState(lesson.lesson_title);
   const [content, setContent] = useState(lesson.content ?? '');
+  const [parts, setParts] = useState<SectionPart[]>(readParts(lesson.parts));
   const [link, setLink] = useState(lesson.video_url ?? '');
   const [minutes, setMinutes] = useState(String(lesson.duration_minutes ?? 5));
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    setParts(readParts(lesson.parts));
     setTitle(lesson.lesson_title); setContent(lesson.content ?? ''); setLink(lesson.video_url ?? ''); setMinutes(String(lesson.duration_minutes ?? 5));
   }, [lesson.id, lesson.lesson_title, lesson.content, lesson.video_url, lesson.duration_minutes]);
 
@@ -546,7 +552,7 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
     setSaving(true);
     await guard(async () => {
       const patch: Record<string, unknown> = { lesson_title: title.trim() || 'Untitled lesson', duration_minutes: Math.max(1, Number(minutes) || 5) };
-      if (lesson.lesson_type === 'text') patch.content = content;
+      if (lesson.lesson_type === 'text') { patch.content = content; patch.parts = cleanParts(parts); }
       if (lesson.lesson_type === 'video') patch.video_url = link.trim();
       await repo.updateLesson(lesson.id, patch);
       await refresh();
@@ -653,6 +659,15 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
               minHeight={220}
             />
           )}
+          {lesson.lesson_type === 'text' && (
+            <>
+              <SectionPartsEditor parts={parts} onChange={setParts} onImageUpload={async (f: File) => (await uploadImage(f)).url} resetKey={lesson.id} />
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => setParts((p) => addPart(readParts(p)))} className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">+ Add part</button>
+                <span className="text-xs text-slate-500">A long article is easier to read in parts — the employee reads them one at a time. Press “Save lesson” to store them.</span>
+              </div>
+            </>
+          )}
 
           {lesson.lesson_type === 'document' && (
             <div className="space-y-2">
@@ -669,7 +684,7 @@ function LessonRow({ lesson, index, total, canEdit, open, onToggle, onMove, guar
             </div>
           )}
 
-          <LessonExtras lesson={lesson} liveContent={lesson.lesson_type === 'text' ? content : undefined} guard={guard} refresh={refresh} />
+          <LessonExtras lesson={lesson} liveContent={lesson.lesson_type === 'text' ? [content, partsText(parts, htmlToText)].filter(Boolean).join('\n\n') : undefined} guard={guard} refresh={refresh} />
 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onToggle} className={`${BTN} border border-slate-200 text-slate-700 hover:bg-white`}>Close</button>

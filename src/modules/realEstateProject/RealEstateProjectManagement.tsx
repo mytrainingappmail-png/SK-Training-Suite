@@ -51,6 +51,8 @@ import { htmlToText } from '../../utils/htmlToText';
 import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import RichTextEditor from '../../components/shared/RichTextEditor';
+import SectionPartsEditor from '../../components/shared/SectionPartsEditor';
+import { addPart, cleanParts, partsText, readParts } from '../../types/sectionParts';
 import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
 import type { RealEstateProjectSection, RealEstateProjectSectionForm } from '../../types/realEstateProjectSection';
 import { defaultProjectSectionForm } from '../../types/realEstateProjectSection';
@@ -672,6 +674,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
       assessment_id: s.assessment_id,
       faq_items: s.faq_items,
       test_required: s.test_required !== false,
+      parts: readParts(s.parts),
       watermark_enabled: s.watermark_enabled,
       watermark_text: s.watermark_text,
       watermark_orientation: s.watermark_orientation,
@@ -699,7 +702,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
       // the test was taken off a reading section: it goes away together with its questions (after the section is saved without it)
       const assessmentToDrop = isPage && !attachTestOn && originalSection?.section_type === 'page' && originalSection.assessment_id ? originalSection.assessment_id : null;
       const testWasMissing = wantsTest && !sectionDraft.assessment_id;
-      if (isPage) payload = { ...payload, faq_items: attachFaqOn ? payload.faq_items : [], ...(assessmentToDrop ? { assessment_id: null } : {}) };
+      if (isPage) payload = { ...payload, parts: cleanParts(payload.parts), faq_items: attachFaqOn ? payload.faq_items : [], ...(assessmentToDrop ? { assessment_id: null } : {}) };
       if (wantsTest) {
         if (!sectionDraft.title.trim()) throw new Error(isPage ? 'Give this section a title first.' : 'Give the test a subject line first.');
         const settingsPayload = {
@@ -1067,10 +1070,20 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                     )}
 
                     {sectionDraft.section_type === 'page' && (
+                      <SectionPartsEditor
+                        parts={readParts(sectionDraft.parts)}
+                        onChange={(next) => setSectionDraft((d) => (d ? { ...d, parts: next } : d))}
+                        onImageUpload={uploadInlineImage}
+                        resetKey={editingSectionId ?? 'new-section'}
+                      />
+                    )}
+
+                    {sectionDraft.section_type === 'page' && (
                       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
                         <p className="text-xs font-bold text-amber-900">Add to this section</p>
-                        <p className="mb-3 mt-0.5 text-xs text-amber-800">A FAQ or test added here stays part of THIS section: the employee reads, then starts the test right there. No separate section needed.</p>
+                        <p className="mb-3 mt-0.5 text-xs text-amber-800">A long article is easier to read in parts: add parts and the employee reads them one at a time. A FAQ or test added here stays part of THIS section: the employee reads, then starts the test right there. No separate section needed.</p>
                         <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => setSectionDraft((d) => (d ? { ...d, parts: addPart(readParts(d.parts)) } : d))} className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">+ Add part</button>
                           <button type="button" onClick={() => { if (attachFaqOn && sectionDraft.faq_items.length > 0 && !window.confirm('Remove the FAQ from this section? Its questions are deleted when you save.')) return; setAttachFaqOn((v) => !v); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${attachFaqOn ? 'border-violet-300 bg-violet-100 text-violet-800' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
                             {attachFaqOn ? '− Remove FAQ' : '+ Add FAQ'}
                           </button>
@@ -1153,7 +1166,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                             showToast={showToast}
                             aiSourceText={sectionDraft.section_type === 'page'
                               // a test inside a reading section is made from THAT section's own text (as typed now)
-                              ? `${sectionDraft.title}\n${htmlToText(sectionDraft.page_content)}`
+                              ? [`${sectionDraft.title}\n${htmlToText(sectionDraft.page_content)}`, partsText(sectionDraft.parts, htmlToText)].filter(Boolean).join('\n\n')
                               : [
                                 htmlToText(draft.full_description),
                                 ...sections.filter((s) => s.section_type === 'page').map((s) => `${s.title}\n${htmlToText(s.page_content)}`),

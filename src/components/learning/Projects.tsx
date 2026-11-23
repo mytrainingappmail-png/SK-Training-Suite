@@ -26,6 +26,8 @@ import ThumbnailCard from '../shared/ThumbnailCard';
 import { brochureLink } from '../../utils/brochureLink';
 import type { Project } from '../../services/projects/projectsService';
 import TranslatableHtml from '../shared/TranslatableHtml';
+import PartsReader from '../shared/PartsReader';
+import { resolveParts } from '../../types/sectionParts';
 
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
   return (<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h9a1.5 1.5 0 0 1 1.5 1.5V21M4.5 3v18M4.5 3H3m10.5 0H15m-1.5 18V15a1.5 1.5 0 0 1 1.5-1.5h1.5A1.5 1.5 0 0 1 18 15v6M15 3l4.5 3v15M18.75 3H15M7.5 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6h1.5m-1.5 3h1.5m-1.5 3h1.5" /></svg>);
@@ -212,16 +214,13 @@ export function ProjectDetailCard({
                       {(section.faq_items ?? []).length > 0 && <span className="ml-2 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">+ FAQ</span>}
                       {section.assessment_id && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{passedIds?.has(section.assessment_id) ? '✓ Test passed' : '+ Test'}</span>}
                     </button>
-                    {openKeys.has(key) && (
-                      <>
-                      <div className="relative">
-                        <TranslatableHtml
-                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
-                          html={section.page_content}
-                          {...noCopyProps(section.no_copy)}
-                        />
-                        <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
-                      </div>
+                    {openKeys.has(key) && (() => {
+                      const readable = resolveParts(section.page_content, section.parts);
+                      const watermark = { enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity };
+                      const hasExtras = (section.faq_items ?? []).length > 0 || !!section.assessment_id;
+                      // the section's questions & answers and its test come after the reading
+                      const extras = (
+                        <>
                       {(section.faq_items ?? []).length > 0 && (
                         <div className="mt-3 space-y-2">
                           <p className="text-sm font-bold text-slate-800">Questions &amp; answers</p>
@@ -259,8 +258,29 @@ export function ProjectDetailCard({
                           </div>
                         );
                       })()}
-                      </>
-                    )}
+                        </>
+                      );
+                      if (readable.length > 0) {
+                        return (
+                          <div className="mt-3">
+                            <PartsReader parts={readable} watermark={watermark} noCopy={section.no_copy} endSlot={hasExtras ? extras : undefined} endUnlocked={!!section.assessment_id && !!passedIds?.has(section.assessment_id)} />
+                          </div>
+                        );
+                      }
+                      return (
+                        <>
+                      <div className="relative">
+                        <TranslatableHtml
+                          className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"
+                          html={section.page_content}
+                          {...noCopyProps(section.no_copy)}
+                        />
+                        <ContentWatermark config={{ enabled: section.watermark_enabled, text: section.watermark_text, orientation: section.watermark_orientation, opacity: section.watermark_opacity }} />
+                      </div>
+                          {extras}
+                        </>
+                      );
+                    })()}
                   </div>
                 );
               }

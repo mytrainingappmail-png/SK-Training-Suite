@@ -55,6 +55,8 @@ export const defaultInductionDayForm: InductionDayForm = {
   source_id: null,
 };
 
+import type { SectionPart } from './sectionParts';
+
 export type InductionSectionType = 'page' | 'test' | 'faq' | 'projects' | 'acknowledge' | 'feedback' | 'task' | 'contact';
 
 // How much a card matters for finishing its day: none = optional, open = must be opened, complete = must be filled in.
@@ -76,6 +78,8 @@ export interface FeedbackQuestion {
 
 // Settings of the newer card kinds — everything is optional and every wording is the admin's own.
 export interface InductionCardConfig {
+  // page card split into parts read one at a time (first entry = the card's own text; see types/sectionParts)
+  parts?: SectionPart[];
   // page card with a test added to it: must the employee pass that test to finish the card? (default yes)
   test_required?: boolean;
   // acknowledge

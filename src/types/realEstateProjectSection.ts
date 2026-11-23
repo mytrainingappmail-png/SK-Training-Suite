@@ -1,3 +1,5 @@
+import type { SectionPart } from './sectionParts';
+
 export type ProjectSectionType = 'page' | 'test' | 'faq';
 
 export interface ProjectSectionFaqItem {
@@ -17,6 +19,8 @@ export interface RealEstateProjectSection {
   faq_items: ProjectSectionFaqItem[];
   // A reading section that carries its own test: must the employee pass it? (default yes)
   test_required: boolean;
+  // The section split into parts read one at a time (first entry = the section's own text; empty = single page)
+  parts: SectionPart[];
   // Content protection — set only via the platform operator's own account (Admin UI hides
   // these for everyone else); survives being cloned to another company since a clone copies
   // every column of the source row.
@@ -44,6 +48,7 @@ export const defaultProjectSectionForm: RealEstateProjectSectionForm = {
   assessment_id: null,
   faq_items: [],
   test_required: true,
+  parts: [],
   watermark_enabled: false,
   watermark_text: '',
   watermark_orientation: 'diagonal',

@@ -33,6 +33,8 @@ export interface CoursePlayerLesson {
   faqItems: { question: string; answer: string }[];
   /** A lesson that has its own test (assessmentId on a non-quiz lesson): must it be passed before the lesson is done? */
   testRequired: boolean;
+  /** A reading lesson split into parts read one at a time (first entry = the lesson's own text; empty = single page). */
+  parts: { id: string; title: string; html: string }[];
 }
 
 export interface CoursePlayerModule {

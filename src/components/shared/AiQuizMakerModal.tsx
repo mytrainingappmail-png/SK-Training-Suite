@@ -6,7 +6,9 @@ import { useState } from "react";
 import { generateQuizQuestions } from "../../services/aiQuiz/aiQuizService";
 import type { AiQuestion, AiDifficulty, AiLanguage } from "../../services/aiQuiz/aiQuizService";
 
-const COUNTS = [5, 10, 15, 20];
+const COUNTS = [5, 10, 15, 20, 25, 30];
+// the whole section (all its parts) goes in at once; the maker function accepts up to this many characters
+const MAX_CHARS = 60000;
 const DIFFS: { v: AiDifficulty; l: string }[] = [
   { v: "easy", l: "Easy" }, { v: "medium", l: "Medium" }, { v: "hard", l: "Hard (situations)" }, { v: "mixed", l: "Mixed" },
 ];
@@ -17,7 +19,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
   onAdd: (questions: AiQuestion[]) => void;
   onClose: () => void;
 }) {
-  const [content, setContent] = useState(sourceText.slice(0, 14000));
+  const [content, setContent] = useState(sourceText.slice(0, MAX_CHARS));
   const [count, setCount] = useState(10);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("mixed");
   const [language, setLanguage] = useState<AiLanguage>("english");
@@ -29,7 +31,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
   const [runsLeft, setRunsLeft] = useState<number | null>(null);
 
   const words = content.trim() ? content.trim().split(/\s+/).length : 0;
-  const tooLong = content.length > 14000;
+  const tooLong = content.length > MAX_CHARS;
 
   async function generate() {
     setBusy(true);
@@ -74,7 +76,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
                   placeholder="Paste the lesson, brochure text or notes the questions should come from…"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
                 />
-                <p className="mt-1 text-[11px] text-slate-400">{sourceText ? "Filled from this page. Edit it freely — one topic at a time gives the best questions." : "Paste the content here (about 2,500 words at most)."}</p>
+                <p className="mt-1 text-[11px] text-slate-400">{sourceText ? "Filled from this whole section (all its parts). Edit it freely." : "Paste the content here (about 10,000 words at most)."}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
