@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react';
 import { matchesProjectSearch } from '../../utils/projectSearch';
 import { loadProjectsForEmployee } from '../../services/projects/projectsService';
-import { loadCompletedProjectIds, markProjectComplete } from '../../services/realEstateProject/realEstateProjectService';
+import { loadCompletedProjectIds, markProjectComplete, loadFocusedProjectIds } from '../../services/realEstateProject/realEstateProjectService';
 import { getCurrentUser } from '../../services/auth/session';
 import { getPassedTestIds } from '../../services/induction/inductionProgressService';
 import SectionHeroBanner from './SectionHeroBanner';
@@ -445,6 +445,9 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
   const [activeTestAssessmentId, setActiveTestAssessmentId] = useState<string | null>(null);
   const [completedProjectIds, setCompletedProjectIds] = useState<Set<string>>(new Set());
   const [passedIds, setPassedIds] = useState<Set<string>>(new Set());
+  /** The company's focused projects, and which group the employee is looking at. */
+  const [focusedIds, setFocusedIds] = useState<Set<string>>(new Set());
+  const [group, setGroup] = useState<'all' | 'focused' | 'others'>('all');
   const [markingProjectId, setMarkingProjectId] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -492,6 +495,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load projects.'))
       .finally(() => setLoading(false));
     loadCompletedProjectIds(user.id).then((ids) => setCompletedProjectIds(new Set(ids))).catch(() => {});
+    if (!onlyProjectIds) loadFocusedProjectIds().then(setFocusedIds).catch(() => {});
   }, [user?.id, (onlyProjectIds ?? []).join(',')]);
 
   /** Which of the tests added inside reading sections this employee has passed. */
@@ -513,7 +517,37 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
     }
   }
 
-  const filtered = projects.filter((p) => matchesProjectSearch(search, [p.projectName], [p.shortDescription]));
+  const searched = projects.filter((p) => matchesProjectSearch(search, [p.projectName], [p.shortDescription]));
+  // Focused projects come first; the filter chips only appear when the company has marked at least one
+  const hasFocus = !onlyProjectIds && projects.some((p) => focusedIds.has(p.projectId));
+  const focusedList = searched.filter((p) => focusedIds.has(p.projectId));
+  const otherList = searched.filter((p) => !focusedIds.has(p.projectId));
+  const filtered = !hasFocus || group === 'all' ? [...focusedList, ...otherList] : group === 'focused' ? focusedList : otherList;
+  const visible = filtered.slice(0, shownCount);
+  const showGroups = hasFocus && group === 'all' && focusedList.length > 0 && otherList.length > 0;
+
+  function renderCard(project: Project) {
+    const selected = compareIds.includes(project.projectId);
+    const selectionOrder = compareIds.indexOf(project.projectId);
+    const focused = focusedIds.has(project.projectId);
+    return (
+      <div key={project.projectId} className={`w-full [&>button]:w-full ${selected ? 'rounded-2xl ring-2 ring-indigo-500' : ''}`}>
+        <ThumbnailCard
+          fullImage
+          title={project.projectName}
+          subtitle={project.shortDescription}
+          thumbnailUrl={project.thumbnail}
+          onClick={() => compareMode ? toggleCompareSelection(project.projectId) : setOpenProjectId(project.projectId)}
+          cornerTag={focused ? <span className="rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-slate-900 shadow">⭐ Focus</span> : undefined}
+          badge={selected ? (
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white shadow">
+              {selectionOrder + 1}
+            </span>
+          ) : undefined}
+        />
+      </div>
+    );
+  }
 
   const openProject = projects.find((p) => p.projectId === openProjectId) ?? null;
   const openProjectIndex = projects.findIndex((p) => p.projectId === openProjectId);
@@ -629,6 +663,27 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
         </button>
       </div>
 
+      {hasFocus && (
+        <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Project groups">
+          {([
+            ['all', 'All projects', projects.length],
+            ['focused', '⭐ Focused projects', projects.filter((p) => focusedIds.has(p.projectId)).length],
+            ['others', 'Other projects', projects.filter((p) => !focusedIds.has(p.projectId)).length],
+          ] as const).map(([key, label, n]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={group === key}
+              onClick={() => { setGroup(key); setShownCount(24); }}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${group === key ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              {label} <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] ${group === key ? 'bg-white/25' : 'bg-white'}`}>{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {compareMode && (
         <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-700">
           Pick up to {MAX_COMPARE} projects to compare — tap a card to select it.
@@ -647,28 +702,23 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
         </div>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
+      {!loading && !error && filtered.length > 0 && !showGroups && (
         <div className={`grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 ${compareMode ? 'pb-20' : ''}`}>
-          {filtered.slice(0, shownCount).map((project) => {
-            const selected = compareIds.includes(project.projectId);
-            const selectionOrder = compareIds.indexOf(project.projectId);
-            return (
-              <div key={project.projectId} className={`w-full [&>button]:w-full ${selected ? 'rounded-2xl ring-2 ring-indigo-500' : ''}`}>
-                <ThumbnailCard
-                  fullImage
-                  title={project.projectName}
-                  subtitle={project.shortDescription}
-                  thumbnailUrl={project.thumbnail}
-                  onClick={() => compareMode ? toggleCompareSelection(project.projectId) : setOpenProjectId(project.projectId)}
-                  badge={selected ? (
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white shadow">
-                      {selectionOrder + 1}
-                    </span>
-                  ) : undefined}
-                />
-              </div>
-            );
-          })}
+          {visible.map(renderCard)}
+        </div>
+      )}
+
+      {!loading && !error && filtered.length > 0 && showGroups && (
+        <div className={compareMode ? 'pb-20' : ''}>
+          {([
+            ['⭐ Focused projects', visible.filter((p) => focusedIds.has(p.projectId))],
+            ['Other projects', visible.filter((p) => !focusedIds.has(p.projectId))],
+          ] as const).map(([label, list]) => list.length > 0 && (
+            <div key={label} className="mb-8 last:mb-0">
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">{label} <span className="font-semibold text-slate-400">· {list.length}</span></h3>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">{list.map(renderCard)}</div>
+            </div>
+          ))}
         </div>
       )}
 

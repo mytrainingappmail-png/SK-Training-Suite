@@ -20,6 +20,8 @@ import {
   uploadProjectBrochure,
   getSectionsForProject,
   getAllSections,
+  getFocusedProjectIds,
+  setProjectFocus,
   createSection as repoCreateSection,
   updateSection,
   deleteSection,
@@ -57,6 +59,15 @@ export async function removeCategory(id: string): Promise<void> {
 }
 
 import { supabase } from '../../lib/supabase';
+
+/** Which of the company's projects are marked as focused. */
+export async function loadFocusedProjectIds(): Promise<Set<string>> {
+  return new Set(await getFocusedProjectIds());
+}
+
+export async function setProjectFocused(companyId: string, projectId: string, focused: boolean): Promise<void> {
+  await setProjectFocus(companyId, projectId, focused);
+}
 
 export async function loadProjects(opts: { inductionSectionId?: string; includeInduction?: boolean } = {}): Promise<RealEstateProject[]> {
   return getProjects(opts);

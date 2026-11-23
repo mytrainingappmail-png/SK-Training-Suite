@@ -44,6 +44,7 @@ import {
   loadQuestionsWithOptions,
 } from '../../services/question/questionService';
 import { getCurrentUser } from '../../services/auth/session';
+import { loadFocusedProjectIds, setProjectFocused } from '../../services/realEstateProject/realEstateProjectService';
 import { loadCompany } from '../../services/company/companyService';
 import type { WatermarkConfig, ContentProtectionPatch } from '../../components/shared/ContentWatermark';
 import TestQuestionsEditor from '../../components/shared/TestQuestionsEditor';
@@ -281,6 +282,8 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
   // 'Preview' of a project exactly as an employee sees it (nothing saved).
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<RealEstateProject[]>([]);
+  // the company's focused projects (shown first and under their own filter for employees)
+  const [focusedIds, setFocusedIds] = useState<Set<string>>(new Set());
   // projects whose linked copy (main Projects <-> Induction card) is behind - marked in the list
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const [brochures, setBrochures] = useState<RealEstateProjectBrochure[]>([]);
@@ -328,8 +331,22 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     setTimeout(() => setToast(''), 2400);
   }
 
+  async function toggleFocus(projectId: string) {
+    if (!user?.companyId) return;
+    const next = !focusedIds.has(projectId);
+    setFocusedIds((prev) => { const s = new Set(prev); if (next) s.add(projectId); else s.delete(projectId); return s; });
+    try {
+      await setProjectFocused(user.companyId, projectId, next);
+      showToast(next ? 'Marked as a focused project.' : 'Removed from focused projects.');
+    } catch (err) {
+      setFocusedIds((prev) => { const s = new Set(prev); if (next) s.delete(projectId); else s.add(projectId); return s; });
+      showToast(err instanceof Error ? err.message : 'Could not change the focus.');
+    }
+  }
+
   function fetchAll() {
     setLoading(true);
+    if (!scope) loadFocusedProjectIds().then(setFocusedIds).catch(() => { /* no focus marks yet */ });
     Promise.all([loadProjects(scope ? { inductionSectionId: scope.inductionSectionId } : undefined), loadAllBrochures(), branchService.getAll(), loadCompany(), loadProjectsWithStaleCopies()])
       .then(([p, b, br, co, stale]) => {
         setProjects(p);
@@ -853,6 +870,14 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
           <button onClick={() => void closeEditor()} className="text-sm font-semibold text-slate-500 hover:text-slate-800">
             ← Back to Projects
           </button>
+          {editingProjectId !== 'new' && !scope && (
+            <button
+              onClick={() => void toggleFocus(editingProjectId)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${focusedIds.has(editingProjectId) ? 'bg-amber-400 text-slate-900 hover:bg-amber-300' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              {focusedIds.has(editingProjectId) ? '⭐ Focused project' : '☆ Make focused'}
+            </button>
+          )}
           {editingProjectId !== 'new' && (
             <button onClick={() => setPreviewProjectId(editingProjectId)} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">👁 Preview as employee</button>
           )}
@@ -1372,6 +1397,15 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
                         {cloningProjectId === p.id ? 'Cloning…' : 'Clone'}
                       </button>
                     </>
+                  )}
+                  {!scope && (
+                    <button
+                      onClick={() => void toggleFocus(p.id)}
+                      title="Focused projects are shown first to employees, under their own filter"
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${focusedIds.has(p.id) ? 'bg-amber-400 text-slate-900 hover:bg-amber-300' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                      {focusedIds.has(p.id) ? '⭐ Focused' : '☆ Focus'}
+                    </button>
                   )}
                   <button onClick={() => setPreviewProjectId(p.id)} className="text-xs font-semibold text-emerald-700 hover:underline">👁 Preview</button>
                   {scope && (

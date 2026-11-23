@@ -121,6 +121,23 @@ export async function getSectionsForProject(projectId: string): Promise<RealEsta
   return data ?? [];
 }
 
+/** The ids of this company's focused projects. */
+export async function getFocusedProjectIds(): Promise<string[]> {
+  const { data, error } = await supabase.from('project_focus').select('project_id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.project_id as string);
+}
+
+export async function setProjectFocus(companyId: string, projectId: string, focused: boolean): Promise<void> {
+  if (focused) {
+    const { error } = await supabase.from('project_focus').upsert({ project_id: projectId, company_id: companyId }, { onConflict: 'project_id' });
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from('project_focus').delete().eq('project_id', projectId);
+    if (error) throw new Error(error.message);
+  }
+}
+
 export async function getAllSections(): Promise<RealEstateProjectSection[]> {
   const { data, error } = await supabase
     .from('real_estate_project_sections')
