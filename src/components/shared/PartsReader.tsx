@@ -133,11 +133,19 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
                 onClick={() => setOpen(n)}
                 className="group flex flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
               >
-                <div className={`relative flex h-24 items-end bg-gradient-to-br ${ACCENTS[i % ACCENTS.length]} px-4 pb-3 text-white`}>
-                  <span className="text-4xl font-black leading-none opacity-90">{n}</span>
-                  <span className="ml-2 pb-1 text-xs font-bold uppercase tracking-wide opacity-90">Part</span>
-                  {read && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-emerald-700">✓ Read</span>}
-                </div>
+                {p.thumbnail ? (
+                  <div className="relative h-36 bg-slate-100">
+                    <img src={p.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">Part {n}</span>
+                    {read && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-emerald-700">✓ Read</span>}
+                  </div>
+                ) : (
+                  <div className={`relative flex h-24 items-end bg-gradient-to-br ${ACCENTS[i % ACCENTS.length]} px-4 pb-3 text-white`}>
+                    <span className="text-4xl font-black leading-none opacity-90">{n}</span>
+                    <span className="ml-2 pb-1 text-xs font-bold uppercase tracking-wide opacity-90">Part</span>
+                    {read && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-emerald-700">✓ Read</span>}
+                  </div>
+                )}
                 <div className="flex flex-1 flex-col gap-1 p-4">
                   <p className="text-sm font-bold leading-snug text-slate-900">{p.title}</p>
                   <p className="text-xs text-slate-500">{readMinutes(p.html)} min read</p>

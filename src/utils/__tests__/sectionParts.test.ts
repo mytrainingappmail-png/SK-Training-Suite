@@ -42,3 +42,14 @@ describe('section parts', () => {
     expect(partsText(parts, (h) => h.replace(/<[^>]*>/g, ''))).toBe('B\nBody');
   });
 });
+
+describe('part card pictures', () => {
+  it('keep the picture on a part through saving and reading', () => {
+    const parts = [{ id: 'main', title: '', html: '' }, { id: 'a', title: 'One', html: '<p>Text</p>', thumbnail: 'https://x/y.png' }, { id: 'b', title: 'Two', html: '<p>More</p>' }];
+    expect(cleanParts(parts)[1].thumbnail).toBe('https://x/y.png');
+    expect(cleanParts(parts)[2].thumbnail).toBeUndefined();
+    const readable = resolveParts('<p>Main</p>', parts);
+    expect(readable[1].thumbnail).toBe('https://x/y.png');
+    expect(readable[0].thumbnail).toBeUndefined();
+  });
+});

@@ -4,10 +4,10 @@
 // main text stays where it always was), the others carry their own title + text.
 // An empty list (or a single entry) means an ordinary one-page section, exactly like before.
 
-export interface SectionPart { id: string; title: string; html: string }
+export interface SectionPart { id: string; title: string; html: string; /** The picture on this part's card (optional). */ thumbnail?: string }
 
 /** A part as the employee sees it: every part has a title and its text. */
-export interface ReadablePart { id: string; title: string; html: string }
+export interface ReadablePart { id: string; title: string; html: string; thumbnail?: string }
 
 export function newPartId(): string {
   return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -22,7 +22,7 @@ export function readParts(value: unknown): SectionPart[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
-    .map((p) => ({ id: typeof p.id === 'string' && p.id ? p.id : newPartId(), title: typeof p.title === 'string' ? p.title : '', html: typeof p.html === 'string' ? p.html : '' }));
+    .map((p) => ({ id: typeof p.id === 'string' && p.id ? p.id : newPartId(), title: typeof p.title === 'string' ? p.title : '', html: typeof p.html === 'string' ? p.html : '', ...(typeof p.thumbnail === 'string' && p.thumbnail ? { thumbnail: p.thumbnail } : {}) }));
 }
 
 /** Adds one more part; the first time, the section's own text becomes Part 1. */
@@ -40,7 +40,7 @@ export function cleanParts(parts: SectionPart[] | undefined | null): SectionPart
   if (kept.length === 0) return [];
   return [
     { id: main.id || MAIN_ID, title: main.title.trim(), html: '' },
-    ...kept.map((p) => ({ id: p.id, title: p.title.trim(), html: p.html })),
+    ...kept.map((p) => ({ id: p.id, title: p.title.trim(), html: p.html, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) })),
   ];
 }
 
@@ -49,7 +49,7 @@ export function resolveParts(mainHtml: string, parts: unknown): ReadablePart[] {
   const list = cleanParts(readParts(parts));
   if (list.length < 2) return [];
   // the first entry is the section's own text = the OVERVIEW; the extra parts are Part 1, Part 2 ...
-  return list.map((p, i) => ({ id: p.id, title: p.title || (i === 0 ? 'Overview' : `Part ${i}`), html: i === 0 ? mainHtml : p.html }));
+  return list.map((p, i) => ({ id: p.id, title: p.title || (i === 0 ? 'Overview' : `Part ${i}`), html: i === 0 ? mainHtml : p.html, ...(i > 0 && p.thumbnail ? { thumbnail: p.thumbnail } : {}) }));
 }
 
 /** Plain text of the extra parts (for the AI question maker, searches...). */

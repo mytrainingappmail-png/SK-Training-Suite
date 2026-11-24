@@ -2,7 +2,9 @@
 // Part 1 (edited in the usual editor above); this lists Part 2, 3 ... each with its own title and text, in reading order.
 // Parts live in the section's own data; saving the section saves them.
 
+import { useRef, useState } from 'react';
 import RichTextEditor from './RichTextEditor';
+import ImageEditModal from './ImageEditModal';
 import { addPart } from '../../types/sectionParts';
 import type { SectionPart } from '../../types/sectionParts';
 
@@ -15,6 +17,11 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
   /** Changes when another section is opened, so the editors reload their text. */
   resetKey: string;
 }) {
+  // the picture being cropped for one part's card: which part, and the chosen file
+  const [pending, setPending] = useState<{ index: number; file: File } | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickFor = useRef<number>(0);
   if (parts.length < 2) return null;
   const main = parts[0];
   const extra = parts.slice(1);
@@ -27,6 +34,15 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
     [next[i], next[j]] = [next[j], next[i]];
     onChange(next);
   }
+  async function uploadThumb(index: number, file: File) {
+    const id = parts[index]?.id;
+    setPending(null);
+    setUploadingId(id ?? null);
+    try { setAt(index, { thumbnail: await onImageUpload(file) }); }
+    catch (e) { window.alert(e instanceof Error ? e.message : 'Could not upload the picture.'); }
+    finally { setUploadingId(null); }
+  }
+
   function remove(i: number) {
     const p = parts[i];
     if (p.html.replace(/<[^>]*>/g, '').trim() && !window.confirm(`Delete “${p.title || `Part ${i}`}”? Its text is deleted when you save.`)) return;
@@ -57,12 +73,24 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
                   <button type="button" onClick={() => remove(i)} className="rounded px-2 py-1 text-red-500 hover:bg-red-50" title="Delete this part" aria-label="Delete part">🗑</button>
                 </div>
               </div>
+              <div className="mb-2 flex flex-wrap items-center gap-3">
+                {p.thumbnail ? <img src={p.thumbnail} alt="" className="h-12 w-20 rounded-lg object-cover" /> : <div className="flex h-12 w-20 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-semibold text-slate-400">no picture</div>}
+                <button type="button" disabled={uploadingId === p.id} onClick={() => { pickFor.current = i; fileInput.current?.click(); }} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {uploadingId === p.id ? 'Uploading…' : p.thumbnail ? 'Replace card picture' : 'Add card picture'}
+                </button>
+                {p.thumbnail && <button type="button" onClick={() => setAt(i, { thumbnail: undefined })} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>}
+                {!p.thumbnail && <span className="text-xs text-slate-400">Optional — a colourful card with the part number is shown if you skip it.</span>}
+              </div>
               <RichTextEditor value={p.html} onChange={(html) => setAt(i, { html })} onImageUpload={onImageUpload} minHeight={160} resetKey={`${resetKey}:${p.id}`} />
             </div>
           );
         })}
       </div>
 
+      <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPending({ index: pickFor.current, file: f }); }} />
+      {pending && (
+        <ImageEditModal file={pending.file} frames={['rectangle', 'rounded', 'square']} defaultFrame="rectangle" title="Resize & Frame Part Card Picture" onCancel={() => setPending(null)} onConfirm={(f) => void uploadThumb(pending.index, f)} />
+      )}
       <button type="button" onClick={() => onChange(addPart(parts))} className="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">+ Add another part</button>
     </div>
   );
