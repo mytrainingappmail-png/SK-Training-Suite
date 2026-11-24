@@ -41,8 +41,8 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
       {/* where am I */}
       <div className="rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 p-3 ring-1 ring-indigo-100 sm:p-4">
         <div className="flex items-center justify-between gap-3 text-xs font-bold text-indigo-900">
-          <span>Part {index + 1} of {total}</span>
-          <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] text-indigo-700">{finished ? '✓ All parts opened' : `${seen.size} of ${total} opened`}</span>
+          <span>{index === 0 ? 'Overview' : `Part ${index} of ${total - 1}`}</span>
+          <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] text-indigo-700">{finished ? '✓ All opened' : `${seen.size} of ${total} opened`}</span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/80" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style={{ width: `${pct}%` }} />
@@ -62,7 +62,7 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
                   active ? 'bg-indigo-600 text-white shadow-sm' : done ? 'bg-white text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-50' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
                 }`}
               >
-                <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${active ? 'bg-white/25' : done ? 'bg-emerald-100' : 'bg-slate-100'}`}>{done ? '✓' : i + 1}</span>
+                <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${active ? 'bg-white/25' : done ? 'bg-emerald-100' : 'bg-slate-100'}`}>{done ? '✓' : i === 0 ? '★' : i}</span>
                 <span className="truncate">{p.title}</span>
               </button>
             );
@@ -73,7 +73,7 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
       {/* the part */}
       <article className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">Part {index + 1}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">{index === 0 ? 'Overview' : `Part ${index}`}</p>
           <h3 className="text-lg font-bold leading-snug text-slate-900">{part.title}</h3>
         </header>
         <div className="relative">
@@ -112,7 +112,7 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
       {endSlot && (finished || endUnlocked) && <div className="mt-6">{endSlot}</div>}
       {endSlot && !finished && !endUnlocked && (
         <p className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs font-medium text-slate-500">
-          Open all {total} parts to see the questions and the test for this section.
+          Open the overview and all {total - 1} parts to see the questions and the test for this section.
         </p>
       )}
     </div>

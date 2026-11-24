@@ -1,6 +1,7 @@
 // A long reading section split into PARTS that the employee reads one at a time (Induction card, Project section, Course
-// lesson). The stored list holds the parts in order: the FIRST entry only stands for the section's own main text (it carries
-// that part's title, its html is ignored - the main text stays where it always was), the others carry their own title + text.
+// lesson). The section's own text is the OVERVIEW (headline + intro) and the numbered Parts 1, 2, 3 ... come after it. The stored
+// list holds them in order: the FIRST entry only stands for the overview (it carries its optional heading, its html is ignored - the
+// main text stays where it always was), the others carry their own title + text.
 // An empty list (or a single entry) means an ordinary one-page section, exactly like before.
 
 export interface SectionPart { id: string; title: string; html: string }
@@ -47,7 +48,8 @@ export function cleanParts(parts: SectionPart[] | undefined | null): SectionPart
 export function resolveParts(mainHtml: string, parts: unknown): ReadablePart[] {
   const list = cleanParts(readParts(parts));
   if (list.length < 2) return [];
-  return list.map((p, i) => ({ id: p.id, title: p.title || `Part ${i + 1}`, html: i === 0 ? mainHtml : p.html }));
+  // the first entry is the section's own text = the OVERVIEW; the extra parts are Part 1, Part 2 ...
+  return list.map((p, i) => ({ id: p.id, title: p.title || (i === 0 ? 'Overview' : `Part ${i}`), html: i === 0 ? mainHtml : p.html }));
 }
 
 /** Plain text of the extra parts (for the AI question maker, searches...). */

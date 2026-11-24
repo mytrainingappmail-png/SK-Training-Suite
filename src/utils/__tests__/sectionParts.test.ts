@@ -8,17 +8,17 @@ describe('section parts', () => {
     expect(resolveParts('<p>Main</p>', [{ id: 'main', title: 'Only', html: '' }])).toEqual([]);
   });
 
-  it('adding the first part turns the section\'s own text into Part 1', () => {
+  it('adding the first part keeps the section\'s own text as the Overview', () => {
     const parts = addPart([]);
     expect(parts).toHaveLength(2);
     expect(parts[0].id).toBe('main');
   });
 
-  it('Part 1 shows the section\'s own text; the others show theirs; missing titles become "Part N"', () => {
+  it('the Overview shows the section\'s own text; numbered parts show theirs; missing titles become "Overview" and "Part N"', () => {
     const parts = [{ id: 'main', title: 'Intro', html: '' }, { id: 'a', title: '', html: '<p>Two</p>' }];
     expect(resolveParts('<p>Main</p>', parts)).toEqual([
       { id: 'main', title: 'Intro', html: '<p>Main</p>' },
-      { id: 'a', title: 'Part 2', html: '<p>Two</p>' },
+      { id: 'a', title: 'Part 1', html: '<p>Two</p>' },
     ]);
   });
 

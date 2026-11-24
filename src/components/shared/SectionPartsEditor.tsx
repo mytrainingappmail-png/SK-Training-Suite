@@ -29,18 +29,18 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
   }
   function remove(i: number) {
     const p = parts[i];
-    if (p.html.replace(/<[^>]*>/g, '').trim() && !window.confirm(`Delete “${p.title || `Part ${i + 1}`}”? Its text is deleted when you save.`)) return;
+    if (p.html.replace(/<[^>]*>/g, '').trim() && !window.confirm(`Delete “${p.title || `Part ${i}`}”? Its text is deleted when you save.`)) return;
     const next = parts.filter((_, idx) => idx !== i);
     onChange(next.length < 2 ? [] : next);
   }
 
   return (
     <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
-      <p className="text-xs font-bold text-indigo-900">Parts of this section ({parts.length})</p>
-      <p className="mb-3 mt-0.5 text-xs text-indigo-800">The employee reads one part at a time, with “Next part” buttons and a progress bar. The text above is Part 1.</p>
+      <p className="text-xs font-bold text-indigo-900">Parts of this section ({parts.length - 1})</p>
+      <p className="mb-3 mt-0.5 text-xs text-indigo-800">The text above is the section's headline and overview — the employee sees it first. Then they choose Part 1, Part 2, Part 3… and read one part at a time, with “Next part” buttons and a progress bar.</p>
 
-      <label className="mb-3 block text-xs font-semibold text-slate-600">Part 1 title (the text above)
-        <input value={main.title} onChange={(e) => setAt(0, { title: e.target.value })} placeholder="e.g. What is Sales?" className={`${INPUT} mt-1`} />
+      <label className="mb-3 block text-xs font-semibold text-slate-600">Overview heading (the text above) — optional, shows as “Overview” if left empty
+        <input value={main.title} onChange={(e) => setAt(0, { title: e.target.value })} placeholder="Overview" className={`${INPUT} mt-1`} />
       </label>
 
       <div className="space-y-4">
@@ -49,7 +49,7 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
           return (
             <div key={p.id} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-bold text-indigo-700">Part {i + 1}</span>
+                <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-bold text-indigo-700">Part {i}</span>
                 <input value={p.title} onChange={(e) => setAt(i, { title: e.target.value })} placeholder="Part title, e.g. How do customers buy?" className={`${INPUT} min-w-[12rem] flex-1`} />
                 <div className="flex items-center gap-1 text-slate-500">
                   <button type="button" disabled={i === 1} onClick={() => move(i, -1)} className="rounded px-2 py-1 hover:bg-slate-100 disabled:opacity-30" title="Move up" aria-label="Move part up">↑</button>
