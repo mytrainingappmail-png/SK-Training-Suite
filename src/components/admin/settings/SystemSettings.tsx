@@ -346,12 +346,12 @@ function SystemSettings() {
     setTimeout(() => {
       setLocal((prev) => ({ ...prev, backup: { ...prev.backup, lastBackupAt: new Date().toISOString() } }));
       setBackingUp(false);
-      showToast('Backup recorded for this session — no backup service is connected yet.');
+      showToast('Real backups are in Admin → Backup & Restore (download now, automatic weekly backups, restore).');
     }, 600);
   }
 
   function handleRestore() {
-    showToast('Restore requires a connected backup service, which is not available yet.');
+    showToast('Restore is in Admin → Backup & Restore.');
   }
 
   function handleTestConnection() {

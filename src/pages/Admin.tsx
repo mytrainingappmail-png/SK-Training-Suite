@@ -73,6 +73,7 @@ const MarketDataManagement = lazyWithRetry(() => import("../components/admin/mar
 const QuizAdminSetupPanel = lazyWithRetry(() => import("../components/quiz/QuizAdminSetupPanel"));
 const CallingAppAdminSetupPanel = lazyWithRetry(() => import("../components/callingApp/CallingAppAdminSetupPanel"));
 const AuditLogCenter = lazyWithRetry(() => import("../components/admin/audit/AuditLogCenter"));
+const BackupManager = lazyWithRetry(() => import("../components/admin/backup/BackupManager"));
 
 import { useAuthorization } from "../hooks/useAuthorization";
 import { loadCompany } from "../services/company/companyService";
@@ -511,6 +512,9 @@ function Admin() {
                   {can(PERMISSIONS.VIEW_AUDIT_LOG) && matches("Audit Log") && (
                     <button onClick={() => setActiveTab("audit-log")} className={getTabClass()} style={getTabStyle("audit-log")}>Audit Log</button>
                   )}
+                  {can(PERMISSIONS.VIEW_COMPANY) && matches("Backup & Restore") && (
+                    <button onClick={() => setActiveTab("backups")} className={getTabClass()} style={getTabStyle("backups")}>Backup &amp; Restore</button>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -682,6 +686,7 @@ function Admin() {
             {activeTab === "calling-app" && moduleFlags.calling_app && <CallingAppAdminSetupPanel />}
 
             {activeTab === "audit-log" && can(PERMISSIONS.VIEW_AUDIT_LOG) && <AuditLogCenter />}
+            {activeTab === "backups" && can(PERMISSIONS.VIEW_COMPANY) && <BackupManager />}
 
             {activeTab === "permissions" && isPlatformOperator && can(PERMISSIONS.VIEW_PERMISSION) && <PermissionManagement />}
             {activeTab === "role-permission" && can(PERMISSIONS.VIEW_PERMISSION) && (
