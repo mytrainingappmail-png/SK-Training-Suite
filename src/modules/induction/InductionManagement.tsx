@@ -43,7 +43,7 @@ import { branchService } from '../../services/branch/branchService';
 import { getCurrentUser } from '../../services/auth/session';
 import { loadCompany } from '../../services/company/companyService';
 import RichTextEditor from '../../components/shared/RichTextEditor';
-import ImageEditModal from '../../components/shared/ImageEditModal';
+import { fitCardImage } from '../../utils/fitCardImage';
 import InductionDayPreview from './InductionDayPreview';
 import LocationPicker from '../../components/shared/LocationPicker';
 import InductionCardProjects from './InductionCardProjects';
@@ -336,10 +336,8 @@ function InductionManagement() {
   const [reordering, setReordering] = useState(false);
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const [uploadingThumb, setUploadingThumb] = useState(false);
-  const [pendingThumbFile, setPendingThumbFile] = useState<File | null>(null);
   // Picture of the card a section becomes on the employee's screen.
   const sectionThumbInputRef = useRef<HTMLInputElement>(null);
-  const [pendingSectionThumb, setPendingSectionThumb] = useState<File | null>(null);
   // 'Preview' of a Day exactly as an employee sees it (nothing saved).
   const [previewDay, setPreviewDay] = useState<InductionDay | null>(null);
   const orderedDays = [...days].sort((a, b) => a.display_order - b.display_order);
@@ -464,8 +462,8 @@ function InductionManagement() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    // Opens the resize/frame editor first — never uploads the raw picked file as-is.
-    setPendingThumbFile(file);
+    // fitted to the card shape and compressed on the spot - never uploads the raw picked file as-is
+    void fitCardImage(file).then(handleThumbnailEdited);
   }
 
   // A picture chosen for something that is ALREADY saved is stored at once - there is no second "Save" to forget
@@ -482,7 +480,6 @@ function InductionManagement() {
   }
 
   async function handleThumbnailEdited(file: File) {
-    setPendingThumbFile(null);
     setUploadingThumb(true);
     try {
       const url = await uploadInlineImage(file);
@@ -496,7 +493,6 @@ function InductionManagement() {
   }
 
   async function handleSectionThumbnailEdited(file: File) {
-    setPendingSectionThumb(null);
     setUploadingSectionThumb(true);
     try {
       const url = await uploadInlineImage(file);
@@ -985,16 +981,6 @@ function InductionManagement() {
                   {uploadingThumb ? 'Uploading…' : draft.thumbnail_url ? 'Replace Image' : 'Upload Image'}
                 </button>
               </div>
-              {pendingThumbFile && (
-                <ImageEditModal
-                  file={pendingThumbFile}
-                  frames={['rectangle', 'rounded', 'square']}
-                  defaultFrame="rounded"
-                  title="Resize & Frame Thumbnail"
-                  onCancel={() => setPendingThumbFile(null)}
-                  onConfirm={handleThumbnailEdited}
-                />
-              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">Label shown before the title (optional) — this day only</label>
@@ -1128,16 +1114,13 @@ function InductionManagement() {
                     <label className="mb-1 block text-xs font-semibold text-slate-500">Card picture — what the employee sees on this section's card</label>
                     <div className="flex items-center gap-3">
                       {sectionDraft.thumbnail_url && <img src={sectionDraft.thumbnail_url} alt="" className="h-14 w-24 rounded-xl object-cover" />}
-                      <input ref={sectionThumbInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setPendingSectionThumb(file); }} />
+                      <input ref={sectionThumbInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void fitCardImage(file).then(handleSectionThumbnailEdited); }} />
                       <button type="button" onClick={() => sectionThumbInputRef.current?.click()} disabled={uploadingSectionThumb} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                         {uploadingSectionThumb ? 'Uploading…' : sectionDraft.thumbnail_url ? 'Replace picture' : 'Add picture'}
                       </button>
                       {sectionDraft.thumbnail_url && <button type="button" onClick={() => { setSectionDraft((d) => (d ? { ...d, thumbnail_url: null } : d)); void persistSectionPicture(null); }} className="text-xs font-semibold text-red-500 hover:underline">Remove</button>}
                       {!sectionDraft.thumbnail_url && <span className="text-xs text-slate-400">Optional — a colourful card is drawn if you skip it.</span>}
                     </div>
-                    {pendingSectionThumb && (
-                      <ImageEditModal file={pendingSectionThumb} frames={['rectangle', 'rounded', 'square']} defaultFrame="rounded" title="Resize & Frame Card Picture" onCancel={() => setPendingSectionThumb(null)} onConfirm={handleSectionThumbnailEdited} />
-                    )}
                   </div>
 
                   {isOperator && (

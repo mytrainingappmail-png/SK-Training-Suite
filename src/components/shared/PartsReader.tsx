@@ -134,7 +134,7 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
                 className="group flex flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
               >
                 {p.thumbnail ? (
-                  <div className="relative h-36 bg-slate-100">
+                  <div className="relative aspect-video bg-slate-100">
                     <img src={p.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
                     <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">Part {n}</span>
                     {read && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-emerald-700">✓ Read</span>}

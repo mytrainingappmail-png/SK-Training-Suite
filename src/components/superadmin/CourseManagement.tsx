@@ -37,6 +37,7 @@ import type { Course, CourseForm, CourseLevel } from "../../types/course";
 import type { Company } from "../../types/company";
 import type { Category } from "../../types/category";
 import { defaultCourseForm } from "../../types/course";
+import { fitCardImage } from "../../utils/fitCardImage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -510,7 +511,7 @@ function CourseModal({
     setUploadingThumb(true);
     setThumbError("");
     try {
-      const url = await uploadCourseThumbnail(file, editing?.id ?? "new");
+      const url = await uploadCourseThumbnail(await fitCardImage(file), editing?.id ?? "new");
       field("thumbnail", url);
     } catch (err) {
       setThumbError(err instanceof Error ? err.message : "Failed to upload thumbnail.");

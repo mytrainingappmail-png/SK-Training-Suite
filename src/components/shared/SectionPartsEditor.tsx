@@ -4,7 +4,7 @@
 
 import { useRef, useState } from 'react';
 import RichTextEditor from './RichTextEditor';
-import ImageEditModal from './ImageEditModal';
+import { fitCardImage } from '../../utils/fitCardImage';
 import { addPart } from '../../types/sectionParts';
 import type { SectionPart } from '../../types/sectionParts';
 
@@ -17,8 +17,6 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
   /** Changes when another section is opened, so the editors reload their text. */
   resetKey: string;
 }) {
-  // the picture being cropped for one part's card: which part, and the chosen file
-  const [pending, setPending] = useState<{ index: number; file: File } | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const pickFor = useRef<number>(0);
@@ -36,9 +34,8 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
   }
   async function uploadThumb(index: number, file: File) {
     const id = parts[index]?.id;
-    setPending(null);
     setUploadingId(id ?? null);
-    try { setAt(index, { thumbnail: await onImageUpload(file) }); }
+    try { setAt(index, { thumbnail: await onImageUpload(await fitCardImage(file)) }); }
     catch (e) { window.alert(e instanceof Error ? e.message : 'Could not upload the picture.'); }
     finally { setUploadingId(null); }
   }
@@ -87,10 +84,7 @@ export default function SectionPartsEditor({ parts, onChange, onImageUpload, res
         })}
       </div>
 
-      <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPending({ index: pickFor.current, file: f }); }} />
-      {pending && (
-        <ImageEditModal file={pending.file} frames={['rectangle', 'rounded', 'square']} defaultFrame="rectangle" title="Resize & Frame Part Card Picture" onCancel={() => setPending(null)} onConfirm={(f) => void uploadThumb(pending.index, f)} />
-      )}
+      <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void uploadThumb(pickFor.current, f); }} />
       <button type="button" onClick={() => onChange(addPart(parts))} className="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">+ Add another part</button>
     </div>
   );

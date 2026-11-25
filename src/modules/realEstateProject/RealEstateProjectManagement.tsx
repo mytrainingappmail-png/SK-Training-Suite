@@ -53,6 +53,7 @@ import FaqItemsEditor from '../../components/shared/FaqItemsEditor';
 import { protectionPatchFromCompany } from '../../components/shared/ContentWatermark';
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import SectionPartsEditor from '../../components/shared/SectionPartsEditor';
+import { fitCardImage } from '../../utils/fitCardImage';
 import { addPart, cleanParts, partsText, readParts } from '../../types/sectionParts';
 import type { RealEstateProject, RealEstateProjectBrochure } from '../../types/realEstateProject';
 import type { RealEstateProjectSection, RealEstateProjectSectionForm } from '../../types/realEstateProjectSection';
@@ -474,7 +475,7 @@ function RealEstateProjectManagement({ scope }: { scope?: ProjectManagerScope } 
     if (!file) return;
     setUploadingThumb(true);
     try {
-      const url = await uploadThumbnail(file, editingProjectId ?? 'new');
+      const url = await uploadThumbnail(await fitCardImage(file), editingProjectId ?? 'new');
       setDraft((d) => ({ ...d, thumbnail_url: url }));
       showToast('Thumbnail uploaded');
     } catch (err) {

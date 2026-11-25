@@ -80,6 +80,7 @@ import type { Assessment, AssessmentForm, AssessmentType } from '../../../types/
 import { defaultAssessmentForm } from '../../../types/assessment';
 import type { Question, QuestionType, DifficultyLevel, QuestionWithOptionsForm, QuestionOptionForm } from '../../../types/question';
 import { defaultQuestionForm, TRUE_FALSE_OPTIONS } from '../../../types/question';
+import { fitCardImage } from "../../../utils/fitCardImage";
 
 const LESSONS_CHANGED_EVENT = 'sk:lessons-changed';
 
@@ -2757,7 +2758,7 @@ function CourseBuilder({ initialCourseId }: { initialCourseId?: string }) {
     if (!selectedModule) return;
     setUploadingThumbnail(true);
     try {
-      const result = await uploadImage(file);
+      const result = await uploadImage(await fitCardImage(file));
       await saveModule(selectedModule.id, { ...toModuleForm(selectedModule), thumbnail: result.url });
       fetchOutline();
       showToast('Thumbnail updated');

@@ -61,6 +61,7 @@ import type { Department } from '../../../types/department';
 import type { Designation } from '../../../types/designation';
 import type { Employee } from '../../../types/employee';
 import type { Course } from '../../../types/course';
+import { fitCardImage } from "../../../utils/fitCardImage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Icons (inline SVG only)
@@ -602,7 +603,7 @@ function LearningPathManagement() {
     if (!activePath) return;
     setUploadingThumbnail(true);
     try {
-      const result = await uploadImage(file);
+      const result = await uploadImage(await fitCardImage(file));
       const merged: LearningPathForm = { ...toLearningPathForm(activePath), thumbnail_url: result.url };
       await saveLearningPath(activePath.id, merged);
       fetchAll();

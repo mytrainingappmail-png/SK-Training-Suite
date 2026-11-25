@@ -13,6 +13,7 @@ import { loadCourses } from "../../services/course/courseService";
 import type { Module, ModuleForm } from "../../types/module";
 import type { Course } from "../../types/course";
 import { defaultModuleForm } from "../../types/module";
+import { fitCardImage } from "../../utils/fitCardImage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -386,7 +387,7 @@ function ModuleModal({
     setUploadingThumb(true);
     setThumbError("");
     try {
-      const url = await uploadToCourseContent(file, "images/modules", editing?.id ?? "new");
+      const url = await uploadToCourseContent(await fitCardImage(file), "images/modules", editing?.id ?? "new");
       field("thumbnail", url);
     } catch (err) {
       setThumbError(err instanceof Error ? err.message : "Failed to upload thumbnail.");

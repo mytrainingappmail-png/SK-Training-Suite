@@ -61,7 +61,7 @@ function ThumbnailCard({ title, subtitle, thumbnailUrl, badge, cornerTag, childr
       disabled={disabled}
       className="group flex flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
     >
-      <div className={`relative w-full flex-shrink-0 bg-slate-100 ${fullImage ? 'aspect-[4/3] overflow-hidden' : 'aspect-video'}`}>
+      <div className={`relative w-full flex-shrink-0 bg-slate-100 ${fullImage ? 'aspect-video overflow-hidden' : 'aspect-video'}`}>
         {thumbnailUrl && fullImage ? (
           <>
             <img src={thumbnailUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-xl" />

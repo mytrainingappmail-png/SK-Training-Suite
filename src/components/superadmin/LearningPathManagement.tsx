@@ -18,6 +18,7 @@ import type {
 } from "../../types/learningPath";
 import type { CertificateTemplate } from "../../types/certificateTemplate";
 import { defaultLearningPathForm } from "../../types/learningPath";
+import { fitCardImage } from "../../utils/fitCardImage";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -328,7 +329,7 @@ function LearningPathModal({
     setUploadingThumb(true);
     setThumbError("");
     try {
-      const url = await uploadToCourseContent(file, "images/learning-paths", editing?.id ?? "new");
+      const url = await uploadToCourseContent(await fitCardImage(file), "images/learning-paths", editing?.id ?? "new");
       field("thumbnail_url", url);
     } catch (err) {
       setThumbError(err instanceof Error ? err.message : "Failed to upload thumbnail.");
