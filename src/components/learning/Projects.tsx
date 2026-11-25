@@ -27,6 +27,7 @@ import { brochureLink } from '../../utils/brochureLink';
 import type { Project } from '../../services/projects/projectsService';
 import TranslatableHtml from '../shared/TranslatableHtml';
 import PartsReader from '../shared/PartsReader';
+import SummaryPanel from '../shared/SummaryPanel';
 import { resolveParts } from '../../types/sectionParts';
 
 function IconBuilding({ className = 'h-7 w-7' }: { className?: string }) {
@@ -269,6 +270,7 @@ export function ProjectDetailCard({
                       }
                       return (
                         <>
+                      <div className="mt-2"><SummaryPanel html={section.page_content} /></div>
                       <div className="relative">
                         <TranslatableHtml
                           className="prose prose-sm mt-2 max-w-none rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_td]:border [&_td]:border-slate-200 [&_td]:p-2"

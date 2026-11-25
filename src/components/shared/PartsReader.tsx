@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import ContentWatermark, { noCopyProps } from './ContentWatermark';
 import type { WatermarkConfig } from './ContentWatermark';
 import TranslatableHtml from './TranslatableHtml';
+import SummaryPanel from './SummaryPanel';
 import type { ReadablePart } from '../../types/sectionParts';
 
 const ACCENTS = [
@@ -70,7 +71,8 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
           </div>
         </div>
 
-        <article className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="mt-4"><SummaryPanel html={part.html} label="⚡ Summarise this part" /></div>
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6">
             <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">Part {open}</p>
             <h3 className="text-lg font-bold leading-snug text-slate-900">{part.title}</h3>
@@ -106,6 +108,7 @@ export default function PartsReader({ parts, watermark, noCopy = false, endSlot,
   // ── the overview, then the part cards ───────────────────────────────────────
   return (
     <div ref={top} className="scroll-mt-4">
+      <SummaryPanel html={parts.map((p) => p.html).join('\n')} label="⚡ Summarise this whole section" />
       <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6">
           <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">Overview</p>

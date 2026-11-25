@@ -17,6 +17,7 @@ import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import type { InductionCardResponse, InductionDay, InductionDaySection } from '../../types/induction';
 import TranslatableHtml from '../shared/TranslatableHtml';
 import PartsReader from '../shared/PartsReader';
+import SummaryPanel from '../shared/SummaryPanel';
 import { resolveParts } from '../../types/sectionParts';
 
 function IconArrowLeft({ className = 'h-4 w-4' }: { className?: string }) {
@@ -196,6 +197,7 @@ export default function InductionDayView({
               }
               return (
                 <>
+                  <SummaryPanel html={openSection.page_content} />
                   <div className="relative">
                     <TranslatableHtml
                       className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-5 text-sm leading-relaxed"

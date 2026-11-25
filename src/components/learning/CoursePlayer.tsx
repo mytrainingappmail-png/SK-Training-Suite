@@ -17,6 +17,7 @@ import AssessmentPlayer from '../assessment/AssessmentPlayer';
 import ContentWatermark, { noCopyProps } from '../shared/ContentWatermark';
 import TranslatableHtml from '../shared/TranslatableHtml';
 import PartsReader from '../shared/PartsReader';
+import SummaryPanel from '../shared/SummaryPanel';
 import { resolveParts } from '../../types/sectionParts';
 import type {
   CoursePlayerData,
@@ -256,6 +257,7 @@ function LessonContent({
           endUnlocked={endUnlocked}
         />
       )}
+      {readableParts.length === 0 && lesson.lessonType === 'text' && lesson.content && <SummaryPanel html={lesson.content} />}
       {readableParts.length === 0 && (lesson.lessonType === 'text' || lesson.lessonType === 'document') && lesson.content && (
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
           {/* Watermark only ever applies to written/text lessons, never a
