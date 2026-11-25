@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import PreviewModal from '../../components/shared/PreviewModal';
 import InductionDayView from '../../components/learning/InductionDayView';
-import { loadSectionsForDay } from '../../services/induction/inductionService';
+import { loadSectionsForDay, loadHiddenSectionIds } from '../../services/induction/inductionService';
 import { LOCATIONS, visibleInLocation } from '../../constants/locations';
 import type { InductionCardResponse, InductionDay, InductionDaySection, InductionResponseKind } from '../../types/induction';
 
@@ -21,8 +21,8 @@ export default function InductionDayPreview({ day, dayLabel, nextName, nextDay, 
   const [asLocation, setAsLocation] = useState('');
 
   useEffect(() => {
-    loadSectionsForDay(day.id)
-      .then((rows) => setSections([...rows].sort((a, b) => a.display_order - b.display_order)))
+    Promise.all([loadSectionsForDay(day.id), loadHiddenSectionIds()])
+      .then(([rows, hidden]) => setSections([...rows].filter((r) => !hidden.has(r.id)).sort((a, b) => a.display_order - b.display_order)))
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load this day.'));
   }, [day.id]);
 

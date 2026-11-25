@@ -27,7 +27,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   loadDays, saveDay, editDay, removeDay, reorderDays,
-  loadSectionsForDay, saveSection, editSection, removeSection, reorderSections,
+  loadSectionsForDay, saveSection, editSection, removeSection, reorderSections, loadHiddenSectionIds, setSectionHidden,
   loadAssignments, assignEmployee, markAssignmentComplete, reactivateAssignment, removeAssignment,
   cloneDayToBranch,
 } from '../../services/induction/inductionService';
@@ -352,6 +352,8 @@ function InductionManagement() {
   const [uploadingSectionThumb, setUploadingSectionThumb] = useState(false);
 
   const [sections, setSections] = useState<InductionDaySection[]>([]);
+  // cards this company has hidden from its trainees
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [sectionDraft, setSectionDraft] = useState<{ section_type: InductionSectionType; title: string; page_content: string; assessment_id: string | null; faq_items: InductionFaqItem[]; config: InductionCardConfig; requirement: InductionRequirement; project_ids: string[] | null; thumbnail_url: string | null; locations: string[] | null; watermark_enabled: boolean; watermark_text: string | null; watermark_orientation: 'horizontal' | 'vertical' | 'diagonal'; watermark_opacity: number; no_copy: boolean } | null>(null);
   const [isOperator, setIsOperator] = useState(false);
   const [company, setCompany] = useState<Company | null>(null);
@@ -413,7 +415,31 @@ function InductionManagement() {
 
   useEffect(() => { fetchAll(); }, []);
 
+  async function toggleCardHidden(sectionId: string) {
+    if (!user?.companyId) return;
+    const next = !hiddenIds.has(sectionId);
+    setHiddenIds((prev) => { const s = new Set(prev); if (next) s.add(sectionId); else s.delete(sectionId); return s; });
+    try {
+      await setSectionHidden(user.companyId, sectionId, next);
+      showToast(next ? 'Hidden — trainees will not see this topic.' : 'Visible to trainees again.');
+    } catch (err) {
+      setHiddenIds((prev) => { const s = new Set(prev); if (next) s.delete(sectionId); else s.add(sectionId); return s; });
+      showToast(err instanceof Error ? err.message : 'Could not change this.');
+    }
+  }
+
+  async function toggleDayHidden(day: InductionDay) {
+    try {
+      await editDay(day.id, { active: !day.active });
+      fetchAll();
+      showToast(day.active ? 'Day hidden — trainees will not see it.' : 'Day is visible to trainees again.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not change this.');
+    }
+  }
+
   function fetchSections(dayId: string) {
+    loadHiddenSectionIds().then(setHiddenIds);
     loadSectionsForDay(dayId)
       .then(setSections)
       .catch((err: unknown) => showToast(err instanceof Error ? err.message : 'Failed to load sections.'));
@@ -1069,12 +1095,16 @@ function InductionManagement() {
                         {({ test: 'Test', faq: 'FAQ', projects: 'Projects', feedback: 'Feedback', task: 'Task', acknowledge: 'Read & agree', contact: 'Buddy' } as Record<string, string>)[s.section_type] ?? 'Page'}
                         {s.requirement === 'none' && s.section_type !== 'test' && <span className="ml-1 font-normal opacity-70">· optional</span>}
                       </span>
-                      <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+                      <p className={`text-sm font-semibold ${hiddenIds.has(s.id) ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{s.title}</p>
+                      {hiddenIds.has(s.id) && <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">🙈 Hidden from trainees</span>}
                       {s.section_type === 'page' && (s.faq_items ?? []).length > 0 && <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">+ FAQ</span>}
                       {s.section_type === 'page' && s.assessment_id && <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">+ Test{s.config?.test_required === false ? ' (optional)' : ''}</span>}
                       {s.locations && s.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {s.locations.map(locationLabel).join(', ')}</span>}
                     </div>
                     <div className="flex gap-2">
+                      <button onClick={() => void toggleCardHidden(s.id)} title="Hide this topic from trainees (for example if your company's training is shorter)" className={`rounded-full px-2.5 py-0.5 text-xs font-bold transition ${hiddenIds.has(s.id) ? 'bg-slate-800 text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                        {hiddenIds.has(s.id) ? '👁 Show' : '🙈 Hide'}
+                      </button>
                       {isFormCard(s) && <button onClick={() => setResponsesFor(s)} className="text-xs font-semibold text-emerald-700 hover:underline">Responses</button>}
                       {(s.section_type === 'test' || s.section_type === 'faq') && i > 0 && sections[i - 1].section_type === 'page' && (
                         <button onClick={() => void handleMergeIntoAbove(i)} className="text-xs font-semibold text-amber-700 hover:underline">↑ Move into the card above</button>
@@ -1473,7 +1503,7 @@ function InductionManagement() {
                     </span>
                     {d.locations && d.locations.length > 0 && <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">📍 {d.locations.map(locationLabel).join(', ')}</span>}
                     {staleDayIds.has(d.id) && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="This Day changed after its linked Course Module was last updated. Open it and press Update the Module now.">⚠ Linked Module is behind</span>}
-                    {!d.active && <span className="text-[11px] font-semibold text-slate-400">Inactive</span>}
+                    {!d.active && <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">🙈 Hidden from trainees</span>}
                   </div>
                   </div>
                 </div>
@@ -1498,6 +1528,9 @@ function InductionManagement() {
                     </>
                   )}
                   <button onClick={() => setCopyToCourseDay(d)} className="text-xs font-semibold text-violet-700 hover:underline" title="Make this Day a Module of a Course">📚 Copy to Course</button>
+                  <button onClick={() => void toggleDayHidden(d)} title="Hide this whole day from trainees (for example if your company's training is shorter)" className={`rounded-full px-2.5 py-0.5 text-xs font-bold transition ${d.active ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
+                    {d.active ? '🙈 Hide' : '👁 Show'}
+                  </button>
                   <button onClick={() => setPreviewDay(d)} className="text-xs font-semibold text-emerald-700 hover:underline">👁 Preview</button>
                   <button onClick={() => startEditDay(d)} className="text-xs font-semibold text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => handleDeleteDay(d.id)} className="text-xs font-semibold text-red-500 hover:underline">Delete</button>

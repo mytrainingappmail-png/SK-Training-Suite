@@ -37,12 +37,16 @@ export async function loadInductionReportData(): Promise<InductionReportData> {
     supabase.from('branches').select('id, branch_name, city'),
   ]);
   const assigned = must('assignments', assignments as never) as ReportAssignment[];
+  // cards the company hid from its trainees do not count anywhere
+  const hiddenRes = await supabase.from('induction_hidden_sections').select('section_id');
+  const hidden = new Set(((hiddenRes.data ?? []) as { section_id: string }[]).map((r) => r.section_id));
+  const visibleSections = (must('sections', sections as never) as ReportSection[]).filter((s) => !hidden.has(s.id));
   const ids = assigned.map((a) => a.employee_id);
 
   const employees = ids.length
     ? must('employees', await supabase.from('employees').select('id, employee_code, first_name, last_name, branch_id, active').in('id', ids))
     : [];
-  const testIds = must('sections', sections as never).map((s) => (s as ReportSection).assessment_id).filter((x): x is string => !!x);
+  const testIds = visibleSections.map((s) => s.assessment_id).filter((x): x is string => !!x);
   const passes = ids.length && testIds.length
     ? must('passes', await supabase.from('assessment_results').select('employee_id, assessment_id').eq('passed', true).in('employee_id', ids).in('assessment_id', testIds))
     : [];
@@ -52,7 +56,7 @@ export async function loadInductionReportData(): Promise<InductionReportData> {
     employees: employees as ReportEmployee[],
     branches: must('branches', branches as never) as { id: string; branch_name: string; city: string | null }[],
     days: must('days', days as never) as ReportDay[],
-    sections: must('sections', sections as never) as ReportSection[],
+    sections: visibleSections,
     completions: must('completions', completions as never) as ReportCompletion[],
     views: must('views', views as never) as ReportView[],
     passes: passes as ReportPass[],

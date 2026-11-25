@@ -5,6 +5,23 @@
 // modeled on Real Estate Projects.
 
 import { supabase } from '../../lib/supabase';
+
+/** The cards this company has hidden from its trainees. */
+export async function getHiddenSectionIds(): Promise<string[]> {
+  const { data, error } = await supabase.from('induction_hidden_sections').select('section_id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.section_id as string);
+}
+
+export async function setSectionHiddenRow(companyId: string, sectionId: string, hidden: boolean): Promise<void> {
+  if (hidden) {
+    const { error } = await supabase.from('induction_hidden_sections').upsert({ section_id: sectionId, company_id: companyId }, { onConflict: 'section_id' });
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from('induction_hidden_sections').delete().eq('section_id', sectionId);
+    if (error) throw new Error(error.message);
+  }
+}
 import type {
   InductionDay,
   InductionDayForm,

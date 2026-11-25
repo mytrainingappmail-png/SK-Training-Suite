@@ -8,6 +8,7 @@ import {
   getSectionsForDay, getAllSections, createSection, updateSection, deleteSection, bulkApplySectionProtection,
   getCompletionsForEmployee, markDayComplete, getViewedSectionIds, markSectionViewed,
   getAssignments, getMyAssignment, createAssignment, setAssignmentStatus, deleteAssignment,
+  getHiddenSectionIds, setSectionHiddenRow,
 } from '../../repositories/induction/inductionRepository';
 import { supabase } from '../../lib/supabase';
 import { employeeLocationKey } from '../../constants/locations';
@@ -133,6 +134,15 @@ export async function saveSection(form: InductionDaySectionForm): Promise<Induct
 export async function editSection(id: string, form: Partial<InductionDaySectionForm>): Promise<InductionDaySection> {
   if (!id) throw new Error('Invalid section ID.');
   return updateSection(id, form);
+}
+
+/** Ids of the cards the company has hidden from its trainees (empty if the company never hid any). */
+export async function loadHiddenSectionIds(): Promise<Set<string>> {
+  try { return new Set(await getHiddenSectionIds()); } catch { return new Set(); }
+}
+
+export async function setSectionHidden(companyId: string, sectionId: string, hidden: boolean): Promise<void> {
+  await setSectionHiddenRow(companyId, sectionId, hidden);
 }
 
 export async function removeSection(id: string): Promise<void> {

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed, loadMyLocationKey,
+  loadDays, loadAllSections, loadCompletions, markComplete, loadMyAssignment, loadViewedSectionIds, recordSectionViewed, loadMyLocationKey, loadHiddenSectionIds,
 } from '../../services/induction/inductionService';
 import { getPassedTestIds, getMustPassTestIds } from '../../services/induction/inductionProgressService';
 import { getMyCardResponses, saveMyCardResponse } from '../../repositories/induction/inductionCardRepository';
@@ -82,14 +82,14 @@ function Induction() {
     if (!user?.id) { setError('No active session.'); setLoading(false); return; }
     setLoading(true);
     setError('');
-    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null), getMyCardResponses(user.id).catch(() => [] as InductionCardResponse[]), getMyInductionCertificate(user.id).catch(() => null)])
-      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation, myResponses, myCertificate]) => {
+    Promise.all([loadMyAssignment(user.id), loadDays(), loadAllSections(), loadCompletions(user.id), loadViewedSectionIds(user.id), loadMyLocationKey(user.branchId || null), getMyCardResponses(user.id).catch(() => [] as InductionCardResponse[]), getMyInductionCertificate(user.id).catch(() => null), loadHiddenSectionIds()])
+      .then(async ([assignment, allDays, allSectionsRaw, comps, viewed, myLocation, myResponses, myCertificate, hiddenIds]) => {
         setResponses(Object.fromEntries(myResponses.map((r) => [r.section_id, r])));
         setCertificate(myCertificate);
         if (certKnown.current === false && myCertificate) showToast('🎉 Induction complete — your certificate is ready!');
         certKnown.current = !!myCertificate;
         // Days and sections limited to other locations are simply not there for this employee.
-        const allSections = allSectionsRaw.filter((s) => visibleInLocation(s.locations, myLocation));
+        const allSections = allSectionsRaw.filter((s) => visibleInLocation(s.locations, myLocation) && !hiddenIds.has(s.id));
         setViewedIds(new Set(viewed));
         setHasAssignment(!!assignment && assignment.status === 'active');
         setAssignmentDone(!!assignment && assignment.status === 'completed');
