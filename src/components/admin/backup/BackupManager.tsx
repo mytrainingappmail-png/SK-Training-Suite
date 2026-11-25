@@ -9,6 +9,7 @@ import {
   startDownload, uploadBackupFile,
 } from '../../../services/backup/backupService';
 import type { BackupRow, BackupSettings, RestoreResult } from '../../../services/backup/backupService';
+import PictureOptimiser from './PictureOptimiser';
 
 const KIND_LABEL: Record<BackupRow['kind'], { label: string; cls: string }> = {
   manual: { label: 'Manual', cls: 'bg-indigo-50 text-indigo-700' },
@@ -189,6 +190,8 @@ export default function BackupManager() {
           ))}
         </div>
       </div>
+
+      <PictureOptimiser />
 
       {target && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
