@@ -127,6 +127,10 @@ export interface Quiz {
   allow_early_next?: boolean | null;
   /** Live Quiz: show the top ranks on each trainee's screen while the quiz runs. null = follow the company default (off). */
   live_top_enabled?: boolean | null;
+  /** Answer paper after a Live Quiz: null = follow the company default (Quiz Settings). */
+  paper_release_mode?: PaperMode | null;
+  /** Who gets a certificate for THIS quiz / exam: null = follow the company default (Quiz Settings). */
+  cert_eligibility?: CertEligibility | null;
   /** Background behind the questions on the trainee's screen: null = follow the company default, 'none', 'logo' or 'image' (bg_image_url). */
   bg_kind?: QuizBackgroundKind | null;
   bg_image_url?: string | null;
@@ -230,6 +234,12 @@ export interface QuizSession {
   lobby_music?: ChampMusic | null;
   lobby_music_url?: string | null;
   lobby_music_volume?: number | null;
+  /** Frozen at launch: "release" (the trainer releases the answer paper), "auto" (shown right after the quiz) or "off". Older sessions: null = auto. */
+  paper_mode?: PaperMode | null;
+  paper_released?: boolean;
+  paper_released_at?: string | null;
+  /** Minutes the released paper stays open (null = until hidden). */
+  paper_minutes?: number | null;
   /** When the host's start countdown ends (database time); null = the host starts it by hand. */
   scheduled_start_at?: string | null;
   /** The location its quiz had when it was launched. */
@@ -331,7 +341,10 @@ export interface QuizResultFolder {
 }
 
 /** Who certificates go to for a quiz, admin-configured — a competition, not a participation trophy. */
-export type CertEligibility = "all_pass" | "top1" | "top3";
+export type CertEligibility = "all_pass" | "top1" | "top2" | "top3";
+
+/** What happens to the trainee's answer paper after a Live Quiz: the trainer releases it / it shows by itself / it is never shown. */
+export type PaperMode = "release" | "auto" | "off";
 
 /** Public, correctness-free payload returned by get_current_quiz_question RPC. */
 export interface PublicQuizQuestionOption {
@@ -455,6 +468,10 @@ export interface QuizSettings {
   live_top_name_style: LiveTopNameStyle;
   /** How often a trainee's board refreshes, in seconds (3-30). */
   live_top_refresh_seconds: number;
+  /** Company default for the answer paper after a Live Quiz. */
+  paper_release_mode: PaperMode;
+  /** Minutes the paper stays open after the trainer releases it (null = until the trainer hides it). */
+  paper_default_minutes: number | null;
   /** The host's leaderboard shows each player's running percentage (right answers / answers given so far). */
   leaderboard_show_percent: boolean;
   /** The trainee's own top-ranks board also shows that percentage (off to begin with). */

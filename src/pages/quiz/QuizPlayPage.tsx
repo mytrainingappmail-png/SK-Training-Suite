@@ -16,6 +16,8 @@ import LiveTopCard from "../../components/quiz/LiveTopCard";
 import { applyQuizFavicon } from "../../services/quiz/quizBrandingRuntimeService";
 import { playTone } from "../../services/quiz/quizSoundService";
 import { QUIZ_AUTO_NEXT_PAUSE_SECONDS } from "../../constants/quizTiming";
+import { QUIZ_PAPER_WATCH_SECONDS } from "../../constants/quizPaperTiming";
+import { getSession } from "../../repositories/quiz/quizSessionRepository";
 import { issueMyCertificate } from "../../repositories/quiz/quizCertificateRepository";
 import { getMyAnswerReview, getMyResult, flagTabSwitch } from "../../repositories/quiz/quizAnswerRepository";
 import { rankByMarks, MEDALS } from "../../services/quiz/quizRankingService";
@@ -64,6 +66,9 @@ export default function QuizPlayPage() {
   const [certificate, setCertificate] = useState<QuizCertificate | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [reviewQuestions, setReviewQuestions] = useState<AnswerReviewQuestion[] | null>(null);
+  // The answer paper is released / hidden by the trainer: what the trainee's screen may show right now (kept fresh by a small watcher)
+  const [paper, setPaper] = useState<{ mode: string; released: boolean; releasedAt: string | null; minutes: number | null } | null>(null);
+  const [paperTick, setPaperTick] = useState(0);
   const [retryOpen, setRetryOpen] = useState(false);
   const [reviewSecondsLeft, setReviewSecondsLeft] = useState(DEFAULT_REVIEW_VISIBLE_SECONDS);
   const [myResult, setMyResult] = useState<MyQuizResult | null>(null);
@@ -340,10 +345,6 @@ export default function QuizPlayPage() {
 
     listParticipants(sessionId, supabaseQuizPlayer).then(setParticipants).catch(() => {});
 
-    getMyAnswerReview(sessionId)
-      .then(setReviewQuestions)
-      .catch(() => {});
-
     getMyResult(sessionId).then(setMyResult);
 
     issueMyCertificate(sessionId)
@@ -354,6 +355,41 @@ export default function QuizPlayPage() {
 
     return () => clearTimeout(confettiTimer);
   }, [sessionId, session?.phase]);
+
+  // The answer paper: follow the trainer's release / hide (and the optional timer) while this result screen is open.
+  useEffect(() => {
+    if (!sessionId || session?.phase !== "ended") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function pull() {
+      try {
+        const s = await getSession(sessionId!, supabaseQuizPlayer);
+        if (!cancelled && s) setPaper({ mode: s.paper_mode ?? "auto", released: !!s.paper_released, releasedAt: s.paper_released_at ?? null, minutes: s.paper_minutes ?? null });
+      } catch { /* try again on the next beat */ }
+      if (!cancelled) timer = setTimeout(pull, QUIZ_PAPER_WATCH_SECONDS * 1000 * (0.8 + Math.random() * 0.4));
+    }
+    void pull();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [sessionId, session?.phase]);
+
+  // a released paper with a timer leaves by itself: tick once a second only while such a timer runs
+  const paperMode = paper?.mode ?? session?.paper_mode ?? "auto";
+  const paperExpiresAt = paper?.released && paper.releasedAt && paper.minutes ? new Date(paper.releasedAt).getTime() + paper.minutes * 60000 : null;
+  useEffect(() => {
+    if (paperExpiresAt === null) return;
+    const t = setInterval(() => setPaperTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [paperExpiresAt]);
+  void paperTick;
+  const paperVisible = session?.phase === "ended" && (paperMode === "auto" || (paperMode === "release" && !!paper?.released && (paperExpiresAt === null || serverNow() < paperExpiresAt)));
+
+  useEffect(() => {
+    if (!sessionId || session?.phase !== "ended") return;
+    if (!paperVisible) { setReviewQuestions(null); return; }
+    let cancelled = false;
+    getMyAnswerReview(sessionId).then((r) => { if (!cancelled) setReviewQuestions(r); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sessionId, session?.phase, paperVisible]);
 
   // Once the trainee moves past the splash into their certificate/answer review,
   // this screen auto-closes back to the Join Quiz page after a few minutes —
@@ -679,6 +715,16 @@ export default function QuizPlayPage() {
         )}
         {retryOpen && <RetryMistakes questions={mistakes} onClose={() => setRetryOpen(false)} />}
 
+        {paperMode === "release" && !paperVisible && (
+          <div className="w-full max-w-lg mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-400">
+            📄 {paper?.released ? "Your answer paper is closed now." : "Your answer paper will appear here when your trainer shares it."}
+          </div>
+        )}
+        {paperVisible && paperMode === "release" && paperExpiresAt !== null && (
+          <div className="w-full max-w-lg mt-4 text-left text-xs font-semibold text-amber-300">
+            ⏳ Your answer paper closes in {Math.max(0, Math.floor((paperExpiresAt - serverNow()) / 60000))}:{String(Math.max(0, Math.floor(((paperExpiresAt - serverNow()) % 60000) / 1000))).padStart(2, "0")}
+          </div>
+        )}
         {reviewQuestions && reviewQuestions.length > 0 && (
           <div className="w-full max-w-lg mt-4 text-left">
             <div className="flex items-center justify-between gap-2 mb-2">

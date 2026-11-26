@@ -1,5 +1,5 @@
 import { supabaseQuiz } from "../../lib/supabaseQuiz";
-import type { Quiz, QuizQuestion, QuizWithQuestions, HotspotZone, QuizBackgroundKind } from "../../types/quiz";
+import type { Quiz, QuizQuestion, QuizWithQuestions, HotspotZone, QuizBackgroundKind, PaperMode, CertEligibility } from "../../types/quiz";
 
 export interface QuizForm {
   title: string;
@@ -26,6 +26,10 @@ export interface QuizForm {
   allow_early_next?: boolean | null;
   /** Live Quiz: show the top ranks on each trainee's screen. null / absent = follow the company default. */
   live_top_enabled?: boolean | null;
+  /** Answer paper after a Live Quiz: null / absent = follow the company default. */
+  paper_release_mode?: PaperMode | null;
+  /** Certificate rule for this quiz / exam: null / absent = follow the company default. */
+  cert_eligibility?: CertEligibility | null;
   /** Background behind the questions on the trainee's screen: null / absent = follow the company default. */
   bg_kind?: QuizBackgroundKind | null;
   bg_image_url?: string | null;

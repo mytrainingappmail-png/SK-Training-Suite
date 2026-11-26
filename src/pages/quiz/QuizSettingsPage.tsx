@@ -18,6 +18,7 @@ import QuizLocationsCard from "../../components/quiz/QuizLocationsCard";
 import QuizRankTitlesCard from "../../components/quiz/QuizRankTitlesCard";
 import QuizBackgroundCard from "../../components/quiz/QuizBackgroundCard";
 import QuizLiveTopCard from "../../components/quiz/QuizLiveTopCard";
+import QuizPaperCard from "../../components/quiz/QuizPaperCard";
 import type { QuizSettings, OptionColor, CertTemplate, CertTemplateDraft, CertPhotoFrame, Quiz } from "../../types/quiz";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -665,6 +666,7 @@ export default function QuizSettingsPage() {
               [
                 { value: "all_pass", label: "Everyone who passes" },
                 { value: "top1", label: "Only rank #1" },
+                { value: "top2", label: "Top 2 ranks" },
                 { value: "top3", label: "Top 3 ranks" },
               ] as const
             ).map((opt) => (
@@ -1403,6 +1405,7 @@ export default function QuizSettingsPage() {
 
       <QuizRankTitlesCard />
 
+      <QuizPaperCard />
       <QuizLiveTopCard />
 
       <QuizBackgroundCard />

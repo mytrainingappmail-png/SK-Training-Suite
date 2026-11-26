@@ -211,3 +211,9 @@ export async function getSessionResults(sessionId: string): Promise<QuizSessionR
 
   return data ?? [];
 }
+
+/** The trainer releases or hides the answer paper of an ended Live Quiz (optionally for a number of minutes). */
+export async function releaseQuizPaper(sessionId: string, release: boolean, minutes: number | null): Promise<void> {
+  const { error } = await supabaseQuiz.rpc("release_quiz_paper", { p_session_id: sessionId, p_release: release, p_minutes: minutes });
+  if (error) throw new Error(error.message);
+}

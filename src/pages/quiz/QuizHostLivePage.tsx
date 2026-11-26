@@ -20,6 +20,7 @@ import { rankByMarks, isCertEligible, marksOf, percentOfMarks, MEDALS } from "..
 import GradeBadge from "../../components/quiz/GradeBadge";
 import QuizSessionResultCardButton from "../../components/quiz/QuizSessionResultCardButton";
 import QuizAdminCertificateButton from "../../components/quiz/QuizAdminCertificateButton";
+import QuizPaperControl from "../../components/quiz/QuizPaperControl";
 import QuizConfetti from "../../components/quiz/QuizConfetti";
 import { HorizontalBars, type ChartPoint } from "../../components/quiz/QuizDashboardCharts";
 import { getQuizLiveAdmin, stopQuizParticipant, resumeQuizParticipant } from "../../repositories/quiz/quizParticipantRepository";
@@ -401,7 +402,8 @@ export default function QuizHostLivePage() {
 
   const scale = uiScale / 100;
   const brandName = settings?.brand_name?.trim();
-  const certEligibility = settings?.cert_eligibility ?? "all_pass";
+  // this quiz's own choice first, else the company default
+  const certEligibility = quiz?.cert_eligibility ?? settings?.cert_eligibility ?? "all_pass";
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 relative overflow-hidden flex flex-col">
@@ -757,17 +759,19 @@ export default function QuizHostLivePage() {
                     </div>
                   )}
 
+                  {session && <QuizPaperControl session={session} defaultMinutes={settings?.paper_default_minutes ?? null} />}
+
                   {/* Certificates — competition-gated by cert_eligibility, not just a passing score */}
                   {(() => {
                     const ranked = rankByMarks(participants);
                     const eligible = ranked.filter((p, i) => isCertEligible(i + 1, participantGrade(percentOfMarks(p, totalQuestions, totalMarks), quiz), certEligibility));
                     if (eligible.length === 0) return null;
                     const eligibilityLabel =
-                      certEligibility === "top1" ? "Rank #1 only" : certEligibility === "top3" ? "Top 3 ranks" : "Everyone who passed";
+                      certEligibility === "top1" ? "Rank #1 only" : certEligibility === "top2" ? "Top 2 ranks" : certEligibility === "top3" ? "Top 3 ranks" : "Everyone who passed";
                     return (
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                         <div className="text-sm font-bold text-white mb-1">🎖️ Certificates ({eligible.length} eligible)</div>
-                        <p className="text-xs text-slate-500 mb-3">Eligibility: {eligibilityLabel} — set in Quiz Settings</p>
+                        <p className="text-xs text-slate-500 mb-3">Eligibility: {eligibilityLabel} — set in this quiz's own settings (or Quiz Settings)</p>
                         <div className="space-y-2">
                           {eligible.map((p) => (
                             <div key={p.id} className="flex items-center justify-between gap-3 bg-slate-800/60 rounded-lg px-3 py-2 text-sm">

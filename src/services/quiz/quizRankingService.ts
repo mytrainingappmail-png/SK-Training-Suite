@@ -34,6 +34,7 @@ export function findRank<T extends { correct_count: number; marks_earned?: numbe
 export function isCertEligible(rank: number, grade: QuizGrade, certEligibility: CertEligibility): boolean {
   if (grade !== "PASS") return false;
   if (certEligibility === "top1") return rank === 1;
+  if (certEligibility === "top2") return rank <= 2;
   if (certEligibility === "top3") return rank <= 3;
   return true;
 }

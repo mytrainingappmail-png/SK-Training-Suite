@@ -52,6 +52,8 @@ const DEFAULT_SETTINGS: Omit<QuizSettings, "company_id" | "updated_at"> = {
   live_top_show_me: true,
   live_top_name_style: "full",
   live_top_refresh_seconds: 5,
+  paper_release_mode: "release",
+  paper_default_minutes: null,
   leaderboard_show_percent: true,
   live_top_show_percent: false,
   bg_kind: "none",

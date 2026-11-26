@@ -96,6 +96,8 @@ export default function QuizResultsPage() {
   const [revealChampions, setRevealChampions] = useState<ChampionRow[] | null>(null);
 
   const [certEligibility, setCertEligibility] = useState<CertEligibility>("all_pass");
+  // a quiz / exam that chose its own certificate rule
+  const [quizCertById, setQuizCertById] = useState<Map<string, CertEligibility>>(new Map());
   const [musicChoice, setMusicChoice] = useState<ChampMusic>("builtin");
   const [musicUrl, setMusicUrl] = useState("");
   // the music that plays only on the topper's own phone
@@ -140,6 +142,7 @@ export default function QuizResultsPage() {
     ])
       .then(([s, r, settings, f, saved, quizList]) => {
         setTrackedQuizIds(new Set(quizList.filter((q) => q.track_attempts).map((q) => q.id)));
+        setQuizCertById(new Map(quizList.filter((q) => q.cert_eligibility).map((q) => [q.id, q.cert_eligibility as CertEligibility])));
         setSavedFolders(saved);
         setSessions(s.filter((x) => x.phase === "ended"));
         setAllResults(r);
@@ -833,7 +836,7 @@ export default function QuizResultsPage() {
                 isOpen={expanded === s.id}
                 onToggle={() => toggle(s.id, s.quiz_id)}
                 distribution={distributions[s.id]}
-                certEligibility={certEligibility}
+                certEligibility={quizCertById.get(s.quiz_id) ?? certEligibility}
                 companyId={admin?.company_id ?? null}
                 actions={
                   (

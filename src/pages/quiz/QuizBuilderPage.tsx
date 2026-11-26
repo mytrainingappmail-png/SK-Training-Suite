@@ -22,7 +22,7 @@ import SyncChoiceModal, { type SyncItem } from "../../components/quiz/SyncChoice
 import DeleteChoiceModal from "../../components/quiz/DeleteChoiceModal";
 import { getQuestionLinks, syncQuestionCopies, questionContentKey, questionForOtherTest, copyQuestionsToTest, createTestFromQuestions, deleteQuestionCopies, type QuestionLink } from "../../services/quiz/quizLinkService";
 import { hasHindi, translateQuestionsToHindi } from "../../services/quiz/quizHindiService";
-import type { QuizDifficulty } from "../../types/quiz";
+import type { QuizDifficulty, PaperMode, CertEligibility } from "../../types/quiz";
 
 let localIdCounter = 0;
 function nextLocalId() {
@@ -78,6 +78,8 @@ const DEFAULT_FORM: QuizForm = {
   reveal_answers: null,
   allow_early_next: null,
   live_top_enabled: null,
+  paper_release_mode: null,
+  cert_eligibility: null,
   bg_kind: null,
   bg_image_url: null,
   location_id: undefined, // new quiz: follows the location switch at the top until chosen here
@@ -169,6 +171,8 @@ export default function QuizBuilderPage({ mode = "live" }: { mode?: "live" | "ex
           reveal_answers: quiz.reveal_answers ?? null,
           allow_early_next: quiz.allow_early_next ?? null,
           live_top_enabled: quiz.live_top_enabled ?? null,
+          paper_release_mode: quiz.paper_release_mode ?? null,
+          cert_eligibility: quiz.cert_eligibility ?? null,
           bg_kind: quiz.bg_kind ?? null,
           bg_image_url: quiz.bg_image_url ?? null,
           location_id: quiz.location_id ?? null,
@@ -1094,6 +1098,39 @@ It is removed from this screen only - nothing is permanent until you click Save 
         </label>
         {!form.issue_certificate && (
           <p className="text-xs text-slate-500 -mt-2">No certificate will be offered for this quiz, regardless of score — useful for practice/ungraded quizzes.</p>
+        )}
+        {form.issue_certificate && (
+          <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">🎖️ Who gets the certificate (this {isExam ? "exam" : "quiz"})</label>
+            <select
+              className="w-full sm:max-w-md rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              value={form.cert_eligibility ?? "default"}
+              onChange={(e) => setForm({ ...form, cert_eligibility: e.target.value === "default" ? null : (e.target.value as CertEligibility) })}
+            >
+              <option value="default">Follow my default setting (Quiz Settings)</option>
+              <option value="all_pass">Everyone who passes</option>
+              <option value="top1">Only rank #1</option>
+              <option value="top2">Top 2 ranks</option>
+              <option value="top3">Top 3 ranks</option>
+            </select>
+            <p className="text-xs text-slate-500">Chosen here for this {isExam ? "exam" : "quiz"} only — no need to open Settings each time. Ranks go by marks, with the faster player ahead on a tie. Save the {isExam ? "exam" : "quiz"} to apply it.</p>
+          </div>
+        )}
+        {!isExam && (
+          <div className="rounded-lg border border-slate-700 px-3 py-2.5 space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">📄 Answer paper after the quiz (trainee's screen)</label>
+            <select
+              className="w-full sm:max-w-md rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+              value={form.paper_release_mode ?? "default"}
+              onChange={(e) => setForm({ ...form, paper_release_mode: e.target.value === "default" ? null : (e.target.value as PaperMode) })}
+            >
+              <option value="default">Follow my default setting (Quiz Settings)</option>
+              <option value="release">I release it (and can hide it again)</option>
+              <option value="auto">Show it automatically after the quiz</option>
+              <option value="off">Do not show it at all</option>
+            </select>
+            <p className="text-xs text-slate-500">The answer paper is each trainee's review of every question. “I release it” puts a Release / Hide button (with an optional timer) on your end screen — handy for practice quizzes you do not want trainees to keep reading.</p>
+          </div>
         )}
       </fieldset>
 
