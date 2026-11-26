@@ -825,6 +825,21 @@ export default function QuizHostLivePage() {
                     <span className="text-slate-400" title="Questions answered so far">{answered}/{totalQuestions}</span>
                     <span className="font-bold text-emerald-300" title="Right">✅ {lr?.correct_count ?? p.correct_count}</span>
                     <span className="font-bold text-red-300" title="Wrong">❌ {lr?.wrong_count ?? 0}</span>
+                    {settings?.leaderboard_show_percent !== false && (() => {
+                      // running percentage: right answers out of the answers given so far - moves with every answer
+                      const right = lr?.correct_count ?? p.correct_count;
+                      const given = Math.max(answered, right + (lr?.wrong_count ?? 0));
+                      if (given === 0) return <span className="text-slate-600" title="No answer yet">—%</span>;
+                      const pct = Math.round((right / given) * 100);
+                      return (
+                        <span
+                          title="Right answers out of the answers given so far"
+                          className={`rounded px-1.5 py-0.5 font-sans text-[11px] font-extrabold ${pct >= 70 ? "bg-emerald-500/20 text-emerald-300" : pct >= 40 ? "bg-amber-500/20 text-amber-300" : "bg-red-500/20 text-red-300"}`}
+                        >
+                          {pct}%
+                        </span>
+                      );
+                    })()}
                     {isPaused && <span className="rounded bg-red-500/20 px-1.5 py-0.5 font-sans text-[10px] font-bold text-red-300">⏸ PAUSED</span>}
                     {canEdit && session?.phase !== "ended" && (
                       <button

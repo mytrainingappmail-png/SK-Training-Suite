@@ -26,6 +26,8 @@ export default function QuizLiveTopCard() {
   const [showMe, setShowMe] = useState(true);
   const [nameStyle, setNameStyle] = useState<LiveTopNameStyle>("full");
   const [refresh, setRefresh] = useState(5);
+  const [hostPercent, setHostPercent] = useState(true);
+  const [boardPercent, setBoardPercent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -41,6 +43,8 @@ export default function QuizLiveTopCard() {
         setShowMe(s.live_top_show_me ?? true);
         setNameStyle(s.live_top_name_style ?? "full");
         setRefresh(s.live_top_refresh_seconds ?? 5);
+        setHostPercent(s.leaderboard_show_percent ?? true);
+        setBoardPercent(s.live_top_show_percent ?? false);
       })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load the live ranks settings."); })
       .finally(() => { if (!cancelled) setLoaded(true); });
@@ -60,6 +64,8 @@ export default function QuizLiveTopCard() {
         live_top_show_me: showMe,
         live_top_name_style: nameStyle,
         live_top_refresh_seconds: refresh,
+        leaderboard_show_percent: hostPercent,
+        live_top_show_percent: boardPercent,
       });
       setMessage("Saved. It applies to Live Quizzes from now on (a quiz that is already running picks it up on the next refresh).");
       setTimeout(() => setMessage(""), 5000);
@@ -85,12 +91,30 @@ export default function QuizLiveTopCard() {
       </div>
 
       <label className="flex items-start gap-2 text-sm text-slate-300">
+        <input type="checkbox" className="mt-0.5" checked={hostPercent} onChange={(e) => setHostPercent(e.target.checked)} />
+        <span>
+          Show a running percentage on the host's leaderboard
+          <span className="block text-xs text-slate-500 mt-0.5">
+            Next to every player: how much of what they have answered so far is right (right answers ÷ answers given). It changes with every right or wrong answer.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm text-slate-300">
         <input type="checkbox" className="mt-0.5" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         <span>
           Show the top ranks on trainees' screens (Live Quiz)
           <span className="block text-xs text-slate-500 mt-0.5">
             Off to begin with. It switches itself off for a quiz that hides right / wrong from players, because a moving rank would give the answer away.
           </span>
+        </span>
+      </label>
+
+      <label className={`flex items-start gap-2 text-sm text-slate-300 ${enabled ? "" : "opacity-50"}`}>
+        <input type="checkbox" className="mt-0.5" checked={boardPercent} onChange={(e) => setBoardPercent(e.target.checked)} />
+        <span>
+          Also show each trainee's percentage on that board
+          <span className="block text-xs text-slate-500 mt-0.5">Off to begin with: the trainee board normally shows names and places only. Switch it on if you want trainees to see how accurate the leaders are.</span>
         </span>
       </label>
 

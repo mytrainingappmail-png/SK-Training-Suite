@@ -68,7 +68,7 @@ export default function LiveTopCard({ sessionId, config }: { sessionId: string; 
             "Top ranks appear after the first answers"
           ) : (
             <>
-              {me ? <span className="text-amber-300">You: {place(me.rank)}</span> : <span className="text-slate-400">Not ranked yet</span>}
+              {me ? <span className="text-amber-300">You: {place(me.rank)}{config?.show_percent && me.percent != null ? ` · ${me.percent}%` : ""}</span> : <span className="text-slate-400">Not ranked yet</span>}
               {move !== 0 && me && <span className={move > 0 ? " ml-1 text-emerald-400" : " ml-1 text-red-400"}>{move > 0 ? `▲${move}` : `▼${-move}`}</span>}
               {leader && <span className="text-slate-400"> · Leading: {leader.display_name}</span>}
             </>
@@ -83,6 +83,7 @@ export default function LiveTopCard({ sessionId, config }: { sessionId: string; 
             <li key={r.rank} className={`${i > 0 && r.rank - rows[i - 1].rank > 1 ? "mt-2 border-t border-dashed border-slate-700 pt-2 " : ""}flex items-center gap-2 rounded-lg px-2 py-1 text-sm ${r.is_me ? "bg-amber-400/15 font-bold text-amber-200" : "text-slate-200"}`}>
               <span className="w-8 shrink-0 text-center font-mono text-xs">{place(r.rank)}</span>
               <span className="min-w-0 flex-1 truncate">{r.display_name}</span>
+              {config?.show_percent && r.percent != null && <span className="shrink-0 rounded-md bg-slate-700/70 px-1.5 py-0.5 font-mono text-[11px] font-bold text-emerald-300" title="Right answers so far">{r.percent}%</span>}
               {r.is_me && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-950">You</span>}
             </li>
           ))}

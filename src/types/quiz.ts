@@ -455,6 +455,10 @@ export interface QuizSettings {
   live_top_name_style: LiveTopNameStyle;
   /** How often a trainee's board refreshes, in seconds (3-30). */
   live_top_refresh_seconds: number;
+  /** The host's leaderboard shows each player's running percentage (right answers / answers given so far). */
+  leaderboard_show_percent: boolean;
+  /** The trainee's own top-ranks board also shows that percentage (off to begin with). */
+  live_top_show_percent: boolean;
   /** Company default for the background behind the questions on the trainee's screen (a quiz / exam can differ). */
   bg_kind: QuizBackgroundKind;
   bg_image_url: string | null;
@@ -481,13 +485,15 @@ export interface LiveTopConfig {
   show_me: boolean;
   name_style: LiveTopNameStyle;
   refresh_seconds: number;
+  show_percent?: boolean;
 }
 
-/** One line of the live board: place and name only. */
+/** One line of the live board: place and name (and, when the company switched it on, the running percentage). */
 export interface LiveTopRow {
   rank: number;
   display_name: string;
   is_me: boolean;
+  percent?: number | null;
 }
 
 /** Limits the database enforces; the settings screen uses the same. */
