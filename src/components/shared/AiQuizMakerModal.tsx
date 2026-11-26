@@ -88,7 +88,7 @@ export default function AiQuizMakerModal({ sourceText, onAdd, onClose }: {
                 </label>
                 <label className="col-span-2 text-xs font-semibold text-slate-600">Language
                   <select value={language} onChange={(e) => setLanguage(e.target.value as AiLanguage)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm">
-                    <option value="english">English</option><option value="hinglish">Hinglish (Hindi in English letters)</option>
+                    <option value="english">English</option><option value="hinglish">Hinglish (हिंदी + English words)</option>
                   </select>
                 </label>
               </div>

@@ -1,7 +1,7 @@
 // supabase/functions/translate-hinglish/index.ts
 //
 // "Read in Hinglish" for employees: turns English training content (the HTML of a page, lesson or project
-// description) into natural Hinglish — Hindi written in English letters, the way an Indian sales team actually talks.
+// description) into natural Hinglish - Hindi in Devanagari script with the usual English words kept in English (see _shared/hinglishStyle.ts), the way an Indian sales team actually talks.
 //
 // COST: free. Uses Google's Gemini free tier (no card needed). One-time setup by the platform owner:
 //   1. Get a free key at https://aistudio.google.com/apikey
@@ -17,18 +17,33 @@
 
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { corsHeaders, HttpError, jsonResponse, requireEmployeeCaller, serviceClient } from "../_shared/auth.ts";
+import { HINGLISH_STYLE } from "../_shared/hinglishStyle.ts";
 
 const MAX_HTML_CHARS = 60000;
 const CHUNK_CHARS = 3500;
 const DEFAULT_DAILY_CAP = 800; // fresh (uncached) pieces per day, whole platform
-const CACHE_VERSION = "hinglish-v1";
+const CACHE_VERSION = "hinglish-v2"; // v2: Devanagari + English terms (v1 was Hindi in English letters, never reused)
 
-const PROMPT = `Translate the HTML below into natural, conversational Hinglish: Hindi written in English (Roman) letters, the way Indian real estate sales teams talk (for example "Yeh project RERA approved hai aur possession 2027 mein milega").
-Rules:
+function buildPrompt(strict: boolean): string {
+  return `Translate the English HTML below into natural, conversational Hinglish.
+${HINGLISH_STYLE}
+${strict ? "IMPORTANT: your last answer was mostly English letters. This time every sentence MUST be written mainly in Devanagari; only the individual English nouns and terms listed above stay in Latin letters.\n" : ""}Rules:
 - Keep EVERY HTML tag and attribute exactly as it is. Change only the visible text between tags.
-- Keep numbers, prices, areas, dates, project names, brand names and terms like RERA, BHK, sqft, GST, PLC, EMI, ROI, CRM in English.
-- Keep it simple and friendly. Do not add, remove or explain anything.
+- Keep the meaning exactly the same. Do not add, remove, explain or reorder anything. Keep it simple and friendly.
+- Text that is already Hindi, or only a number or a name, stays as it is.
 - Output ONLY the translated HTML, nothing else (no code fences).`;
+}
+
+const visibleText = (h: string) => h.replace(/<[^>]*>/g, " ");
+const countDev = (s: string) => (s.match(/[\u0900-\u097F]/g) ?? []).length;
+const countLat = (s: string) => (s.match(/[A-Za-z]/g) ?? []).length;
+/** A piece that had real English must come back with real Devanagari in it - not the English handed back, nor Hindi in English letters. */
+function isDevanagariHinglish(src: string, out: string): boolean {
+  if (countLat(visibleText(src)) < 25) return true;
+  const dev = countDev(visibleText(out));
+  const lat = countLat(visibleText(out));
+  return dev >= 12 && dev / (dev + lat) >= 0.25;
+}
 
 function tagSignature(s: string): string {
   return (s.match(/<\/?[a-zA-Z][a-zA-Z0-9]*/g) ?? []).join("");
@@ -67,7 +82,7 @@ async function sha256(text: string): Promise<string> {
 // models are tried in order and the next one is used when one is retired (404) or overloaded (503). GEMINI_MODEL can pin one.
 const MODELS = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];
 
-async function callGemini(chunk: string, apiKey: string): Promise<string> {
+async function callGemini(chunk: string, apiKey: string, strict = false): Promise<string> {
   const pinned = Deno.env.get("GEMINI_MODEL");
   const models = pinned ? [pinned, ...MODELS.filter((m) => m !== pinned)] : MODELS;
   let rateLimited = false;
@@ -76,7 +91,7 @@ async function callGemini(chunk: string, apiKey: string): Promise<string> {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: `${PROMPT}\n\n${chunk}` }] }],
+        contents: [{ role: "user", parts: [{ text: `${buildPrompt(strict)}\n\n${chunk}` }] }],
         generationConfig: { temperature: 0.2 },
       }),
     });
@@ -146,8 +161,10 @@ serve(async (req) => {
           const src = chunks[i];
           if (mock) { results[i] = mockTranslate(src); rows.push({ hash: hashes[i], lang: "hinglish", result: results[i] }); return; }
           let out = await callGemini(src, apiKey!);
-          if (tagSignature(out) !== tagSignature(src)) out = await callGemini(src, apiKey!); // one retry if the layout changed
+          // a second, firmer try when the layout changed or the answer is not Devanagari Hinglish
+          if (tagSignature(out) !== tagSignature(src) || !isDevanagariHinglish(src, out)) out = await callGemini(src, apiKey!, true);
           if (!out || tagSignature(out) !== tagSignature(src)) { results[i] = src; return; } // never ship broken markup
+          if (!isDevanagariHinglish(src, out)) { results[i] = src; return; } // still English letters: show the original rather than the wrong style
           results[i] = out;
           rows.push({ hash: hashes[i], lang: "hinglish", result: out });
         }));

@@ -14,6 +14,7 @@
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { corsHeaders, HttpError, jsonResponse, requireEmployeeCaller, serviceClient } from "../_shared/auth.ts";
 import { callGemini } from "../_shared/gemini.ts";
+import { HINGLISH_STYLE } from "../_shared/hinglishStyle.ts";
 
 const MAX_CONTENT = 60000; // about 10,000 words: a whole long section with all its parts in one go
 const MIN_CONTENT = 200;
@@ -121,7 +122,7 @@ function validate(rawList: unknown[], count: number): Question[] {
 
 function buildPrompt(content: string, count: number, difficulty: string, language: string, extra: string): string {
   const lang = language === "hinglish"
-    ? "Write the questions, options and explanations in natural, simple Hinglish (Hindi in English letters, how Indian sales teams talk). Keep numbers, project names and terms like RERA, BHK, sqft, GST, EMI, ROI in English."
+    ? `Write the questions, options and explanations in Hinglish. ${HINGLISH_STYLE}`
     : "Write in clear, simple English.";
   return `You are an experienced corporate trainer for real estate sales teams in India. Create ${count} multiple-choice questions that test whether a learner has understood the TRAINING CONTENT below.
 

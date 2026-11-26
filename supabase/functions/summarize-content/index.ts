@@ -12,10 +12,11 @@
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { corsHeaders, HttpError, jsonResponse, rateLimit, requireEmployeeCaller, serviceClient } from "../_shared/auth.ts";
 import { callGemini } from "../_shared/gemini.ts";
+import { HINGLISH_STYLE } from "../_shared/hinglishStyle.ts";
 
 const MAX_CHARS = 60000;
 const MIN_WORDS = 150;
-const CACHE_VERSION = "sum-v1";
+const CACHE_VERSION = "sum-v2"; // v2: Hinglish = Devanagari + English terms
 
 const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[ \t ]+/g, " ").replace(/\n\s*\n+/g, "\n").trim().slice(0, max) : "");
 const countWords = (s: string) => (s.match(/\S+/g) ?? []).length;
@@ -33,7 +34,7 @@ function targetWords(words: number): number {
 
 function buildPrompt(content: string, target: number, language: string): string {
   const lang = language === "hinglish"
-    ? "Write in natural, simple Hinglish (Hindi in English letters, the way Indian sales teams talk). Keep numbers, names and terms like RERA, BHK, sqft, GST, EMI, ROI in English."
+    ? HINGLISH_STYLE
     : "Write in clear, simple English.";
   return `You are helping a sales trainee quickly understand a long training article. Write a summary of about ${target} words (between ${Math.round(target * 0.8)} and ${Math.round(target * 1.2)}).
 

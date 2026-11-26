@@ -1,5 +1,5 @@
 // A drop-in for "render this admin-written HTML" on the employee side, with a small button that switches the text to
-// Hinglish (Hindi in English letters) and back. The choice is remembered, so once someone prefers Hinglish every page
+// Hinglish (Hindi in Devanagari with the usual English words kept in English) and back. The choice is remembered, so once someone prefers Hinglish every page
 // they open follows it. The button only appears when translation has been switched on for the platform and the text has
 // real words in it. The translated HTML is sanitised exactly like the original before it is shown.
 
