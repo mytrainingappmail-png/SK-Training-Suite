@@ -23,6 +23,7 @@ import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TextSelection } from '@tiptap/pm/state';
+import { ResizableNodeView } from '@tiptap/core';
 import ImageEditModal from './ImageEditModal';
 import ImageAnnotator, { type Annotation } from './ImageAnnotator';
 import ImageCropper from './ImageCropper';
@@ -60,10 +61,96 @@ interface RichTextEditorProps {
 }
 
 // The picture node remembers its ORIGINAL picture and the drawn objects, so a drawn-on picture can be reopened and edited.
+// It is also resizable by dragging its corner handles (Word / PowerPoint style) and can be made transparent. Size and
+// transparency are saved on the picture itself (width / height attributes + an inline opacity style), so they show the same
+// wherever the content is displayed. A shape (a drawn SVG) stretches freely; a photo keeps its proportions.
+const isShapeSrc = (src: unknown) => typeof src === 'string' && src.startsWith('data:image/svg+xml');
+
 const AnnotatableImage = ImageExtension.extend({
+  addNodeView() {
+    return ({ node, getPos, HTMLAttributes, editor }) => {
+      const el = document.createElement('img');
+      el.draggable = false;
+      Object.entries(HTMLAttributes).forEach(([key, value]) => {
+        if (value == null || key === 'width' || key === 'height' || key === 'style') return;
+        el.setAttribute(key, String(value));
+      });
+      let box: HTMLElement | null = null; // the resize wrapper; its flex row places the picture left / centre / right
+      const applyLook = (n: typeof node) => {
+        const op = Number(n.attrs.opacity);
+        el.style.opacity = Number.isFinite(op) && op > 0 && op < 1 ? String(op) : '';
+        el.style.width = n.attrs.width ? `${n.attrs.width}px` : '';
+        el.style.height = n.attrs.height ? `${n.attrs.height}px` : '';
+        if (box) box.style.justifyContent = n.attrs.align === 'center' ? 'center' : n.attrs.align === 'right' ? 'flex-end' : '';
+      };
+      applyLook(node);
+      const lockRatio = !isShapeSrc(node.attrs.src);
+      const view = new ResizableNodeView({
+        element: el,
+        editor,
+        node,
+        getPos,
+        onResize: (width, height) => {
+          el.style.width = `${width}px`;
+          el.style.height = `${height}px`;
+        },
+        onCommit: (width, height) => {
+          const pos = getPos();
+          if (pos === undefined) return;
+          editor.chain().setNodeSelection(pos).updateAttributes('image', { width, height }).run();
+        },
+        onUpdate: (updated) => {
+          if (updated.type !== node.type) return false;
+          if (updated.attrs.src !== el.getAttribute('src')) el.setAttribute('src', String(updated.attrs.src));
+          applyLook(updated);
+          return true;
+        },
+        options: { directions: ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'right', 'bottom'], min: { width: 16, height: 16 }, preserveAspectRatio: lockRatio },
+      });
+      const dom = view.dom;
+      box = dom;
+      applyLook(node);
+      dom.style.visibility = 'hidden';
+      dom.style.pointerEvents = 'none';
+      el.onload = () => { dom.style.visibility = ''; dom.style.pointerEvents = ''; };
+      return view;
+    };
+  },
   addAttributes() {
     return {
       ...this.parent?.(),
+      opacity: {
+        default: null,
+        parseHTML: (el: HTMLElement) => {
+          const v = parseFloat(el.style.opacity);
+          return Number.isFinite(v) && v > 0 && v < 1 ? v : null;
+        },
+        renderHTML: (attrs: Record<string, unknown>) => (attrs.opacity ? { style: `opacity:${attrs.opacity}` } : {}),
+      },
+      // where the picture sits in the line: left (default), centre or right
+      align: {
+        default: null,
+        parseHTML: (el: HTMLElement) => {
+          const l = el.style.marginLeft;
+          const r = el.style.marginRight;
+          if (l === 'auto' && r === 'auto') return 'center';
+          if (l === 'auto') return 'right';
+          return null;
+        },
+        renderHTML: (attrs: Record<string, unknown>) =>
+          attrs.align === 'center' ? { style: 'display:block;margin-left:auto;margin-right:auto' }
+            : attrs.align === 'right' ? { style: 'display:block;margin-left:auto;margin-right:0' } : {},
+      },
+      // keep a resized picture in proportion when the column gets narrower (phones): the browser scales the height by the ratio
+      height: {
+        default: null,
+        renderHTML: (attrs: Record<string, unknown>) => {
+          const w = Number(attrs.width);
+          const h = Number(attrs.height);
+          if (!h) return {};
+          return w ? { height: h, style: `height:auto;aspect-ratio:${w}/${h}` } : { height: h };
+        },
+      },
       annot: {
         default: null,
         parseHTML: (el: HTMLElement) => el.getAttribute('data-annot'),
@@ -136,20 +223,22 @@ const FONT_SIZES = [
 
 const TEXT_COLORS = ['#0F172A', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777'];
 // Full text-colour menu: greys, then every hue from dark to light.
+// Every shade here is deep enough to read clearly on a white page (no pastel / washed-out colours).
 const TEXT_PALETTE = [
-  '#000000', '#334155', '#64748B', '#94A3B8', '#CBD5E1', '#FFFFFF',
-  '#7F1D1D', '#B91C1C', '#DC2626', '#EF4444', '#F87171', '#FCA5A5',
-  '#7C2D12', '#C2410C', '#EA580C', '#F97316', '#FB923C', '#FDBA74',
-  '#713F12', '#A16207', '#CA8A04', '#EAB308', '#FACC15', '#FDE047',
-  '#14532D', '#15803D', '#16A34A', '#22C55E', '#4ADE80', '#86EFAC',
-  '#134E4A', '#0F766E', '#0D9488', '#14B8A6', '#2DD4BF', '#5EEAD4',
-  '#1E3A8A', '#1D4ED8', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD',
-  '#312E81', '#4338CA', '#6366F1', '#7C3AED', '#A78BFA', '#C4B5FD',
-  '#831843', '#BE185D', '#DB2777', '#EC4899', '#F472B6', '#F9A8D4',
+  '#000000', '#0F172A', '#1E293B', '#334155', '#475569', '#64748B',
+  '#450A0A', '#7F1D1D', '#991B1B', '#B91C1C', '#C81E1E', '#DC2626',
+  '#431407', '#7C2D12', '#9A3412', '#C2410C', '#D4500A', '#EA580C',
+  '#422006', '#713F12', '#854D0E', '#A16207', '#B45309', '#CA8A04',
+  '#052E16', '#14532D', '#166534', '#15803D', '#047857', '#16A34A',
+  '#042F2E', '#134E4A', '#115E59', '#0F766E', '#0E7490', '#0D9488',
+  '#172554', '#1E3A8A', '#1E40AF', '#1D4ED8', '#0369A1', '#2563EB',
+  '#1E1B4B', '#312E81', '#3730A3', '#4338CA', '#5B21B6', '#7C3AED',
+  '#500724', '#831843', '#9D174D', '#BE185D', '#A21CAF', '#DB2777',
 ];
-const HIGHLIGHT_COLORS = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA'];
-const CELL_COLORS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3', '#FFEDD5', '#FFFFFF'];
-const SHAPE_COLORS = ['#1E293B', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED'];
+// Highlighter colours: strong, saturated marker shades (dark text stays readable on all of them).
+const HIGHLIGHT_COLORS = ['#FACC15', '#4ADE80', '#38BDF8', '#F472B6', '#FB923C', '#A78BFA'];
+const CELL_COLORS = ['#FDE68A', '#BBF7D0', '#BFDBFE', '#FBCFE8', '#FED7AA', '#FFFFFF'];
+const SHAPE_COLORS = ['#1E293B', '#DC2626', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777', '#0F766E'];
 
 // Word's "Insert > Shapes" gallery, reduced to the set actually useful in
 // training content (diagrams, process flows, callouts) — each entry is an
@@ -447,7 +536,7 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Start writing…' }),
-      AnnotatableImage.configure({ inline: false }),
+      AnnotatableImage.configure({ inline: false, allowBase64: true }), // shapes are small inline SVG pictures - without this they vanished when the page was reopened
       TableWithStyle.configure({ resizable: true }),
       TableRowWithHeight,
       TableHeaderWithColor,
@@ -743,6 +832,38 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
     setShowShapesMenu(false);
   }
 
+  // The selected picture / shape: its on-screen element, so size changes keep its proportions.
+  function selectedImageElement(): HTMLImageElement | null {
+    if (!editor) return null;
+    const dom = editor.view.nodeDOM(editor.state.selection.from) as HTMLElement | null;
+    if (!dom) return null;
+    return dom instanceof HTMLImageElement ? dom : dom.querySelector('img');
+  }
+  function setImageSizePct(pct: number) {
+    if (!editor) return;
+    const el = selectedImageElement();
+    if (!el) return;
+    const column = Math.max(120, editor.view.dom.clientWidth - 32);
+    const ratio = el.offsetWidth && el.offsetHeight ? el.offsetHeight / el.offsetWidth : (el.naturalHeight || 1) / (el.naturalWidth || 1);
+    const width = Math.round(column * pct / 100);
+    editor.chain().focus().updateAttributes('image', { width, height: Math.round(width * ratio) }).run();
+  }
+  function resetImageSize() {
+    editor?.chain().focus().updateAttributes('image', { width: null, height: null }).run();
+  }
+  function setImageOpacity(pct: number) {
+    editor?.chain().focus().updateAttributes('image', { opacity: pct >= 100 ? null : Math.max(0.1, pct / 100) }).run();
+  }
+  // A shape is a small SVG; change every colour in it to the picked one.
+  function recolourShape(color: string) {
+    if (!editor) return;
+    const src = String(editor.getAttributes('image').src ?? '');
+    const prefix = 'data:image/svg+xml,';
+    if (!src.startsWith(prefix)) return;
+    const svg = decodeURIComponent(src.slice(prefix.length)).replace(/(fill|stroke)="#[0-9A-Fa-f]{6}"/g, `$1="${color}"`);
+    editor.chain().focus().updateAttributes('image', { src: prefix + encodeURIComponent(svg) }).run();
+  }
+
   if (!editor) return null;
 
   const closeTableMenus = () => { setShowTableMenu(false); setCtxMenu(null); };
@@ -834,6 +955,17 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
               title={`Color: ${c}`}
               onClick={() => editor.chain().focus().setColor(c).run()}
               className="h-5 w-5 flex-shrink-0 rounded-full ring-1 ring-inset ring-slate-200"
+              style={{ backgroundColor: c }}
+            />
+          ))}
+          <div className="mx-0.5 h-5 w-px bg-slate-200" />
+          {HIGHLIGHT_COLORS.slice(0, 4).map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={`Highlight: ${c}`}
+              onClick={() => editor.chain().focus().setHighlight({ color: c }).run()}
+              className="h-5 w-5 flex-shrink-0 rounded ring-1 ring-inset ring-slate-300"
               style={{ backgroundColor: c }}
             />
           ))}
@@ -1164,19 +1296,67 @@ function RichTextEditor({ value, onChange, onImageUpload, minHeight = 300, reset
           away, exactly as reported ("only shows at the top"). Nesting it one level in fixes
           that: the inner div is as tall as the actual content, so `inset-0` covers all of it
           and it scrolls along with the text underneath it. */}
-      {editor.isActive('image') && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-          <span>🖼 Picture selected.</span>
-          <button type="button" onClick={openCropper} className="rounded-md border border-indigo-300 bg-white px-3 py-1.5 font-semibold text-indigo-700 hover:bg-indigo-100">
-            ✂ Crop
-          </button>
-          {annotatable && (
-            <button type="button" onClick={openAnnotator} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
-              ✏️ Draw arrows, circles, brackets &amp; text on it
-            </button>
-          )}
-        </div>
-      )}
+      {editor.isActive('image') && (() => {
+        const img = editor.getAttributes('image') as Record<string, unknown>;
+        const shape = isShapeSrc(img.src);
+        const opacityPct = Math.round((Number(img.opacity) > 0 && Number(img.opacity) < 1 ? Number(img.opacity) : 1) * 100);
+        const align = (img.align as string) || 'left';
+        const btn = 'rounded-md border border-indigo-300 bg-white px-2.5 py-1.5 font-semibold text-indigo-700 hover:bg-indigo-100';
+        const on = 'rounded-md border border-indigo-600 bg-indigo-600 px-2.5 py-1.5 font-semibold text-white';
+        return (
+          <div className="space-y-2 border-b border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{shape ? '🔷 Shape selected' : '🖼 Picture selected'}</span>
+              <span className="text-indigo-600">— drag its corner dots to make it bigger or smaller{shape ? ' (any way you like)' : ' (keeps its proportions)'}.</span>
+              {!shape && (
+                <button type="button" onClick={openCropper} className={btn}>✂ Crop</button>
+              )}
+              {annotatable && !shape && (
+                <button type="button" onClick={openAnnotator} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
+                  ✏️ Draw arrows, circles, brackets &amp; text on it
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold">Size</span>
+                {[25, 50, 75, 100].map((p) => (
+                  <button key={p} type="button" onClick={() => setImageSizePct(p)} className={btn}>{p}%</button>
+                ))}
+                {!!(img.width || img.height) && <button type="button" onClick={resetImageSize} className={btn}>Original</button>}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold">Transparency</span>
+                <input
+                  type="range" min={10} max={100} step={5} value={opacityPct}
+                  onChange={(e) => setImageOpacity(Number(e.target.value))}
+                  className="h-1.5 w-28 accent-indigo-600" aria-label="Picture transparency"
+                />
+                <span className="w-9 tabular-nums">{opacityPct}%</span>
+                <button type="button" onClick={() => setImageOpacity(100)} className={opacityPct === 100 ? on : btn}>Solid</button>
+                <button type="button" onClick={() => setImageOpacity(60)} className={opacityPct === 60 ? on : btn}>Light</button>
+                <button type="button" onClick={() => setImageOpacity(30)} className={opacityPct === 30 ? on : btn}>Transparent</button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold">Place</span>
+                {(['left', 'center', 'right'] as const).map((a) => (
+                  <button key={a} type="button" onClick={() => editor.chain().focus().updateAttributes('image', { align: a }).run()} className={align === a ? on : btn}>
+                    {a === 'left' ? '⬅ Left' : a === 'center' ? '↔ Centre' : 'Right ➡'}
+                  </button>
+                ))}
+              </div>
+              {shape && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold">Colour</span>
+                  {SHAPE_COLORS.map((c) => (
+                    <button key={c} type="button" title={c} onClick={() => recolourShape(c)} className="h-5 w-5 rounded-full ring-1 ring-inset ring-slate-300" style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="max-h-[70vh] overflow-y-auto">
         <div className="relative">
