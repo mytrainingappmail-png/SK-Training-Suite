@@ -134,8 +134,8 @@ export function ProjectDetailCard({
   const attachedPending = attachedTests.filter((s) => s.test_required !== false && !passedIds?.has(s.assessment_id!));
   const hasFinalTest = project.sections.some((s) => s.section_type === 'test');
   const needsCompleteBox = !completed && (hasFinalTest || attachedTests.some((s) => s.test_required !== false));
-  const [showFullDetails, setShowFullDetails] = useState(false);
-  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
+  // everything is open from the start - the whole project reads like a skill; a section can still be folded
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set(project.sections.filter((s) => s.section_type === 'page').map((s) => `page-${s.id}`)));
 
   function toggleKey(key: string) {
     setOpenKeys((prev) => {
@@ -179,18 +179,11 @@ export function ProjectDetailCard({
       <div className="space-y-5 p-8">
         {project.fullDescription && (
           <div>
-            <button
-              onClick={() => setShowFullDetails((v) => !v)}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:underline"
-            >
-              {showFullDetails ? 'Hide Full Details ▲' : 'View Full Details ▼'}
-            </button>
-            {showFullDetails && (
-              <TranslatableHtml
-                className="prose prose-sm mt-3 max-w-none overflow-x-auto rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_table]:min-w-[420px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:p-2"
-                html={project.fullDescription}
-              />
-            )}
+            <SummaryPanel html={project.fullDescription} label="⚡ Summarise this project" />
+            <TranslatableHtml
+              className="prose prose-sm max-w-none overflow-x-auto rounded-xl bg-slate-50 p-4 text-sm leading-relaxed [&_table]:w-full [&_table]:min-w-[420px] [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_th]:border [&_th]:border-slate-200 [&_th]:p-2"
+              html={project.fullDescription}
+            />
           </div>
         )}
 
@@ -312,28 +305,31 @@ export function ProjectDetailCard({
                   </div>
                 );
               }
-              // section_type === 'test'
+              // section_type === 'test' - written and styled like a skill's test
+              const testPassed = !!section.assessment_id && !!passedIds?.has(section.assessment_id);
               return (
-                <div key={section.id} className={`flex items-center justify-between gap-3 rounded-xl p-4 ${completed ? 'bg-amber-50' : 'bg-slate-100'}`}>
-                  <div>
-                    <p className={`text-sm font-semibold ${completed ? 'text-amber-900' : 'text-slate-500'}`}>
-                      {completed ? '' : '🔒 '}{section.title}
+                <div key={section.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 sm:p-5 ${!completed ? 'border-slate-200 bg-slate-50' : testPassed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-bold ${!completed ? 'text-slate-500' : testPassed ? 'text-emerald-900' : 'text-amber-900'}`}>
+                      {!completed ? '🔒 ' : testPassed ? '✓ ' : '📝 '}{section.title}
                     </p>
-                    <p className={`text-xs ${completed ? 'text-amber-700' : 'text-slate-400'}`}>
-                      {completed
-                        ? `Take this test to confirm you've gone through ${project.projectName}.`
-                        : 'Mark the project complete above to unlock this mandatory test.'}
+                    <p className={`mt-0.5 text-xs ${!completed ? 'text-slate-400' : testPassed ? 'text-emerald-700' : 'text-amber-800'}`}>
+                      {!completed
+                        ? 'Read the project above and mark it complete to unlock this test.'
+                        : testPassed
+                        ? 'Test passed — well done! You can take it again if you want to improve your score.'
+                        : `Take this test to confirm you've gone through ${project.projectName}.`}
                     </p>
                   </div>
                   {section.assessment_id && (
                     <button
                       onClick={() => completed && onLaunchQuiz(section.assessment_id!)}
                       disabled={!completed}
-                      className={`flex-shrink-0 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 ${
-                        completed ? 'bg-amber-500 text-white hover:bg-amber-600' : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                      className={`flex-shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition active:scale-95 ${
+                        !completed ? 'cursor-not-allowed bg-slate-200 text-slate-400' : testPassed ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50' : 'bg-amber-500 text-white hover:bg-amber-600'
                       }`}
                     >
-                      {completed ? 'Take Test' : 'Locked'}
+                      {!completed ? 'Locked' : testPassed ? 'Take again' : 'Start Test'}
                     </button>
                   )}
                 </div>
@@ -503,7 +499,7 @@ function Projects({ onlyProjectIds, embedded = false }: ProjectsProps = {}) {
   /** Which of the tests added inside reading sections this employee has passed. */
   async function refreshPassed(list: Project[] = projects) {
     if (!user?.id) return;
-    const ids = list.flatMap((p) => p.sections).filter((s) => s.section_type === 'page' && s.assessment_id).map((s) => s.assessment_id!);
+    const ids = list.flatMap((p) => p.sections).filter((s) => (s.section_type === 'page' || s.section_type === 'test') && s.assessment_id).map((s) => s.assessment_id!);
     if (ids.length === 0) return;
     try { setPassedIds(await getPassedTestIds(user.id, ids)); } catch { /* the badge simply stays off */ }
   }
